@@ -7,7 +7,8 @@ Built with Flutter (Dart). SQLite via Drift for local storage. Riverpod for stat
 ## Architecture
 - **Mobile App (Flutter)**: Primary execution environment. Offline-first, GPS, camera, AR.
 - **PC Web (Next.js/React)**: Deep planning environment (future phase).
-- **Sync Model**: Firestore cloud sync for shared trips (`lib/features/sync/`). Upload-only so far; open gaps are tracked in issue #45. Manual JSON export/import was removed from the UI in v0.1.1.
+- **Sync Model**: two-way Firestore sync for shared trips (`lib/features/sync/`, #65, #79): dirty POIs and time chunks are pushed after a 2 s debounce, and a trip is pulled when its `cloudVersion` rises. A trip's only member is its creator (there are no invites yet), so sync runs between one user's devices; photos and reference images don't sync. Manual JSON export/import was removed from the UI in v0.1.1.
+- **Data model status**: frozen, bug fixes only. #72 proposes the replacement (a personal `places` library plus shared `trips` with day blocks), planned for v0.2.0.
 
 ## Core Modules
 1. **ROI (Region of Interest)**: Macro-container (e.g., "Kyoto City", "Akihabara") for grouping POIs
@@ -18,10 +19,10 @@ Built with Flutter (Dart). SQLite via Drift for local storage. Riverpod for stat
 6. **Ticket Organizer**: removed in v0.1.1 (the `ticket_qr` media type remains)
 7. **VLM Pipeline**: planned, not implemented — Gemini API for parsing screenshots into POI data via share extension
 
-## Database Schema (SQLite via Drift, schemaVersion 8)
+## Database Schema (SQLite via Drift, schemaVersion 9)
 Source of truth: `lib/core/database/tables.dart`; migrations live in `lib/core/database/database.dart`. Rows carry `author_id` (and `is_shared` on shareable tables) for cloud sync.
 - `rois`: id, name, description, is_offline_cached, created_at, cloud_version, sync_lock_expires_at
-- `pois`: id, roi_id (nullable), name, description, address, lat, lng, business_hours, contact_info, local_cover_image_path, remote_cover_image_url, sort_order, created_at
+- `pois`: id, roi_id (nullable), name, description, address, lat, lng, business_hours, contact_info, local_cover_image_path, remote_cover_image_url, sort_order, created_at, sync_status, is_deleted, has_ever_synced, last_modified_at
 - `animes`: id, name, description, bangumi_id (unique), created_at
 - `tags`: id, name, description, created_at
 - `poi_animes`, `poi_tags`: many-to-many junctions, cascade on delete

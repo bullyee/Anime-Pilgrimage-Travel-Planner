@@ -82,7 +82,7 @@ ls -la "$OUT"
 gh release view "$LAST" --json assets --jq '.assets[] | "\(.name) \(.size)"'
 ```
 
-Compare the size with the last release. Baseline: a fat APK (arm64-v8a, armeabi-v7a, x86_64) of ~93 MB, almost all native libraries — libflutter, libapp, libonnxruntime, libsqlite3 (v0.1.1: 92.5 MB, v0.1.2: 92.6 MB). A large unexplained jump means something got bundled by accident; the 176 MB cutout model is fetched at runtime and must stay out (`unzip -l` the APK and grep for `.onnx`). Don't claim a size change in the CHANGELOG without this comparison.
+Compare the size with the last release. Baseline: a fat APK (arm64-v8a, armeabi-v7a, x86_64) of ~93 MB, almost all native libraries — libflutter, libapp, libonnxruntime, libsqlite3 (v0.1.1: 92.5 MB, v0.1.2: 92.6 MB, v0.1.3: 93.2 MB). A large unexplained jump means something got bundled by accident; the 176 MB cutout model is fetched at runtime and must stay out (`unzip -l` the APK and grep for `.onnx`). Don't claim a size change in the CHANGELOG without this comparison.
 
 ## 6. Smoke test
 
