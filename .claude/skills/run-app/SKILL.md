@@ -105,11 +105,16 @@ Android shoots with the phone's own camera app (`image_picker`) and floats the r
 ```bash
 "$ADB" shell appops set $APP SYSTEM_ALERT_WINDOW allow   # skip the "Display over other apps" settings detour
 "$ADB" shell appops set $APP SYSTEM_ALERT_WINDOW deny    # test the permission dialog instead
-win() { "$ADB" shell dumpsys window windows | grep -c 'Window #.*Sys2038:'"$APP"; }   # 1 = floating window up
+win() { "$ADB" shell dumpsys window windows | grep -cE "Window #[0-9]+ Window\{[0-9a-f]+ u0 $APP\}:"; }   # 1 = floating window up
 ```
 
 - `ui` only dumps the top app's window. The camera app and the floating window don't appear in it, so use `shot` for both.
-- The floating window starts in a top corner. In portrait that's top-right, about (563–1049, 252–525) on Pixel_Test; in landscape it's top-left, clear of the shutter. Tapping it shows a −/+/✕ bar underneath, with ✕ around (968,578) in portrait. Drag it with `input swipe`. After a rotation it must stay fully on screen.
+- The floating window starts in a top corner. In portrait that's top-right; in landscape it's top-left, clear of the shutter. Read its position off a screenshot: in the v0.1.3 smoke test it sat at about (564–1046, 390–658) on Pixel_Test.
+- Tapping the window shows a −/+/✕ bar underneath, with ✕ around (967,716) in portrait.
+  - The bar appears about 0.3 s after the tap, once the tap can't be a double-tap, and hides itself after 3 s. Take the screenshot right after the tap.
+  - To close the window, run another command (a `shot`) between tapping the window and tapping ✕. Otherwise ✕ is tapped before the bar exists.
+- Drag the window with `input swipe`. After a rotation it must stay fully on screen.
+- The system photo picker opens full-screen or as a half sheet, so photo positions change. Tap a photo by the bounds of its `Photo taken on …` entry in `ui`, not by fixed coordinates; a tap outside the sheet cancels the pick.
 - `adb` can't fake a pinch, and two `input tap` calls arrive too far apart for a double-tap. Check resize and double-tap-to-close on a phone.
 - Backing out of the camera, or accepting a shot, must leave `win` at 0.
 - Leaving the camera for another app (`input keyevent 3` for Home) hides the window. `win` stays 1, because the window is only made invisible, so check with `shot`. Returning through Recents shows it again in the same place.
