@@ -24,7 +24,9 @@ Everything lives on your phone. **No account is required and you can use it full
 - ⬇️ **Import locations automatically** by searching an anime in the built-in Bangumi search — the spots come pre-filled with coordinates from the community-run [Anitabi](https://www.anitabi.cn) pilgrimage map.
 - 🗺️ **See everything on a map**, color-coded by region.
 - 🗓️ **Build a day-by-day itinerary** with drag-and-drop scheduling, visit durations, travel time between stops, and progress tracking.
-- 📸 **Recreate scenes with the Anime Camera**, overlaying the original screenshot on your live camera so you can match the angle exactly.
+- 📸 **Recreate scenes with the Anime Camera**, floating the original screenshot over your camera so you can match the angle exactly. On Android it opens your phone's own camera app, so you keep its HDR and night mode.
+- 🎨 **Touch up your shots** in the photo editor: match the colors to the screenshot, adjust brightness and sharpness, rotate, straighten and crop, or paste a character from the screenshot into your photo.
+- ☁️ **Keep a trip in step across your devices** with optional cloud sync *(experimental)*.
 
 ---
 
@@ -38,7 +40,9 @@ When you open the app you land on the **home screen**, your hub for everything. 
 | **Map** | See your places plotted on a map |
 | **My Trips** | Your regions — each one is a trip area like "Kyoto" or "Hakone" |
 | **Trip Calendar** | Schedule visits and plan each day |
-| **Anime Camera** | Recreate scenes with a screenshot overlay *(phone only)* |
+| **Anime Camera** | Recreate scenes with a screenshot overlay *(Android and iOS)* |
+| **Floating Reference** | Float a screenshot over any app and shoot with any camera *(Android)* |
+| **Edit Photo** | Open a photo from your gallery in the photo editor |
 
 > **A quick word on names:** every place you save is called a **POI** (point of interest), and a **Region** is a trip area that groups POIs together. The **My Trips** card opens your list of Regions.
 
@@ -110,6 +114,7 @@ The **Trip Calendar** turns your list of places into an hour-by-hour plan.
   - **Transit** — travel time to your next stop (the schedule shifts to account for it)
   - **Status** — mark visits **Scheduled**, **Completed**, or **Skipped** as your day unfolds
 - **Reorder your route** by dragging visits up and down — the times re-flow automatically so your day stays consistent.
+- **Overlaps are flagged:** when a visit with a fixed time starts before you can get there from the previous one, a **Conflict: N min** marker shows between them.
 
 > You can also schedule a place directly from its detail screen: open a POI, find the **Schedule** section, and tap **+** to add it to the backlog or pin it to a specific date and time.
 
@@ -124,36 +129,58 @@ This is the heart of the app. *Available on Android and iOS.*
 
 **Then line up your shot:**
 
-1. Open **Anime Camera** (from the home screen, or the camera button on the POI).
-2. Your screenshot floats over the live camera as a translucent overlay.
-3. Adjust until it lines up:
-   - **Drag** the overlay to reposition it, and **pinch** to resize it.
-   - Use the **opacity slider** to fade the overlay in and out.
-   - Toggle **flash**, switch between the **native and fill** framing, **zoom**, or flip to the **front camera** as needed.
-4. Tap the **shutter** to capture your matched shot.
+1. Open **Anime Camera** from the home screen, or tap **Take photo** on the place's page.
+2. Choose the screenshot to match: one of this place's reference images, another place's, one from your gallery, or none.
+3. Line it up:
+   - **On Android**, your phone's own camera app opens, with the screenshot floating in a small window. **Drag** the window to move it and **pinch** to resize it. **Tap** it for opacity **−** / **+** and **✕**, or **double-tap** to close it. The camera's shutter, focus and zoom work everywhere else on the screen.
 
-**Polish it afterward:** your photo opens in the editor, where you can fine-tune brightness and sharpness and even color-match it to the reference screenshot. Saved photos are kept with the place, alongside the original — your edits never overwrite it.
+     The first time, Android asks you to allow Trip Planner to **display over other apps**. If you'd rather not, you can still shoot without the window.
+   - **On iOS**, the screenshot floats over the in-app camera. Drag it, pinch to resize it, use the **opacity slider**, and switch **flash**, the **native or fill** framing, **zoom** or the **front camera** as needed.
+4. Take the shot. It opens in the photo editor with the screenshot attached.
 
-## 7. Sign in & cloud sync *(coming soon)*
+> 💡 **Floating Reference** *(Android)*, on the home screen or a place's page, floats a screenshot over every app until you close it, so you can take as many shots as you like with any camera app.
+
+## 7. Edit your photos
+
+The editor opens after every shot. To edit a photo you already have, tap **Edit Photo** on the home screen and pick it from your gallery.
+
+- **Tools** run along the bottom; swipe the strip to see them all:
+  - **Reference** — add or swap the screenshot you're matching.
+  - **Match Color** — shift your photo's colors toward the screenshot's.
+  - **Brightness** and **Sharpness**.
+  - **Rotate** — turn 90°, flip, or straighten up to 45° either way over a grid.
+  - **Crop** — free, the screenshot's shape (**Match ref**), the original shape, or 1:1, 4:3, 3:4, 16:9 and 9:16. The screenshot floats inside the crop box with its own opacity slider.
+  - **Compose** — cut a character out of the screenshot and paste it into your photo. It downloads its AI model (~176 MB) the first time you tap **Download AI model**.
+- **The place button** at the top shows which place the photo is saved to. Tap it to choose another place or create a new one; **No POI** saves the photo only to your phone's gallery.
+- **Save** closes the editor right away and finishes in the background; the place's page shows *Saving N photos…* until it's done. Photos are kept with the place and in a **Trip Planner** album on your phone. Your edits never overwrite the original.
+
+## 8. Sign in & cloud sync *(experimental)*
 
 - **Sign In** (top-right of the home screen) signs you in with Google. It's **completely optional** — every feature above works without it.
-- It exists to power **cloud sync**, which will back up your trips and keep them in step across your devices. Cloud sync is still in development, so for now your data lives only on your device — treat your phone as the only copy of your trip.
+- Signed in, you can keep a region **backed up and in step across your devices**:
+  1. Open the region from **My Trips**, choose **Edit** from the **⋮** menu, turn on **Cloud Collaborative Workspace**, and save. *Once on, it can't be turned off for that region.*
+  2. The region's places and schedule upload. Sign in with the same Google account on another device and the region appears there too.
+  3. From then on, changes on either device — new, edited or deleted places, and schedule changes — sync both ways about two seconds after you make them, whenever you're online. **Sync to Cloud now** on the same screen sends them right away.
+- **What doesn't sync:** photos and reference images stay on the device you added them on, and regions without cloud sync stay only on this device.
+- **Sharing with other people isn't available yet.** Despite the switch's name, it only syncs between your own devices.
 
 ---
 
 ## Good to know
 
 - **It's yours and it's offline.** Your trips, photos, and notes are stored on your device. No account, no connection needed.
-- **A few things go online:** importing from Bangumi, signing in, and the photo editor's **Compose** cutout, which downloads its AI model (~176 MB) the first time you tap **Download AI model** — use Wi-Fi for that one.
-- **One copy for now.** Cloud sync isn't finished yet, so your data isn't duplicated anywhere else — keep that in mind before switching phones or clearing app data.
+- **A few things go online:** importing from Bangumi, signing in and cloud sync, and the photo editor's **Compose** cutout, which downloads its AI model (~176 MB) the first time you tap **Download AI model** — use Wi-Fi for that one.
+- **Mostly one copy.** Only regions with cloud sync are kept anywhere else, and photos never are. Everything else lives only on this device — keep that in mind before switching phones or clearing app data.
 - **Where features work:**
 
   | Feature | Android | iOS | Desktop |
   |---------|:-------:|:---:|:-------:|
   | Plan, organize, map, schedule | ✅ | ✅ | ✅ |
   | Anime Camera (screenshot overlay) | ✅ | ✅ | — |
+  | Floating Reference | ✅ | — | — |
+  | Photo editor | ✅ | ✅ | ✅ (no Compose) |
 
-  On Android, the camera may ask for permission to draw the overlay the first time you use it.
+  On Android, the camera asks once for permission to display over other apps, which the floating screenshot needs.
 
 ---
 
@@ -179,7 +206,7 @@ flutter run -d windows --dart-define-from-file=env.json
 flutter test
 ```
 
-Source is organized feature-first under `lib/features/` (`anime`, `auth`, `calendar`, `camera`, `home`, `poi`, `roi`, `sync`, `tag`), with shared infrastructure under `lib/core/` (`database`, `router`, `providers`). See `CLAUDE.md` for the full architecture and conventions, and `CHANGELOG.md` for release history.
+Source is organized feature-first under `lib/features/` (`anime`, `auth`, `calendar`, `camera`, `home`, `poi`, `roi`, `sync`, `tag`), with shared infrastructure under `lib/core/` (`database`, `router`, `providers`). See `CLAUDE.md` for the full architecture and conventions, and `CHANGELOG.md` for release history. GitHub Actions runs the tests on every pull request and builds the APK when a version tag is pushed.
 
 Contributors using Claude Code get two project skills: `run-app` (build, launch, and drive the app on the Android emulator) and `release` (version, docs, build, smoke test, and a confirmation checklist before anything is published).
 
