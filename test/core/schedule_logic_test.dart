@@ -54,18 +54,14 @@ void main() {
       expect(resolved[2].date, equals(DateTime.utc(2027, 4, 6))); // Continues from pin
     });
 
-    test('rejects pins that do not strictly increase along order', () {
+    test('rejects pins that do not strictly increase along order in validation, and marks conflict in computeBlockDates', () {
       final blocks = [
         DayBlockInfo(id: 'b1', sortKey: 'a0', pinnedDate: DateTime.utc(2027, 4, 5)),
         DayBlockInfo(id: 'b2', sortKey: 'a1', pinnedDate: DateTime.utc(2027, 4, 5)), // Same date
       ];
 
       expect(
-        () => ScheduleLogicEngine.computeBlockDates(
-          blocks: blocks,
-          startDate: DateTime.utc(2027, 4, 1),
-          dayCount: 2,
-        ),
+        () => ScheduleLogicEngine.validatePinnedDates(blocks),
         throwsArgumentError,
       );
 
@@ -75,10 +71,40 @@ void main() {
       ];
 
       expect(
-        () => ScheduleLogicEngine.computeBlockDates(
-          blocks: backwardsBlocks,
+        () => ScheduleLogicEngine.validatePinnedDates(backwardsBlocks),
+        throwsArgumentError,
+      );
+
+      // computeBlockDates does not throw on stored data; marks hasConflict = true
+      final resolved = ScheduleLogicEngine.computeBlockDates(
+        blocks: blocks,
+        startDate: DateTime.utc(2027, 4, 1),
+        dayCount: 2,
+      );
+      expect(resolved[1].hasConflict, isTrue);
+      expect(resolved[0].date, isNot(equals(resolved[1].date)));
+
+      // validatePinnedDates with startDate rejects pinning block 1 to the same date as unpinned block 0
+      expect(
+        () => ScheduleLogicEngine.validatePinnedDates(
+          [
+            const DayBlockInfo(id: 'b1', sortKey: 'a0'),
+            DayBlockInfo(id: 'b2', sortKey: 'a1', pinnedDate: DateTime.utc(2027, 4, 1)),
+          ],
           startDate: DateTime.utc(2027, 4, 1),
           dayCount: 2,
+        ),
+        throwsArgumentError,
+      );
+
+      // validatePinnedDates with startDate rejects pinning block 0 before startDate
+      expect(
+        () => ScheduleLogicEngine.validatePinnedDates(
+          [
+            DayBlockInfo(id: 'b1', sortKey: 'a0', pinnedDate: DateTime.utc(2027, 3, 31)),
+          ],
+          startDate: DateTime.utc(2027, 4, 1),
+          dayCount: 1,
         ),
         throwsArgumentError,
       );

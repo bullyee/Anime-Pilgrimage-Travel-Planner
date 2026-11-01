@@ -5279,18 +5279,16 @@ class $PlacesTable extends Places with TableInfo<$PlacesTable, Place> {
     requiredDuringInsert: false,
     clientDefault: () => DateTime.now(),
   );
-  static const VerificationMeta _updatedAtMeta = const VerificationMeta(
-    'updatedAt',
-  );
   @override
-  late final GeneratedColumn<DateTime> updatedAt = GeneratedColumn<DateTime>(
-    'updated_at',
-    aliasedName,
-    false,
-    type: DriftSqlType.dateTime,
-    requiredDuringInsert: false,
-    clientDefault: () => DateTime.now(),
-  );
+  late final GeneratedColumnWithTypeConverter<DateTime, int> updatedAt =
+      GeneratedColumn<int>(
+        'updated_at',
+        aliasedName,
+        false,
+        type: DriftSqlType.int,
+        requiredDuringInsert: false,
+        clientDefault: () => DateTime.now().millisecondsSinceEpoch,
+      ).withConverter<DateTime>($PlacesTable.$converterupdatedAt);
   @override
   List<GeneratedColumn> get $columns => [
     placeKey,
@@ -5452,12 +5450,6 @@ class $PlacesTable extends Places with TableInfo<$PlacesTable, Place> {
         createdAt.isAcceptableOrUnknown(data['created_at']!, _createdAtMeta),
       );
     }
-    if (data.containsKey('updated_at')) {
-      context.handle(
-        _updatedAtMeta,
-        updatedAt.isAcceptableOrUnknown(data['updated_at']!, _updatedAtMeta),
-      );
-    }
     return context;
   }
 
@@ -5535,10 +5527,12 @@ class $PlacesTable extends Places with TableInfo<$PlacesTable, Place> {
         DriftSqlType.dateTime,
         data['${effectivePrefix}created_at'],
       )!,
-      updatedAt: attachedDatabase.typeMapping.read(
-        DriftSqlType.dateTime,
-        data['${effectivePrefix}updated_at'],
-      )!,
+      updatedAt: $PlacesTable.$converterupdatedAt.fromSql(
+        attachedDatabase.typeMapping.read(
+          DriftSqlType.int,
+          data['${effectivePrefix}updated_at'],
+        )!,
+      ),
     );
   }
 
@@ -5546,6 +5540,9 @@ class $PlacesTable extends Places with TableInfo<$PlacesTable, Place> {
   $PlacesTable createAlias(String alias) {
     return $PlacesTable(attachedDatabase, alias);
   }
+
+  static TypeConverter<DateTime, int> $converterupdatedAt =
+      const MillisecondDateTimeConverter();
 }
 
 class Place extends DataClass implements Insertable<Place> {
@@ -5640,7 +5637,11 @@ class Place extends DataClass implements Insertable<Place> {
     }
     map['visibility'] = Variable<String>(visibility);
     map['created_at'] = Variable<DateTime>(createdAt);
-    map['updated_at'] = Variable<DateTime>(updatedAt);
+    {
+      map['updated_at'] = Variable<int>(
+        $PlacesTable.$converterupdatedAt.toSql(updatedAt),
+      );
+    }
     return map;
   }
 
@@ -5977,7 +5978,7 @@ class PlacesCompanion extends UpdateCompanion<Place> {
     Expression<String>? privateNote,
     Expression<String>? visibility,
     Expression<DateTime>? createdAt,
-    Expression<DateTime>? updatedAt,
+    Expression<int>? updatedAt,
     Expression<int>? rowid,
   }) {
     return RawValuesInsertable({
@@ -6102,7 +6103,9 @@ class PlacesCompanion extends UpdateCompanion<Place> {
       map['created_at'] = Variable<DateTime>(createdAt.value);
     }
     if (updatedAt.present) {
-      map['updated_at'] = Variable<DateTime>(updatedAt.value);
+      map['updated_at'] = Variable<int>(
+        $PlacesTable.$converterupdatedAt.toSql(updatedAt.value),
+      );
     }
     if (rowid.present) {
       map['rowid'] = Variable<int>(rowid.value);
@@ -8500,18 +8503,16 @@ class $TripsTable extends Trips with TableInfo<$TripsTable, Trip> {
     requiredDuringInsert: false,
     clientDefault: () => DateTime.now(),
   );
-  static const VerificationMeta _updatedAtMeta = const VerificationMeta(
-    'updatedAt',
-  );
   @override
-  late final GeneratedColumn<DateTime> updatedAt = GeneratedColumn<DateTime>(
-    'updated_at',
-    aliasedName,
-    false,
-    type: DriftSqlType.dateTime,
-    requiredDuringInsert: false,
-    clientDefault: () => DateTime.now(),
-  );
+  late final GeneratedColumnWithTypeConverter<DateTime, int> updatedAt =
+      GeneratedColumn<int>(
+        'updated_at',
+        aliasedName,
+        false,
+        type: DriftSqlType.int,
+        requiredDuringInsert: false,
+        clientDefault: () => DateTime.now().millisecondsSinceEpoch,
+      ).withConverter<DateTime>($TripsTable.$converterupdatedAt);
   static const VerificationMeta _updatedByMeta = const VerificationMeta(
     'updatedBy',
   );
@@ -8523,17 +8524,15 @@ class $TripsTable extends Trips with TableInfo<$TripsTable, Trip> {
     type: DriftSqlType.string,
     requiredDuringInsert: false,
   );
-  static const VerificationMeta _deletedAtMeta = const VerificationMeta(
-    'deletedAt',
-  );
   @override
-  late final GeneratedColumn<DateTime> deletedAt = GeneratedColumn<DateTime>(
-    'deleted_at',
-    aliasedName,
-    true,
-    type: DriftSqlType.dateTime,
-    requiredDuringInsert: false,
-  );
+  late final GeneratedColumnWithTypeConverter<DateTime?, int> deletedAt =
+      GeneratedColumn<int>(
+        'deleted_at',
+        aliasedName,
+        true,
+        type: DriftSqlType.int,
+        requiredDuringInsert: false,
+      ).withConverter<DateTime?>($TripsTable.$converterdeletedAtn);
   static const VerificationMeta _syncStatusMeta = const VerificationMeta(
     'syncStatus',
   );
@@ -8627,22 +8626,10 @@ class $TripsTable extends Trips with TableInfo<$TripsTable, Trip> {
         createdAt.isAcceptableOrUnknown(data['created_at']!, _createdAtMeta),
       );
     }
-    if (data.containsKey('updated_at')) {
-      context.handle(
-        _updatedAtMeta,
-        updatedAt.isAcceptableOrUnknown(data['updated_at']!, _updatedAtMeta),
-      );
-    }
     if (data.containsKey('updated_by')) {
       context.handle(
         _updatedByMeta,
         updatedBy.isAcceptableOrUnknown(data['updated_by']!, _updatedByMeta),
-      );
-    }
-    if (data.containsKey('deleted_at')) {
-      context.handle(
-        _deletedAtMeta,
-        deletedAt.isAcceptableOrUnknown(data['deleted_at']!, _deletedAtMeta),
       );
     }
     if (data.containsKey('sync_status')) {
@@ -8692,17 +8679,21 @@ class $TripsTable extends Trips with TableInfo<$TripsTable, Trip> {
         DriftSqlType.dateTime,
         data['${effectivePrefix}created_at'],
       )!,
-      updatedAt: attachedDatabase.typeMapping.read(
-        DriftSqlType.dateTime,
-        data['${effectivePrefix}updated_at'],
-      )!,
+      updatedAt: $TripsTable.$converterupdatedAt.fromSql(
+        attachedDatabase.typeMapping.read(
+          DriftSqlType.int,
+          data['${effectivePrefix}updated_at'],
+        )!,
+      ),
       updatedBy: attachedDatabase.typeMapping.read(
         DriftSqlType.string,
         data['${effectivePrefix}updated_by'],
       ),
-      deletedAt: attachedDatabase.typeMapping.read(
-        DriftSqlType.dateTime,
-        data['${effectivePrefix}deleted_at'],
+      deletedAt: $TripsTable.$converterdeletedAtn.fromSql(
+        attachedDatabase.typeMapping.read(
+          DriftSqlType.int,
+          data['${effectivePrefix}deleted_at'],
+        ),
       ),
       syncStatus: attachedDatabase.typeMapping.read(
         DriftSqlType.int,
@@ -8715,6 +8706,13 @@ class $TripsTable extends Trips with TableInfo<$TripsTable, Trip> {
   $TripsTable createAlias(String alias) {
     return $TripsTable(attachedDatabase, alias);
   }
+
+  static TypeConverter<DateTime, int> $converterupdatedAt =
+      const MillisecondDateTimeConverter();
+  static TypeConverter<DateTime, int> $converterdeletedAt =
+      const MillisecondDateTimeConverter();
+  static TypeConverter<DateTime?, int?> $converterdeletedAtn =
+      NullAwareTypeConverter.wrap($converterdeletedAt);
 }
 
 class Trip extends DataClass implements Insertable<Trip> {
@@ -8759,12 +8757,18 @@ class Trip extends DataClass implements Insertable<Trip> {
     }
     map['day_count'] = Variable<int>(dayCount);
     map['created_at'] = Variable<DateTime>(createdAt);
-    map['updated_at'] = Variable<DateTime>(updatedAt);
+    {
+      map['updated_at'] = Variable<int>(
+        $TripsTable.$converterupdatedAt.toSql(updatedAt),
+      );
+    }
     if (!nullToAbsent || updatedBy != null) {
       map['updated_by'] = Variable<String>(updatedBy);
     }
     if (!nullToAbsent || deletedAt != null) {
-      map['deleted_at'] = Variable<DateTime>(deletedAt);
+      map['deleted_at'] = Variable<int>(
+        $TripsTable.$converterdeletedAtn.toSql(deletedAt),
+      );
     }
     map['sync_status'] = Variable<int>(syncStatus);
     return map;
@@ -8989,9 +8993,9 @@ class TripsCompanion extends UpdateCompanion<Trip> {
     Expression<String>? startDate,
     Expression<int>? dayCount,
     Expression<DateTime>? createdAt,
-    Expression<DateTime>? updatedAt,
+    Expression<int>? updatedAt,
     Expression<String>? updatedBy,
-    Expression<DateTime>? deletedAt,
+    Expression<int>? deletedAt,
     Expression<int>? syncStatus,
     Expression<int>? rowid,
   }) {
@@ -9072,13 +9076,17 @@ class TripsCompanion extends UpdateCompanion<Trip> {
       map['created_at'] = Variable<DateTime>(createdAt.value);
     }
     if (updatedAt.present) {
-      map['updated_at'] = Variable<DateTime>(updatedAt.value);
+      map['updated_at'] = Variable<int>(
+        $TripsTable.$converterupdatedAt.toSql(updatedAt.value),
+      );
     }
     if (updatedBy.present) {
       map['updated_by'] = Variable<String>(updatedBy.value);
     }
     if (deletedAt.present) {
-      map['deleted_at'] = Variable<DateTime>(deletedAt.value);
+      map['deleted_at'] = Variable<int>(
+        $TripsTable.$converterdeletedAtn.toSql(deletedAt.value),
+      );
     }
     if (syncStatus.present) {
       map['sync_status'] = Variable<int>(syncStatus.value);
@@ -9167,18 +9175,16 @@ class $TripDaysTable extends TripDays with TableInfo<$TripDaysTable, TripDay> {
     type: DriftSqlType.string,
     requiredDuringInsert: false,
   );
-  static const VerificationMeta _updatedAtMeta = const VerificationMeta(
-    'updatedAt',
-  );
   @override
-  late final GeneratedColumn<DateTime> updatedAt = GeneratedColumn<DateTime>(
-    'updated_at',
-    aliasedName,
-    false,
-    type: DriftSqlType.dateTime,
-    requiredDuringInsert: false,
-    clientDefault: () => DateTime.now(),
-  );
+  late final GeneratedColumnWithTypeConverter<DateTime, int> updatedAt =
+      GeneratedColumn<int>(
+        'updated_at',
+        aliasedName,
+        false,
+        type: DriftSqlType.int,
+        requiredDuringInsert: false,
+        clientDefault: () => DateTime.now().millisecondsSinceEpoch,
+      ).withConverter<DateTime>($TripDaysTable.$converterupdatedAt);
   static const VerificationMeta _updatedByMeta = const VerificationMeta(
     'updatedBy',
   );
@@ -9190,17 +9196,15 @@ class $TripDaysTable extends TripDays with TableInfo<$TripDaysTable, TripDay> {
     type: DriftSqlType.string,
     requiredDuringInsert: false,
   );
-  static const VerificationMeta _deletedAtMeta = const VerificationMeta(
-    'deletedAt',
-  );
   @override
-  late final GeneratedColumn<DateTime> deletedAt = GeneratedColumn<DateTime>(
-    'deleted_at',
-    aliasedName,
-    true,
-    type: DriftSqlType.dateTime,
-    requiredDuringInsert: false,
-  );
+  late final GeneratedColumnWithTypeConverter<DateTime?, int> deletedAt =
+      GeneratedColumn<int>(
+        'deleted_at',
+        aliasedName,
+        true,
+        type: DriftSqlType.int,
+        requiredDuringInsert: false,
+      ).withConverter<DateTime?>($TripDaysTable.$converterdeletedAtn);
   static const VerificationMeta _syncStatusMeta = const VerificationMeta(
     'syncStatus',
   );
@@ -9270,22 +9274,10 @@ class $TripDaysTable extends TripDays with TableInfo<$TripDaysTable, TripDay> {
         pinnedDate.isAcceptableOrUnknown(data['pinned_date']!, _pinnedDateMeta),
       );
     }
-    if (data.containsKey('updated_at')) {
-      context.handle(
-        _updatedAtMeta,
-        updatedAt.isAcceptableOrUnknown(data['updated_at']!, _updatedAtMeta),
-      );
-    }
     if (data.containsKey('updated_by')) {
       context.handle(
         _updatedByMeta,
         updatedBy.isAcceptableOrUnknown(data['updated_by']!, _updatedByMeta),
-      );
-    }
-    if (data.containsKey('deleted_at')) {
-      context.handle(
-        _deletedAtMeta,
-        deletedAt.isAcceptableOrUnknown(data['deleted_at']!, _deletedAtMeta),
       );
     }
     if (data.containsKey('sync_status')) {
@@ -9323,17 +9315,21 @@ class $TripDaysTable extends TripDays with TableInfo<$TripDaysTable, TripDay> {
         DriftSqlType.string,
         data['${effectivePrefix}pinned_date'],
       ),
-      updatedAt: attachedDatabase.typeMapping.read(
-        DriftSqlType.dateTime,
-        data['${effectivePrefix}updated_at'],
-      )!,
+      updatedAt: $TripDaysTable.$converterupdatedAt.fromSql(
+        attachedDatabase.typeMapping.read(
+          DriftSqlType.int,
+          data['${effectivePrefix}updated_at'],
+        )!,
+      ),
       updatedBy: attachedDatabase.typeMapping.read(
         DriftSqlType.string,
         data['${effectivePrefix}updated_by'],
       ),
-      deletedAt: attachedDatabase.typeMapping.read(
-        DriftSqlType.dateTime,
-        data['${effectivePrefix}deleted_at'],
+      deletedAt: $TripDaysTable.$converterdeletedAtn.fromSql(
+        attachedDatabase.typeMapping.read(
+          DriftSqlType.int,
+          data['${effectivePrefix}deleted_at'],
+        ),
       ),
       syncStatus: attachedDatabase.typeMapping.read(
         DriftSqlType.int,
@@ -9346,6 +9342,13 @@ class $TripDaysTable extends TripDays with TableInfo<$TripDaysTable, TripDay> {
   $TripDaysTable createAlias(String alias) {
     return $TripDaysTable(attachedDatabase, alias);
   }
+
+  static TypeConverter<DateTime, int> $converterupdatedAt =
+      const MillisecondDateTimeConverter();
+  static TypeConverter<DateTime, int> $converterdeletedAt =
+      const MillisecondDateTimeConverter();
+  static TypeConverter<DateTime?, int?> $converterdeletedAtn =
+      NullAwareTypeConverter.wrap($converterdeletedAt);
 }
 
 class TripDay extends DataClass implements Insertable<TripDay> {
@@ -9381,12 +9384,18 @@ class TripDay extends DataClass implements Insertable<TripDay> {
     if (!nullToAbsent || pinnedDate != null) {
       map['pinned_date'] = Variable<String>(pinnedDate);
     }
-    map['updated_at'] = Variable<DateTime>(updatedAt);
+    {
+      map['updated_at'] = Variable<int>(
+        $TripDaysTable.$converterupdatedAt.toSql(updatedAt),
+      );
+    }
     if (!nullToAbsent || updatedBy != null) {
       map['updated_by'] = Variable<String>(updatedBy);
     }
     if (!nullToAbsent || deletedAt != null) {
-      map['deleted_at'] = Variable<DateTime>(deletedAt);
+      map['deleted_at'] = Variable<int>(
+        $TripDaysTable.$converterdeletedAtn.toSql(deletedAt),
+      );
     }
     map['sync_status'] = Variable<int>(syncStatus);
     return map;
@@ -9572,9 +9581,9 @@ class TripDaysCompanion extends UpdateCompanion<TripDay> {
     Expression<String>? sortKey,
     Expression<String>? title,
     Expression<String>? pinnedDate,
-    Expression<DateTime>? updatedAt,
+    Expression<int>? updatedAt,
     Expression<String>? updatedBy,
-    Expression<DateTime>? deletedAt,
+    Expression<int>? deletedAt,
     Expression<int>? syncStatus,
     Expression<int>? rowid,
   }) {
@@ -9637,13 +9646,17 @@ class TripDaysCompanion extends UpdateCompanion<TripDay> {
       map['pinned_date'] = Variable<String>(pinnedDate.value);
     }
     if (updatedAt.present) {
-      map['updated_at'] = Variable<DateTime>(updatedAt.value);
+      map['updated_at'] = Variable<int>(
+        $TripDaysTable.$converterupdatedAt.toSql(updatedAt.value),
+      );
     }
     if (updatedBy.present) {
       map['updated_by'] = Variable<String>(updatedBy.value);
     }
     if (deletedAt.present) {
-      map['deleted_at'] = Variable<DateTime>(deletedAt.value);
+      map['deleted_at'] = Variable<int>(
+        $TripDaysTable.$converterdeletedAtn.toSql(deletedAt.value),
+      );
     }
     if (syncStatus.present) {
       map['sync_status'] = Variable<int>(syncStatus.value);
@@ -9865,18 +9878,16 @@ class $StopsTable extends Stops with TableInfo<$StopsTable, Stop> {
     requiredDuringInsert: false,
     clientDefault: () => DateTime.now(),
   );
-  static const VerificationMeta _updatedAtMeta = const VerificationMeta(
-    'updatedAt',
-  );
   @override
-  late final GeneratedColumn<DateTime> updatedAt = GeneratedColumn<DateTime>(
-    'updated_at',
-    aliasedName,
-    false,
-    type: DriftSqlType.dateTime,
-    requiredDuringInsert: false,
-    clientDefault: () => DateTime.now(),
-  );
+  late final GeneratedColumnWithTypeConverter<DateTime, int> updatedAt =
+      GeneratedColumn<int>(
+        'updated_at',
+        aliasedName,
+        false,
+        type: DriftSqlType.int,
+        requiredDuringInsert: false,
+        clientDefault: () => DateTime.now().millisecondsSinceEpoch,
+      ).withConverter<DateTime>($StopsTable.$converterupdatedAt);
   static const VerificationMeta _updatedByMeta = const VerificationMeta(
     'updatedBy',
   );
@@ -9888,17 +9899,15 @@ class $StopsTable extends Stops with TableInfo<$StopsTable, Stop> {
     type: DriftSqlType.string,
     requiredDuringInsert: false,
   );
-  static const VerificationMeta _deletedAtMeta = const VerificationMeta(
-    'deletedAt',
-  );
   @override
-  late final GeneratedColumn<DateTime> deletedAt = GeneratedColumn<DateTime>(
-    'deleted_at',
-    aliasedName,
-    true,
-    type: DriftSqlType.dateTime,
-    requiredDuringInsert: false,
-  );
+  late final GeneratedColumnWithTypeConverter<DateTime?, int> deletedAt =
+      GeneratedColumn<int>(
+        'deleted_at',
+        aliasedName,
+        true,
+        type: DriftSqlType.int,
+        requiredDuringInsert: false,
+      ).withConverter<DateTime?>($StopsTable.$converterdeletedAtn);
   static const VerificationMeta _syncStatusMeta = const VerificationMeta(
     'syncStatus',
   );
@@ -10082,22 +10091,10 @@ class $StopsTable extends Stops with TableInfo<$StopsTable, Stop> {
         createdAt.isAcceptableOrUnknown(data['created_at']!, _createdAtMeta),
       );
     }
-    if (data.containsKey('updated_at')) {
-      context.handle(
-        _updatedAtMeta,
-        updatedAt.isAcceptableOrUnknown(data['updated_at']!, _updatedAtMeta),
-      );
-    }
     if (data.containsKey('updated_by')) {
       context.handle(
         _updatedByMeta,
         updatedBy.isAcceptableOrUnknown(data['updated_by']!, _updatedByMeta),
-      );
-    }
-    if (data.containsKey('deleted_at')) {
-      context.handle(
-        _deletedAtMeta,
-        deletedAt.isAcceptableOrUnknown(data['deleted_at']!, _deletedAtMeta),
       );
     }
     if (data.containsKey('sync_status')) {
@@ -10187,17 +10184,21 @@ class $StopsTable extends Stops with TableInfo<$StopsTable, Stop> {
         DriftSqlType.dateTime,
         data['${effectivePrefix}created_at'],
       )!,
-      updatedAt: attachedDatabase.typeMapping.read(
-        DriftSqlType.dateTime,
-        data['${effectivePrefix}updated_at'],
-      )!,
+      updatedAt: $StopsTable.$converterupdatedAt.fromSql(
+        attachedDatabase.typeMapping.read(
+          DriftSqlType.int,
+          data['${effectivePrefix}updated_at'],
+        )!,
+      ),
       updatedBy: attachedDatabase.typeMapping.read(
         DriftSqlType.string,
         data['${effectivePrefix}updated_by'],
       ),
-      deletedAt: attachedDatabase.typeMapping.read(
-        DriftSqlType.dateTime,
-        data['${effectivePrefix}deleted_at'],
+      deletedAt: $StopsTable.$converterdeletedAtn.fromSql(
+        attachedDatabase.typeMapping.read(
+          DriftSqlType.int,
+          data['${effectivePrefix}deleted_at'],
+        ),
       ),
       syncStatus: attachedDatabase.typeMapping.read(
         DriftSqlType.int,
@@ -10210,6 +10211,13 @@ class $StopsTable extends Stops with TableInfo<$StopsTable, Stop> {
   $StopsTable createAlias(String alias) {
     return $StopsTable(attachedDatabase, alias);
   }
+
+  static TypeConverter<DateTime, int> $converterupdatedAt =
+      const MillisecondDateTimeConverter();
+  static TypeConverter<DateTime, int> $converterdeletedAt =
+      const MillisecondDateTimeConverter();
+  static TypeConverter<DateTime?, int?> $converterdeletedAtn =
+      NullAwareTypeConverter.wrap($converterdeletedAt);
 }
 
 class Stop extends DataClass implements Insertable<Stop> {
@@ -10300,12 +10308,18 @@ class Stop extends DataClass implements Insertable<Stop> {
     }
     map['added_by'] = Variable<String>(addedBy);
     map['created_at'] = Variable<DateTime>(createdAt);
-    map['updated_at'] = Variable<DateTime>(updatedAt);
+    {
+      map['updated_at'] = Variable<int>(
+        $StopsTable.$converterupdatedAt.toSql(updatedAt),
+      );
+    }
     if (!nullToAbsent || updatedBy != null) {
       map['updated_by'] = Variable<String>(updatedBy);
     }
     if (!nullToAbsent || deletedAt != null) {
-      map['deleted_at'] = Variable<DateTime>(deletedAt);
+      map['deleted_at'] = Variable<int>(
+        $StopsTable.$converterdeletedAtn.toSql(deletedAt),
+      );
     }
     map['sync_status'] = Variable<int>(syncStatus);
     return map;
@@ -10696,9 +10710,9 @@ class StopsCompanion extends UpdateCompanion<Stop> {
     Expression<String>? sourceUrl,
     Expression<String>? addedBy,
     Expression<DateTime>? createdAt,
-    Expression<DateTime>? updatedAt,
+    Expression<int>? updatedAt,
     Expression<String>? updatedBy,
-    Expression<DateTime>? deletedAt,
+    Expression<int>? deletedAt,
     Expression<int>? syncStatus,
     Expression<int>? rowid,
   }) {
@@ -10839,13 +10853,17 @@ class StopsCompanion extends UpdateCompanion<Stop> {
       map['created_at'] = Variable<DateTime>(createdAt.value);
     }
     if (updatedAt.present) {
-      map['updated_at'] = Variable<DateTime>(updatedAt.value);
+      map['updated_at'] = Variable<int>(
+        $StopsTable.$converterupdatedAt.toSql(updatedAt.value),
+      );
     }
     if (updatedBy.present) {
       map['updated_by'] = Variable<String>(updatedBy.value);
     }
     if (deletedAt.present) {
-      map['deleted_at'] = Variable<DateTime>(deletedAt.value);
+      map['deleted_at'] = Variable<int>(
+        $StopsTable.$converterdeletedAtn.toSql(deletedAt.value),
+      );
     }
     if (syncStatus.present) {
       map['sync_status'] = Variable<int>(syncStatus.value);
@@ -11212,18 +11230,16 @@ class $ScheduleItemsTable extends ScheduleItems
     requiredDuringInsert: false,
     defaultValue: const Constant('planned'),
   );
-  static const VerificationMeta _updatedAtMeta = const VerificationMeta(
-    'updatedAt',
-  );
   @override
-  late final GeneratedColumn<DateTime> updatedAt = GeneratedColumn<DateTime>(
-    'updated_at',
-    aliasedName,
-    false,
-    type: DriftSqlType.dateTime,
-    requiredDuringInsert: false,
-    clientDefault: () => DateTime.now(),
-  );
+  late final GeneratedColumnWithTypeConverter<DateTime, int> updatedAt =
+      GeneratedColumn<int>(
+        'updated_at',
+        aliasedName,
+        false,
+        type: DriftSqlType.int,
+        requiredDuringInsert: false,
+        clientDefault: () => DateTime.now().millisecondsSinceEpoch,
+      ).withConverter<DateTime>($ScheduleItemsTable.$converterupdatedAt);
   static const VerificationMeta _updatedByMeta = const VerificationMeta(
     'updatedBy',
   );
@@ -11235,17 +11251,15 @@ class $ScheduleItemsTable extends ScheduleItems
     type: DriftSqlType.string,
     requiredDuringInsert: false,
   );
-  static const VerificationMeta _deletedAtMeta = const VerificationMeta(
-    'deletedAt',
-  );
   @override
-  late final GeneratedColumn<DateTime> deletedAt = GeneratedColumn<DateTime>(
-    'deleted_at',
-    aliasedName,
-    true,
-    type: DriftSqlType.dateTime,
-    requiredDuringInsert: false,
-  );
+  late final GeneratedColumnWithTypeConverter<DateTime?, int> deletedAt =
+      GeneratedColumn<int>(
+        'deleted_at',
+        aliasedName,
+        true,
+        type: DriftSqlType.int,
+        requiredDuringInsert: false,
+      ).withConverter<DateTime?>($ScheduleItemsTable.$converterdeletedAtn);
   static const VerificationMeta _syncStatusMeta = const VerificationMeta(
     'syncStatus',
   );
@@ -11353,22 +11367,10 @@ class $ScheduleItemsTable extends ScheduleItems
         status.isAcceptableOrUnknown(data['status']!, _statusMeta),
       );
     }
-    if (data.containsKey('updated_at')) {
-      context.handle(
-        _updatedAtMeta,
-        updatedAt.isAcceptableOrUnknown(data['updated_at']!, _updatedAtMeta),
-      );
-    }
     if (data.containsKey('updated_by')) {
       context.handle(
         _updatedByMeta,
         updatedBy.isAcceptableOrUnknown(data['updated_by']!, _updatedByMeta),
-      );
-    }
-    if (data.containsKey('deleted_at')) {
-      context.handle(
-        _deletedAtMeta,
-        deletedAt.isAcceptableOrUnknown(data['deleted_at']!, _deletedAtMeta),
       );
     }
     if (data.containsKey('sync_status')) {
@@ -11422,17 +11424,21 @@ class $ScheduleItemsTable extends ScheduleItems
         DriftSqlType.string,
         data['${effectivePrefix}status'],
       )!,
-      updatedAt: attachedDatabase.typeMapping.read(
-        DriftSqlType.dateTime,
-        data['${effectivePrefix}updated_at'],
-      )!,
+      updatedAt: $ScheduleItemsTable.$converterupdatedAt.fromSql(
+        attachedDatabase.typeMapping.read(
+          DriftSqlType.int,
+          data['${effectivePrefix}updated_at'],
+        )!,
+      ),
       updatedBy: attachedDatabase.typeMapping.read(
         DriftSqlType.string,
         data['${effectivePrefix}updated_by'],
       ),
-      deletedAt: attachedDatabase.typeMapping.read(
-        DriftSqlType.dateTime,
-        data['${effectivePrefix}deleted_at'],
+      deletedAt: $ScheduleItemsTable.$converterdeletedAtn.fromSql(
+        attachedDatabase.typeMapping.read(
+          DriftSqlType.int,
+          data['${effectivePrefix}deleted_at'],
+        ),
       ),
       syncStatus: attachedDatabase.typeMapping.read(
         DriftSqlType.int,
@@ -11445,6 +11451,13 @@ class $ScheduleItemsTable extends ScheduleItems
   $ScheduleItemsTable createAlias(String alias) {
     return $ScheduleItemsTable(attachedDatabase, alias);
   }
+
+  static TypeConverter<DateTime, int> $converterupdatedAt =
+      const MillisecondDateTimeConverter();
+  static TypeConverter<DateTime, int> $converterdeletedAt =
+      const MillisecondDateTimeConverter();
+  static TypeConverter<DateTime?, int?> $converterdeletedAtn =
+      NullAwareTypeConverter.wrap($converterdeletedAt);
 }
 
 class ScheduleItem extends DataClass implements Insertable<ScheduleItem> {
@@ -11490,12 +11503,18 @@ class ScheduleItem extends DataClass implements Insertable<ScheduleItem> {
       map['fixed_time'] = Variable<int>(fixedTime);
     }
     map['status'] = Variable<String>(status);
-    map['updated_at'] = Variable<DateTime>(updatedAt);
+    {
+      map['updated_at'] = Variable<int>(
+        $ScheduleItemsTable.$converterupdatedAt.toSql(updatedAt),
+      );
+    }
     if (!nullToAbsent || updatedBy != null) {
       map['updated_by'] = Variable<String>(updatedBy);
     }
     if (!nullToAbsent || deletedAt != null) {
-      map['deleted_at'] = Variable<DateTime>(deletedAt);
+      map['deleted_at'] = Variable<int>(
+        $ScheduleItemsTable.$converterdeletedAtn.toSql(deletedAt),
+      );
     }
     map['sync_status'] = Variable<int>(syncStatus);
     return map;
@@ -11735,9 +11754,9 @@ class ScheduleItemsCompanion extends UpdateCompanion<ScheduleItem> {
     Expression<int>? transitMinutes,
     Expression<int>? fixedTime,
     Expression<String>? status,
-    Expression<DateTime>? updatedAt,
+    Expression<int>? updatedAt,
     Expression<String>? updatedBy,
-    Expression<DateTime>? deletedAt,
+    Expression<int>? deletedAt,
     Expression<int>? syncStatus,
     Expression<int>? rowid,
   }) {
@@ -11824,13 +11843,17 @@ class ScheduleItemsCompanion extends UpdateCompanion<ScheduleItem> {
       map['status'] = Variable<String>(status.value);
     }
     if (updatedAt.present) {
-      map['updated_at'] = Variable<DateTime>(updatedAt.value);
+      map['updated_at'] = Variable<int>(
+        $ScheduleItemsTable.$converterupdatedAt.toSql(updatedAt.value),
+      );
     }
     if (updatedBy.present) {
       map['updated_by'] = Variable<String>(updatedBy.value);
     }
     if (deletedAt.present) {
-      map['deleted_at'] = Variable<DateTime>(deletedAt.value);
+      map['deleted_at'] = Variable<int>(
+        $ScheduleItemsTable.$converterdeletedAtn.toSql(deletedAt.value),
+      );
     }
     if (syncStatus.present) {
       map['sync_status'] = Variable<int>(syncStatus.value);
@@ -16574,10 +16597,11 @@ class $$PlacesTableFilterComposer
     builder: (column) => ColumnFilters(column),
   );
 
-  ColumnFilters<DateTime> get updatedAt => $composableBuilder(
-    column: $table.updatedAt,
-    builder: (column) => ColumnFilters(column),
-  );
+  ColumnWithTypeConverterFilters<DateTime, DateTime, int> get updatedAt =>
+      $composableBuilder(
+        column: $table.updatedAt,
+        builder: (column) => ColumnWithTypeConverterFilters(column),
+      );
 
   Expression<bool> placeLabelsRefs(
     Expression<bool> Function($$PlaceLabelsTableFilterComposer f) f,
@@ -16774,7 +16798,7 @@ class $$PlacesTableOrderingComposer
     builder: (column) => ColumnOrderings(column),
   );
 
-  ColumnOrderings<DateTime> get updatedAt => $composableBuilder(
+  ColumnOrderings<int> get updatedAt => $composableBuilder(
     column: $table.updatedAt,
     builder: (column) => ColumnOrderings(column),
   );
@@ -16856,7 +16880,7 @@ class $$PlacesTableAnnotationComposer
   GeneratedColumn<DateTime> get createdAt =>
       $composableBuilder(column: $table.createdAt, builder: (column) => column);
 
-  GeneratedColumn<DateTime> get updatedAt =>
+  GeneratedColumnWithTypeConverter<DateTime, int> get updatedAt =>
       $composableBuilder(column: $table.updatedAt, builder: (column) => column);
 
   Expression<T> placeLabelsRefs<T extends Object>(
@@ -19291,20 +19315,22 @@ class $$TripsTableFilterComposer extends Composer<_$AppDatabase, $TripsTable> {
     builder: (column) => ColumnFilters(column),
   );
 
-  ColumnFilters<DateTime> get updatedAt => $composableBuilder(
-    column: $table.updatedAt,
-    builder: (column) => ColumnFilters(column),
-  );
+  ColumnWithTypeConverterFilters<DateTime, DateTime, int> get updatedAt =>
+      $composableBuilder(
+        column: $table.updatedAt,
+        builder: (column) => ColumnWithTypeConverterFilters(column),
+      );
 
   ColumnFilters<String> get updatedBy => $composableBuilder(
     column: $table.updatedBy,
     builder: (column) => ColumnFilters(column),
   );
 
-  ColumnFilters<DateTime> get deletedAt => $composableBuilder(
-    column: $table.deletedAt,
-    builder: (column) => ColumnFilters(column),
-  );
+  ColumnWithTypeConverterFilters<DateTime?, DateTime, int> get deletedAt =>
+      $composableBuilder(
+        column: $table.deletedAt,
+        builder: (column) => ColumnWithTypeConverterFilters(column),
+      );
 
   ColumnFilters<int> get syncStatus => $composableBuilder(
     column: $table.syncStatus,
@@ -19436,7 +19462,7 @@ class $$TripsTableOrderingComposer
     builder: (column) => ColumnOrderings(column),
   );
 
-  ColumnOrderings<DateTime> get updatedAt => $composableBuilder(
+  ColumnOrderings<int> get updatedAt => $composableBuilder(
     column: $table.updatedAt,
     builder: (column) => ColumnOrderings(column),
   );
@@ -19446,7 +19472,7 @@ class $$TripsTableOrderingComposer
     builder: (column) => ColumnOrderings(column),
   );
 
-  ColumnOrderings<DateTime> get deletedAt => $composableBuilder(
+  ColumnOrderings<int> get deletedAt => $composableBuilder(
     column: $table.deletedAt,
     builder: (column) => ColumnOrderings(column),
   );
@@ -19492,13 +19518,13 @@ class $$TripsTableAnnotationComposer
   GeneratedColumn<DateTime> get createdAt =>
       $composableBuilder(column: $table.createdAt, builder: (column) => column);
 
-  GeneratedColumn<DateTime> get updatedAt =>
+  GeneratedColumnWithTypeConverter<DateTime, int> get updatedAt =>
       $composableBuilder(column: $table.updatedAt, builder: (column) => column);
 
   GeneratedColumn<String> get updatedBy =>
       $composableBuilder(column: $table.updatedBy, builder: (column) => column);
 
-  GeneratedColumn<DateTime> get deletedAt =>
+  GeneratedColumnWithTypeConverter<DateTime?, int> get deletedAt =>
       $composableBuilder(column: $table.deletedAt, builder: (column) => column);
 
   GeneratedColumn<int> get syncStatus => $composableBuilder(
@@ -19868,20 +19894,22 @@ class $$TripDaysTableFilterComposer
     builder: (column) => ColumnFilters(column),
   );
 
-  ColumnFilters<DateTime> get updatedAt => $composableBuilder(
-    column: $table.updatedAt,
-    builder: (column) => ColumnFilters(column),
-  );
+  ColumnWithTypeConverterFilters<DateTime, DateTime, int> get updatedAt =>
+      $composableBuilder(
+        column: $table.updatedAt,
+        builder: (column) => ColumnWithTypeConverterFilters(column),
+      );
 
   ColumnFilters<String> get updatedBy => $composableBuilder(
     column: $table.updatedBy,
     builder: (column) => ColumnFilters(column),
   );
 
-  ColumnFilters<DateTime> get deletedAt => $composableBuilder(
-    column: $table.deletedAt,
-    builder: (column) => ColumnFilters(column),
-  );
+  ColumnWithTypeConverterFilters<DateTime?, DateTime, int> get deletedAt =>
+      $composableBuilder(
+        column: $table.deletedAt,
+        builder: (column) => ColumnWithTypeConverterFilters(column),
+      );
 
   ColumnFilters<int> get syncStatus => $composableBuilder(
     column: $table.syncStatus,
@@ -19966,7 +19994,7 @@ class $$TripDaysTableOrderingComposer
     builder: (column) => ColumnOrderings(column),
   );
 
-  ColumnOrderings<DateTime> get updatedAt => $composableBuilder(
+  ColumnOrderings<int> get updatedAt => $composableBuilder(
     column: $table.updatedAt,
     builder: (column) => ColumnOrderings(column),
   );
@@ -19976,7 +20004,7 @@ class $$TripDaysTableOrderingComposer
     builder: (column) => ColumnOrderings(column),
   );
 
-  ColumnOrderings<DateTime> get deletedAt => $composableBuilder(
+  ColumnOrderings<int> get deletedAt => $composableBuilder(
     column: $table.deletedAt,
     builder: (column) => ColumnOrderings(column),
   );
@@ -20033,13 +20061,13 @@ class $$TripDaysTableAnnotationComposer
     builder: (column) => column,
   );
 
-  GeneratedColumn<DateTime> get updatedAt =>
+  GeneratedColumnWithTypeConverter<DateTime, int> get updatedAt =>
       $composableBuilder(column: $table.updatedAt, builder: (column) => column);
 
   GeneratedColumn<String> get updatedBy =>
       $composableBuilder(column: $table.updatedBy, builder: (column) => column);
 
-  GeneratedColumn<DateTime> get deletedAt =>
+  GeneratedColumnWithTypeConverter<DateTime?, int> get deletedAt =>
       $composableBuilder(column: $table.deletedAt, builder: (column) => column);
 
   GeneratedColumn<int> get syncStatus => $composableBuilder(
@@ -20462,20 +20490,22 @@ class $$StopsTableFilterComposer extends Composer<_$AppDatabase, $StopsTable> {
     builder: (column) => ColumnFilters(column),
   );
 
-  ColumnFilters<DateTime> get updatedAt => $composableBuilder(
-    column: $table.updatedAt,
-    builder: (column) => ColumnFilters(column),
-  );
+  ColumnWithTypeConverterFilters<DateTime, DateTime, int> get updatedAt =>
+      $composableBuilder(
+        column: $table.updatedAt,
+        builder: (column) => ColumnWithTypeConverterFilters(column),
+      );
 
   ColumnFilters<String> get updatedBy => $composableBuilder(
     column: $table.updatedBy,
     builder: (column) => ColumnFilters(column),
   );
 
-  ColumnFilters<DateTime> get deletedAt => $composableBuilder(
-    column: $table.deletedAt,
-    builder: (column) => ColumnFilters(column),
-  );
+  ColumnWithTypeConverterFilters<DateTime?, DateTime, int> get deletedAt =>
+      $composableBuilder(
+        column: $table.deletedAt,
+        builder: (column) => ColumnWithTypeConverterFilters(column),
+      );
 
   ColumnFilters<int> get syncStatus => $composableBuilder(
     column: $table.syncStatus,
@@ -20650,7 +20680,7 @@ class $$StopsTableOrderingComposer
     builder: (column) => ColumnOrderings(column),
   );
 
-  ColumnOrderings<DateTime> get updatedAt => $composableBuilder(
+  ColumnOrderings<int> get updatedAt => $composableBuilder(
     column: $table.updatedAt,
     builder: (column) => ColumnOrderings(column),
   );
@@ -20660,7 +20690,7 @@ class $$StopsTableOrderingComposer
     builder: (column) => ColumnOrderings(column),
   );
 
-  ColumnOrderings<DateTime> get deletedAt => $composableBuilder(
+  ColumnOrderings<int> get deletedAt => $composableBuilder(
     column: $table.deletedAt,
     builder: (column) => ColumnOrderings(column),
   );
@@ -20766,13 +20796,13 @@ class $$StopsTableAnnotationComposer
   GeneratedColumn<DateTime> get createdAt =>
       $composableBuilder(column: $table.createdAt, builder: (column) => column);
 
-  GeneratedColumn<DateTime> get updatedAt =>
+  GeneratedColumnWithTypeConverter<DateTime, int> get updatedAt =>
       $composableBuilder(column: $table.updatedAt, builder: (column) => column);
 
   GeneratedColumn<String> get updatedBy =>
       $composableBuilder(column: $table.updatedBy, builder: (column) => column);
 
-  GeneratedColumn<DateTime> get deletedAt =>
+  GeneratedColumnWithTypeConverter<DateTime?, int> get deletedAt =>
       $composableBuilder(column: $table.deletedAt, builder: (column) => column);
 
   GeneratedColumn<int> get syncStatus => $composableBuilder(
@@ -21586,20 +21616,22 @@ class $$ScheduleItemsTableFilterComposer
     builder: (column) => ColumnFilters(column),
   );
 
-  ColumnFilters<DateTime> get updatedAt => $composableBuilder(
-    column: $table.updatedAt,
-    builder: (column) => ColumnFilters(column),
-  );
+  ColumnWithTypeConverterFilters<DateTime, DateTime, int> get updatedAt =>
+      $composableBuilder(
+        column: $table.updatedAt,
+        builder: (column) => ColumnWithTypeConverterFilters(column),
+      );
 
   ColumnFilters<String> get updatedBy => $composableBuilder(
     column: $table.updatedBy,
     builder: (column) => ColumnFilters(column),
   );
 
-  ColumnFilters<DateTime> get deletedAt => $composableBuilder(
-    column: $table.deletedAt,
-    builder: (column) => ColumnFilters(column),
-  );
+  ColumnWithTypeConverterFilters<DateTime?, DateTime, int> get deletedAt =>
+      $composableBuilder(
+        column: $table.deletedAt,
+        builder: (column) => ColumnWithTypeConverterFilters(column),
+      );
 
   ColumnFilters<int> get syncStatus => $composableBuilder(
     column: $table.syncStatus,
@@ -21715,7 +21747,7 @@ class $$ScheduleItemsTableOrderingComposer
     builder: (column) => ColumnOrderings(column),
   );
 
-  ColumnOrderings<DateTime> get updatedAt => $composableBuilder(
+  ColumnOrderings<int> get updatedAt => $composableBuilder(
     column: $table.updatedAt,
     builder: (column) => ColumnOrderings(column),
   );
@@ -21725,7 +21757,7 @@ class $$ScheduleItemsTableOrderingComposer
     builder: (column) => ColumnOrderings(column),
   );
 
-  ColumnOrderings<DateTime> get deletedAt => $composableBuilder(
+  ColumnOrderings<int> get deletedAt => $composableBuilder(
     column: $table.deletedAt,
     builder: (column) => ColumnOrderings(column),
   );
@@ -21836,13 +21868,13 @@ class $$ScheduleItemsTableAnnotationComposer
   GeneratedColumn<String> get status =>
       $composableBuilder(column: $table.status, builder: (column) => column);
 
-  GeneratedColumn<DateTime> get updatedAt =>
+  GeneratedColumnWithTypeConverter<DateTime, int> get updatedAt =>
       $composableBuilder(column: $table.updatedAt, builder: (column) => column);
 
   GeneratedColumn<String> get updatedBy =>
       $composableBuilder(column: $table.updatedBy, builder: (column) => column);
 
-  GeneratedColumn<DateTime> get deletedAt =>
+  GeneratedColumnWithTypeConverter<DateTime?, int> get deletedAt =>
       $composableBuilder(column: $table.deletedAt, builder: (column) => column);
 
   GeneratedColumn<int> get syncStatus => $composableBuilder(

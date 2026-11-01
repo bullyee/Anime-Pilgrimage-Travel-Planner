@@ -6,6 +6,21 @@ enum SyncStatusV10 {
   dirty,
 }
 
+/// Stores [DateTime] with millisecond precision in SQLite as integer Unix milliseconds.
+class MillisecondDateTimeConverter extends TypeConverter<DateTime, int> {
+  const MillisecondDateTimeConverter();
+
+  @override
+  DateTime fromSql(int fromDb) {
+    return DateTime.fromMillisecondsSinceEpoch(fromDb);
+  }
+
+  @override
+  int toSql(DateTime value) {
+    return value.millisecondsSinceEpoch;
+  }
+}
+
 // ============================================================================
 // PERSONAL LAYER (On device only; never synced directly to shared trip groups)
 // ============================================================================
@@ -44,7 +59,8 @@ class Places extends Table {
   TextColumn get visibility => text().withDefault(const Constant('saved'))();
 
   DateTimeColumn get createdAt => dateTime().clientDefault(() => DateTime.now())();
-  DateTimeColumn get updatedAt => dateTime().clientDefault(() => DateTime.now())();
+  IntColumn get updatedAt =>
+      integer().clientDefault(() => DateTime.now().millisecondsSinceEpoch).map(const MillisecondDateTimeConverter())();
 
   @override
   Set<Column> get primaryKey => {placeKey};
@@ -135,7 +151,7 @@ class NewReferenceImages extends Table {
 }
 
 // ============================================================================
-// SHARED LAYER (One trip, synced across collaborators)
+// SHARED LAYER (Collaborative trip itineraries synced to Firebase)
 // ============================================================================
 
 /// A trip containing day blocks, stops, and schedule items.
@@ -150,11 +166,13 @@ class Trips extends Table {
   IntColumn get dayCount => integer().withDefault(const Constant(1))();
 
   DateTimeColumn get createdAt => dateTime().clientDefault(() => DateTime.now())();
-  DateTimeColumn get updatedAt => dateTime().clientDefault(() => DateTime.now())();
+  IntColumn get updatedAt =>
+      integer().clientDefault(() => DateTime.now().millisecondsSinceEpoch).map(const MillisecondDateTimeConverter())();
 
   // Sync bookkeeping
   TextColumn get updatedBy => text().nullable()();
-  DateTimeColumn get deletedAt => dateTime().nullable()();
+  IntColumn get deletedAt =>
+      integer().nullable().map(const MillisecondDateTimeConverter())();
   IntColumn get syncStatus => integer().withDefault(const Constant(0))(); // 0: synced, 1: dirty
 
   @override
@@ -170,9 +188,11 @@ class TripDays extends Table {
   TextColumn get pinnedDate => text().nullable()(); // 'YYYY-MM-DD'
 
   // Sync bookkeeping
-  DateTimeColumn get updatedAt => dateTime().clientDefault(() => DateTime.now())();
+  IntColumn get updatedAt =>
+      integer().clientDefault(() => DateTime.now().millisecondsSinceEpoch).map(const MillisecondDateTimeConverter())();
   TextColumn get updatedBy => text().nullable()();
-  DateTimeColumn get deletedAt => dateTime().nullable()();
+  IntColumn get deletedAt =>
+      integer().nullable().map(const MillisecondDateTimeConverter())();
   IntColumn get syncStatus => integer().withDefault(const Constant(0))();
 
   @override
@@ -204,9 +224,11 @@ class Stops extends Table {
   DateTimeColumn get createdAt => dateTime().clientDefault(() => DateTime.now())();
 
   // Sync bookkeeping
-  DateTimeColumn get updatedAt => dateTime().clientDefault(() => DateTime.now())();
+  IntColumn get updatedAt =>
+      integer().clientDefault(() => DateTime.now().millisecondsSinceEpoch).map(const MillisecondDateTimeConverter())();
   TextColumn get updatedBy => text().nullable()();
-  DateTimeColumn get deletedAt => dateTime().nullable()();
+  IntColumn get deletedAt =>
+      integer().nullable().map(const MillisecondDateTimeConverter())();
   IntColumn get syncStatus => integer().withDefault(const Constant(0))();
 
   @override
@@ -236,12 +258,13 @@ class ScheduleItems extends Table {
   TextColumn get status => text().withDefault(const Constant('planned'))(); // 'planned' | 'done' | 'skipped'
 
   // Sync bookkeeping
-  DateTimeColumn get updatedAt => dateTime().clientDefault(() => DateTime.now())();
+  IntColumn get updatedAt =>
+      integer().clientDefault(() => DateTime.now().millisecondsSinceEpoch).map(const MillisecondDateTimeConverter())();
   TextColumn get updatedBy => text().nullable()();
-  DateTimeColumn get deletedAt => dateTime().nullable()();
+  IntColumn get deletedAt =>
+      integer().nullable().map(const MillisecondDateTimeConverter())();
   IntColumn get syncStatus => integer().withDefault(const Constant(0))();
 
   @override
   Set<Column> get primaryKey => {id};
 }
-

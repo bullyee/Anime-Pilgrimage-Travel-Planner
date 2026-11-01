@@ -5,6 +5,7 @@
 /// - Schedule timeline time computation (order, stay, transit, fixed times, past-24:00 support e.g. 25:30).
 /// - Trip status (planning / ongoing / finished) derived from dated blocks.
 /// - Backlog calculation derived from stops without schedule items.
+library;
 
 /// Status of a trip derived from its dated blocks and current date.
 enum TripStatus {
@@ -53,12 +54,14 @@ class ResolvedBlockDate {
   final int index;
   final bool isBackup;
   final DateTime? date;
+  final bool hasConflict;
 
   const ResolvedBlockDate({
     required this.block,
     required this.index,
     required this.isBackup,
     this.date,
+    this.hasConflict = false,
   });
 }
 
@@ -128,13 +131,22 @@ DateTime normalizeDateOnly(DateTime dt) {
 class ScheduleLogicEngine {
   const ScheduleLogicEngine._();
 
-  /// Validates that all pinned dates in [blocks] strictly increase along their `sortKey` order.
+  /// Validates that all pinned dates in [blocks] strictly increase along their
+  /// `sortKey` (and `id` tie-breaker) order, and that no pin falls on or before
+  /// the previous block's computed date or before [startDate].
   ///
-  /// Throws [ArgumentError] if two pinned blocks have equal dates or a later block
-  /// has a date before an earlier block.
-  static void validatePinnedDates(List<DayBlockInfo> blocks) {
+  /// Throws [ArgumentError] if any pin conflicts.
+  static void validatePinnedDates(
+    List<DayBlockInfo> blocks, {
+    DateTime? startDate,
+    int? dayCount,
+  }) {
     final sorted = List<DayBlockInfo>.from(blocks)
-      ..sort((a, b) => a.sortKey.compareTo(b.sortKey));
+      ..sort((a, b) {
+        final c = a.sortKey.compareTo(b.sortKey);
+        if (c != 0) return c;
+        return a.id.compareTo(b.id);
+      });
 
     DateTime? lastPin;
     for (final b in sorted) {
@@ -152,56 +164,117 @@ class ScheduleLogicEngine {
         lastPin = currentPin;
       }
     }
+
+    final resolved = computeBlockDates(
+      blocks: sorted,
+      startDate: startDate,
+      dayCount: dayCount ?? sorted.length,
+    );
+    for (final r in resolved) {
+      if (r.hasConflict) {
+        throw ArgumentError(
+          'Pinned date on block ${r.block.id} conflicts with start date or previous block date.',
+        );
+      }
+    }
   }
 
   /// Computes the dates for day blocks.
   ///
-  /// - The blocks are sorted by `sortKey`.
+  /// - The blocks are sorted by `sortKey`, then `id`.
   /// - Blocks with index < [dayCount] are dated blocks.
   /// - Blocks with index >= [dayCount] are backup blocks (no date).
   /// - Block 0 starts at [startDate] (or its pinned date). Subsequent blocks
   ///   continue consecutive dates unless a block has a [DayBlockInfo.pinnedDate],
   ///   in which case it and subsequent blocks continue from that pin.
+  /// - Never throws on stored data: if a stored pin is before [startDate] or on/before
+  ///   the previous block's computed date, `hasConflict` is set to `true` and the
+  ///   conflicting pin is ignored in favor of the consecutive date.
   static List<ResolvedBlockDate> computeBlockDates({
     required List<DayBlockInfo> blocks,
     required DateTime? startDate,
     required int dayCount,
   }) {
-    validatePinnedDates(blocks);
-
     final sorted = List<DayBlockInfo>.from(blocks)
-      ..sort((a, b) => a.sortKey.compareTo(b.sortKey));
+      ..sort((a, b) {
+        final c = a.sortKey.compareTo(b.sortKey);
+        if (c != 0) return c;
+        return a.id.compareTo(b.id);
+      });
 
     final results = <ResolvedBlockDate>[];
-    DateTime? currentDate = startDate != null ? normalizeDateOnly(startDate) : null;
+    DateTime? lastComputedDate;
+    DateTime? lastSeenPin;
 
     for (int i = 0; i < sorted.length; i++) {
       final block = sorted[i];
       final bool isBackup = i >= dayCount;
+      final pin = block.pinnedDate != null ? normalizeDateOnly(block.pinnedDate!) : null;
 
       if (isBackup) {
+        bool hasConflict = false;
+        final minAllowedAfter = lastComputedDate ?? lastSeenPin;
+        if (pin != null && minAllowedAfter != null && !pin.isAfter(minAllowedAfter)) {
+          hasConflict = true;
+        }
+        if (pin != null && !hasConflict) {
+          lastSeenPin = pin;
+        }
         results.add(ResolvedBlockDate(
           block: block,
           index: i,
           isBackup: true,
           date: null,
+          hasConflict: hasConflict,
         ));
-      } else {
-        if (block.pinnedDate != null) {
-          currentDate = normalizeDateOnly(block.pinnedDate!);
+        continue;
+      }
+
+      DateTime? blockDate;
+      bool hasConflict = false;
+
+      if (i == 0) {
+        final baseStart = startDate != null ? normalizeDateOnly(startDate) : null;
+        if (pin != null) {
+          if (baseStart != null && pin.isBefore(baseStart)) {
+            // Pin is before trip start date: conflict! Fall back to base start.
+            blockDate = baseStart;
+            hasConflict = true;
+          } else {
+            blockDate = pin;
+          }
+        } else {
+          blockDate = baseStart;
         }
+      } else {
+        final consecutiveDate = lastComputedDate?.add(const Duration(days: 1));
+        final minAllowedAfter = lastComputedDate ?? lastSeenPin;
 
-        results.add(ResolvedBlockDate(
-          block: block,
-          index: i,
-          isBackup: false,
-          date: currentDate,
-        ));
-
-        if (currentDate != null) {
-          currentDate = currentDate.add(const Duration(days: 1));
+        if (pin != null) {
+          if (minAllowedAfter != null && !pin.isAfter(minAllowedAfter)) {
+            // Pin is on or before previous block's computed date: reject pin, continue consecutively!
+            blockDate = consecutiveDate;
+            hasConflict = true;
+          } else {
+            blockDate = pin;
+          }
+        } else {
+          blockDate = consecutiveDate;
         }
       }
+
+      if (pin != null && !hasConflict) {
+        lastSeenPin = pin;
+      }
+      lastComputedDate = blockDate;
+
+      results.add(ResolvedBlockDate(
+        block: block,
+        index: i,
+        isBackup: false,
+        date: blockDate,
+        hasConflict: hasConflict,
+      ));
     }
 
     return results;
@@ -221,7 +294,11 @@ class ScheduleLogicEngine {
     if (items.isEmpty) return const [];
 
     final sorted = List<ScheduleItemInfo>.from(items)
-      ..sort((a, b) => a.sortKey.compareTo(b.sortKey));
+      ..sort((a, b) {
+        final c = a.sortKey.compareTo(b.sortKey);
+        if (c != 0) return c;
+        return a.id.compareTo(b.id);
+      });
 
     final results = <ComputedTimelineItem>[];
     int currentMinute = sorted.first.fixedTimeMinutes ?? defaultDayStartMinutes;

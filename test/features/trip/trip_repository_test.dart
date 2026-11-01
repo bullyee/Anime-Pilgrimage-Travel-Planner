@@ -88,6 +88,39 @@ void main() {
         () => tripRepo.pinDayBlockDate(days[2].id, '2027-04-11'),
         throwsArgumentError,
       );
+
+      // Pinning a block to the same date as a previous unpinned block is also rejected
+      final datedTrip = await tripRepo.createTrip(
+        title: 'Dated Trip',
+        ownerId: 'user_1',
+        startDate: '2027-05-01',
+        dayCount: 2,
+      );
+      final datedDays = await tripRepo.getDaysForTrip(datedTrip.id);
+      // Day 0 is unpinned and has computed date 2027-05-01; pinning Day 1 to 2027-05-01 must fail
+      expect(
+        () => tripRepo.pinDayBlockDate(datedDays[1].id, '2027-05-01'),
+        throwsArgumentError,
+      );
+    });
+
+    test('deleteDayBlock tombstones the day and its schedule items', () async {
+      final trip = await tripRepo.createTrip(title: 'Delete Day Test', ownerId: 'user_1', dayCount: 2);
+      final days = await tripRepo.getDaysForTrip(trip.id);
+      final stop = await tripRepo.createTripOnlySpot(
+        tripId: trip.id,
+        name: 'Spot A',
+        lat: 35.0,
+        lng: 135.0,
+        addedBy: 'user_1',
+      );
+      await tripRepo.scheduleStop(tripId: trip.id, stopId: stop.id, dayId: days[0].id);
+
+      await tripRepo.deleteDayBlock(days[0].id);
+
+      final remainingDays = await tripRepo.getDaysForTrip(trip.id);
+      expect(remainingDays.map((d) => d.id).toList(), equals([days[1].id]));
+      expect(await tripRepo.getScheduleItemsForTrip(trip.id), isEmpty);
     });
 
     test('addPlaceToTrip copies place facts, reference images and labels', () async {

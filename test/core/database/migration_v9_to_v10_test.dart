@@ -1,8 +1,24 @@
+import 'dart:io';
+
 import 'package:drift/drift.dart' hide isNull, isNotNull;
 import 'package:drift/native.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:trip_planner/core/database/database.dart';
 import 'package:trip_planner/core/database/migrations/migration_v9_to_v10.dart';
+
+const _v10Tables = [
+  'stop_labels',
+  'schedule_items',
+  'stops',
+  'trip_days',
+  'trips',
+  'place_labels',
+  'photos',
+  'place_visits',
+  'v10_reference_images',
+  'labels',
+  'places',
+];
 
 void main() {
   late AppDatabase db;
@@ -217,11 +233,41 @@ void main() {
       expect(tableNames.contains('pois'), isFalse);
     });
 
-    test('migrates legacy v8 database to v10 preserving data', () async {
-      final nowMs = DateTime.utc(2026, 6, 1).millisecondsSinceEpoch;
+    test('real onUpgrade from a v8 database file (8 -> 9 -> 10) preserves data', () async {
+      final dir = await Directory.systemTemp.createTemp('mig_v8_');
+      addTearDown(() => dir.delete(recursive: true));
+      final file = File('${dir.path}/v8.sqlite');
 
-      // Seed v8 records (where POI has no v9 columns like last_modified_at)
-      await db.into(db.rois).insert(
+      // Build a real v8 database file: drop v10 tables, rebuild `pois` without
+      // the v9 columns (sync_status, is_deleted, has_ever_synced, last_modified_at),
+      // and set user_version = 8.
+      final seedDb = AppDatabase.forTesting(NativeDatabase(file));
+      await seedDb.customStatement('PRAGMA foreign_keys = OFF');
+      for (final t in _v10Tables) {
+        await seedDb.customStatement('DROP TABLE $t');
+      }
+      await seedDb.customStatement('DROP TABLE pois');
+      await seedDb.customStatement('''
+        CREATE TABLE pois (
+          id TEXT NOT NULL PRIMARY KEY,
+          roi_id TEXT NULL REFERENCES rois(id) ON DELETE SET NULL,
+          name TEXT NOT NULL,
+          lat REAL NOT NULL,
+          lng REAL NOT NULL,
+          description TEXT NULL,
+          address TEXT NULL,
+          business_hours TEXT NULL,
+          contact_info TEXT NULL,
+          local_cover_image_path TEXT NULL,
+          remote_cover_image_url TEXT NULL,
+          created_at INTEGER NOT NULL DEFAULT 0,
+          author_id TEXT NOT NULL,
+          is_shared INTEGER NOT NULL DEFAULT 0
+        );
+      ''');
+
+      final nowMs = DateTime.utc(2026, 6, 1).millisecondsSinceEpoch;
+      await seedDb.into(seedDb.rois).insert(
             RoisCompanion.insert(
               id: 'roi_shiga',
               name: 'Shiga',
@@ -229,34 +275,98 @@ void main() {
               createdAt: Value(nowMs),
             ),
           );
+      await seedDb.customStatement(
+        'INSERT INTO pois (id, roi_id, name, lat, lng, created_at, author_id, is_shared) VALUES (?, ?, ?, ?, ?, ?, ?, ?)',
+        ['custom_spot_1', 'roi_shiga', 'Toyosato Primary School', 35.20, 136.23, nowMs, 'u1', 0],
+      );
+      await seedDb.customStatement('PRAGMA user_version = 8');
+      await seedDb.close();
 
-      await db.into(db.pois).insert(
-            PoisCompanion.insert(
-              id: 'custom_spot_1',
-              roiId: const Value('roi_shiga'),
-              name: 'Toyosato Primary School',
-              lat: 35.20,
-              lng: 136.23,
-              authorId: 'u1',
-              createdAt: Value(nowMs),
-              // v8 has null lastModifiedAt
-            ),
-          );
+      // Reopen with AppDatabase so Drift runs onUpgrade(8 -> 10)
+      final upgradedDb = AppDatabase.forTesting(NativeDatabase(file));
+      addTearDown(() => upgradedDb.close());
 
-      // Run migration
-      final migrator = MigrationV9ToV10(db);
-      await migrator.migrate(dropOldTables: true);
-
-      // Verify v10 places
-      final place = await (db.select(db.places)..where((tbl) => tbl.placeKey.equals('custom_spot_1'))).getSingle();
+      final place = await (upgradedDb.select(upgradedDb.places)
+            ..where((tbl) => tbl.placeKey.equals('custom_spot_1')))
+          .getSingle();
       expect(place.name, equals('Toyosato Primary School'));
-      expect(place.source, isNull); // Custom spot, not anitabi
+      expect(place.source, isNull);
       expect(place.visibility, equals('saved'));
 
-      // Verify region label
-      final regionLabel = await (db.select(db.labels)..where((tbl) => tbl.id.equals('roi_shiga'))).getSingle();
+      final regionLabel = await (upgradedDb.select(upgradedDb.labels)
+            ..where((tbl) => tbl.id.equals('roi_shiga')))
+          .getSingle();
       expect(regionLabel.name, equals('Shiga'));
       expect(regionLabel.kind, equals('region'));
+
+      final placeLabels = await upgradedDb.select(upgradedDb.placeLabels).get();
+      expect(placeLabels.single.placeKey, equals('custom_spot_1'));
+      expect(placeLabels.single.labelId, equals('roi_shiga'));
+    });
+
+    test('deduplicates anime labels with and without bangumiId and is idempotent on re-run', () async {
+      // Two anime rows for the same work: one with bangumiId, one without
+      await db.into(db.animes).insert(
+            AnimesCompanion.insert(
+              id: 'anime_with_bgm',
+              name: 'K-ON!',
+              bangumiId: const Value('1424'),
+              authorId: 'u1',
+            ),
+          );
+      await db.into(db.animes).insert(
+            AnimesCompanion.insert(
+              id: 'anime_no_bgm',
+              name: 'K-ON!',
+              authorId: 'u1',
+            ),
+          );
+      await db.into(db.pois).insert(
+            PoisCompanion.insert(
+              id: 'poi_1',
+              name: 'School Gate',
+              lat: 35.2,
+              lng: 136.2,
+              authorId: 'u1',
+            ),
+          );
+      await db.into(db.poiAnimes).insert(
+            PoiAnimesCompanion.insert(poiId: 'poi_1', animeId: 'anime_no_bgm'),
+          );
+
+      final migrator = MigrationV9ToV10(db);
+      await migrator.migrateData();
+
+      // Only one anime label should exist, and poi_1 should link to it
+      final animeLabels = await (db.select(db.labels)..where((tbl) => tbl.kind.equals('anime'))).get();
+      expect(animeLabels.length, equals(1));
+      expect(animeLabels.single.id, equals('anime_with_bgm'));
+      expect(animeLabels.single.bangumiId, equals('1424'));
+
+      final pl = await db.select(db.placeLabels).get();
+      expect(pl.length, equals(1));
+      expect(pl.single.placeKey, equals('poi_1'));
+      expect(pl.single.labelId, equals('anime_with_bgm'));
+
+      // Re-running migrateData() at Stage 2 cutover after another POI is added in v9 is idempotent
+      await db.into(db.pois).insert(
+            PoisCompanion.insert(
+              id: 'poi_2',
+              name: 'Music Room',
+              lat: 35.21,
+              lng: 136.21,
+              authorId: 'u1',
+            ),
+          );
+      await db.into(db.poiAnimes).insert(
+            PoiAnimesCompanion.insert(poiId: 'poi_2', animeId: 'anime_with_bgm'),
+          );
+      await migrator.migrateData();
+
+      final allPlaces = await db.select(db.places).get();
+      expect(allPlaces.map((p) => p.placeKey).toSet(), equals({'poi_1', 'poi_2'}));
+      final animeLabelsAfter = await (db.select(db.labels)..where((tbl) => tbl.kind.equals('anime'))).get();
+      expect(animeLabelsAfter.length, equals(1));
     });
   });
 }

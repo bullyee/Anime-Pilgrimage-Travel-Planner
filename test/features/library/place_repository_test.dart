@@ -99,5 +99,86 @@ void main() {
       expect(labels.length, equals(2));
       expect(labels.map((l) => l.name), containsAll(['Hibike! Euphonium', 'Bench']));
     });
+
+    test('renameLabel, mergeLabels, and deleteLabel maintain referential integrity', () async {
+      await placeRepo.upsertPlace(
+        PlacesCompanion.insert(
+          placeKey: 'p1',
+          name: 'Spot 1',
+          lat: 35.0,
+          lng: 135.0,
+        ),
+      );
+      final tagA = await placeRepo.getOrCreateLabel(kind: 'tag', name: 'Cafe');
+      final tagB = await placeRepo.getOrCreateLabel(kind: 'tag', name: 'Coffee Shop');
+      await placeRepo.attachLabelToPlace('p1', tagA.id);
+
+      // Renaming tagA to 'Coffee Shop' collides with tagB and merges into tagB
+      final merged = await placeRepo.renameLabel(tagA.id, 'Coffee Shop');
+      expect(merged.id, equals(tagB.id));
+      expect(await placeRepo.getLabel(tagA.id), isNull);
+
+      final p1Labels = await placeRepo.getLabelsForPlace('p1');
+      expect(p1Labels.map((l) => l.id).toList(), equals([tagB.id]));
+
+      // Deleting tagB cleans up place_labels
+      await placeRepo.deleteLabel(tagB.id);
+      expect(await placeRepo.getLabelsForPlace('p1'), isEmpty);
+    });
+
+    test('Photos, ReferenceImages, and PlaceVisits CRUD operations', () async {
+      await placeRepo.upsertPlace(
+        PlacesCompanion.insert(
+          placeKey: 'p_media',
+          name: 'Shrine',
+          lat: 35.1,
+          lng: 135.1,
+        ),
+      );
+
+      final refImg = await placeRepo.addReferenceImage(
+        placeKey: 'p_media',
+        remoteUrl: 'https://image.anitabi.cn/points/1/ref.jpg',
+        episode: '1',
+        timestampS: 120,
+      );
+      expect((await placeRepo.getReferenceImagesForPlace('p_media')).single.id, equals(refImg.id));
+
+      final photo = await placeRepo.addPhoto(
+        placeKey: 'p_media',
+        localPath: '/local/shot.jpg',
+        tripId: 'trip_1',
+        referenceImageId: refImg.id,
+      );
+      expect((await placeRepo.getPhotosForPlace('p_media')).single.id, equals(photo.id));
+      expect((await placeRepo.getPhotosForTrip('trip_1')).single.id, equals(photo.id));
+
+      await placeRepo.updatePhoto(
+        PhotosCompanion(
+          id: Value(photo.id),
+          kind: const Value('comparison'),
+          isShared: const Value(true),
+        ),
+      );
+      final updatedPhoto = (await placeRepo.getPhoto(photo.id))!;
+      expect(updatedPhoto.kind, equals('comparison'));
+      expect(updatedPhoto.isShared, isTrue);
+
+      final visit = await placeRepo.addVisit(
+        placeKey: 'p_media',
+        date: '2027-04-02',
+        tripId: 'trip_1',
+      );
+      expect((await placeRepo.getVisitsForPlace('p_media')).single.id, equals(visit.id));
+
+      await placeRepo.deleteVisit(visit.id);
+      expect(await placeRepo.getVisitsForPlace('p_media'), isEmpty);
+
+      await placeRepo.deletePhoto(photo.id);
+      expect(await placeRepo.getPhotosForPlace('p_media'), isEmpty);
+
+      await placeRepo.deleteReferenceImage(refImg.id);
+      expect(await placeRepo.getReferenceImagesForPlace('p_media'), isEmpty);
+    });
   });
 }

@@ -2,12 +2,16 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../../../core/database/database.dart';
 import '../../../core/providers/database_provider.dart';
 import '../../../core/utils/schedule_logic.dart';
+import '../../auth/providers/auth_provider.dart';
+import '../../library/providers/place_providers.dart';
 import '../repositories/trip_repository.dart';
 
 /// Provides the [TripRepository] instance backed by Drift.
 final tripRepositoryProvider = Provider<TripRepository>((ref) {
   final db = ref.watch(databaseProvider);
-  return DriftTripRepository(db);
+  final userId = ref.watch(currentUserIdProvider);
+  final placeRepo = ref.watch(placeRepositoryProvider);
+  return DriftTripRepository(db, null, userId, placeRepo);
 });
 
 /// Streams all active trips.
@@ -46,6 +50,18 @@ final scheduleItemsForDayProvider = StreamProvider.autoDispose.family<List<Sched
   return repo.watchScheduleItemsForDay(dayId);
 });
 
+/// Streams labels attached to a specific [stopId].
+final stopLabelsProvider = StreamProvider.autoDispose.family<List<Label>, String>((ref, stopId) {
+  final repo = ref.watch(tripRepositoryProvider);
+  return repo.watchLabelsForStop(stopId);
+});
+
+/// Streams reference images attached to a specific [stopId].
+final stopReferenceImagesProvider = StreamProvider.autoDispose.family<List<NewReferenceImage>, String>((ref, stopId) {
+  final repo = ref.watch(tripRepositoryProvider);
+  return repo.watchReferenceImagesForStop(stopId);
+});
+
 /// Computes resolved calendar dates for all day blocks in a trip.
 final tripResolvedBlockDatesProvider = Provider.autoDispose.family<List<ResolvedBlockDate>, String>((ref, tripId) {
   final tripAsync = ref.watch(tripDetailProvider(tripId));
@@ -67,15 +83,11 @@ final tripResolvedBlockDatesProvider = Provider.autoDispose.family<List<Resolved
 
   final startDate = trip.startDate != null ? DateTime.tryParse(trip.startDate!) : null;
 
-  try {
-    return ScheduleLogicEngine.computeBlockDates(
-      blocks: blockInfos,
-      startDate: startDate,
-      dayCount: trip.dayCount,
-    );
-  } catch (_) {
-    return const [];
-  }
+  return ScheduleLogicEngine.computeBlockDates(
+    blocks: blockInfos,
+    startDate: startDate,
+    dayCount: trip.dayCount,
+  );
 });
 
 /// Computes derived trip status (`planning`, `ongoing`, `finished`).
