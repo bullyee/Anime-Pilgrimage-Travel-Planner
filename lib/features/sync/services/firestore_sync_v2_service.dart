@@ -19,7 +19,8 @@ class FirestoreSyncV2Service {
     final snapshot = await docRef.get();
     if (snapshot.exists) return;
 
-    await docRef.set({
+    final batch = _db.batch();
+    batch.set(docRef, {
       'id': trip.id,
       'title': trip.title,
       'description': trip.description,
@@ -28,11 +29,23 @@ class FirestoreSyncV2Service {
       'startDate': trip.startDate,
       'dayCount': trip.dayCount,
       'members': [currentUserId],
-      'createdAt': FieldValue.serverTimestamp(),
-      'updatedAt': FieldValue.serverTimestamp(),
+      'createdAt': Timestamp.fromDate(trip.createdAt),
+      'updatedAt': Timestamp.fromDate(trip.updatedAt),
       'updatedBy': trip.updatedBy ?? currentUserId,
       'deletedAt': null,
     });
+    final memberRef = docRef.collection('members').doc(currentUserId);
+    batch.set(
+      memberRef,
+      {
+        'tripId': trip.id,
+        'userId': currentUserId,
+        'role': 'owner',
+        'joinedAt': Timestamp.fromDate(trip.createdAt),
+      },
+      SetOptions(merge: true),
+    );
+    await batch.commit();
   }
 
   /// Create a Firestore WriteBatch.
@@ -54,7 +67,8 @@ class FirestoreSyncV2Service {
         'sharing': trip.sharing,
         'startDate': trip.startDate,
         'dayCount': trip.dayCount,
-        'updatedAt': FieldValue.serverTimestamp(),
+        'members': FieldValue.arrayUnion([trip.ownerId]),
+        'updatedAt': Timestamp.fromDate(trip.updatedAt),
         'updatedBy': trip.updatedBy,
         'deletedAt': trip.deletedAt != null ? Timestamp.fromDate(trip.deletedAt!) : null,
       },
@@ -77,7 +91,7 @@ class FirestoreSyncV2Service {
         'sortKey': day.sortKey,
         'title': day.title,
         'pinnedDate': day.pinnedDate,
-        'updatedAt': FieldValue.serverTimestamp(),
+        'updatedAt': Timestamp.fromDate(day.updatedAt),
         'updatedBy': day.updatedBy,
         'deletedAt': day.deletedAt != null ? Timestamp.fromDate(day.deletedAt!) : null,
       },
@@ -85,11 +99,12 @@ class FirestoreSyncV2Service {
     );
   }
 
-  /// Build batch operation for a [Stop] with its associated labels.
+  /// Build batch operation for a [Stop] with its associated labels and URL-backed reference images.
   void buildStopBatchOperations(
     WriteBatch batch,
     Stop stop, {
     List<Label>? labels,
+    List<NewReferenceImage>? referenceImages,
   }) {
     final docRef = _db
         .collection('tripsV2')
@@ -113,8 +128,9 @@ class FirestoreSyncV2Service {
       'coverRemoteUrl': stop.coverRemoteUrl,
       'source': stop.source,
       'sourceUrl': stop.sourceUrl,
+      'area': stop.area,
       'addedBy': stop.addedBy,
-      'updatedAt': FieldValue.serverTimestamp(),
+      'updatedAt': Timestamp.fromDate(stop.updatedAt),
       'updatedBy': stop.updatedBy,
       'deletedAt': stop.deletedAt != null ? Timestamp.fromDate(stop.deletedAt!) : null,
     };
@@ -126,6 +142,21 @@ class FirestoreSyncV2Service {
                 'kind': l.kind,
                 'name': l.name,
                 'bangumiId': l.bangumiId,
+              })
+          .toList();
+    }
+
+    if (referenceImages != null) {
+      data['referenceImages'] = referenceImages
+          .where((img) => img.remoteUrl != null && img.remoteUrl!.isNotEmpty)
+          .map((img) => {
+                'id': img.id,
+                'remoteUrl': img.remoteUrl,
+                'animeLabelId': img.animeLabelId,
+                'episode': img.episode,
+                'timestampS': img.timestampS,
+                'source': img.source,
+                'sourceUrl': img.sourceUrl,
               })
           .toList();
     }
@@ -156,7 +187,7 @@ class FirestoreSyncV2Service {
         'transitMinutes': item.transitMinutes,
         'fixedTime': item.fixedTime,
         'status': item.status,
-        'updatedAt': FieldValue.serverTimestamp(),
+        'updatedAt': Timestamp.fromDate(item.updatedAt),
         'updatedBy': item.updatedBy,
         'deletedAt': item.deletedAt != null ? Timestamp.fromDate(item.deletedAt!) : null,
       },
@@ -216,4 +247,3 @@ class FirestoreSyncV2Service {
         .map((snapshot) => snapshot.docs.map((doc) => doc.data()).toList());
   }
 }
-

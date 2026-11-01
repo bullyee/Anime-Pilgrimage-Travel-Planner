@@ -20,6 +20,7 @@ class FakeFirestoreSyncV2Service implements FirestoreSyncV2Service {
   final Map<String, StreamController<List<Map<String, dynamic>>>> itemsControllers = {};
 
   bool failCommit = false;
+  Future<void> Function()? onBeforeCommit;
 
   void emitUserTrips(List<Map<String, dynamic>> data) {
     userTripsController.add(data);
@@ -62,6 +63,9 @@ class FakeFirestoreSyncV2Service implements FirestoreSyncV2Service {
 
   @override
   Future<void> commitBatch(WriteBatch batch) async {
+    if (onBeforeCommit != null) {
+      await onBeforeCommit!();
+    }
     if (failCommit) {
       throw Exception('Simulated Firestore network timeout / offline failure');
     }
@@ -104,7 +108,12 @@ class FakeFirestoreSyncV2Service implements FirestoreSyncV2Service {
   }
 
   @override
-  void buildStopBatchOperations(WriteBatch batch, Stop stop, {List<Label>? labels}) {
+  void buildStopBatchOperations(
+    WriteBatch batch,
+    Stop stop, {
+    List<Label>? labels,
+    List<NewReferenceImage>? referenceImages,
+  }) {
     final fakeBatch = batch as _FakeV2WriteBatch;
     fakeBatch.addOp(() {
       tripStops.putIfAbsent(stop.tripId, () => {})[stop.id] = {
@@ -123,6 +132,7 @@ class FakeFirestoreSyncV2Service implements FirestoreSyncV2Service {
         'coverRemoteUrl': stop.coverRemoteUrl,
         'source': stop.source,
         'sourceUrl': stop.sourceUrl,
+        'area': stop.area,
         'addedBy': stop.addedBy,
         'updatedAt': stop.updatedAt,
         'updatedBy': stop.updatedBy,
@@ -133,6 +143,18 @@ class FakeFirestoreSyncV2Service implements FirestoreSyncV2Service {
                   'kind': l.kind,
                   'name': l.name,
                   'bangumiId': l.bangumiId,
+                })
+            .toList(),
+        'referenceImages': referenceImages
+            ?.where((img) => img.remoteUrl != null && img.remoteUrl!.isNotEmpty)
+            .map((img) => {
+                  'id': img.id,
+                  'remoteUrl': img.remoteUrl,
+                  'animeLabelId': img.animeLabelId,
+                  'episode': img.episode,
+                  'timestampS': img.timestampS,
+                  'source': img.source,
+                  'sourceUrl': img.sourceUrl,
                 })
             .toList(),
       };
@@ -291,6 +313,7 @@ void main() {
               name: 'Former Toyosato Elementary School',
               lat: 35.201,
               lng: 136.234,
+              area: const Value('Toyosato'),
               addedBy: currentUserId,
               updatedAt: Value(now),
               syncStatus: const Value(1), // Dirty
@@ -331,6 +354,7 @@ void main() {
       expect(fakeFirestore.tripStops['trip_1']?['stop_1'], isNotNull);
       final remoteStop = fakeFirestore.tripStops['trip_1']!['stop_1']!;
       expect(remoteStop['name'], 'Former Toyosato Elementary School');
+      expect(remoteStop['area'], 'Toyosato');
       final remoteLabels = remoteStop['labels'] as List;
       expect(remoteLabels.length, 1);
       expect(remoteLabels.first['name'], 'K-ON!');
@@ -352,6 +376,44 @@ void main() {
       expect(localItem.syncStatus, 0);
 
       expect(syncEngine.getTripSyncStatus('trip_1'), TripSyncStatus.synced);
+    });
+
+    test('concurrent local edit during commitBatch is not lost and triggers a follow-up push', () async {
+      final t1 = DateTime(2026, 11, 1, 10, 0, 0);
+      final t2 = DateTime(2026, 11, 1, 10, 0, 5);
+
+      await db.into(db.trips).insert(
+            TripsCompanion.insert(
+              id: 'trip_concurrent',
+              title: 'Initial Title',
+              ownerId: currentUserId,
+              sharing: const Value('group'),
+              updatedAt: Value(t1),
+              syncStatus: const Value(1),
+            ),
+          );
+
+      // Simulate user editing the trip while the first commitBatch is in flight
+      var editedMidFlight = false;
+      fakeFirestore.onBeforeCommit = () async {
+        if (!editedMidFlight) {
+          editedMidFlight = true;
+          await (db.update(db.trips)..where((t) => t.id.equals('trip_concurrent'))).write(
+            TripsCompanion(
+              title: const Value('Updated Mid-Flight Title'),
+              updatedAt: Value(t2),
+              syncStatus: const Value(1),
+            ),
+          );
+        }
+      };
+
+      syncEngine.startSync();
+      await Future.delayed(const Duration(milliseconds: 900));
+
+      expect(fakeFirestore.trips['trip_concurrent']!['title'], equals('Updated Mid-Flight Title'));
+      final localTrip = await (db.select(db.trips)..where((t) => t.id.equals('trip_concurrent'))).getSingle();
+      expect(localTrip.syncStatus, equals(0));
     });
 
     test('retains dirty status and marks trip offline on network commit failure', () async {
@@ -402,36 +464,7 @@ void main() {
       expect(localTrip!.title, 'Remote Shonan Trip');
       expect(localTrip.ownerId, 'user_bob');
 
-      // Emit remote day
-      fakeFirestore.emitDays('trip_remote', [
-        {
-          'id': 'remote_day_1',
-          'tripId': 'trip_remote',
-          'sortKey': 'a0',
-          'title': 'Kamakura Coast',
-          'updatedAt': now,
-        }
-      ]);
-
-      // Emit remote stop with both anime label (Bangumi natural key) and region label (name natural key)
-      fakeFirestore.emitStops('trip_remote', [
-        {
-          'id': 'remote_stop_1',
-          'tripId': 'trip_remote',
-          'placeKey': 'anitabi:100',
-          'name': 'Kamakurakokomae Station',
-          'lat': 35.306,
-          'lng': 139.502,
-          'addedBy': 'user_bob',
-          'updatedAt': now,
-          'labels': [
-            {'kind': 'anime', 'name': 'Slam Dunk', 'bangumiId': '999'},
-            {'kind': 'region', 'name': 'Kamakura', 'bangumiId': null},
-          ],
-        }
-      ]);
-
-      // Emit remote schedule item
+      // Emit remote schedule item BEFORE day and stop to verify out-of-order FK buffering
       fakeFirestore.emitScheduleItems('trip_remote', [
         {
           'id': 'remote_item_1',
@@ -445,6 +478,46 @@ void main() {
         }
       ]);
 
+      await Future.delayed(const Duration(milliseconds: 50));
+
+      // Emit remote day
+      fakeFirestore.emitDays('trip_remote', [
+        {
+          'id': 'remote_day_1',
+          'tripId': 'trip_remote',
+          'sortKey': 'a0',
+          'title': 'Kamakura Coast',
+          'updatedAt': now,
+        }
+      ]);
+
+      // Emit remote stop with both anime label (Bangumi natural key), region label, and reference image
+      fakeFirestore.emitStops('trip_remote', [
+        {
+          'id': 'remote_stop_1',
+          'tripId': 'trip_remote',
+          'placeKey': 'anitabi:100',
+          'name': 'Kamakurakokomae Station',
+          'lat': 35.306,
+          'lng': 139.502,
+          'area': 'Enoden Line',
+          'addedBy': 'user_bob',
+          'updatedAt': now,
+          'labels': [
+            {'kind': 'anime', 'name': 'Slam Dunk', 'bangumiId': '999'},
+            {'kind': 'region', 'name': 'Kamakura', 'bangumiId': null},
+          ],
+          'referenceImages': [
+            {
+              'id': 'ref_shonan_1',
+              'remoteUrl': 'https://image.anitabi.cn/points/100/1.jpg',
+              'episode': 'OP',
+              'timestampS': 55,
+            }
+          ],
+        }
+      ]);
+
       await Future.delayed(const Duration(milliseconds: 200));
 
       final localDay = await (db.select(db.tripDays)..where((d) => d.id.equals('remote_day_1'))).getSingleOrNull();
@@ -454,6 +527,7 @@ void main() {
       final localStop = await (db.select(db.stops)..where((s) => s.id.equals('remote_stop_1'))).getSingleOrNull();
       expect(localStop, isNotNull);
       expect(localStop!.name, 'Kamakurakokomae Station');
+      expect(localStop.area, 'Enoden Line');
 
       // Verify labels were naturally matched or created locally
       final labels = await db.select(db.labels).get();
@@ -463,10 +537,55 @@ void main() {
       final stopLabels = await (db.select(db.stopLabels)..where((sl) => sl.stopId.equals('remote_stop_1'))).get();
       expect(stopLabels.length, 2);
 
+      // Verify stop reference image was synced
+      final stopRefs = await (db.select(db.newReferenceImages)..where((r) => r.stopId.equals('remote_stop_1'))).get();
+      expect(stopRefs.length, 1);
+      expect(stopRefs.single.remoteUrl, 'https://image.anitabi.cn/points/100/1.jpg');
+
+      // Verify buffered schedule item was flushed once day and stop arrived
       final localItem = await (db.select(db.scheduleItems)..where((i) => i.id.equals('remote_item_1'))).getSingleOrNull();
       expect(localItem, isNotNull);
       expect(localItem!.stayMinutes, 45);
       expect(localItem.fixedTime, 600);
+    });
+
+    test('when owner deletes or unshares a trip, collaborator keeps a private unsynced copy', () async {
+      syncEngine.startSync();
+      final t1 = DateTime(2026, 11, 1, 10, 0);
+      final t2 = DateTime(2026, 11, 1, 11, 0);
+
+      // Collaborator (user_alice) receives a shared trip owned by user_bob
+      fakeFirestore.emitUserTrips([
+        {
+          'id': 'trip_bob',
+          'title': 'Bob Shared Trip',
+          'ownerId': 'user_bob',
+          'sharing': 'group',
+          'dayCount': 1,
+          'updatedAt': t1,
+        }
+      ]);
+      await Future.delayed(const Duration(milliseconds: 100));
+
+      // Now user_bob deletes the trip in the cloud
+      fakeFirestore.emitUserTrips([
+        {
+          'id': 'trip_bob',
+          'title': 'Bob Shared Trip',
+          'ownerId': 'user_bob',
+          'sharing': 'group',
+          'dayCount': 1,
+          'updatedAt': t2,
+          'deletedAt': t2,
+        }
+      ]);
+      await Future.delayed(const Duration(milliseconds: 100));
+
+      final localTrip = await (db.select(db.trips)..where((t) => t.id.equals('trip_bob'))).getSingle();
+      expect(localTrip.deletedAt, isNull);
+      expect(localTrip.sharing, equals('private'));
+      expect(localTrip.ownerId, equals(currentUserId));
+      expect(localTrip.syncStatus, equals(0));
     });
 
     test('respects Last-Write-Wins (LWW) and does not overwrite newer local updates', () async {
@@ -593,4 +712,3 @@ void main() {
     });
   });
 }
-

@@ -2,7 +2,7 @@ import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:riverpod_annotation/riverpod_annotation.dart';
 
-import '../../../core/database/database.dart';
+import '../../../core/providers/database_provider.dart';
 import '../../auth/providers/auth_provider.dart';
 import '../services/firestore_sync_v2_service.dart';
 import '../services/sync_engine_service_v2.dart';
@@ -18,9 +18,7 @@ FirestoreSyncV2Service firestoreSyncV2Service(Ref ref) {
 SyncEngineServiceV2 syncEngineServiceV2(Ref ref) {
   final db = ref.watch(databaseProvider);
   final firestoreSync = ref.watch(firestoreSyncV2ServiceProvider);
-  final authState = ref.watch(authNotifierProvider);
-
-  final userId = authState.user?.uid ?? 'guest_local_user';
+  final userId = ref.watch(currentUserIdProvider);
 
   final service = SyncEngineServiceV2(
     localDb: db,
@@ -43,4 +41,3 @@ Stream<TripSyncStatus> tripSyncStatus(Ref ref, String tripId) {
   return syncEngine.statusStream
       .map((statuses) => statuses[tripId] ?? TripSyncStatus.synced);
 }
-
