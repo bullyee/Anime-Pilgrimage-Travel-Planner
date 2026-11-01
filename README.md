@@ -169,8 +169,11 @@ flutter pub get
 # Generate the database & provider code
 dart run build_runner build --delete-conflicting-outputs
 
-# Run on a connected device
+# Run on a connected device (Android / iOS)
 flutter run
+
+# Run on Windows Desktop
+flutter run -d windows --dart-define-from-file=env.json
 
 # Run the unit tests
 flutter test

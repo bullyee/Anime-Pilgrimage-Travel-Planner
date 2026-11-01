@@ -1,4 +1,4 @@
-name: Release APK
+name: Release
 
 # Pushing a vX.Y.Z tag builds the APK and attaches it to a *draft* pre-release.
 # Whoever cuts the release (see .claude/skills/release/SKILL.md) checks the

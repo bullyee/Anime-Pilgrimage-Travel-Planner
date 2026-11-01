@@ -1,5 +1,6 @@
 import 'dart:async';
 import 'dart:io';
+import 'package:flutter/foundation.dart' show kIsWeb;
 import 'dart:typed_data';
 
 import 'package:flutter/material.dart';
@@ -74,11 +75,14 @@ class BackgroundPhotoSaves extends Notifier<List<PendingPhotoSave>> {
   }) {
     final job = PendingPhotoSave(const Uuid().v4(), poiId);
     state = [...state, job];
+    final isDesktop =
+        !kIsWeb && (Platform.isWindows || Platform.isMacOS || Platform.isLinux);
+    final targetName = isDesktop ? 'Pictures folder' : 'gallery';
     final message = !toGallery
         ? 'Photo saved.'
         : poiId == null
-        ? 'Saved to the gallery.'
-        : 'Saved to the POI and the gallery.';
+        ? 'Saved to the $targetName.'
+        : 'Saved to the POI and the $targetName.';
     unawaited(
       _run(
         job,
@@ -129,8 +133,10 @@ class BackgroundPhotoSaves extends Notifier<List<PendingPhotoSave>> {
       }
       if (toGallery) {
         final galleryStart = watch.elapsedMilliseconds;
-        if (!await Gal.requestAccess(toAlbum: true)) {
-          throw StateError('no access to the gallery');
+        if (!kIsWeb && (Platform.isAndroid || Platform.isIOS)) {
+          if (!await Gal.requestAccess(toAlbum: true)) {
+            throw StateError('no access to the gallery');
+          }
         }
         await Gal.putImage(source.path, album: galleryAlbum);
         if (originalToGallery && bytes != null && original != null) {

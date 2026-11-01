@@ -1,10 +1,16 @@
 import 'dart:io';
 import 'dart:typed_data';
 
+import 'package:flutter/foundation.dart' show kIsWeb;
 import 'package:flutter/material.dart';
 
 import '../widgets/isnet_cutout_panel.dart';
 import '../widgets/mlkit_cutout_panel.dart';
+
+/// Whether the current platform supports ML Kit subject segmentation.
+/// Desktop (Windows, macOS, Linux) and web do not support ML Kit.
+bool get mlkitCutoutSupported =>
+    !kIsWeb && (Platform.isAndroid || Platform.isIOS);
 
 /// Cuts a transparent-PNG subject out of [sourcePath] (e.g. an anime reference
 /// frame) and pops the result bytes back to the caller via `Navigator.pop`.
@@ -46,29 +52,31 @@ class _CutoutEditorScreenState extends State<CutoutEditorScreen> {
       ),
       body: Column(
         children: [
-          Padding(
-            padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
-            child: SegmentedButton<CutoutEngine>(
-              segments: const [
-                ButtonSegment(
-                    value: CutoutEngine.isnet,
-                    icon: Icon(Icons.auto_fix_high),
-                    label: Text('isnet')),
-                ButtonSegment(
-                    value: CutoutEngine.mlkit,
-                    icon: Icon(Icons.android),
-                    label: Text('ML Kit')),
-              ],
-              selected: {_engine},
-              onSelectionChanged: (s) => setState(() {
-                _engine = s.first;
-                _result = null; // different engine → different result
-              }),
+          if (mlkitCutoutSupported)
+            Padding(
+              padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+              child: SegmentedButton<CutoutEngine>(
+                segments: const [
+                  ButtonSegment(
+                      value: CutoutEngine.isnet,
+                      icon: Icon(Icons.auto_fix_high),
+                      label: Text('isnet')),
+                  ButtonSegment(
+                      value: CutoutEngine.mlkit,
+                      icon: Icon(Icons.android),
+                      label: Text('ML Kit')),
+                ],
+                selected: {_engine},
+                onSelectionChanged: (s) => setState(() {
+                  _engine = s.first;
+                  _result = null; // different engine → different result
+                }),
+              ),
             ),
-          ),
           Expanded(
             // Key by engine so switching rebuilds the panel fresh.
-            child: _engine == CutoutEngine.isnet
+            // On desktop/web, always use IsnetCutoutPanel.
+            child: (!mlkitCutoutSupported || _engine == CutoutEngine.isnet)
                 ? IsnetCutoutPanel(
                     key: const ValueKey('isnet'),
                     source: source,

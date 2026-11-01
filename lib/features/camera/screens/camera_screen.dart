@@ -88,7 +88,9 @@ class _CameraScreenState extends ConsumerState<CameraScreen>
   void initState() {
     super.initState();
     WidgetsBinding.instance.addObserver(this);
-    SystemChrome.setEnabledSystemUIMode(SystemUiMode.immersiveSticky);
+    if (!kIsWeb && (Platform.isAndroid || Platform.isIOS)) {
+      SystemChrome.setEnabledSystemUIMode(SystemUiMode.immersiveSticky);
+    }
     Future.microtask(() {
       ref.read(cameraProvider.notifier).initialize(widget.poiId);
       _initializeCameras();
@@ -116,13 +118,22 @@ class _CameraScreenState extends ConsumerState<CameraScreen>
   void dispose() {
     WidgetsBinding.instance.removeObserver(this);
     _controller?.dispose();
-    SystemChrome.setEnabledSystemUIMode(SystemUiMode.edgeToEdge);
+    if (!kIsWeb && (Platform.isAndroid || Platform.isIOS)) {
+      SystemChrome.setEnabledSystemUIMode(SystemUiMode.edgeToEdge);
+    }
     super.dispose();
   }
 
   Future<void> _initializeCameras() async {
     try {
-      if (kIsWeb || Platform.isWindows || Platform.isMacOS || Platform.isLinux) return;
+      if (kIsWeb || Platform.isWindows || Platform.isMacOS || Platform.isLinux) {
+        if (mounted) {
+          ref.read(cameraProvider.notifier).setCameraError(
+                'Anime Camera is only supported on mobile devices (Android / iOS).',
+              );
+        }
+        return;
+      }
       final cameras = await availableCameras();
       if (!mounted) return;
 

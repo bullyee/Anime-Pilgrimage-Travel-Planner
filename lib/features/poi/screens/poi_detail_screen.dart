@@ -1,4 +1,5 @@
 import 'dart:io';
+import 'package:flutter/foundation.dart' show kIsWeb;
 
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
@@ -1330,12 +1331,17 @@ class _MediaAssetTile extends StatelessWidget {
     
     // Use the bang operator since we've guaranteed it's not null
     await Gal.putImage(asset.localPath!);
+                final isDesktop = !kIsWeb && (Platform.isWindows || Platform.isMacOS || Platform.isLinux);
                 messenger.showSnackBar(
-                  const SnackBar(content: Text('Saved to gallery.')),
+                  SnackBar(content: Text(isDesktop ? 'Saved to Pictures folder.' : 'Saved to gallery.')),
                 );
               } on GalException catch (e) {
                 messenger.showSnackBar(
                   SnackBar(content: Text('Save failed: ${e.type.message}')),
+                );
+              } catch (e) {
+                messenger.showSnackBar(
+                  SnackBar(content: Text('Save failed: $e')),
                 );
               }
             },

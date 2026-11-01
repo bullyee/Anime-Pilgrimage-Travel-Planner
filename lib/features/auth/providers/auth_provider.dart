@@ -11,6 +11,21 @@ import 'package:http/http.dart' as http;
 
 part 'auth_provider.g.dart';
 
+/// Thrown when authentication is not configured for the current platform/build.
+class AuthConfigurationException implements Exception {
+  final String message;
+  const AuthConfigurationException(this.message);
+
+  @override
+  String toString() => message;
+}
+
+/// Checks whether desktop OAuth credentials are configured at compile-time.
+bool get isDesktopAuthAvailable =>
+    const String.fromEnvironment('DESKTOP_CLIENT_ID').isNotEmpty &&
+    const String.fromEnvironment('DESKTOP_CLIENT_SECRET').isNotEmpty;
+
+
 // --- [Providers] ---
 
 @Riverpod(keepAlive: true)
@@ -63,8 +78,8 @@ class AuthController extends Notifier<AsyncValue<User?>> {
       
       // Safety check to ensure credentials are provided
       if (desktopClientId.isEmpty || desktopClientSecret.isEmpty) {
-        throw StateError(
-          'Missing OAuth credentials. Please run the app with --dart-define-from-file=env.json',
+        throw const AuthConfigurationException(
+          'Google Sign-In is not configured for this desktop build. You can continue using Trip Planner offline.',
         );
       }
 

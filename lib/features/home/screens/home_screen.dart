@@ -5,8 +5,6 @@ import 'package:go_router/go_router.dart';
 import 'package:trip_planner/features/auth/providers/auth_provider.dart';
 import 'package:trip_planner/features/camera/services/anime_camera_launcher.dart';
 
-
-
 class HomeScreen extends ConsumerStatefulWidget {
   const HomeScreen({super.key});
 
@@ -27,7 +25,7 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
-    
+
     // Watch the authentication state to determine which button to show
     final authState = ref.watch(authStateChangesProvider);
 
@@ -76,83 +74,91 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
           ),
         ],
       ),
-      body: SingleChildScrollView(
-        child: Padding(
-          padding: const EdgeInsets.all(16),
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.stretch,
-            children: [
-              Text(
-                'Anime Pilgrimage',
-                style: theme.textTheme.headlineMedium?.copyWith(
-                  fontWeight: FontWeight.bold,
-                ),
+      body: Align(
+        alignment: Alignment.topCenter,
+        child: ConstrainedBox(
+          constraints: const BoxConstraints(maxWidth: 800),
+          child: SingleChildScrollView(
+            child: Padding(
+              padding: const EdgeInsets.all(16),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.stretch,
+                children: [
+                  Text(
+                    'Anime Pilgrimage',
+                    style: theme.textTheme.headlineMedium?.copyWith(
+                      fontWeight: FontWeight.bold,
+                    ),
+                  ),
+                  const SizedBox(height: 8),
+                  Text(
+                    'Plan your anime location visits',
+                    style: theme.textTheme.bodyLarge?.copyWith(
+                      color: theme.colorScheme.onSurfaceVariant,
+                    ),
+                  ),
+                  const SizedBox(height: 24),
+                  _HomeCard(
+                    icon: Icons.layers,
+                    title: 'View POIs',
+                    subtitle: 'Browse and manage regions, anime, tags, POIs',
+                    onTap: () => context.push('/pois'),
+                  ),
+                  const SizedBox(height: 12),
+                  _HomeCard(
+                    icon: Icons.map,
+                    title: 'Map',
+                    subtitle: 'Visualize POIs on the map',
+                    onTap: () => context.push('/map'),
+                  ),
+                  const SizedBox(height: 12),
+                  _HomeCard(
+                    icon: Icons.flight_takeoff, // 或 Icons.map, Icons.luggage
+                    title: 'My Trips',
+                    subtitle: 'Manage your travel plans',
+                    onTap: () => context.push('/rois'),
+                  ),
+                  const SizedBox(height: 12),
+                  _HomeCard(
+                    icon: Icons.calendar_month,
+                    title: 'Trip Calendar',
+                    subtitle: 'Schedule your visits',
+                    onTap: () => context.push('/calendar'),
+                  ),
+                  if (animeCameraSupported) ...[
+                    const SizedBox(height: 12),
+                    _HomeCard(
+                      icon: Icons.camera_alt,
+                      title: 'Anime Camera',
+                      subtitle: 'AR photo overlay with reference',
+                      onTap: () => openAnimeCamera(context, ref),
+                    ),
+                  ],
+                  if (floatingReferenceSupported) ...[
+                    const SizedBox(height: 12),
+                    _HomeCard(
+                      icon: Icons.picture_in_picture_alt,
+                      title: 'Floating Reference',
+                      subtitle:
+                          'Float an anime frame over any app and shoot '
+                          'with your own camera',
+                      onTap: () => floatReference(context, ref),
+                    ),
+                  ],
+                  const SizedBox(height: 12),
+                  _HomeCard(
+                    icon: Icons.auto_fix_high,
+                    title: 'Edit Photo',
+                    subtitle:
+                        'Pick a photo from your gallery and edit it '
+                        'against a reference',
+                    onTap: () => editPhotoFromGallery(context, ref),
+                  ),
+                ],
               ),
-              const SizedBox(height: 8),
-              Text(
-                'Plan your anime location visits',
-                style: theme.textTheme.bodyLarge?.copyWith(
-                  color: theme.colorScheme.onSurfaceVariant,
-                ),
-              ),
-              const SizedBox(height: 24),
-              _HomeCard(
-                icon: Icons.layers,
-                title: 'View POIs',
-                subtitle: 'Browse and manage regions, anime, tags, POIs',
-                onTap: () => context.push('/pois'),
-              ),
-              const SizedBox(height: 12),
-              _HomeCard(
-                icon: Icons.map,
-                title: 'Map',
-                subtitle: 'Visualize POIs on the map',
-                onTap: () => context.push('/map'),
-              ),
-              const SizedBox(height: 12),
-              _HomeCard(
-                icon: Icons.flight_takeoff, // 或 Icons.map, Icons.luggage
-                title: 'My Trips',
-                subtitle: 'Manage your travel plans',
-                onTap: () => context.push('/rois'),
-              ),
-              const SizedBox(height: 12),
-              _HomeCard(
-                icon: Icons.calendar_month,
-                title: 'Trip Calendar',
-                subtitle: 'Schedule your visits',
-                onTap: () => context.push('/calendar'),
-              ),
-              if (animeCameraSupported) ...[
-                const SizedBox(height: 12),
-                _HomeCard(
-                  icon: Icons.camera_alt,
-                  title: 'Anime Camera',
-                  subtitle: 'AR photo overlay with reference',
-                  onTap: () => openAnimeCamera(context, ref),
-                ),
-              ],
-              if (floatingReferenceSupported) ...[
-                const SizedBox(height: 12),
-                _HomeCard(
-                  icon: Icons.picture_in_picture_alt,
-                  title: 'Floating Reference',
-                  subtitle: 'Float an anime frame over any app and shoot '
-                      'with your own camera',
-                  onTap: () => floatReference(context, ref),
-                ),
-              ],
-              const SizedBox(height: 12),
-              _HomeCard(
-                icon: Icons.auto_fix_high,
-                title: 'Edit Photo',
-                subtitle: 'Pick a photo from your gallery and edit it '
-                    'against a reference',
-                onTap: () => editPhotoFromGallery(context, ref),
-              ),
-            ],
+            ),
           ),
-        ),      
+        ),
       ),
     );
   }
