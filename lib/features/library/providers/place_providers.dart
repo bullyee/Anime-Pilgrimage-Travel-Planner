@@ -38,3 +38,4 @@ final placeLabelsProvider = StreamProvider.autoDispose.family<List<Label>, Strin
   final repo = ref.watch(placeRepositoryProvider);
   return repo.watchLabelsForPlace(placeKey);
 });
+

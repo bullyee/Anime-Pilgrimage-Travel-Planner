@@ -3,6 +3,7 @@ import 'package:uuid/uuid.dart';
 import 'connection/connection.dart' as db_connection;
 import 'tables.dart';
 import 'tables_v10.dart';
+import 'migrations/migration_v9_to_v10.dart';
 
 part 'database.g.dart';
 
@@ -90,6 +91,9 @@ class AppDatabase extends _$AppDatabase {
             await m.createTable(stops);
             await m.createTable(stopLabels);
             await m.createTable(scheduleItems);
+
+            // Migrate legacy data to v10 tables
+            await MigrationV9ToV10(this).migrateData();
           }
         },
         beforeOpen: (details) async {

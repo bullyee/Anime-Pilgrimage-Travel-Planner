@@ -265,3 +265,4 @@ class DriftPlaceRepository implements PlaceRepository {
     return (await (_db.select(_db.labels)..where((tbl) => tbl.id.equals(newId))).getSingle());
   }
 }
+

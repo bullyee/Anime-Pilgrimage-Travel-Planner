@@ -133,3 +133,4 @@ final dayTimelineProvider = Provider.autoDispose.family<List<ComputedTimelineIte
 
   return ScheduleLogicEngine.computeScheduleTimes(itemInfos);
 });
+
