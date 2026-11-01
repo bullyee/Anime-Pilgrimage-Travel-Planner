@@ -109,10 +109,32 @@ service cloud.firestore {
     // ==========================================
     function isTripMemberV2(tripId) {
       let tripDoc = get(/databases/$(database)/documents/tripsV2/$(tripId));
+      let memberDoc = /databases/$(database)/documents/tripsV2/$(tripId)/members/$(request.auth.uid);
       return tripDoc != null && (
         request.auth.uid == tripDoc.data.ownerId ||
-        (('members' in tripDoc.data) && request.auth.uid in tripDoc.data.members)
+        (('members' in tripDoc.data) && request.auth.uid in tripDoc.data.members) ||
+        exists(memberDoc)
       );
+    }
+
+    function getTripRole(tripId) {
+      let tripDoc = get(/databases/$(database)/documents/tripsV2/$(tripId));
+      let memberDoc = /databases/$(database)/documents/tripsV2/$(tripId)/members/$(request.auth.uid);
+      return (tripDoc != null && request.auth.uid == tripDoc.data.ownerId)
+        ? 'owner'
+        : (exists(memberDoc) && 'role' in get(memberDoc).data ? get(memberDoc).data.role : 'editor');
+    }
+
+    function isTripOwner(tripId) {
+      let tripDoc = get(/databases/$(database)/documents/tripsV2/$(tripId));
+      let memberDoc = /databases/$(database)/documents/tripsV2/$(tripId)/members/$(request.auth.uid);
+      return (tripDoc != null && request.auth.uid == tripDoc.data.ownerId) ||
+        (exists(memberDoc) && get(memberDoc).data.role == 'owner');
+    }
+
+    function isTripEditorOrOwner(tripId) {
+      let role = getTripRole(tripId);
+      return role == 'owner' || role == 'editor';
     }
 
     function isLwwValid() {
@@ -151,11 +173,24 @@ service cloud.firestore {
         && (!('transitMinutes' in data) || (data.transitMinutes is number && data.transitMinutes >= 0));
     }
 
+    function isValidInviteJoin(tripId, memberUid) {
+      let inviteToken = request.resource.data.inviteToken;
+      let inviteDoc = get(/databases/$(database)/documents/invites/$(inviteToken));
+      return request.auth.uid == memberUid
+        && inviteDoc != null
+        && inviteDoc.data.tripId == tripId
+        && inviteDoc.data.role == request.resource.data.role
+        && (!('isRevoked' in inviteDoc.data) || inviteDoc.data.isRevoked == false)
+        && request.time < inviteDoc.data.expiresAt
+        && (!('emailAllowlist' in inviteDoc.data) || inviteDoc.data.emailAllowlist.size() == 0 || request.auth.token.email in inviteDoc.data.emailAllowlist);
+    }
+
     match /tripsV2/{tripId} {
       allow read: if isAuthenticated() && (
         resource == null ||
         request.auth.uid == resource.data.ownerId ||
-        (('members' in resource.data) && request.auth.uid in resource.data.members)
+        (('members' in resource.data) && request.auth.uid in resource.data.members) ||
+        exists(/databases/$(database)/documents/tripsV2/$(tripId)/members/$(request.auth.uid))
       );
 
       allow create: if isAuthenticated()
@@ -163,42 +198,110 @@ service cloud.firestore {
         && request.resource.data.members == [request.auth.uid]
         && isTripV2Safe();
 
+      // Only owner or editors can update trip metadata (viewers are read-only)
       allow update: if isAuthenticated()
         && isTripMemberV2(tripId)
+        && isTripEditorOrOwner(tripId)
         && request.resource.data.ownerId == resource.data.ownerId
         && request.resource.data.members == resource.data.members
         && isLwwValid()
         && isTripV2Safe();
 
-      // Deletes are soft-deleted via deletedAt tombstones
+      // Direct hard deletes disallowed; soft-deletes via deletedAt tombstones
       allow delete: if false;
 
+      // --- Members subcollection (Stage 4 RBAC) ---
+      match /members/{memberUid} {
+        allow read: if isAuthenticated() && isTripMemberV2(tripId);
+
+        // Member creation:
+        // (a) Owner adding self upon trip initialization
+        // (b) User joining via valid invite token
+        allow create: if isAuthenticated() && (
+          (request.auth.uid == memberUid && isTripOwner(tripId)) ||
+          isValidInviteJoin(tripId, memberUid)
+        );
+
+        // Member update:
+        // (a) Self updating displayName / avatarUrl (role unchanged)
+        // (b) Owner updating role / transferring ownership
+        allow update: if isAuthenticated() && (
+          (request.auth.uid == memberUid && request.resource.data.role == resource.data.role) ||
+          isTripOwner(tripId)
+        );
+
+        // Member delete:
+        // (a) Member leaving self (owner cannot leave without transfer)
+        // (b) Owner kicking a non-owner member
+        allow delete: if isAuthenticated() && (
+          (request.auth.uid == memberUid && resource.data.role != 'owner') ||
+          (isTripOwner(tripId) && resource.data.role != 'owner')
+        );
+      }
+
+      // --- Days subcollection ---
       match /days/{dayId} {
         allow read: if isAuthenticated() && isTripMemberV2(tripId);
         allow create, update: if isAuthenticated()
           && isTripMemberV2(tripId)
+          && isTripEditorOrOwner(tripId)
           && isLwwValid()
           && isDayBlockSafe();
         allow delete: if false;
       }
 
+      // --- Stops subcollection ---
       match /stops/{stopId} {
         allow read: if isAuthenticated() && isTripMemberV2(tripId);
         allow create, update: if isAuthenticated()
           && isTripMemberV2(tripId)
+          && isTripEditorOrOwner(tripId)
           && isLwwValid()
           && isStopSafe();
         allow delete: if false;
       }
 
+      // --- Schedule Items subcollection ---
       match /schedule_items/{itemId} {
         allow read: if isAuthenticated() && isTripMemberV2(tripId);
         allow create, update: if isAuthenticated()
           && isTripMemberV2(tripId)
+          && isTripEditorOrOwner(tripId)
           && isLwwValid()
           && isScheduleItemSafe();
         allow delete: if false;
       }
+    }
+
+    // ==========================================
+    // 5. Invites Collection (Stage 4 Group Sharing)
+    // ==========================================
+    match /invites/{token} {
+      // Any authenticated user can read invite doc for preview prior to joining
+      allow read: if isAuthenticated();
+
+      // Only owner or editor of the trip can create an invite
+      allow create: if isAuthenticated()
+        && isTripEditorOrOwner(request.resource.data.tripId)
+        && request.resource.data.token == token
+        && request.resource.data.createdBy == request.auth.uid;
+
+      // Only trip owner or the inviter can update (e.g. revoke)
+      allow update: if isAuthenticated() && (
+        isTripOwner(resource.data.tripId) ||
+        resource.data.createdBy == request.auth.uid
+      );
+
+      // Only trip owner can delete invite
+      allow delete: if isAuthenticated() && isTripOwner(resource.data.tripId);
+    }
+
+    // Short code lookup for invites
+    match /invite_codes/{code} {
+      allow read: if isAuthenticated();
+      allow create: if isAuthenticated()
+        && exists(/databases/$(database)/documents/invites/$(request.resource.data.token));
+      allow update, delete: if false;
     }
   }
 }

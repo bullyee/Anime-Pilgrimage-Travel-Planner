@@ -3,21 +3,23 @@ import urllib.error
 import json
 import base64
 import sys
+import time
 
-def create_jwt(user_id):
+def create_jwt(user_id, email=None):
     header = base64.urlsafe_b64encode(b'{"alg":"none","typ":"JWT"}').decode('utf-8').rstrip('=')
+    email_field = f',"email":"{email}"' if email else ''
     payload = base64.urlsafe_b64encode(
-        f'{{"sub":"{user_id}","user_id":"{user_id}","aud":"trip-planner-2775c","iss":"https://securetoken.google.com/trip-planner-2775c"}}'.encode('utf-8')
+        f'{{"sub":"{user_id}","user_id":"{user_id}","aud":"trip-planner-2775c","iss":"https://securetoken.google.com/trip-planner-2775c"{email_field}}}'.encode('utf-8')
     ).decode('utf-8').rstrip('=')
     return f"{header}.{payload}."
 
 BASE_URL = 'http://127.0.0.1:8080/v1/projects/trip-planner-2775c/databases/(default)/documents'
 
-def api_request(method, path, data=None, user_id=None):
+def api_request(method, path, data=None, user_id=None, email=None):
     url = f"{BASE_URL}/{path}"
     headers = {'Content-Type': 'application/json'}
     if user_id:
-        headers['Authorization'] = f"Bearer {create_jwt(user_id)}"
+        headers['Authorization'] = f"Bearer {create_jwt(user_id, email=email)}"
     
     body = json.dumps(data).encode('utf-8') if data else None
     req = urllib.request.Request(url, data=body, headers=headers, method=method)
@@ -28,7 +30,7 @@ def api_request(method, path, data=None, user_id=None):
         return e.code, e.read().decode('utf-8')
 
 def main():
-    print("=== RUNNING FIRESTORE RULES V2 TEST SUITE ===")
+    print("=== RUNNING FIRESTORE RULES V2 & STAGE 4 RBAC TEST SUITE ===")
     tests_passed = 0
     tests_total = 0
 
@@ -152,6 +154,126 @@ def main():
     }
     code, _ = api_request('PATCH', 'tripsV2/trip_v2_1/stops/stop_1', stale_update_data, user_id='alice')
     assert_status("tripsV2: LWW stale update denied (403)", 403, code)
+
+    # =========================================================================
+    # STAGE 4 RBAC & INVITE TESTS
+    # =========================================================================
+    print("\n--- Testing Stage 4 RBAC & Invites ---")
+
+    # 14. Owner adds self as member doc under tripsV2/{tripId}/members/{ownerUid}
+    alice_member_data = {
+        'fields': {
+            'userId': {'stringValue': 'alice'},
+            'tripId': {'stringValue': 'trip_v2_1'},
+            'role': {'stringValue': 'owner'},
+            'displayName': {'stringValue': 'Alice'},
+        }
+    }
+    code, _ = api_request('POST', 'tripsV2/trip_v2_1/members?documentId=alice', alice_member_data, user_id='alice')
+    assert_status("Stage 4: Owner can add self as owner member (200)", 200, code)
+
+    # 15. Owner creates an invite for role 'viewer'
+    now_epoch = int(time.time())
+    expires_in_7_days = now_epoch + 7 * 86400
+    invite_token = 'token_viewer_abc'
+    invite_data = {
+        'fields': {
+            'token': {'stringValue': invite_token},
+            'tripId': {'stringValue': 'trip_v2_1'},
+            'role': {'stringValue': 'viewer'},
+            'createdBy': {'stringValue': 'alice'},
+            'isRevoked': {'booleanValue': False},
+            'expiresAt': {'timestampValue': f'{time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime(expires_in_7_days))}'},
+            'tripTitle': {'stringValue': 'Kyoto Pilgrimage'},
+        }
+    }
+    code, _ = api_request('POST', f'invites?documentId={invite_token}', invite_data, user_id='alice')
+    assert_status("Stage 4: Owner can create invite (200)", 200, code)
+
+    # 16. Unauthenticated or outsider can read invite preview
+    code, resp = api_request('GET', f'invites/{invite_token}', user_id='charlie')
+    assert_status("Stage 4: Any user can read invite preview (200)", 200, code)
+
+    # 17. Charlie joins trip using the invite token to become 'viewer'
+    charlie_member_data = {
+        'fields': {
+            'userId': {'stringValue': 'charlie'},
+            'tripId': {'stringValue': 'trip_v2_1'},
+            'role': {'stringValue': 'viewer'},
+            'inviteToken': {'stringValue': invite_token},
+            'displayName': {'stringValue': 'Charlie'},
+        }
+    }
+    code, _ = api_request('POST', 'tripsV2/trip_v2_1/members?documentId=charlie', charlie_member_data, user_id='charlie')
+    assert_status("Stage 4: Charlie joins via valid invite token (200)", 200, code)
+
+    # 18. Charlie as 'viewer' can read trip stops
+    code, _ = api_request('GET', 'tripsV2/trip_v2_1/stops/stop_1', user_id='charlie')
+    assert_status("Stage 4: Charlie (viewer) can read stops (200)", 200, code)
+
+    # 19. Charlie as 'viewer' ATTEMPTS to create a new stop -> MUST BE DENIED (403)
+    viewer_stop_data = {
+        'fields': {
+            'id': {'stringValue': 'stop_viewer_forbidden'},
+            'tripId': {'stringValue': 'trip_v2_1'},
+            'placeKey': {'stringValue': 'anitabi:999'},
+            'name': {'stringValue': 'Viewer Cannot Add'},
+            'addedBy': {'stringValue': 'charlie'},
+            'updatedAt': {'integerValue': '3000'},
+        }
+    }
+    code, _ = api_request('POST', 'tripsV2/trip_v2_1/stops?documentId=stop_viewer_forbidden', viewer_stop_data, user_id='charlie')
+    assert_status("Stage 4: Charlie (viewer) cannot create stop (403)", 403, code)
+
+    # 20. Alice (Owner) promotes Charlie to 'editor'
+    promote_charlie_data = {
+        'fields': {
+            'userId': {'stringValue': 'charlie'},
+            'tripId': {'stringValue': 'trip_v2_1'},
+            'role': {'stringValue': 'editor'},
+            'displayName': {'stringValue': 'Charlie'},
+        }
+    }
+    code, _ = api_request('PATCH', 'tripsV2/trip_v2_1/members/charlie', promote_charlie_data, user_id='alice')
+    assert_status("Stage 4: Owner can promote member to editor (200)", 200, code)
+
+    # 21. Now as 'editor', Charlie creates a stop -> SUCCEEDS (200)
+    code, _ = api_request('POST', 'tripsV2/trip_v2_1/stops?documentId=stop_viewer_forbidden', viewer_stop_data, user_id='charlie')
+    assert_status("Stage 4: Charlie (promoted to editor) can create stop (200)", 200, code)
+
+    # 22. Charlie as editor tries to kick Alice (Owner) -> MUST BE DENIED (403)
+    code, _ = api_request('DELETE', 'tripsV2/trip_v2_1/members/alice', user_id='charlie')
+    assert_status("Stage 4: Non-owner cannot kick owner (403)", 403, code)
+
+    # 23. Alice revokes the invite token
+    revoke_data = {
+        'fields': {
+            'isRevoked': {'booleanValue': True},
+        }
+    }
+    code, _ = api_request('PATCH', f'invites/{invite_token}?updateMask.fieldPaths=isRevoked', revoke_data, user_id='alice')
+    assert_status("Stage 4: Owner can revoke invite (200)", 200, code)
+
+    # 24. New user David tries to join with revoked invite -> MUST BE DENIED (403)
+    david_member_data = {
+        'fields': {
+            'userId': {'stringValue': 'david'},
+            'tripId': {'stringValue': 'trip_v2_1'},
+            'role': {'stringValue': 'viewer'},
+            'inviteToken': {'stringValue': invite_token},
+            'displayName': {'stringValue': 'David'},
+        }
+    }
+    code, _ = api_request('POST', 'tripsV2/trip_v2_1/members?documentId=david', david_member_data, user_id='david')
+    assert_status("Stage 4: Join with revoked invite denied (403)", 403, code)
+
+    # 25. Charlie leaves trip (self-delete from members) -> SUCCEEDS (200)
+    code, _ = api_request('DELETE', 'tripsV2/trip_v2_1/members/charlie', user_id='charlie')
+    assert_status("Stage 4: Non-owner member can leave trip (200)", 200, code)
+
+    # 26. Alice (sole owner) tries to self-delete from members -> DENIED (403)
+    code, _ = api_request('DELETE', 'tripsV2/trip_v2_1/members/alice', user_id='alice')
+    assert_status("Stage 4: Owner cannot leave without transferring ownership (403)", 403, code)
 
     print(f"\nALL {tests_passed}/{tests_total} FIRESTORE RULES TESTS PASSED!")
 
