@@ -6,7 +6,7 @@ part of 'roi_repository.dart';
 // RiverpodGenerator
 // **************************************************************************
 
-String _$roiRepositoryHash() => r'b48045a0c98786f0f291870f45d566424c6b91ef';
+String _$roiRepositoryHash() => r'3ae764caa16ed33f08796f494c888af6028a8002';
 
 /// See also [roiRepository].
 @ProviderFor(roiRepository)

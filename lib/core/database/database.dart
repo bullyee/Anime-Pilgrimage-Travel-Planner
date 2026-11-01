@@ -2,6 +2,7 @@ import 'package:drift/drift.dart';
 import 'package:uuid/uuid.dart';
 import 'connection/connection.dart' as db_connection;
 import 'tables.dart';
+import 'tables_v10.dart';
 
 part 'database.g.dart';
 
@@ -16,6 +17,17 @@ part 'database.g.dart';
   TimeChunks,
   MediaAssets,
   ReferenceImages,
+  Places,
+  Labels,
+  PlaceLabels,
+  Photos,
+  PlaceVisits,
+  NewReferenceImages,
+  Trips,
+  TripDays,
+  Stops,
+  StopLabels,
+  ScheduleItems,
 ])
 class AppDatabase extends _$AppDatabase {
   AppDatabase() : super(db_connection.openConnection());
@@ -23,7 +35,7 @@ class AppDatabase extends _$AppDatabase {
   AppDatabase.forTesting(super.executor);
 
   @override
-  int get schemaVersion => 9;
+  int get schemaVersion => 10;
 
   @override
   MigrationStrategy get migration => MigrationStrategy(
@@ -65,6 +77,19 @@ class AppDatabase extends _$AppDatabase {
               UPDATE pois SET has_ever_synced = 1
               WHERE roi_id IN (SELECT id FROM rois WHERE is_shared = 1 AND cloud_version > 0);
             ''');
+          }
+          if (from < 10) {
+            await m.createTable(places);
+            await m.createTable(labels);
+            await m.createTable(placeLabels);
+            await m.createTable(photos);
+            await m.createTable(placeVisits);
+            await m.createTable(newReferenceImages);
+            await m.createTable(trips);
+            await m.createTable(tripDays);
+            await m.createTable(stops);
+            await m.createTable(stopLabels);
+            await m.createTable(scheduleItems);
           }
         },
         beforeOpen: (details) async {

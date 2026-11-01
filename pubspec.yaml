@@ -72,6 +72,7 @@ dependencies:
   google_mlkit_subject_segmentation: ^0.0.3
   onnxruntime: ^1.4.1
   gal: ^2.3.2
+  fractional_indexing_dart: ^1.0.7
 
 dev_dependencies:
   flutter_test:
