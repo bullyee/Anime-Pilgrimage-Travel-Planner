@@ -277,8 +277,8 @@ service cloud.firestore {
     // 5. Invites Collection (Stage 4 Group Sharing)
     // ==========================================
     match /invites/{token} {
-      // Any authenticated user can read invite doc for preview prior to joining
-      allow read: if isAuthenticated();
+      // Anyone with the token can read invite doc for public preview prior to joining
+      allow read: if true;
 
       // Only owner or editor of the trip can create an invite
       allow create: if isAuthenticated()
@@ -298,7 +298,7 @@ service cloud.firestore {
 
     // Short code lookup for invites
     match /invite_codes/{code} {
-      allow read: if isAuthenticated();
+      allow read: if true;
       allow create: if isAuthenticated()
         && exists(/databases/$(database)/documents/invites/$(request.resource.data.token));
       allow update, delete: if false;

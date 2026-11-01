@@ -1,0 +1,465 @@
+<!DOCTYPE html>
+<html lang="zh-TW">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>加入聖地巡禮行程 - Trip Planner</title>
+  <style>
+    :root {
+      --primary: #4F46E5;
+      --primary-hover: #4338CA;
+      --bg-color: #F8FAFC;
+      --card-bg: #FFFFFF;
+      --text-main: #0F172A;
+      --text-sub: #64748B;
+      --border: #E2E8F0;
+      --accent: #10B981;
+    }
+
+    * {
+      box-sizing: border-box;
+      margin: 0;
+      padding: 0;
+      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
+    }
+
+    body {
+      background-color: var(--bg-color);
+      color: var(--text-main);
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      min-height: 100vh;
+      padding: 24px 16px;
+    }
+
+    .container {
+      max-width: 480px;
+      width: 100%;
+      background: var(--card-bg);
+      border-radius: 20px;
+      box-shadow: 0 10px 25px -5px rgba(0, 0, 0, 0.05), 0 8px 10px -6px rgba(0, 0, 0, 0.03);
+      border: 1px solid var(--border);
+      overflow: hidden;
+    }
+
+    .header-banner {
+      background: linear-gradient(135deg, #6366F1 0%, #4F46E5 100%);
+      padding: 32px 24px;
+      text-align: center;
+      color: white;
+    }
+
+    .app-badge {
+      display: inline-flex;
+      align-items: center;
+      gap: 6px;
+      background: rgba(255, 255, 255, 0.2);
+      backdrop-filter: blur(8px);
+      padding: 6px 14px;
+      border-radius: 9999px;
+      font-size: 13px;
+      font-weight: 600;
+      letter-spacing: 0.5px;
+      margin-bottom: 12px;
+    }
+
+    .header-title {
+      font-size: 24px;
+      font-weight: 700;
+      margin-bottom: 6px;
+    }
+
+    .header-subtitle {
+      font-size: 14px;
+      opacity: 0.9;
+    }
+
+    .card-body {
+      padding: 28px 24px;
+    }
+
+    .invite-preview {
+      background: #F1F5F9;
+      border-radius: 14px;
+      padding: 20px;
+      margin-bottom: 24px;
+      border: 1px solid var(--border);
+    }
+
+    .inviter-info {
+      display: flex;
+      align-items: center;
+      gap: 12px;
+      margin-bottom: 16px;
+    }
+
+    .avatar {
+      width: 44px;
+      height: 44px;
+      border-radius: 50%;
+      background: #CBD5E1;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-weight: 700;
+      color: #475569;
+      font-size: 18px;
+      overflow: hidden;
+    }
+
+    .avatar img {
+      width: 100%;
+      height: 100%;
+      object-fit: cover;
+    }
+
+    .inviter-text .name {
+      font-weight: 600;
+      font-size: 15px;
+      color: var(--text-main);
+    }
+
+    .inviter-text .role-badge {
+      font-size: 12px;
+      color: #6366F1;
+      font-weight: 600;
+    }
+
+    .trip-title {
+      font-size: 20px;
+      font-weight: 700;
+      color: var(--text-main);
+      margin-bottom: 8px;
+    }
+
+    .trip-meta {
+      display: flex;
+      gap: 16px;
+      font-size: 13px;
+      color: var(--text-sub);
+    }
+
+    .meta-item {
+      display: flex;
+      align-items: center;
+      gap: 4px;
+    }
+
+    .shortcode-section {
+      text-align: center;
+      margin-bottom: 24px;
+    }
+
+    .shortcode-label {
+      font-size: 13px;
+      font-weight: 600;
+      color: var(--text-sub);
+      margin-bottom: 8px;
+    }
+
+    .shortcode-box {
+      display: inline-flex;
+      align-items: center;
+      gap: 12px;
+      background: #EEF2FF;
+      border: 2px dashed #818CF8;
+      border-radius: 12px;
+      padding: 10px 24px;
+    }
+
+    .shortcode-value {
+      font-size: 28px;
+      font-weight: 800;
+      letter-spacing: 4px;
+      color: var(--primary);
+    }
+
+    .copy-btn {
+      background: white;
+      border: 1px solid #CBD5E1;
+      padding: 6px 12px;
+      border-radius: 8px;
+      font-size: 12px;
+      font-weight: 600;
+      color: #475569;
+      cursor: pointer;
+      transition: all 0.2s;
+    }
+
+    .copy-btn:hover {
+      background: #F8FAFC;
+      border-color: #94A3B8;
+    }
+
+    .actions {
+      display: flex;
+      flex-direction: column;
+      gap: 12px;
+      margin-bottom: 24px;
+    }
+
+    .btn {
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      gap: 8px;
+      width: 100%;
+      padding: 14px;
+      border-radius: 12px;
+      font-size: 15px;
+      font-weight: 600;
+      text-decoration: none;
+      cursor: pointer;
+      transition: all 0.2s;
+      border: none;
+    }
+
+    .btn-primary {
+      background: var(--primary);
+      color: white;
+    }
+
+    .btn-primary:hover {
+      background: var(--primary-hover);
+    }
+
+    .btn-secondary {
+      background: white;
+      color: var(--text-main);
+      border: 1px solid var(--border);
+    }
+
+    .btn-secondary:hover {
+      background: #F8FAFC;
+    }
+
+    .instructions {
+      border-top: 1px solid var(--border);
+      padding-top: 20px;
+    }
+
+    .instructions h4 {
+      font-size: 14px;
+      color: var(--text-sub);
+      margin-bottom: 12px;
+    }
+
+    .instructions ol {
+      padding-left: 20px;
+      font-size: 13px;
+      color: var(--text-sub);
+      line-height: 1.7;
+    }
+
+    .loading, .error {
+      text-align: center;
+      padding: 20px;
+      font-size: 14px;
+      color: var(--text-sub);
+    }
+
+    .error {
+      color: #EF4444;
+    }
+  </style>
+</head>
+<body>
+
+  <div class="container">
+    <div class="header-banner">
+      <div class="app-badge">🌸 聖地巡禮行程規劃</div>
+      <h1 class="header-title">邀請協同規劃</h1>
+      <p class="header-subtitle">與好友一同整理巡禮景點與專屬拍照行程</p>
+    </div>
+
+    <div class="card-body">
+      <!-- Invite preview block -->
+      <div id="loading" class="loading">正在讀取邀請資訊...</div>
+      
+      <div id="preview" style="display: none;">
+        <div class="invite-preview">
+          <div class="inviter-info">
+            <div class="avatar" id="inviterAvatar">A</div>
+            <div class="inviter-text">
+              <div class="name" id="inviterName">好友</div>
+              <div class="role-badge" id="roleBadge">邀請您共同編輯</div>
+            </div>
+          </div>
+          <div class="trip-title" id="tripTitle">聖地巡禮行程</div>
+          <div class="trip-meta">
+            <div class="meta-item">📍 <span id="stopCount">0</span> 個巡禮點</div>
+            <div class="meta-item" id="tripDateContainer">📅 <span id="tripDate">未定日期</span></div>
+          </div>
+        </div>
+
+        <div class="shortcode-section">
+          <div class="shortcode-label">您的 6 位數邀請碼</div>
+          <div class="shortcode-box">
+            <span class="shortcode-value" id="shortCode">------</span>
+            <button class="copy-btn" id="copyBtn" onclick="copyCode()">複製</button>
+          </div>
+        </div>
+
+        <div class="actions">
+          <a id="openAppBtn" href="#" class="btn btn-primary">在 App 中開啟並加入</a>
+          <a id="downloadApkBtn" href="https://github.com/bullyee/trip_planner/releases/latest" class="btn btn-secondary">
+            下載最新 Android APK (v0.1.3+)
+          </a>
+        </div>
+      </div>
+
+      <div id="errorMessage" class="error" style="display: none;">
+        找不到對應的邀請資訊或邀請已過期。請向邀請人確認邀請代碼是否正確。
+      </div>
+
+      <div class="instructions">
+        <h4>如何加入？</h4>
+        <ol>
+          <li>若尚未安裝 App，請點擊上方「下載 Android APK」進行安裝。</li>
+          <li>開啟 App 並使用 Google 帳號登入。</li>
+          <li>重新點擊邀請連結，或在 App「加入行程」輸入上方 6 碼短碼即可！</li>
+        </ol>
+      </div>
+    </div>
+  </div>
+
+  <script>
+    const PROJECT_ID = "trip-planner-2775c";
+    const BASE_FIRESTORE = `https://firestore.googleapis.com/v1/projects/${PROJECT_ID}/databases/(default)/documents`;
+
+    let activeToken = "";
+    let activeCode = "";
+
+    function getParam(name) {
+      const urlParams = new URLSearchParams(window.location.search);
+      return urlParams.get(name);
+    }
+
+    async function fetchInvite() {
+      let token = getParam("token");
+      let code = getParam("code");
+
+      // Also check path segments, e.g. /join/K7M2P9
+      const pathParts = window.location.pathname.split("/").filter(Boolean);
+      if (!token && !code && pathParts.length >= 2 && (pathParts[0] === "join" || pathParts[0] === "invite")) {
+        const candidate = pathParts[1];
+        if (candidate.length === 6 && !candidate.includes("-")) {
+          code = candidate.toUpperCase();
+        } else {
+          token = candidate;
+        }
+      }
+
+      if (!token && !code) {
+        showDefaultPreview();
+        return;
+      }
+
+      try {
+        // If code provided, resolve token first
+        if (!token && code) {
+          activeCode = code.toUpperCase();
+          const codeRes = await fetch(`${BASE_FIRESTORE}/invite_codes/${activeCode}`);
+          if (!codeRes.ok) throw new Error("Invalid code");
+          const codeJson = await codeRes.json();
+          token = codeJson.fields?.token?.stringValue;
+        }
+
+        if (!token) throw new Error("No token found");
+        activeToken = token;
+
+        const inviteRes = await fetch(`${BASE_FIRESTORE}/invites/${token}`);
+        if (!inviteRes.ok) throw new Error("Invite document not found");
+        const inviteJson = await inviteRes.json();
+        const f = inviteJson.fields || {};
+
+        const title = f.tripTitle?.stringValue || "聖地巡禮行程";
+        const inviter = f.inviterName?.stringValue || "行程協同者";
+        const stops = f.stopCount?.integerValue || 0;
+        const dates = f.tripDates?.stringValue || "未定日期";
+        const shortCode = f.shortCode?.stringValue || activeCode || "------";
+        const role = f.role?.stringValue || "editor";
+        const avatarUrl = f.inviterAvatarUrl?.stringValue;
+
+        renderPreview({
+          title,
+          inviter,
+          stops,
+          dates,
+          shortCode,
+          role,
+          avatarUrl,
+        });
+      } catch (err) {
+        console.warn("Failed to fetch invite preview:", err);
+        if (activeCode) {
+          renderPreview({
+            title: "聖地巡禮共用行程",
+            inviter: "好友",
+            stops: 0,
+            dates: "自訂日期",
+            shortCode: activeCode,
+            role: "editor"
+          });
+        } else {
+          document.getElementById("loading").style.display = "none";
+          document.getElementById("errorMessage").style.display = "block";
+        }
+      }
+    }
+
+    function renderPreview(data) {
+      document.getElementById("loading").style.display = "none";
+      document.getElementById("preview").style.display = "block";
+
+      document.getElementById("tripTitle").innerText = data.title;
+      document.getElementById("inviterName").innerText = data.inviter;
+      document.getElementById("stopCount").innerText = data.stops;
+      document.getElementById("tripDate").innerText = data.dates;
+      document.getElementById("shortCode").innerText = data.shortCode;
+      activeCode = data.shortCode;
+
+      if (data.role === "viewer") {
+        document.getElementById("roleBadge").innerText = "邀請您檢視行程 (唯讀)";
+      } else {
+        document.getElementById("roleBadge").innerText = "邀請您共同編輯行程";
+      }
+
+      if (data.avatarUrl) {
+        document.getElementById("inviterAvatar").innerHTML = `<img src="${data.avatarUrl}" alt="Avatar">`;
+      } else {
+        document.getElementById("inviterAvatar").innerText = data.inviter.charAt(0).toUpperCase();
+      }
+
+      // App links
+      const appUrl = `https://trip-planner-2775c.web.app/join?token=${activeToken || ""}&code=${activeCode}`;
+      document.getElementById("openAppBtn").href = appUrl;
+    }
+
+    function showDefaultPreview() {
+      renderPreview({
+        title: "聖地巡禮行程規劃",
+        inviter: "好友",
+        stops: 0,
+        dates: "即將出發",
+        shortCode: "PILGRIM",
+        role: "editor"
+      });
+    }
+
+    function copyCode() {
+      if (!activeCode || activeCode === "------") return;
+      navigator.clipboard.writeText(activeCode).then(() => {
+        const btn = document.getElementById("copyBtn");
+        btn.innerText = "已複製！";
+        setTimeout(() => { btn.innerText = "複製"; }, 2000);
+      });
+    }
+
+    fetchInvite();
+  </script>
+</body>
+</html>
+
