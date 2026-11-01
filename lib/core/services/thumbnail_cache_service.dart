@@ -1,24 +1,47 @@
 import 'dart:async';
 import 'dart:convert';
 import 'dart:io';
+// ignore: depend_on_referenced_packages
 import 'package:crypto/crypto.dart';
 import 'package:flutter/foundation.dart';
 import 'package:http/http.dart' as http;
 import 'package:path/path.dart' as p;
 import 'package:path_provider/path_provider.dart';
 
+import '../../features/poi/services/anitabi_api_service.dart';
+
 /// Service responsible for downloading, deduplicating, and locally caching
 /// reference image thumbnails on disk for offline use.
+///
+/// Follows the Anitabi rules in `CLAUDE.md`:
+/// - Sends [AnitabiApiService.userAgent] on every request.
+/// - Never retries after receiving HTTP 403 or 429 (`isRateLimitedOrBlocked`).
+/// - Keeps downloads sequential and rare (default concurrency = 1).
 class ThumbnailCacheService {
   final http.Client _client;
   final Directory? _overrideCacheDir; // For testing
   final Map<String, Future<String?>> _inFlightFetches = {};
+
+  /// Set to `true` when any request receives HTTP 403 or 429 so we stop issuing
+  /// further network requests rather than hammering a rate-limited/blocked host.
+  bool _isRateLimitedOrBlocked = false;
+
+  bool get isRateLimitedOrBlocked => _isRateLimitedOrBlocked;
 
   ThumbnailCacheService({
     http.Client? client,
     Directory? overrideCacheDir,
   })  : _client = client ?? http.Client(),
         _overrideCacheDir = overrideCacheDir;
+
+  static const Map<String, String> _headers = {
+    'User-Agent': AnitabiApiService.userAgent,
+  };
+
+  /// Resets the blocked state (e.g. when user manually retries later).
+  void resetBlockedState() {
+    _isRateLimitedOrBlocked = false;
+  }
 
   /// Returns a deterministic cache file path for the given [url].
   Future<File> getCacheFile(String url) async {
@@ -34,16 +57,27 @@ class ThumbnailCacheService {
     return File(filePath);
   }
 
+  /// Get a cached local [File] for [url], downloading and caching if needed.
+  /// Returns null if offline, blocked (403/429), or download fails.
+  Future<File?> getThumbnail(String url) async {
+    final path = await getOrFetchThumbnail(url);
+    return path != null ? File(path) : null;
+  }
+
   /// Get a cached local file path for [url].
   /// If already downloaded, returns local path immediately.
   /// If not, downloads and caches the file, then returns the path.
-  /// Returns null if offline or download fails.
+  /// Returns null if offline, blocked (403/429), or download fails.
   Future<String?> getOrFetchThumbnail(String url) async {
     if (url.trim().isEmpty) return null;
 
     final targetFile = await getCacheFile(url);
     if (await targetFile.exists()) {
       return targetFile.path;
+    }
+
+    if (_isRateLimitedOrBlocked) {
+      return null;
     }
 
     // Deduplicate in-flight requests for the same URL
@@ -63,31 +97,52 @@ class ThumbnailCacheService {
   }
 
   Future<String?> _downloadAndSave(String url, File targetFile) async {
-    try {
-      final response = await _client
-          .get(Uri.parse(url))
-          .timeout(const Duration(seconds: 10));
+    for (final candidate in _imageCandidates(url)) {
+      if (_isRateLimitedOrBlocked) return null;
+      try {
+        final response = await _client
+            .get(Uri.parse(candidate), headers: _headers)
+            .timeout(const Duration(seconds: 10));
 
-      if (response.statusCode != 200 || response.bodyBytes.isEmpty) {
-        return null;
+        // Never retry on 403 or 429 per CLAUDE.md
+        if (response.statusCode == 403 || response.statusCode == 429) {
+          _isRateLimitedOrBlocked = true;
+          debugPrint(
+            '[ThumbnailCacheService] Received HTTP ${response.statusCode} for $candidate; halting further thumbnail downloads.',
+          );
+          return null;
+        }
+
+        if (response.statusCode == 200 && response.bodyBytes.isNotEmpty) {
+          await targetFile.writeAsBytes(response.bodyBytes, flush: true);
+          return targetFile.path;
+        }
+      } catch (e) {
+        debugPrint('[ThumbnailCacheService] Failed to cache thumbnail for $candidate: $e');
       }
-
-      await targetFile.writeAsBytes(response.bodyBytes, flush: true);
-      return targetFile.path;
-    } catch (e) {
-      debugPrint('[ThumbnailCacheService] Failed to cache thumbnail for $url: $e');
-      return null;
     }
+    return null;
   }
 
-  /// Prefetch multiple thumbnails in parallel with bounded concurrency.
-  Future<void> prefetchThumbnails(List<String> urls, {int concurrency = 4}) async {
+  static List<String> _imageCandidates(String url) {
+    const primary = 'https://image.anitabi.cn/';
+    const mirror = 'https://img-tc.anitabi.cn/';
+    if (url.startsWith(primary)) {
+      return [url, mirror + url.substring(primary.length)];
+    }
+    return [url];
+  }
+
+  /// Prefetch multiple thumbnails sequentially by default (concurrency = 1)
+  /// to keep Anitabi image requests rare and gentle. Stops immediately if
+  /// HTTP 403 or 429 is encountered.
+  Future<void> prefetchThumbnails(List<String> urls, {int concurrency = 1}) async {
     final queue = List<String>.from(urls.where((u) => u.trim().isNotEmpty));
     if (queue.isEmpty) return;
 
     Future<void> worker() async {
-      while (queue.isNotEmpty) {
-        final url = queue.removeLast();
+      while (queue.isNotEmpty && !_isRateLimitedOrBlocked) {
+        final url = queue.removeAt(0);
         await getOrFetchThumbnail(url);
       }
     }
@@ -140,4 +195,3 @@ class ThumbnailCacheService {
     return '.jpg';
   }
 }
-

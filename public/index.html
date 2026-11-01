@@ -375,6 +375,15 @@
         const inviteJson = await inviteRes.json();
         const f = inviteJson.fields || {};
 
+        const isRevoked = f.isRevoked?.booleanValue === true;
+        const expiresAtStr = f.expiresAt?.timestampValue;
+        const isExpired = expiresAtStr ? new Date(expiresAtStr) < new Date() : false;
+        if (isRevoked || isExpired) {
+          document.getElementById("loading").style.display = "none";
+          document.getElementById("errorMessage").style.display = "block";
+          return;
+        }
+
         const title = f.tripTitle?.stringValue || "聖地巡禮行程";
         const inviter = f.inviterName?.stringValue || "行程協同者";
         const stops = f.stopCount?.integerValue || 0;
@@ -394,19 +403,8 @@
         });
       } catch (err) {
         console.warn("Failed to fetch invite preview:", err);
-        if (activeCode) {
-          renderPreview({
-            title: "聖地巡禮共用行程",
-            inviter: "好友",
-            stops: 0,
-            dates: "自訂日期",
-            shortCode: activeCode,
-            role: "editor"
-          });
-        } else {
-          document.getElementById("loading").style.display = "none";
-          document.getElementById("errorMessage").style.display = "block";
-        }
+        document.getElementById("loading").style.display = "none";
+        document.getElementById("errorMessage").style.display = "block";
       }
     }
 
@@ -428,14 +426,23 @@
       }
 
       if (data.avatarUrl) {
-        document.getElementById("inviterAvatar").innerHTML = `<img src="${data.avatarUrl}" alt="Avatar">`;
+        const avatarEl = document.getElementById("inviterAvatar");
+        avatarEl.textContent = "";
+        const img = document.createElement("img");
+        img.src = data.avatarUrl;
+        img.alt = "Avatar";
+        avatarEl.appendChild(img);
       } else {
         document.getElementById("inviterAvatar").innerText = data.inviter.charAt(0).toUpperCase();
       }
 
-      // App links
-      const appUrl = `https://trip-planner-2775c.web.app/join?token=${activeToken || ""}&code=${activeCode}`;
-      document.getElementById("openAppBtn").href = appUrl;
+      // App links (use Android intent:// URI on Android browsers so clicking from the same web host opens the installed APK)
+      const query = `token=${encodeURIComponent(activeToken || "")}&code=${encodeURIComponent(activeCode)}`;
+      const appUrl = `https://trip-planner-2775c.web.app/join?${query}`;
+      const isAndroid = /Android/i.test(navigator.userAgent || "");
+      document.getElementById("openAppBtn").href = isAndroid
+        ? `intent://trip-planner-2775c.web.app/join?${query}#Intent;scheme=https;package=com.example.trip_planner;S.browser_fallback_url=${encodeURIComponent(appUrl)};end`
+        : appUrl;
     }
 
     function showDefaultPreview() {
@@ -462,4 +469,3 @@
   </script>
 </body>
 </html>
-

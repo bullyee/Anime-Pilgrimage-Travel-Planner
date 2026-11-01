@@ -1,3 +1,5 @@
+import 'package:cloud_firestore/cloud_firestore.dart' show Timestamp;
+
 enum TripMemberRole {
   owner,
   editor,
@@ -44,6 +46,14 @@ class TripMember {
     required this.joinedAt,
   });
 
+  static DateTime? _parseDateTime(dynamic val) {
+    if (val is DateTime) return val;
+    if (val is Timestamp) return val.toDate();
+    if (val is int) return DateTime.fromMillisecondsSinceEpoch(val);
+    if (val is String) return DateTime.tryParse(val);
+    return null;
+  }
+
   factory TripMember.fromMap(Map<String, dynamic> data) {
     return TripMember(
       userId: data['userId'] as String? ?? '',
@@ -51,9 +61,7 @@ class TripMember {
       role: TripMemberRole.fromString(data['role'] as String?),
       displayName: data['displayName'] as String? ?? 'Anonymous',
       avatarUrl: data['avatarUrl'] as String?,
-      joinedAt: (data['joinedAt'] is DateTime)
-          ? data['joinedAt'] as DateTime
-          : DateTime.tryParse(data['joinedAt']?.toString() ?? '') ?? DateTime.now(),
+      joinedAt: _parseDateTime(data['joinedAt']) ?? DateTime.now(),
     );
   }
 
@@ -68,4 +76,3 @@ class TripMember {
     };
   }
 }
-

@@ -1,4 +1,3 @@
-import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:drift/drift.dart' hide isNull, isNotNull;
 import 'package:drift/native.dart';
 import 'package:flutter_test/flutter_test.dart';
@@ -7,172 +6,7 @@ import 'package:trip_planner/features/sharing/models/trip_invite.dart';
 import 'package:trip_planner/features/sharing/models/trip_member.dart';
 import 'package:trip_planner/features/sharing/services/group_sharing_service.dart';
 
-// Fake Firestore for GroupSharingService unit testing
-class FakeSharingFirestore implements FirebaseFirestore {
-  final Map<String, Map<String, dynamic>> invites = {};
-  final Map<String, Map<String, dynamic>> inviteCodes = {};
-  final Map<String, Map<String, Map<String, dynamic>>> members = {};
-  final Map<String, Map<String, dynamic>> tripsV2 = {};
-
-  @override
-  CollectionReference<Map<String, dynamic>> collection(String collectionPath) {
-    return _FakeCollectionReference(this, collectionPath);
-  }
-
-  @override
-  WriteBatch batch() => _FakeSharingWriteBatch(this);
-
-  @override
-  dynamic noSuchMethod(Invocation invocation) => super.noSuchMethod(invocation);
-}
-
-class _FakeCollectionReference implements CollectionReference<Map<String, dynamic>> {
-  final FakeSharingFirestore _db;
-  final String _path;
-
-  _FakeCollectionReference(this._db, this._path);
-
-  @override
-  DocumentReference<Map<String, dynamic>> doc([String? path]) {
-    final fullPath = path != null ? '$_path/$path' : '$_path/auto_id';
-    return _FakeDocumentReference(_db, fullPath);
-  }
-
-  @override
-  dynamic noSuchMethod(Invocation invocation) => super.noSuchMethod(invocation);
-}
-
-class _FakeDocumentReference implements DocumentReference<Map<String, dynamic>> {
-  final FakeSharingFirestore _db;
-  final String _fullPath;
-
-  _FakeDocumentReference(this._db, this._fullPath);
-
-  @override
-  CollectionReference<Map<String, dynamic>> collection(String collectionPath) {
-    return _FakeCollectionReference(_db, '$_fullPath/$collectionPath');
-  }
-
-  @override
-  Future<void> set(Map<String, dynamic> data, [SetOptions? options]) async {
-    final parts = _fullPath.split('/');
-    if (parts.length == 2) {
-      final col = parts[0];
-      final docId = parts[1];
-      if (col == 'invites') _db.invites[docId] = Map.from(data);
-      if (col == 'invite_codes') _db.inviteCodes[docId] = Map.from(data);
-      if (col == 'tripsV2') _db.tripsV2[docId] = Map.from(data);
-    } else if (parts.length == 4) {
-      final tripId = parts[1];
-      final memberId = parts[3];
-      _db.members.putIfAbsent(tripId, () => {})[memberId] = Map.from(data);
-    }
-  }
-
-  @override
-  Future<void> update(Map<Object, Object?> data) async {
-    final parts = _fullPath.split('/');
-    if (parts.length == 2) {
-      final col = parts[0];
-      final docId = parts[1];
-      if (col == 'invites' && _db.invites.containsKey(docId)) {
-        data.forEach((k, v) => _db.invites[docId]![k.toString()] = v);
-      }
-      if (col == 'tripsV2' && _db.tripsV2.containsKey(docId)) {
-        data.forEach((k, v) => _db.tripsV2[docId]![k.toString()] = v);
-      }
-    } else if (parts.length == 4) {
-      final tripId = parts[1];
-      final memberId = parts[3];
-      if (_db.members[tripId]?.containsKey(memberId) == true) {
-        data.forEach((k, v) => _db.members[tripId]![memberId]![k.toString()] = v);
-      }
-    }
-  }
-
-  @override
-  Future<void> delete() async {
-    final parts = _fullPath.split('/');
-    if (parts.length == 2) {
-      final col = parts[0];
-      final docId = parts[1];
-      if (col == 'invites') _db.invites.remove(docId);
-      if (col == 'invite_codes') _db.inviteCodes.remove(docId);
-    } else if (parts.length == 4) {
-      final tripId = parts[1];
-      final memberId = parts[3];
-      _db.members[tripId]?.remove(memberId);
-    }
-  }
-
-  @override
-  Future<DocumentSnapshot<Map<String, dynamic>>> get([GetOptions? options]) async {
-    final parts = _fullPath.split('/');
-    Map<String, dynamic>? data;
-    bool exists = false;
-    if (parts.length == 2) {
-      final col = parts[0];
-      final docId = parts[1];
-      if (col == 'invites') {
-        data = _db.invites[docId];
-        exists = data != null;
-      } else if (col == 'invite_codes') {
-        data = _db.inviteCodes[docId];
-        exists = data != null;
-      } else if (col == 'tripsV2') {
-        data = _db.tripsV2[docId];
-        exists = data != null;
-      }
-    } else if (parts.length == 4) {
-      final tripId = parts[1];
-      final memberId = parts[3];
-      data = _db.members[tripId]?[memberId];
-      exists = data != null;
-    }
-    return _FakeDocumentSnapshot(data, exists);
-  }
-
-  @override
-  dynamic noSuchMethod(Invocation invocation) => super.noSuchMethod(invocation);
-}
-
-class _FakeDocumentSnapshot implements DocumentSnapshot<Map<String, dynamic>> {
-  final Map<String, dynamic>? _data;
-  final bool _exists;
-
-  _FakeDocumentSnapshot(this._data, this._exists);
-
-  @override
-  bool get exists => _exists;
-
-  @override
-  Map<String, dynamic>? data() => _data;
-
-  @override
-  dynamic noSuchMethod(Invocation invocation) => super.noSuchMethod(invocation);
-}
-
-class _FakeSharingWriteBatch implements WriteBatch {
-  final FakeSharingFirestore _db;
-  final List<void Function()> _ops = [];
-
-  _FakeSharingWriteBatch(this._db);
-
-  @override
-  void update(DocumentReference<Object?> document, Map<Object, Object?> data) {
-    _ops.add(() => document.update(data));
-  }
-
-  @override
-  Future<void> commit() async {
-    for (final op in _ops) {
-      op();
-    }
-  }
-
-  @override
-  dynamic noSuchMethod(Invocation invocation) => super.noSuchMethod(invocation);
-}
+import 'fake_sharing_firestore.dart';
 
 void main() {
   late AppDatabase db;
@@ -265,7 +99,7 @@ void main() {
   });
 
   group('GroupSharingService - Invites & Members', () {
-    test('creates invite and resolves via token and short code preview', () async {
+    test('creates invite excluding deleted stops and resolves via token and short code preview', () async {
       await db.into(db.trips).insert(
             TripsCompanion.insert(
               id: 'trip_kyoto',
@@ -285,6 +119,19 @@ void main() {
               lat: 34.967,
               lng: 135.772,
               addedBy: currentUserId,
+            ),
+          );
+      // Tombstoned stop must not be counted in stopCount
+      await db.into(db.stops).insert(
+            StopsCompanion.insert(
+              id: 'stop_deleted',
+              tripId: 'trip_kyoto',
+              placeKey: 'anitabi:2',
+              name: 'Deleted Spot',
+              lat: 35.0,
+              lng: 135.0,
+              addedBy: currentUserId,
+              deletedAt: Value(DateTime.now()),
             ),
           );
 
@@ -367,7 +214,7 @@ void main() {
       expect(fakeFirestore.members['trip_test']?.containsKey(currentUserId), isFalse);
     });
 
-    test('revokes invite prevents subsequent joins', () async {
+    test('revokes or expires invite prevents subsequent joins', () async {
       final invite = TripInvite(
         token: 'token_to_revoke',
         shortCode: 'REVOKE',
@@ -395,17 +242,89 @@ void main() {
         () => charlieService.joinTripWithInvite(invite.token),
         throwsA(isA<Exception>()),
       );
+
+      // Expired invite stored via toMap() (ISO string) is also rejected
+      final expiredInvite = TripInvite(
+        token: 'token_expired_iso',
+        shortCode: 'EXPIRE',
+        tripId: 'trip_test',
+        role: TripMemberRole.viewer,
+        createdBy: currentUserId,
+        inviterName: 'Alice',
+        tripTitle: 'Test Trip',
+        stopCount: 1,
+        createdAt: DateTime.now().subtract(const Duration(days: 10)),
+        expiresAt: DateTime.now().subtract(const Duration(days: 3)),
+      );
+      fakeFirestore.invites[expiredInvite.token] = expiredInvite.toMap();
+      expect(
+        () => charlieService.joinTripWithInvite(expiredInvite.token),
+        throwsA(isA<Exception>()),
+      );
+    });
+
+    test('leaveTrip rejects owner without transfer and converts non-owner local copy to private', () async {
+      await db.into(db.trips).insert(
+            TripsCompanion.insert(
+              id: 'trip_leave_test',
+              title: 'Shared Trip',
+              ownerId: currentUserId,
+              sharing: const Value('group'),
+              syncStatus: const Value(0),
+            ),
+          );
+      fakeFirestore.tripsV2['trip_leave_test'] = {
+        'id': 'trip_leave_test',
+        'ownerId': currentUserId,
+        'members': [currentUserId, 'user_bob'],
+      };
+      fakeFirestore.members['trip_leave_test'] = {
+        currentUserId: {'userId': currentUserId, 'role': 'owner'},
+        'user_bob': {'userId': 'user_bob', 'role': 'editor'},
+      };
+
+      // Owner cannot leave without transferring ownership first
+      expect(
+        () => sharingService.leaveTrip('trip_leave_test'),
+        throwsStateError,
+      );
+
+      // Non-owner (user_bob) leaves and keeps a private unsynced local copy
+      final bobService = GroupSharingService(
+        firestore: fakeFirestore,
+        db: db,
+        currentUserId: 'user_bob',
+      );
+      await bobService.leaveTrip('trip_leave_test');
+      expect(fakeFirestore.members['trip_leave_test']?.containsKey('user_bob'), isFalse);
+
+      final localTrip = await (db.select(db.trips)..where((t) => t.id.equals('trip_leave_test'))).getSingle();
+      expect(localTrip.sharing, equals('private'));
+      expect(localTrip.ownerId, equals('user_bob'));
+      expect(localTrip.syncStatus, equals(0));
     });
   });
 
   group('GroupSharingService - Guest Transition Claiming', () {
-    test('claimGuestTrips reassigns orphan guest trips to signed in user', () async {
+    test('claimGuestTrips reassigns orphan guest trips and child rows to signed in user', () async {
       // Create two trips in guest mode
       await db.into(db.trips).insert(
             TripsCompanion.insert(
               id: 'guest_trip_1',
               title: 'Draft Pilgrimage 1',
               ownerId: 'guest_local_user',
+            ),
+          );
+      await db.into(db.stops).insert(
+            StopsCompanion.insert(
+              id: 'guest_stop_1',
+              tripId: 'guest_trip_1',
+              placeKey: 'anitabi:1',
+              name: 'Spot 1',
+              lat: 35.0,
+              lng: 135.0,
+              addedBy: 'guest_local_user',
+              updatedBy: const Value('guest_local_user'),
             ),
           );
 
@@ -432,6 +351,10 @@ void main() {
       final trip1 = await (db.select(db.trips)..where((t) => t.id.equals('guest_trip_1'))).getSingle();
       expect(trip1.ownerId, 'user_alice');
       expect(trip1.updatedBy, 'user_alice');
+
+      final stop1 = await (db.select(db.stops)..where((s) => s.id.equals('guest_stop_1'))).getSingle();
+      expect(stop1.addedBy, 'user_alice');
+      expect(stop1.updatedBy, 'user_alice');
 
       final trip2 = await (db.select(db.trips)..where((t) => t.id.equals('guest_trip_2'))).getSingle();
       expect(trip2.ownerId, 'user_alice');

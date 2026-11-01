@@ -105,31 +105,40 @@ service cloud.firestore {
     }
 
     // ==========================================
-    // 4. Shared Trips V2 (v0.2.x+ MVP Model)
+    // 4. Shared Trips V2 & Group Sharing (Stage 3 + Stage 4 RBAC)
     // ==========================================
-    function isTripMemberV2(tripId) {
-      let tripDoc = get(/databases/$(database)/documents/tripsV2/$(tripId));
-      let memberDoc = /databases/$(database)/documents/tripsV2/$(tripId)/members/$(request.auth.uid);
-      return tripDoc != null && (
-        request.auth.uid == tripDoc.data.ownerId ||
-        (('members' in tripDoc.data) && request.auth.uid in tripDoc.data.members) ||
-        exists(memberDoc)
-      );
+    function getTripDocV2(tripId) {
+      return get(/databases/$(database)/documents/tripsV2/$(tripId));
     }
 
+    function getMemberDoc(tripId, uid) {
+      return get(/databases/$(database)/documents/tripsV2/$(tripId)/members/$(uid));
+    }
+
+    function isTripMemberV2(tripId) {
+      let tripDoc = getTripDocV2(tripId);
+      let memberDoc = getMemberDoc(tripId, request.auth.uid);
+      return (tripDoc != null && (
+        request.auth.uid == tripDoc.data.ownerId ||
+        (('members' in tripDoc.data) && request.auth.uid in tripDoc.data.members)
+      )) || memberDoc != null;
+    }
+
+    // Role lookup: 'owner' | 'editor' | 'viewer' | ''
     function getTripRole(tripId) {
-      let tripDoc = get(/databases/$(database)/documents/tripsV2/$(tripId));
-      let memberDoc = /databases/$(database)/documents/tripsV2/$(tripId)/members/$(request.auth.uid);
+      let tripDoc = getTripDocV2(tripId);
+      let memberDoc = getMemberDoc(tripId, request.auth.uid);
       return (tripDoc != null && request.auth.uid == tripDoc.data.ownerId)
         ? 'owner'
-        : (exists(memberDoc) && 'role' in get(memberDoc).data ? get(memberDoc).data.role : 'editor');
+        : (memberDoc != null && ('role' in memberDoc.data))
+          ? memberDoc.data.role
+          : (tripDoc != null && ('members' in tripDoc.data) && request.auth.uid in tripDoc.data.members)
+            ? 'editor'
+            : '';
     }
 
     function isTripOwner(tripId) {
-      let tripDoc = get(/databases/$(database)/documents/tripsV2/$(tripId));
-      let memberDoc = /databases/$(database)/documents/tripsV2/$(tripId)/members/$(request.auth.uid);
-      return (tripDoc != null && request.auth.uid == tripDoc.data.ownerId) ||
-        (exists(memberDoc) && get(memberDoc).data.role == 'owner');
+      return getTripRole(tripId) == 'owner';
     }
 
     function isTripEditorOrOwner(tripId) {
@@ -185,6 +194,17 @@ service cloud.firestore {
         && (!('emailAllowlist' in inviteDoc.data) || inviteDoc.data.emailAllowlist.size() == 0 || request.auth.token.email in inviteDoc.data.emailAllowlist);
     }
 
+    function isSelfMemberArraySync(tripId) {
+      let memberPath = /databases/$(database)/documents/tripsV2/$(tripId)/members/$(request.auth.uid);
+      let onlyMembersChanged = request.resource.data.diff(resource.data).affectedKeys().hasOnly(['members']);
+      let oldMembers = ('members' in resource.data) ? resource.data.members.toSet() : [].toSet();
+      let newMembers = request.resource.data.members.toSet();
+      return onlyMembersChanged && (
+        (existsAfter(memberPath) && newMembers == oldMembers.union([request.auth.uid].toSet())) ||
+        (!existsAfter(memberPath) && newMembers == oldMembers.difference([request.auth.uid].toSet()))
+      );
+    }
+
     match /tripsV2/{tripId} {
       allow read: if isAuthenticated() && (
         resource == null ||
@@ -198,14 +218,19 @@ service cloud.firestore {
         && request.resource.data.members == [request.auth.uid]
         && isTripV2Safe();
 
-      // Only owner or editors can update trip metadata (viewers are read-only)
-      allow update: if isAuthenticated()
-        && isTripMemberV2(tripId)
-        && isTripEditorOrOwner(tripId)
-        && request.resource.data.ownerId == resource.data.ownerId
-        && request.resource.data.members == resource.data.members
-        && isLwwValid()
-        && isTripV2Safe();
+      // Only owner or editors can update trip metadata (viewers are read-only),
+      // and only the owner can change ownerId, sharing, or remove members.
+      // Joining/leaving members may sync their own UID in the members array in lockstep with /members/{uid}.
+      allow update: if isAuthenticated() && (
+        (isTripMemberV2(tripId)
+          && isTripEditorOrOwner(tripId)
+          && (!('ownerId' in request.resource.data) || request.resource.data.ownerId == resource.data.ownerId || isTripOwner(tripId))
+          && (!('sharing' in request.resource.data) || request.resource.data.sharing == resource.data.sharing || isTripOwner(tripId))
+          && (!('members' in request.resource.data) || !('members' in resource.data) || isTripOwner(tripId) || request.resource.data.members.toSet().hasAll(resource.data.members))
+          && isLwwValid()
+          && isTripV2Safe()) ||
+        isSelfMemberArraySync(tripId)
+      );
 
       // Direct hard deletes disallowed; soft-deletes via deletedAt tombstones
       allow delete: if false;
@@ -234,12 +259,11 @@ service cloud.firestore {
         // (a) Member leaving self (owner cannot leave without transfer)
         // (b) Owner kicking a non-owner member
         allow delete: if isAuthenticated() && (
-          (request.auth.uid == memberUid && resource.data.role != 'owner') ||
+          (request.auth.uid == memberUid && !isTripOwner(tripId)) ||
           (isTripOwner(tripId) && resource.data.role != 'owner')
         );
       }
 
-      // --- Days subcollection ---
       match /days/{dayId} {
         allow read: if isAuthenticated() && isTripMemberV2(tripId);
         allow create, update: if isAuthenticated()
@@ -250,7 +274,6 @@ service cloud.firestore {
         allow delete: if false;
       }
 
-      // --- Stops subcollection ---
       match /stops/{stopId} {
         allow read: if isAuthenticated() && isTripMemberV2(tripId);
         allow create, update: if isAuthenticated()
@@ -261,7 +284,6 @@ service cloud.firestore {
         allow delete: if false;
       }
 
-      // --- Schedule Items subcollection ---
       match /schedule_items/{itemId} {
         allow read: if isAuthenticated() && isTripMemberV2(tripId);
         allow create, update: if isAuthenticated()
@@ -274,34 +296,46 @@ service cloud.firestore {
     }
 
     // ==========================================
-    // 5. Invites Collection (Stage 4 Group Sharing)
+    // 5. Group Sharing Invites & Short Codes (Stage 4)
     // ==========================================
     match /invites/{token} {
-      // Anyone with the token can read invite doc for public preview prior to joining
-      allow read: if true;
+      // Single-doc lookup by token is public so the web landing page and preview card can read it;
+      // collection-wide listing is blocked so tokens cannot be enumerated.
+      allow get: if true;
+      allow list: if false;
 
-      // Only owner or editor of the trip can create an invite
+      // Only Owner or Editor of the trip can create an editor/viewer invite
       allow create: if isAuthenticated()
-        && isTripEditorOrOwner(request.resource.data.tripId)
-        && request.resource.data.token == token
-        && request.resource.data.createdBy == request.auth.uid;
+        && request.resource.data.createdBy == request.auth.uid
+        && request.resource.data.role in ['editor', 'viewer']
+        && isTripEditorOrOwner(request.resource.data.tripId);
 
-      // Only trip owner or the inviter can update (e.g. revoke)
-      allow update: if isAuthenticated() && (
-        isTripOwner(resource.data.tripId) ||
-        resource.data.createdBy == request.auth.uid
+      // Creator or Trip Owner can revoke or update expiration without mutating core invite fields
+      allow update: if isAuthenticated()
+        && request.resource.data.tripId == resource.data.tripId
+        && request.resource.data.role == resource.data.role
+        && request.resource.data.createdBy == resource.data.createdBy
+        && (
+          resource.data.createdBy == request.auth.uid ||
+          isTripOwner(resource.data.tripId)
+        );
+
+      allow delete: if isAuthenticated() && (
+        resource.data.createdBy == request.auth.uid ||
+        isTripOwner(resource.data.tripId)
       );
-
-      // Only trip owner can delete invite
-      allow delete: if isAuthenticated() && isTripOwner(resource.data.tripId);
     }
 
-    // Short code lookup for invites
-    match /invite_codes/{code} {
-      allow read: if true;
+    match /invite_codes/{shortCode} {
+      // Short code lookup is single-doc only
+      allow get: if true;
+      allow list: if false;
+
       allow create: if isAuthenticated()
-        && exists(/databases/$(database)/documents/invites/$(request.resource.data.token));
-      allow update, delete: if false;
+        && request.resource.data.token is string
+        && shortCode.size() == 6;
+
+      allow delete: if isAuthenticated();
     }
   }
 }

@@ -65,6 +65,7 @@ class TripListController extends StateNotifier<TripListState> {
   final TripRepository _repository;
   final String _currentUserId;
   StreamSubscription<List<Trip>>? _tripsSub;
+  int _loadGeneration = 0;
 
   TripListController({
     required TripRepository repository,
@@ -77,11 +78,13 @@ class TripListController extends StateNotifier<TripListState> {
 
   void _init() {
     _tripsSub = _repository.watchTrips().listen((trips) async {
+      final gen = ++_loadGeneration;
       final summaryList = <TripSummaryItem>[];
 
       for (final trip in trips) {
         final stops = await _repository.getStopsForTrip(trip.id);
         final days = await _repository.getDaysForTrip(trip.id);
+        if (!mounted || gen != _loadGeneration) return;
 
         final blockInfos = days.map((d) {
           return DayBlockInfo(
@@ -128,6 +131,7 @@ class TripListController extends StateNotifier<TripListState> {
         ));
       }
 
+      if (!mounted || gen != _loadGeneration) return;
       final filtered = _applyFilters(summaryList, state.filter, state.searchQuery);
       state = state.copyWith(
         allTrips: summaryList,
@@ -135,6 +139,7 @@ class TripListController extends StateNotifier<TripListState> {
         isLoading: false,
       );
     }, onError: (e) {
+      if (!mounted) return;
       state = state.copyWith(isLoading: false, errorMessage: e.toString());
     });
   }
@@ -153,6 +158,7 @@ class TripListController extends StateNotifier<TripListState> {
     try {
       await _repository.deleteTrip(tripId);
     } catch (e) {
+      if (!mounted) return;
       state = state.copyWith(errorMessage: e.toString());
     }
   }

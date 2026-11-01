@@ -34,12 +34,75 @@ class GroupSharingService {
     String? inviterAvatarUrl,
     List<String>? emailAllowlist,
   }) async {
-    final trip = await (_db.select(_db.trips)..where((t) => t.id.equals(tripId))).getSingleOrNull();
-    final stopCount = await (_db.select(_db.stops)..where((s) => s.tripId.equals(tripId))).get();
+    if (role == TripMemberRole.owner) {
+      throw ArgumentError('Cannot create an invite with the owner role.');
+    }
+
+    final now = DateTime.now();
+    var trip = await (_db.select(_db.trips)..where((t) => t.id.equals(tripId))).getSingleOrNull();
+
+    // If the trip is still private locally, promote it to 'group' and mark its rows dirty
+    if (trip != null && trip.sharing != 'group') {
+      await _db.transaction(() async {
+        await (_db.update(_db.trips)..where((t) => t.id.equals(tripId))).write(
+          TripsCompanion(
+            sharing: const Value('group'),
+            syncStatus: const Value(1),
+            updatedAt: Value(now),
+            updatedBy: Value(currentUserId),
+          ),
+        );
+        await (_db.update(_db.tripDays)..where((d) => d.tripId.equals(tripId)))
+            .write(const TripDaysCompanion(syncStatus: Value(1)));
+        await (_db.update(_db.stops)..where((s) => s.tripId.equals(tripId)))
+            .write(const StopsCompanion(syncStatus: Value(1)));
+        await (_db.update(_db.scheduleItems)..where((i) => i.tripId.equals(tripId)))
+            .write(const ScheduleItemsCompanion(syncStatus: Value(1)));
+      });
+      trip = await (_db.select(_db.trips)..where((t) => t.id.equals(tripId))).getSingleOrNull();
+    }
+
+    // Ensure the cloud trip document and owner member record exist before creating the invite
+    // so Firestore security rules (`isTripEditorOrOwner(tripId)`) authorize invite creation.
+    if (trip != null && trip.ownerId == currentUserId) {
+      final tripRef = _firestore.collection('tripsV2').doc(tripId);
+      final tripSnap = await tripRef.get();
+      if (!tripSnap.exists) {
+        final initBatch = _firestore.batch();
+        initBatch.set(tripRef, {
+          'id': trip.id,
+          'title': trip.title,
+          'description': trip.description,
+          'ownerId': trip.ownerId,
+          'sharing': 'group',
+          'startDate': trip.startDate,
+          'dayCount': trip.dayCount,
+          'members': [currentUserId],
+          'createdAt': Timestamp.fromDate(trip.createdAt),
+          'updatedAt': Timestamp.fromDate(trip.updatedAt),
+          'updatedBy': trip.updatedBy ?? currentUserId,
+          'deletedAt': null,
+        });
+        initBatch.set(
+          tripRef.collection('members').doc(currentUserId),
+          {
+            'tripId': trip.id,
+            'userId': currentUserId,
+            'role': 'owner',
+            'joinedAt': Timestamp.fromDate(trip.createdAt),
+          },
+          SetOptions(merge: true),
+        );
+        await initBatch.commit();
+      }
+    }
+
+    final activeStops = await (_db.select(_db.stops)
+          ..where((s) => s.tripId.equals(tripId) & s.deletedAt.isNull()))
+        .get();
 
     final token = const Uuid().v4();
     final shortCode = generateShortCode();
-    final now = DateTime.now();
     final expiresAt = now.add(const Duration(days: 7));
 
     final invite = TripInvite(
@@ -52,15 +115,15 @@ class GroupSharingService {
       inviterAvatarUrl: inviterAvatarUrl,
       tripTitle: trip?.title ?? 'Trip Itinerary',
       tripDates: trip?.startDate,
-      stopCount: stopCount.length,
+      stopCount: activeStops.length,
       createdAt: now,
       expiresAt: expiresAt,
       isRevoked: false,
       emailAllowlist: emailAllowlist ?? const [],
     );
 
-    // Save invite doc
-    await _firestore.collection('invites').doc(token).set({
+    final batch = _firestore.batch();
+    batch.set(_firestore.collection('invites').doc(token), {
       'token': invite.token,
       'shortCode': invite.shortCode,
       'tripId': invite.tripId,
@@ -77,11 +140,12 @@ class GroupSharingService {
       'emailAllowlist': invite.emailAllowlist,
     });
 
-    // Save short code index
-    await _firestore.collection('invite_codes').doc(shortCode).set({
+    batch.set(_firestore.collection('invite_codes').doc(shortCode), {
       'token': token,
       'createdAt': Timestamp.fromDate(now),
     });
+
+    await batch.commit();
 
     return invite;
   }
@@ -101,26 +165,10 @@ class GroupSharingService {
     if (!inviteDoc.exists) return null;
 
     final data = inviteDoc.data()!;
-    return TripInvite(
-      token: data['token'] as String? ?? token,
-      shortCode: data['shortCode'] as String? ?? '',
-      tripId: data['tripId'] as String? ?? '',
-      role: TripMemberRole.fromString(data['role'] as String?),
-      createdBy: data['createdBy'] as String? ?? '',
-      inviterName: data['inviterName'] as String? ?? '',
-      inviterAvatarUrl: data['inviterAvatarUrl'] as String?,
-      tripTitle: data['tripTitle'] as String? ?? '',
-      tripDates: data['tripDates'] as String?,
-      stopCount: (data['stopCount'] as num?)?.toInt() ?? 0,
-      createdAt: (data['createdAt'] is Timestamp)
-          ? (data['createdAt'] as Timestamp).toDate()
-          : DateTime.now(),
-      expiresAt: (data['expiresAt'] is Timestamp)
-          ? (data['expiresAt'] as Timestamp).toDate()
-          : DateTime.now().add(const Duration(days: 7)),
-      isRevoked: data['isRevoked'] as bool? ?? false,
-      emailAllowlist: List<String>.from(data['emailAllowlist'] as List? ?? []),
-    );
+    return TripInvite.fromMap({
+      ...data,
+      'token': data['token'] as String? ?? token,
+    });
   }
 
   /// Join a trip via invite token or short code.
@@ -128,10 +176,19 @@ class GroupSharingService {
     String tokenOrCode, {
     String? displayName,
     String? avatarUrl,
+    String? userEmail,
   }) async {
     final invite = await getInvitePreview(tokenOrCode);
     if (invite == null || !invite.isValid) {
       throw Exception('Invite is invalid, revoked, or has expired.');
+    }
+
+    if (invite.emailAllowlist.isNotEmpty) {
+      final normalizedEmail = userEmail?.trim().toLowerCase();
+      final allowed = invite.emailAllowlist.map((e) => e.trim().toLowerCase()).toSet();
+      if (normalizedEmail == null || !allowed.contains(normalizedEmail)) {
+        throw Exception('Your email is not on the invite allowlist.');
+      }
     }
 
     final now = DateTime.now();
@@ -144,13 +201,12 @@ class GroupSharingService {
       joinedAt: now,
     );
 
-    // Write member doc to tripsV2/{tripId}/members/{currentUserId}
-    await _firestore
-        .collection('tripsV2')
-        .doc(invite.tripId)
-        .collection('members')
-        .doc(currentUserId)
-        .set({
+    final tripRef = _firestore.collection('tripsV2').doc(invite.tripId);
+    final memberRef = tripRef.collection('members').doc(currentUserId);
+    final tripSnap = await tripRef.get();
+
+    final batch = _firestore.batch();
+    batch.set(memberRef, {
       'userId': member.userId,
       'tripId': member.tripId,
       'role': member.role.toRoleString(),
@@ -159,6 +215,15 @@ class GroupSharingService {
       'joinedAt': Timestamp.fromDate(now),
       'inviteToken': invite.token,
     });
+
+    // Also add currentUserId to tripsV2/{tripId}.members so watchUserTrips queries match
+    if (tripSnap.exists) {
+      batch.update(tripRef, {
+        'members': FieldValue.arrayUnion([currentUserId]),
+      });
+    }
+
+    await batch.commit();
 
     return member;
   }
@@ -172,16 +237,12 @@ class GroupSharingService {
         .snapshots()
         .map((snapshot) => snapshot.docs.map((doc) {
               final data = doc.data();
-              return TripMember(
-                userId: data['userId'] as String? ?? doc.id,
-                tripId: tripId,
-                role: TripMemberRole.fromString(data['role'] as String?),
-                displayName: data['displayName'] as String? ?? 'Collaborator',
-                avatarUrl: data['avatarUrl'] as String?,
-                joinedAt: (data['joinedAt'] is Timestamp)
-                    ? (data['joinedAt'] as Timestamp).toDate()
-                    : DateTime.now(),
-              );
+              return TripMember.fromMap({
+                ...data,
+                'userId': data['userId'] as String? ?? doc.id,
+                'tripId': data['tripId'] as String? ?? tripId,
+                'displayName': data['displayName'] as String? ?? 'Collaborator',
+              });
             }).toList());
   }
 
@@ -203,31 +264,113 @@ class GroupSharingService {
 
   /// Kick a member from the trip (Owner only).
   Future<void> removeMember(String tripId, String memberUserId) async {
-    await _firestore
-        .collection('tripsV2')
-        .doc(tripId)
-        .collection('members')
-        .doc(memberUserId)
-        .delete();
+    final tripRef = _firestore.collection('tripsV2').doc(tripId);
+    final memberRef = tripRef.collection('members').doc(memberUserId);
+    final tripSnap = await tripRef.get();
+
+    final batch = _firestore.batch();
+    batch.delete(memberRef);
+    if (tripSnap.exists) {
+      batch.update(tripRef, {
+        'members': FieldValue.arrayRemove([memberUserId]),
+      });
+    }
+    await batch.commit();
   }
 
-  /// Leave a trip (Self-removal for non-owners).
+  /// Leave a trip (Self-removal for non-owners; preserves a private local copy).
   Future<void> leaveTrip(String tripId) async {
-    await _firestore
-        .collection('tripsV2')
-        .doc(tripId)
-        .collection('members')
-        .doc(currentUserId)
-        .delete();
+    final tripRef = _firestore.collection('tripsV2').doc(tripId);
+    final memberRef = tripRef.collection('members').doc(currentUserId);
+
+    final tripSnap = await tripRef.get();
+    final memberSnap = await memberRef.get();
+    final localTrip = await (_db.select(_db.trips)..where((t) => t.id.equals(tripId))).getSingleOrNull();
+
+    final isOwner = (tripSnap.exists && tripSnap.data()?['ownerId'] == currentUserId) ||
+        (memberSnap.exists && memberSnap.data()?['role'] == 'owner') ||
+        (localTrip != null && localTrip.ownerId == currentUserId && localTrip.sharing == 'group');
+    if (isOwner) {
+      throw StateError('Owner cannot leave the trip without transferring ownership first.');
+    }
+
+    final batch = _firestore.batch();
+    batch.delete(memberRef);
+    if (tripSnap.exists) {
+      batch.update(tripRef, {
+        'members': FieldValue.arrayRemove([currentUserId]),
+      });
+    }
+    await batch.commit();
+
+    // Per `docs/trip-sharing.md`: leaving a trip keeps a private, unsynced local copy
+    if (localTrip != null) {
+      await _db.transaction(() async {
+        await (_db.update(_db.trips)..where((t) => t.id.equals(tripId))).write(
+          TripsCompanion(
+            ownerId: Value(currentUserId),
+            sharing: const Value('private'),
+            syncStatus: const Value(0),
+          ),
+        );
+        await (_db.update(_db.tripDays)..where((d) => d.tripId.equals(tripId)))
+            .write(const TripDaysCompanion(syncStatus: Value(0)));
+        await (_db.update(_db.stops)..where((s) => s.tripId.equals(tripId)))
+            .write(const StopsCompanion(syncStatus: Value(0)));
+        await (_db.update(_db.scheduleItems)..where((i) => i.tripId.equals(tripId)))
+            .write(const ScheduleItemsCompanion(syncStatus: Value(0)));
+      });
+    }
+  }
+
+  /// Stop sharing a trip (Owner only). Converts the trip back to private.
+  Future<void> unshareTrip(String tripId) async {
+    final now = DateTime.now();
+    final tripRef = _firestore.collection('tripsV2').doc(tripId);
+    final tripSnap = await tripRef.get();
+    if (tripSnap.exists) {
+      await tripRef.update({
+        'sharing': 'private',
+        'members': [currentUserId],
+        'updatedAt': Timestamp.fromDate(now),
+        'updatedBy': currentUserId,
+      });
+    }
+
+    await _db.transaction(() async {
+      await (_db.update(_db.trips)..where((t) => t.id.equals(tripId))).write(
+        TripsCompanion(
+          sharing: const Value('private'),
+          updatedAt: Value(now),
+          updatedBy: Value(currentUserId),
+          syncStatus: const Value(0),
+        ),
+      );
+      await (_db.update(_db.tripDays)..where((d) => d.tripId.equals(tripId)))
+          .write(const TripDaysCompanion(syncStatus: Value(0)));
+      await (_db.update(_db.stops)..where((s) => s.tripId.equals(tripId)))
+          .write(const StopsCompanion(syncStatus: Value(0)));
+      await (_db.update(_db.scheduleItems)..where((i) => i.tripId.equals(tripId)))
+          .write(const ScheduleItemsCompanion(syncStatus: Value(0)));
+    });
   }
 
   /// Transfer trip ownership to another member.
   Future<void> transferOwnership(String tripId, String newOwnerId) async {
+    if (newOwnerId.trim().isEmpty || newOwnerId == currentUserId) {
+      throw ArgumentError('newOwnerId must be a different member.');
+    }
+
+    final now = DateTime.now();
     final batch = _firestore.batch();
 
-    // 1. Update trip doc ownerId
+    // 1. Update trip doc ownerId and bump updatedAt so LWW propagates to collaborators
     final tripRef = _firestore.collection('tripsV2').doc(tripId);
-    batch.update(tripRef, {'ownerId': newOwnerId});
+    batch.update(tripRef, {
+      'ownerId': newOwnerId,
+      'updatedAt': Timestamp.fromDate(now),
+      'updatedBy': currentUserId,
+    });
 
     // 2. Update new owner's member doc to 'owner'
     final newOwnerRef = tripRef.collection('members').doc(newOwnerId);
@@ -241,7 +384,11 @@ class GroupSharingService {
 
     // Update local database trip owner if local trip exists
     await (_db.update(_db.trips)..where((t) => t.id.equals(tripId))).write(
-      TripsCompanion(ownerId: Value(newOwnerId)),
+      TripsCompanion(
+        ownerId: Value(newOwnerId),
+        updatedAt: Value(now),
+        updatedBy: Value(currentUserId),
+      ),
     );
   }
 
@@ -260,19 +407,31 @@ class GroupSharingService {
 
     if (guestTrips.isEmpty) return 0;
 
+    final now = DateTime.now();
     await _db.transaction(() async {
       await (_db.update(_db.trips)
             ..where((t) => t.ownerId.equals('guest_local_user')))
           .write(
         TripsCompanion(
           ownerId: Value(signedInUserId),
-          updatedAt: Value(DateTime.now()),
+          updatedAt: Value(now),
           updatedBy: Value(signedInUserId),
         ),
       );
+      await (_db.update(_db.tripDays)
+            ..where((d) => d.updatedBy.equals('guest_local_user')))
+          .write(TripDaysCompanion(updatedBy: Value(signedInUserId)));
+      await (_db.update(_db.stops)
+            ..where((s) => s.addedBy.equals('guest_local_user')))
+          .write(StopsCompanion(addedBy: Value(signedInUserId)));
+      await (_db.update(_db.stops)
+            ..where((s) => s.updatedBy.equals('guest_local_user')))
+          .write(StopsCompanion(updatedBy: Value(signedInUserId)));
+      await (_db.update(_db.scheduleItems)
+            ..where((i) => i.updatedBy.equals('guest_local_user')))
+          .write(ScheduleItemsCompanion(updatedBy: Value(signedInUserId)));
     });
 
     return guestTrips.length;
   }
 }
-

@@ -68,9 +68,11 @@ class TripPlannerController extends StateNotifier<TripPlannerState> {
 
   /// Load and compute the full trip plan.
   Future<void> load() async {
+    if (!mounted) return;
     state = state.copyWith(isLoading: true, errorMessage: null);
     try {
       final trip = await _repository.getTrip(tripId);
+      if (!mounted) return;
       if (trip == null) {
         state = state.copyWith(isLoading: false, errorMessage: 'Trip not found');
         return;
@@ -79,9 +81,11 @@ class TripPlannerController extends StateNotifier<TripPlannerState> {
       final days = await _repository.getDaysForTrip(tripId);
       final stops = await _repository.getStopsForTrip(tripId);
       final scheduleItems = await _repository.getScheduleItemsForTrip(tripId);
+      if (!mounted) return;
 
       _computeAndEmitState(trip: trip, days: days, stops: stops, items: scheduleItems);
     } catch (e) {
+      if (!mounted) return;
       state = state.copyWith(isLoading: false, errorMessage: e.toString());
     }
   }
@@ -110,7 +114,7 @@ class TripPlannerController extends StateNotifier<TripPlannerState> {
       dayCount: trip.dayCount,
     );
 
-    // 2. Compute timeline schedules for all day items
+    // 2. Compute timeline schedules per day (so each day starts fresh at defaultDayStartMinutes)
     final itemInfos = items.map((i) {
       return ScheduleItemInfo(
         id: i.id,
@@ -124,7 +128,23 @@ class TripPlannerController extends StateNotifier<TripPlannerState> {
       );
     }).toList();
 
-    final timelineItems = ScheduleLogicEngine.computeScheduleTimes(itemInfos);
+    final itemsByDay = <String, List<ScheduleItemInfo>>{};
+    for (final info in itemInfos) {
+      itemsByDay.putIfAbsent(info.dayId, () => []).add(info);
+    }
+
+    final timelineItems = <ComputedTimelineItem>[];
+    final orderedDayIds = [
+      for (final b in resolvedBlocks) b.block.id,
+      for (final dayId in itemsByDay.keys)
+        if (!resolvedBlocks.any((b) => b.block.id == dayId)) dayId,
+    ];
+    for (final dayId in orderedDayIds) {
+      final dayItems = itemsByDay[dayId];
+      if (dayItems != null && dayItems.isNotEmpty) {
+        timelineItems.addAll(ScheduleLogicEngine.computeScheduleTimes(dayItems));
+      }
+    }
 
     // 3. Derive Backlog stops (stops belonging to this trip that have no active schedule item)
     final backlogStopIds = ScheduleLogicEngine.computeBacklog(
@@ -170,7 +190,9 @@ class TripPlannerController extends StateNotifier<TripPlannerState> {
       await _repository.pinDayBlockDate(dayId, date);
       await load();
     } catch (e) {
-      state = state.copyWith(errorMessage: e.toString());
+      if (mounted) {
+        state = state.copyWith(errorMessage: e.toString());
+      }
       rethrow;
     }
   }
@@ -184,7 +206,10 @@ class TripPlannerController extends StateNotifier<TripPlannerState> {
     int? fixedTime,
   }) async {
     final dayItems = await _repository.getScheduleItemsForDay(dayId);
-    dayItems.sort((a, b) => a.sortKey.compareTo(b.sortKey));
+    dayItems.sort((a, b) {
+      final cmp = a.sortKey.compareTo(b.sortKey);
+      return cmp != 0 ? cmp : a.id.compareTo(b.id);
+    });
 
     final lastKey = dayItems.isEmpty ? null : dayItems.last.sortKey;
     final newSortKey = FractionalIndexUtil.append(lastKey == null ? [] : [lastKey]);
@@ -236,8 +261,16 @@ class TripPlannerController extends StateNotifier<TripPlannerState> {
 }
 
 /// Provider family for TripPlannerController keyed by tripId.
+/// Automatically refreshes when underlying trip, days, stops, or schedule items change.
 final tripPlannerControllerProvider =
-    StateNotifierProvider.family<TripPlannerController, TripPlannerState, String>((ref, tripId) {
+    StateNotifierProvider.autoDispose.family<TripPlannerController, TripPlannerState, String>((ref, tripId) {
   final repo = ref.watch(tripRepositoryProvider);
-  return TripPlannerController(repository: repo, tripId: tripId);
+  final controller = TripPlannerController(repository: repo, tripId: tripId);
+
+  ref.listen(tripDetailProvider(tripId), (_, _) => controller.load());
+  ref.listen(tripDaysProvider(tripId), (_, _) => controller.load());
+  ref.listen(tripStopsProvider(tripId), (_, _) => controller.load());
+  ref.listen(scheduleItemsForTripProvider(tripId), (_, _) => controller.load());
+
+  return controller;
 });

@@ -1,20 +1,16 @@
-import 'package:drift/drift.dart' hide isNull, isNotNull;
 import 'package:drift/native.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:trip_planner/core/database/database.dart';
 import 'package:trip_planner/core/utils/schedule_logic.dart';
-import 'package:trip_planner/features/library/repositories/place_repository.dart';
 import 'package:trip_planner/features/trip/controllers/trip_planner_controller.dart';
 import 'package:trip_planner/features/trip/repositories/trip_repository.dart';
 
 void main() {
   late AppDatabase db;
-  late PlaceRepository placeRepo;
   late TripRepository tripRepo;
 
   setUp(() {
     db = AppDatabase.forTesting(NativeDatabase.memory());
-    placeRepo = DriftPlaceRepository(db);
     tripRepo = DriftTripRepository(db);
   });
 
@@ -240,6 +236,49 @@ void main() {
       );
 
       expect(controller.state.scheduledTimeline.first.item.id, equals(item1.id));
+    });
+
+    test('computes timeline independently for each day block rather than accumulating across days', () async {
+      final trip = await tripRepo.createTrip(
+        title: 'Two Day Timeline Trip',
+        ownerId: 'user_test',
+        startDate: '2027-09-01',
+        dayCount: 2,
+      );
+
+      final stop1 = await tripRepo.createTripOnlySpot(
+        tripId: trip.id,
+        name: 'Day 1 Spot',
+        lat: 35.0,
+        lng: 135.0,
+        addedBy: 'user_test',
+      );
+      final stop2 = await tripRepo.createTripOnlySpot(
+        tripId: trip.id,
+        name: 'Day 2 Spot',
+        lat: 35.1,
+        lng: 135.1,
+        addedBy: 'user_test',
+      );
+
+      final controller = TripPlannerController(
+        repository: tripRepo,
+        tripId: trip.id,
+      );
+      await controller.load();
+
+      final day0Id = controller.state.days[0].block.id;
+      final day1Id = controller.state.days[1].block.id;
+
+      await controller.scheduleStop(stop1.id, day0Id, stayMinutes: 120);
+      await controller.scheduleStop(stop2.id, day1Id, stayMinutes: 60);
+
+      final day0Timeline = controller.state.scheduledTimeline.where((t) => t.item.dayId == day0Id).single;
+      final day1Timeline = controller.state.scheduledTimeline.where((t) => t.item.dayId == day1Id).single;
+
+      // Both Day 1 and Day 2 start at default 09:00 (540 minutes)
+      expect(day0Timeline.startMinutes, equals(540));
+      expect(day1Timeline.startMinutes, equals(540));
     });
   });
 }

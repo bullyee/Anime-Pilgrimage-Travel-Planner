@@ -190,9 +190,25 @@ def main():
     code, _ = api_request('POST', f'invites?documentId={invite_token}', invite_data, user_id='alice')
     assert_status("Stage 4: Owner can create invite (200)", 200, code)
 
-    # 16. Unauthenticated or outsider can read invite preview
+    # 15b. Non-member intruder CANNOT forge an invite for trip_v2_1
+    forged_invite = {
+        'fields': {
+            'token': {'stringValue': 'forged_token'},
+            'tripId': {'stringValue': 'trip_v2_1'},
+            'role': {'stringValue': 'editor'},
+            'createdBy': {'stringValue': 'intruder_bob'},
+            'isRevoked': {'booleanValue': False},
+            'expiresAt': {'timestampValue': f'{time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime(expires_in_7_days))}'},
+        }
+    }
+    code, _ = api_request('POST', 'invites?documentId=forged_token', forged_invite, user_id='intruder_bob')
+    assert_status("Stage 4: Non-member cannot create invite for trip (403)", 403, code)
+
+    # 16. Unauthenticated or outsider can read exact invite preview by token, but cannot list all invites
     code, resp = api_request('GET', f'invites/{invite_token}', user_id='charlie')
-    assert_status("Stage 4: Any user can read invite preview (200)", 200, code)
+    assert_status("Stage 4: Any user can read invite preview by token (200)", 200, code)
+    code, _ = api_request('GET', 'invites', user_id='charlie')
+    assert_status("Stage 4: Listing all invites is denied (403)", 403, code)
 
     # 17. Charlie joins trip using the invite token to become 'viewer'
     charlie_member_data = {
@@ -248,6 +264,10 @@ def main():
     # 23. Alice revokes the invite token
     revoke_data = {
         'fields': {
+            'token': {'stringValue': invite_token},
+            'tripId': {'stringValue': 'trip_v2_1'},
+            'role': {'stringValue': 'viewer'},
+            'createdBy': {'stringValue': 'alice'},
             'isRevoked': {'booleanValue': True},
         }
     }

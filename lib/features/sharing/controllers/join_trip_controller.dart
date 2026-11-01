@@ -55,17 +55,18 @@ class JoinTripController extends StateNotifier<JoinTripState> {
   })  : _sharingService = sharingService,
         super(const JoinTripState());
 
-  /// Update input code (strips whitespace, capitalizes alphanumeric).
+  /// Update input code (strips whitespace, capitalizes 6-char alphanumeric short codes
+  /// while preserving case for full UUID tokens).
   /// If code reaches 6 characters or is a token format, automatically fetch preview.
   Future<void> updateCode(String rawCode) async {
-    final sanitized = rawCode.trim().toUpperCase();
+    final trimmed = rawCode.trim();
+    final sanitized =
+        (!trimmed.contains('-') && trimmed.length <= 6) ? trimmed.toUpperCase() : trimmed;
     if (sanitized == state.code) return;
 
-    state = state.copyWith(code: sanitized, clearError: true);
+    state = state.copyWith(code: sanitized, clearInvite: true, clearError: true);
 
-    // If empty, clear preview
     if (sanitized.isEmpty) {
-      state = state.copyWith(clearInvite: true, clearError: true);
       return;
     }
 
@@ -83,6 +84,7 @@ class JoinTripController extends StateNotifier<JoinTripState> {
     state = state.copyWith(isLoading: true, clearError: true);
     try {
       final invite = await _sharingService.getInvitePreview(target);
+      if (!mounted) return;
       if (invite == null) {
         state = state.copyWith(
           isLoading: false,
@@ -103,6 +105,7 @@ class JoinTripController extends StateNotifier<JoinTripState> {
         );
       }
     } catch (e) {
+      if (!mounted) return;
       state = state.copyWith(
         isLoading: false,
         clearInvite: true,
@@ -115,6 +118,7 @@ class JoinTripController extends StateNotifier<JoinTripState> {
   Future<TripMember?> joinTrip({
     String? displayName,
     String? avatarUrl,
+    String? userEmail,
   }) async {
     final invite = state.invite;
     final tokenOrCode = invite?.token ?? state.code;
@@ -129,7 +133,9 @@ class JoinTripController extends StateNotifier<JoinTripState> {
         tokenOrCode,
         displayName: displayName,
         avatarUrl: avatarUrl,
+        userEmail: userEmail,
       );
+      if (!mounted) return member;
 
       state = state.copyWith(
         isJoining: false,
@@ -139,6 +145,7 @@ class JoinTripController extends StateNotifier<JoinTripState> {
       );
       return member;
     } catch (e) {
+      if (!mounted) return null;
       state = state.copyWith(
         isJoining: false,
         errorMessage: 'Failed to join trip: ${e.toString()}',

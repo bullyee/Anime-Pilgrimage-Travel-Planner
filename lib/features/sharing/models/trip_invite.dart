@@ -1,3 +1,4 @@
+import 'package:cloud_firestore/cloud_firestore.dart' show Timestamp;
 import 'trip_member.dart';
 
 class TripInvite {
@@ -36,6 +37,14 @@ class TripInvite {
   bool get isExpired => DateTime.now().isAfter(expiresAt);
   bool get isValid => !isRevoked && !isExpired;
 
+  static DateTime? _parseDateTime(dynamic val) {
+    if (val is DateTime) return val;
+    if (val is Timestamp) return val.toDate();
+    if (val is int) return DateTime.fromMillisecondsSinceEpoch(val);
+    if (val is String) return DateTime.tryParse(val);
+    return null;
+  }
+
   factory TripInvite.fromMap(Map<String, dynamic> data) {
     return TripInvite(
       token: data['token'] as String? ?? '',
@@ -48,13 +57,9 @@ class TripInvite {
       tripTitle: data['tripTitle'] as String? ?? 'Trip Pilgrimage',
       tripDates: data['tripDates'] as String?,
       stopCount: (data['stopCount'] as num?)?.toInt() ?? 0,
-      createdAt: (data['createdAt'] is DateTime)
-          ? data['createdAt'] as DateTime
-          : DateTime.tryParse(data['createdAt']?.toString() ?? '') ?? DateTime.now(),
-      expiresAt: (data['expiresAt'] is DateTime)
-          ? data['expiresAt'] as DateTime
-          : DateTime.tryParse(data['expiresAt']?.toString() ?? '') ??
-              DateTime.now().add(const Duration(days: 7)),
+      createdAt: _parseDateTime(data['createdAt']) ?? DateTime.now(),
+      expiresAt: _parseDateTime(data['expiresAt']) ??
+          DateTime.now().add(const Duration(days: 7)),
       isRevoked: data['isRevoked'] as bool? ?? false,
       emailAllowlist: List<String>.from(data['emailAllowlist'] as List? ?? []),
     );
@@ -79,4 +84,3 @@ class TripInvite {
     };
   }
 }
-

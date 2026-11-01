@@ -1,3 +1,4 @@
+// ignore_for_file: subtype_of_sealed_class
 import 'package:cloud_firestore/cloud_firestore.dart';
 
 /// Fake Firestore for GroupSharing testing without real emulator.
@@ -13,7 +14,7 @@ class FakeSharingFirestore implements FirebaseFirestore {
   }
 
   @override
-  WriteBatch batch() => _FakeSharingWriteBatch(this);
+  WriteBatch batch() => _FakeSharingWriteBatch();
 
   @override
   dynamic noSuchMethod(Invocation invocation) => super.noSuchMethod(invocation);
@@ -146,10 +147,12 @@ class _FakeDocumentSnapshot implements DocumentSnapshot<Map<String, dynamic>> {
 }
 
 class _FakeSharingWriteBatch implements WriteBatch {
-  final FakeSharingFirestore _db;
-  final List<void Function()> _ops = [];
+  final List<Future<void> Function()> _ops = [];
 
-  _FakeSharingWriteBatch(this._db);
+  @override
+  void set<T>(DocumentReference<T> document, T data, [SetOptions? options]) {
+    _ops.add(() => document.set(data, options));
+  }
 
   @override
   void update(DocumentReference<Object?> document, Map<Object, Object?> data) {
@@ -157,9 +160,14 @@ class _FakeSharingWriteBatch implements WriteBatch {
   }
 
   @override
+  void delete(DocumentReference<Object?> document) {
+    _ops.add(() => document.delete());
+  }
+
+  @override
   Future<void> commit() async {
     for (final op in _ops) {
-      op();
+      await op();
     }
   }
 
