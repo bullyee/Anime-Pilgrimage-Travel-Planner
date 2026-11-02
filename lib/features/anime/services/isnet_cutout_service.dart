@@ -47,6 +47,13 @@ class IsnetCutoutService {
   static bool _envReady = false;
   OrtSession? _session;
 
+  // Releasing the session while runAsync still uses it crashes the native
+  // side (#84), and the panel disposes this service when the user leaves it
+  // mid-cutout. So dispose() only marks it, and the last run to finish
+  // releases the session.
+  int _running = 0;
+  bool _disposed = false;
+
   Future<void> _ensureSession() async {
     if (_session != null) return;
     if (!_envReady) {
@@ -57,15 +64,29 @@ class IsnetCutoutService {
     // downloads it (with progress) before getting here, so this is normally
     // just a disk lookup.
     final modelFile = await store.ensure();
-    _session = OrtSession.fromFile(modelFile, OrtSessionOptions());
+    // Closed meanwhile: a session opened now would never be released.
+    if (_disposed) return;
+    _session ??= OrtSession.fromFile(modelFile, OrtSessionOptions());
   }
 
   /// Runs isnet on [original], returning a soft mask + guide at 1024² so the
-  /// caller can refine + composite at will. Throws if the model fails to load.
+  /// caller can refine + composite at will. Throws if the model fails to load,
+  /// or once the service is disposed.
   Future<IsnetMask> segment(img.Image original) async {
+    if (_disposed) throw StateError('The cutout was closed.');
     await _ensureSession();
-    final session = _session!;
+    final session = _session;
+    if (session == null) throw StateError('The cutout was closed.');
+    _running++;
+    try {
+      return await _segmentWith(session, original);
+    } finally {
+      _running--;
+      if (_disposed && _running == 0) _releaseSession();
+    }
+  }
 
+  Future<IsnetMask> _segmentWith(OrtSession session, img.Image original) async {
     // Letterbox the original into the square model input — a plain squash
     // distorts the character (thin parts like limbs/hair fall below the model's
     // resolution and get dropped). Preserve aspect, pad with black; the same
@@ -154,7 +175,14 @@ class IsnetCutoutService {
     return out;
   }
 
+  /// Releases the model session, at once or, while a cutout is running,
+  /// when it finishes.
   void dispose() {
+    _disposed = true;
+    if (_running == 0) _releaseSession();
+  }
+
+  void _releaseSession() {
     _session?.release();
     _session = null;
   }
