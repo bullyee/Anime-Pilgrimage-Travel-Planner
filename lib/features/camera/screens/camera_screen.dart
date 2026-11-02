@@ -59,9 +59,13 @@ Future<String?> _cropPhotoToAspectInIsolate(_CropArgs args) async {
 }
 
 class CameraScreen extends ConsumerStatefulWidget {
-  final String? poiId;
+  /// The place the shot is for, when the camera was opened from one.
+  final String? placeKey;
 
-  const CameraScreen({super.key, this.poiId});
+  /// The trip the shot is filed under; see [openCaptureInEditor].
+  final String? tripId;
+
+  const CameraScreen({super.key, this.placeKey, this.tripId});
 
   @override
   ConsumerState<CameraScreen> createState() => _CameraScreenState();
@@ -92,7 +96,7 @@ class _CameraScreenState extends ConsumerState<CameraScreen>
       SystemChrome.setEnabledSystemUIMode(SystemUiMode.immersiveSticky);
     }
     Future.microtask(() {
-      ref.read(cameraProvider.notifier).initialize(widget.poiId);
+      ref.read(cameraProvider.notifier).initialize(widget.placeKey);
       _initializeCameras();
     });
   }
@@ -222,19 +226,20 @@ class _CameraScreenState extends ConsumerState<CameraScreen>
       // (back, save, or discard) returns straight to live preview
       // without re-running camera init.
       //
-      // When the camera was opened without a POI context (Anime Camera
-      // entry from the home screen), the editor opens with no POI: the
-      // photo goes to the phone's gallery, and the editor's POI button
-      // can save it into an existing POI or a new one as well.
+      // When the camera was opened without a place (Anime Camera entry
+      // from the home screen), the editor opens with no place: the photo
+      // goes to the phone's gallery, and the editor's place button can
+      // save it into a place from the library or a new one as well.
       //
-      // If the user already picked a POI earlier via the reference-
-      // image library button (which writes to `cameraProvider.poiId`),
-      // the editor starts with that one.
+      // If the user already picked a place earlier via the frames button
+      // (which writes to `cameraProvider.placeKey`), the editor starts
+      // with that one.
       final camState = ref.read(cameraProvider);
       openCaptureInEditor(
         context,
         photoPath: visiblePhoto.path,
-        poiId: widget.poiId ?? camState.poiId,
+        placeKey: widget.placeKey ?? camState.placeKey,
+        tripId: widget.tripId,
         referencePath: camState.referenceImage?.path,
         referenceImageId: camState.referenceImageId,
       );
@@ -500,7 +505,7 @@ class _CameraScreenState extends ConsumerState<CameraScreen>
               const Spacer(),
               _CameraIconButton(
                 icon: Icons.photo_library_outlined,
-                onTap: _pickPoiReferenceImage,
+                onTap: _pickPlaceFrame,
               ),
               const SizedBox(width: 10),
               _FrameModeToggle(
@@ -632,8 +637,8 @@ class _CameraScreenState extends ConsumerState<CameraScreen>
                 children: [
                   _ReferenceButton(
                     referenceImage:
-                        camState.poiId == null ? camState.referenceImage : null,
-                    emptyIcon: camState.poiId == null
+                        camState.placeKey == null ? camState.referenceImage : null,
+                    emptyIcon: camState.placeKey == null
                         ? Icons.image
                         : Icons.file_upload_outlined,
                     onTap: _pickReferenceImage,
@@ -658,17 +663,17 @@ class _CameraScreenState extends ConsumerState<CameraScreen>
     final picked = await picker.pickImage(source: ImageSource.gallery);
     if (picked == null) return;
     if (!mounted) return;
-    // Uploading an image as a POI media asset now lives on the POI
-    // detail screen's "Add Image" button, so this button only sets the
-    // current camera overlay reference regardless of context.
+    // Adding a photo to a place lives on the place page's "Add photos"
+    // button, so this button only sets the current camera overlay
+    // reference regardless of context.
     ref.read(cameraProvider.notifier).setReferenceImage(File(picked.path));
   }
 
-  Future<void> _pickPoiReferenceImage() async {
-    final poiId = await _resolvePoiIdForReference();
-    if (poiId == null || !mounted) return;
+  Future<void> _pickPlaceFrame() async {
+    final placeKey = await _resolvePlaceForFrame();
+    if (placeKey == null || !mounted) return;
 
-    final picked = await pickPoiReferenceImage(context, ref, poiId);
+    final picked = await pickPlaceFrame(context, ref, placeKey);
     if (picked == null) return;
 
     ref
@@ -676,14 +681,14 @@ class _CameraScreenState extends ConsumerState<CameraScreen>
         .setReferenceImage(File(picked.localPath!), referenceImageId: picked.id);
   }
 
-  Future<String?> _resolvePoiIdForReference() async {
-    final currentPoiId = ref.read(cameraProvider).poiId;
-    if (currentPoiId != null) return currentPoiId;
+  Future<String?> _resolvePlaceForFrame() async {
+    final current = ref.read(cameraProvider).placeKey;
+    if (current != null) return current;
 
-    final picked = await pickPoiId(context, ref);
+    final picked = await pickPlaceKey(context, ref);
     if (picked == null) return null;
 
-    ref.read(cameraProvider.notifier).setPoiId(picked);
+    ref.read(cameraProvider.notifier).setPlaceKey(picked);
     return picked;
   }
 }

@@ -21,21 +21,30 @@ import '../repositories/media_repository.dart';
 /// chooses its icon from this column.
 ///
 /// While the old POI screens and the new place pages both exist, the photo
-/// joins both models: the POI's media when [poiId] is a POI, and the place's
-/// photos (from [places]) when it is a place. Migrated places keep their POI
-/// ids, so most photos land in both, under the same id, which keeps the
-/// v9 → v10 migration from copying them twice when it re-runs at the cutover.
+/// joins both models: the POI's media when [placeKey] is a POI, and the
+/// place's photos (from [places]) when it is a place. Migrated places keep
+/// their POI ids, so most photos land in both, under the same id, which
+/// keeps the v9 → v10 migration from copying them twice when it re-runs at
+/// the cutover.
+///
+/// In `photos`, [kind] is `original`, `edited`, `composite` or `comparison`;
+/// [derivedFromId] is the place photo it was edited from, and [tripId] the
+/// trip it was taken on.
 ///
 /// Returns `true` on success, `false` on any I/O or database failure
 /// — callers decide whether to surface that via a SnackBar.
 Future<bool> persistMediaAsset({
   required MediaRepository mediaRepo,
   required File source,
-  required String poiId,
+  required String placeKey,
   required String type,
   required String authorId, // CRITICAL FIX: Mandate authorId from the caller
   String? referenceImageId,
   PlaceRepository? places,
+  String kind = 'original',
+  String? derivedFromId,
+  String? tripId,
+  DateTime? takenAt,
 }) async {
   try {
     final appDir = await getApplicationDocumentsDirectory();
@@ -52,32 +61,33 @@ Future<bool> persistMediaAsset({
 
     final newAsset = MediaAssetModel(
       id: assetId,
-      poiId: poiId,
+      poiId: placeKey,
       type: type,
       authorId: authorId, // CRITICAL FIX: Use the injected ID
       localPath: savedPath,
       referenceImageId: referenceImageId,
       createdAt: DateTime.now().millisecondsSinceEpoch,
     );
-    
+
     var saved = false;
-    if (await mediaRepo.poiExists(poiId)) {
+    if (await mediaRepo.poiExists(placeKey)) {
       await mediaRepo.addMediaAsset(newAsset);
       saved = true;
     }
-    if (places != null && await places.getPlace(poiId) != null) {
+    if (places != null && await places.getPlace(placeKey) != null) {
       await places.upsertPhoto(PhotosCompanion.insert(
         id: assetId,
-        placeKey: poiId,
-        // The kinds the v9 → v10 migration gives these types.
-        kind: Value(type == 'comparison_image' ? 'comparison' : 'original'),
+        placeKey: placeKey,
+        tripId: Value(tripId),
+        kind: Value(kind),
+        derivedFromId: Value(derivedFromId),
         referenceImageId: Value(referenceImageId),
         localPath: savedPath,
-        takenAt: Value(DateTime.now()),
+        takenAt: Value(takenAt ?? DateTime.now()),
       ));
       saved = true;
     }
-    if (!saved) throw StateError('$poiId is neither a POI nor a place');
+    if (!saved) throw StateError('$placeKey is neither a POI nor a place');
     return true;
   } catch (e, st) {
     // CRITICAL FIX: Stop silent failures. Log the exact I/O or DB error.

@@ -13,11 +13,13 @@ import '../../../core/utils/app_result.dart';
 import '../../../shared/theme/app_theme.dart';
 import '../../../shared/widgets/name_dialog.dart';
 import '../../camera/services/anime_camera_launcher.dart';
+import '../../camera/services/photo_edit_route.dart';
 import '../../trip/controllers/trip_stops_controller.dart';
 import '../../trip/models/trip_summary.dart';
 import '../../trip/providers/trip_list_providers.dart';
 import '../controllers/library_controller.dart';
 import '../controllers/place_controller.dart';
+import '../models/frames.dart';
 import '../models/library_entry.dart';
 import '../providers/library_providers.dart';
 import '../providers/place_providers.dart';
@@ -232,15 +234,6 @@ class _PlaceScreenState extends ConsumerState<PlaceScreen> {
       ),
     ));
   }
-}
-
-/// "Ep 3 · 12:34", from what is known of a frame, or null.
-String? frameCaption(NewReferenceImage f) {
-  final parts = <String>[
-    if (f.episode?.trim().isNotEmpty ?? false) 'Ep ${f.episode!.trim()}',
-    if (f.timestampS != null) '${f.timestampS! ~/ 60}:${(f.timestampS! % 60).toString().padLeft(2, '0')}',
-  ];
-  return parts.isEmpty ? null : parts.join(' · ');
 }
 
 class _FrameHero extends StatelessWidget {
@@ -760,12 +753,14 @@ class _PhotosCard extends ConsumerWidget {
         title: DateFormat.yMMMd().add_Hm().format(photo.takenAt ?? photo.createdAt),
         actions: [
           _ViewerAction('Edit', () {
-            final qs = {
-              'path': Uri.encodeComponent(photo.localPath),
-              if (frame?.localPath != null) 'ref': Uri.encodeComponent(frame!.localPath!),
-              if (frame != null) 'refId': frame.id,
-            };
-            viewerContext.push('/pois/${Uri.encodeComponent(placeKey)}/photo-edit?${qs.entries.map((e) => '${e.key}=${e.value}').join('&')}');
+            viewerContext.push(PhotoEditArgs(
+              path: photo.localPath,
+              placeKey: placeKey,
+              tripId: photo.tripId,
+              photoId: photo.id,
+              referencePath: frame?.localPath,
+              referenceImageId: frame?.id,
+            ).location);
           }, primary: true),
           _ViewerAction('Save to device', () async {
             final result = await place.saveToGallery(photo.localPath);

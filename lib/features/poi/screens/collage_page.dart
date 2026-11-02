@@ -29,9 +29,15 @@ class CollagePage extends ConsumerStatefulWidget {
 
   final String referencePath;
 
-  /// POI whose media the result joins; null saves only to the phone's
+  /// Place whose photos the result joins; null saves only to the phone's
   /// gallery. The result always goes to the gallery as well.
-  final String? poiId;
+  final String? placeKey;
+
+  /// The trip the result is filed under, the place photo it derives from,
+  /// and when the photo was taken, as the editor passes them on.
+  final String? tripId;
+  final String? derivedFromId;
+  final DateTime? takenAt;
 
   /// The untouched photo, when it was just taken with the Anime Camera: it
   /// isn't in the gallery yet, so it's saved there next to the result.
@@ -47,7 +53,10 @@ class CollagePage extends ConsumerStatefulWidget {
     required this.sourcePath,
     required this.recipe,
     required this.referencePath,
-    this.poiId,
+    this.placeKey,
+    this.tripId,
+    this.derivedFromId,
+    this.takenAt,
     this.originalCapture,
     required this.onBack,
   });
@@ -253,7 +262,11 @@ class _CollagePageState extends ConsumerState<CollagePage> {
     final vertical = _compareVertical;
     final referencePath = widget.referencePath;
     ref.read(backgroundPhotoSavesProvider.notifier).save(
-          poiId: widget.poiId,
+          placeKey: widget.placeKey,
+          tripId: widget.tripId,
+          kind: compare ? 'comparison' : 'composite',
+          derivedFromId: widget.derivedFromId,
+          takenAt: widget.takenAt,
           toGallery: true,
           originalToGallery: widget.originalCapture != null,
           original: widget.originalCapture,
