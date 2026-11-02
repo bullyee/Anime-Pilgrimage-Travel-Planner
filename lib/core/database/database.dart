@@ -36,7 +36,7 @@ class AppDatabase extends _$AppDatabase {
   AppDatabase.forTesting(super.executor);
 
   @override
-  int get schemaVersion => 10;
+  int get schemaVersion => 11;
 
   @override
   MigrationStrategy get migration => MigrationStrategy(
@@ -106,6 +106,9 @@ class AppDatabase extends _$AppDatabase {
 
             // Migrate legacy data to v10 tables. (Note: During Stage 1 & 2, legacy UI screens still write to v9 tables; at Stage 2 cutover, re-run idempotent migrateData() before dropLegacyTables().)
             await MigrationV9ToV10(this).migrateData();
+          }
+          if (from == 10) {
+            await m.addColumn(stops, stops.area);
           }
         },
         beforeOpen: (details) async {

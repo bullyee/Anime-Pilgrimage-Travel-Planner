@@ -234,6 +234,148 @@ void main() {
       final reordered = await tripRepo.getScheduleItemsForDay(dayId);
       expect(reordered.first.id, equals(item2.id));
     });
+
+    test('setStopsArea creates, renames, and dissolves an area in a single transaction', () async {
+      final trip = await tripRepo.createTrip(title: 'Kyoto Areas', ownerId: 'user_1');
+      final stop1 = await tripRepo.createTripOnlySpot(
+        tripId: trip.id,
+        name: 'Fushimi Inari',
+        lat: 34.9671,
+        lng: 135.7727,
+        addedBy: 'user_1',
+      );
+      final stop2 = await tripRepo.createTripOnlySpot(
+        tripId: trip.id,
+        name: 'Tofuku-ji',
+        lat: 34.9764,
+        lng: 135.7741,
+        addedBy: 'user_1',
+      );
+
+      // Clear syncStatus to verify setStopsArea marks rows dirty
+      await (db.update(db.stops)..where((t) => t.tripId.equals(trip.id))).write(
+        const StopsCompanion(syncStatus: Value(0)),
+      );
+
+      // 1. Create area
+      await tripRepo.setStopsArea([stop1.id, stop2.id], 'South Kyoto');
+      var stops = await tripRepo.getStopsForTrip(trip.id);
+      expect(stops.map((s) => s.area).toList(), equals(['South Kyoto', 'South Kyoto']));
+      expect(stops.every((s) => s.syncStatus == 1), isTrue);
+
+      // 2. Rename area
+      await tripRepo.setStopsArea([stop1.id, stop2.id], 'Fushimi Area');
+      stops = await tripRepo.getStopsForTrip(trip.id);
+      expect(stops.map((s) => s.area).toList(), equals(['Fushimi Area', 'Fushimi Area']));
+
+      // 3. Dissolve area (null)
+      await tripRepo.setStopsArea([stop1.id, stop2.id], null);
+      stops = await tripRepo.getStopsForTrip(trip.id);
+      expect(stops.map((s) => s.area).toList(), equals([null, null]));
+    });
+
+    test('scheduleStops and moveScheduleItems batch operations', () async {
+      final trip = await tripRepo.createTrip(
+        title: 'Batch Schedule Trip',
+        ownerId: 'user_1',
+        dayCount: 2,
+      );
+      final days = await tripRepo.getDaysForTrip(trip.id);
+      final day0 = days[0].id;
+      final day1 = days[1].id;
+
+      final stop1 = await tripRepo.createTripOnlySpot(
+        tripId: trip.id,
+        name: 'Uji Bridge',
+        lat: 34.892,
+        lng: 135.806,
+        addedBy: 'user_1',
+        area: 'Uji',
+      );
+      final stop2 = await tripRepo.createTripOnlySpot(
+        tripId: trip.id,
+        name: 'Byodoin',
+        lat: 34.889,
+        lng: 135.807,
+        addedBy: 'user_1',
+        area: 'Uji',
+      );
+
+      // Batch schedule stops onto day 0 with explicit sort keys and stayMinutes
+      final createdItems = await tripRepo.scheduleStops(
+        tripId: trip.id,
+        dayId: day0,
+        stopIds: [stop1.id, stop2.id],
+        sortKeys: ['a0', 'a1'],
+        stayMinutes: 45,
+      );
+
+      expect(createdItems.length, equals(2));
+      expect(createdItems[0].stopId, equals(stop1.id));
+      expect(createdItems[0].sortKey, equals('a0'));
+      expect(createdItems[0].stayMinutes, equals(45));
+      expect(createdItems[0].syncStatus, equals(1));
+      expect(createdItems[1].stopId, equals(stop2.id));
+      expect(createdItems[1].sortKey, equals('a1'));
+
+      // Reset syncStatus to 0 to verify moveScheduleItems marks rows dirty
+      await (db.update(db.scheduleItems)..where((t) => t.tripId.equals(trip.id))).write(
+        const ScheduleItemsCompanion(syncStatus: Value(0)),
+      );
+
+      // Move both items to day 1 in reversed order
+      await tripRepo.moveScheduleItems(
+        itemIds: [createdItems[0].id, createdItems[1].id],
+        newSortKeys: ['b1', 'b0'],
+        targetDayId: day1,
+      );
+
+      expect(await tripRepo.getScheduleItemsForDay(day0), isEmpty);
+      final day1Items = await tripRepo.getScheduleItemsForDay(day1);
+      expect(day1Items.map((i) => i.id).toList(), equals([createdItems[1].id, createdItems[0].id]));
+      expect(day1Items.every((i) => i.syncStatus == 1), isTrue);
+    });
+
+    test('schema v10 to v11 migration adds stops.area column', () async {
+      // Force table creation first, then drop area by recreating v10 stops table without area
+      await db.customSelect('SELECT 1').get();
+      await db.customStatement('ALTER TABLE stops RENAME TO stops_v11_tmp');
+      await db.customStatement('''
+        CREATE TABLE stops (
+          id TEXT NOT NULL PRIMARY KEY,
+          trip_id TEXT NOT NULL REFERENCES trips(id) ON DELETE CASCADE,
+          place_key TEXT NOT NULL,
+          name TEXT NOT NULL,
+          lat REAL NOT NULL,
+          lng REAL NOT NULL,
+          description TEXT,
+          address TEXT,
+          business_hours TEXT,
+          contact_info TEXT,
+          access_tips TEXT,
+          links TEXT NOT NULL DEFAULT '[]',
+          cover_local_path TEXT,
+          cover_remote_url TEXT,
+          source TEXT NOT NULL DEFAULT 'manual',
+          source_url TEXT,
+          added_by TEXT NOT NULL,
+          created_at INTEGER NOT NULL DEFAULT (strftime('%s', 'now')),
+          updated_at INTEGER NOT NULL DEFAULT (strftime('%s', 'now')),
+          updated_by TEXT NOT NULL DEFAULT 'u',
+          deleted_at INTEGER,
+          sync_status INTEGER NOT NULL DEFAULT 0
+        )
+      ''');
+      await db.customStatement('DROP TABLE stops_v11_tmp');
+
+      // Run migration from 10 to 11
+      final m = db.createMigrator();
+      await db.migration.onUpgrade(m, 10, 11);
+
+      final cols = await db.customSelect('PRAGMA table_info(stops)').get();
+      final colNames = cols.map((r) => r.read<String>('name')).toSet();
+      expect(colNames, contains('area'));
+    });
   });
 }
 

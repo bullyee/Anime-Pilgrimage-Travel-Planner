@@ -21,9 +21,7 @@ service cloud.firestore {
       return request.auth != null;
     }
 
-    // The trip must EXIST and the caller must be its author or a listed member.
-    // (Removed the old "tripDoc == null -> true" short-circuit, which let any
-    // authenticated user write under a non-existent trip id.)
+    // Legacy helper for v0.1.x trips
     function isTripMember(roiId) {
       let tripDoc = get(/databases/$(database)/documents/trips/$(roiId));
       return tripDoc != null && (
@@ -61,7 +59,7 @@ service cloud.firestore {
     }
 
     // ==========================================
-    // 3. Dual-Track: Shared Trips (Collaborative)
+    // 3. Dual-Track: Shared Trips (v0.1.x Legacy)
     // ==========================================
     match /trips/{tripId} {
       // Creator must be the author and list themselves as a member.
@@ -69,17 +67,12 @@ service cloud.firestore {
         && request.resource.data.authorId == request.auth.uid
         && (request.auth.uid in request.resource.data.members);
 
-      // Allow reading a non-existent trip doc (resource == null) so the client
-      // can check existence (tripExists) and the self-heal can recreate a
-      // deleted trip. Existing trips stay gated to members.
       allow read: if isAuthenticated() && (resource == null || isTripMember(tripId));
       allow delete: if isAuthenticated() && isTripMember(tripId);
 
       allow update: if isAuthenticated() && isTripMember(tripId) && (
-        // (a) Lock-only change: acquire/release the sync lock.
         (request.resource.data.diff(resource.data).affectedKeys().hasOnly(['syncLock']))
         ||
-        // (b) Member self-removal: a member can remove only themselves from `members`
         (
           request.resource.data.diff(resource.data).affectedKeys().hasOnly(['members'])
           && resource.data.members.hasAll(request.resource.data.members)
@@ -87,8 +80,6 @@ service cloud.firestore {
           && !(request.auth.uid in request.resource.data.members)
         )
         ||
-        // (c) A real sync commit: monotonic version bump, lock respected, and
-        //     membership / authorship are NOT allowed to change here.
         (
           request.resource.data.cloudVersion == resource.data.cloudVersion + 1
           && request.resource.data.authorId == resource.data.authorId
@@ -110,6 +101,103 @@ service cloud.firestore {
       match /pois/{poiId} {
         allow read, delete: if isAuthenticated() && isTripMember(tripId);
         allow create, update: if isAuthenticated() && isTripMember(tripId) && isStrictPoiSafe();
+      }
+    }
+
+    // ==========================================
+    // 4. Shared Trips V2 (v0.2.x+ MVP Model)
+    // ==========================================
+    function isTripMemberV2(tripId) {
+      let tripDoc = get(/databases/$(database)/documents/tripsV2/$(tripId));
+      return tripDoc != null && (
+        request.auth.uid == tripDoc.data.ownerId ||
+        (('members' in tripDoc.data) && request.auth.uid in tripDoc.data.members)
+      );
+    }
+
+    function isLwwValid() {
+      return resource == null || (
+        !('updatedAt' in resource.data) ||
+        !('updatedAt' in request.resource.data) ||
+        request.resource.data.updatedAt >= resource.data.updatedAt
+      );
+    }
+
+    function isTripV2Safe() {
+      let data = request.resource.data;
+      return (!('id' in data) || (data.id is string && data.id.size() <= 100))
+        && (!('title' in data) || (data.title is string && data.title.size() <= 300))
+        && (!('dayCount' in data) || (data.dayCount is number && data.dayCount >= 0));
+    }
+
+    function isDayBlockSafe() {
+      let data = request.resource.data;
+      return (!('id' in data) || (data.id is string && data.id.size() <= 100))
+        && (!('sortKey' in data) || (data.sortKey is string && data.sortKey.size() <= 100));
+    }
+
+    function isStopSafe() {
+      let data = request.resource.data;
+      return (!('id' in data) || (data.id is string && data.id.size() <= 100))
+        && (!('name' in data) || (data.name is string && data.name.size() <= 300))
+        && (!('placeKey' in data) || (data.placeKey is string && data.placeKey.size() <= 200));
+    }
+
+    function isScheduleItemSafe() {
+      let data = request.resource.data;
+      return (!('id' in data) || (data.id is string && data.id.size() <= 100))
+        && (!('sortKey' in data) || (data.sortKey is string && data.sortKey.size() <= 100))
+        && (!('stayMinutes' in data) || (data.stayMinutes is number && data.stayMinutes >= 0))
+        && (!('transitMinutes' in data) || (data.transitMinutes is number && data.transitMinutes >= 0));
+    }
+
+    match /tripsV2/{tripId} {
+      allow read: if isAuthenticated() && (
+        resource == null ||
+        request.auth.uid == resource.data.ownerId ||
+        (('members' in resource.data) && request.auth.uid in resource.data.members)
+      );
+
+      allow create: if isAuthenticated()
+        && request.resource.data.ownerId == request.auth.uid
+        && request.resource.data.members == [request.auth.uid]
+        && isTripV2Safe();
+
+      allow update: if isAuthenticated()
+        && isTripMemberV2(tripId)
+        && request.resource.data.ownerId == resource.data.ownerId
+        && request.resource.data.members == resource.data.members
+        && isLwwValid()
+        && isTripV2Safe();
+
+      // Deletes are soft-deleted via deletedAt tombstones
+      allow delete: if false;
+
+      match /days/{dayId} {
+        allow read: if isAuthenticated() && isTripMemberV2(tripId);
+        allow create, update: if isAuthenticated()
+          && isTripMemberV2(tripId)
+          && isLwwValid()
+          && isDayBlockSafe();
+        allow delete: if false;
+      }
+
+      match /stops/{stopId} {
+        allow read: if isAuthenticated() && isTripMemberV2(tripId);
+        allow create, update: if isAuthenticated()
+          && isTripMemberV2(tripId)
+          && isLwwValid()
+          && isStopSafe();
+        allow delete: if false;
+      }
+
+      match /schedule_items/{itemId} {
+        allow read: if isAuthenticated() && isTripMemberV2(tripId);
+        allow create, update: if isAuthenticated()
+          && isTripMemberV2(tripId)
+          && isLwwValid()
+          && isScheduleItemSafe();
+        allow delete: if false;
       }
     }
   }
