@@ -11,7 +11,7 @@ class CameraState {
   // of the live preview. The reference itself stays in state when
   // toggled off so the user can flick it back on without re-picking.
   final bool overlayVisible;
-  final String? poiId;
+  final String? placeKey;
   final String? error;
   final Offset overlayOffset;
   final double overlayScale;
@@ -22,7 +22,7 @@ class CameraState {
     this.referenceImage,
     this.referenceImageId,
     this.overlayVisible = true,
-    this.poiId,
+    this.placeKey,
     this.error,
     this.overlayOffset = Offset.zero,
     this.overlayScale = 1,
@@ -34,7 +34,7 @@ class CameraState {
     File? referenceImage,
     String? referenceImageId,
     bool? overlayVisible,
-    String? poiId,
+    String? placeKey,
     String? error,
     Offset? overlayOffset,
     double? overlayScale,
@@ -51,7 +51,7 @@ class CameraState {
           ? null
           : (referenceImageId ?? this.referenceImageId),
       overlayVisible: overlayVisible ?? this.overlayVisible,
-      poiId: poiId ?? this.poiId,
+      placeKey: placeKey ?? this.placeKey,
       error: clearError ? null : (error ?? this.error),
       overlayOffset: overlayOffset ?? this.overlayOffset,
       overlayScale: overlayScale ?? this.overlayScale,
@@ -63,8 +63,8 @@ class CameraState {
 class CameraNotifier extends StateNotifier<CameraState> {
   CameraNotifier() : super(const CameraState());
 
-  void initialize(String? poiId) {
-    state = state.copyWith(poiId: poiId, isInitialized: true, clearError: true);
+  void initialize(String? placeKey) {
+    state = state.copyWith(placeKey: placeKey, isInitialized: true, clearError: true);
   }
 
   void setCameraError(String message) {
@@ -117,8 +117,8 @@ class CameraNotifier extends StateNotifier<CameraState> {
     );
   }
 
-  void setPoiId(String id) {
-    state = state.copyWith(poiId: id);
+  void setPlaceKey(String key) {
+    state = state.copyWith(placeKey: key);
   }
 }
 

@@ -42,6 +42,23 @@ final libraryEntriesProvider = Provider.autoDispose<AsyncValue<List<LibraryEntry
   ));
 });
 
+/// The files of each place's anime frames, oldest first, by place key: the
+/// camera's place picker shows the first as a thumbnail. Frames that only
+/// have a remote copy are left out.
+final placeFramePathsProvider = StreamProvider.autoDispose<Map<String, List<String>>>((ref) {
+  final db = ref.watch(databaseProvider);
+  final query = db.select(db.newReferenceImages)
+    ..where((f) => f.placeKey.isNotNull() & f.localPath.isNotNull())
+    ..orderBy([(f) => OrderingTerm.asc(f.createdAt)]);
+  return query.watch().map((frames) {
+    final byPlace = <String, List<String>>{};
+    for (final f in frames) {
+      byPlace.putIfAbsent(f.placeKey!, () => []).add(f.localPath!);
+    }
+    return byPlace;
+  });
+});
+
 /// How many places carry each label, by label id.
 final labelPlaceCountsProvider = Provider.autoDispose<Map<String, int>>((ref) {
   final links = ref.watch(placeLabelLinksProvider).valueOrNull ?? const <PlaceLabel>[];

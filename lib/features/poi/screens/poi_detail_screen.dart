@@ -410,14 +410,14 @@ class PoiDetailScreen extends ConsumerWidget {
                         IconButton(
                           tooltip: 'Take photo',
                           onPressed: () =>
-                              openAnimeCamera(context, ref, poiId: poi.id),
+                              openAnimeCamera(context, ref, placeKey: poi.id),
                           icon: const Icon(Icons.camera_alt),
                         ),
                       if (floatingReferenceSupported)
                         IconButton(
                           tooltip: 'Float reference',
                           onPressed: () =>
-                              floatReference(context, ref, poiId: poi.id),
+                              floatReference(context, ref, placeKey: poi.id),
                           icon: const Icon(Icons.picture_in_picture_alt),
                         ),
                       IconButton(
@@ -436,7 +436,7 @@ class PoiDetailScreen extends ConsumerWidget {
               Builder(builder: (context) {
                 final saving = ref
                     .watch(backgroundPhotoSavesProvider)
-                    .where((save) => save.poiId == poi.id)
+                    .where((save) => save.placeKey == poi.id)
                     .length;
                 if (saving == 0) return const SizedBox.shrink();
                 return Padding(
