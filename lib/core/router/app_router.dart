@@ -20,6 +20,10 @@ import '../../features/anime/screens/bangumi_search_screen.dart';
 import '../../features/tag/screens/tag_edit_screen.dart';
 import '../../features/calendar/screens/calendar_screen.dart';
 import '../../features/camera/screens/camera_screen.dart';
+import '../../features/trip/screens/library_picker_screen.dart';
+import '../../features/trip/screens/new_spot_screen.dart';
+import '../../features/trip/screens/trip_list_screen.dart';
+import '../../features/trip/screens/trip_screen.dart';
 
 part 'app_router.g.dart';
 
@@ -69,6 +73,36 @@ GoRouter router(RouterRef ref) {
       GoRoute(
         path: '/',
         builder: (context, state) => const HomeScreen(),
+      ),
+      GoRoute(
+        path: '/trips',
+        builder: (context, state) => const TripListScreen(),
+      ),
+      GoRoute(
+        path: '/trips/:tripId',
+        builder: (context, state) => TripScreen(
+          tripId: state.pathParameters['tripId']!,
+          initialTab: TripTab.values.asNameMap()[state.uri.queryParameters['tab']] ?? TripTab.overview,
+        ),
+      ),
+      GoRoute(
+        path: '/trips/:tripId/stops',
+        builder: (context, state) => TripScreen(
+          tripId: state.pathParameters['tripId']!,
+          initialTab: TripTab.stops,
+        ),
+      ),
+      GoRoute(
+        path: '/trips/:tripId/stops/add',
+        builder: (context, state) => LibraryPickerScreen(
+          tripId: state.pathParameters['tripId']!,
+        ),
+      ),
+      GoRoute(
+        path: '/trips/:tripId/stops/new',
+        builder: (context, state) => NewSpotScreen(
+          tripId: state.pathParameters['tripId']!,
+        ),
       ),
       GoRoute(
         path: '/rois',

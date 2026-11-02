@@ -113,10 +113,10 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
                   ),
                   const SizedBox(height: 12),
                   _HomeCard(
-                    icon: Icons.flight_takeoff, // 或 Icons.map, Icons.luggage
+                    icon: Icons.flight_takeoff,
                     title: 'My Trips',
-                    subtitle: 'Manage your travel plans',
-                    onTap: () => context.push('/rois'),
+                    subtitle: 'Plan your trips day by day',
+                    onTap: () => context.push('/trips'),
                   ),
                   const SizedBox(height: 12),
                   _HomeCard(
