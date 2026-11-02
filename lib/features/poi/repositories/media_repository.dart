@@ -10,6 +10,10 @@ import 'package:riverpod_annotation/riverpod_annotation.dart';
 part 'media_repository.g.dart';
 
 abstract class MediaRepository {
+  /// Whether [poiId] is a POI of the old model. Media can only join one that
+  /// is; places made in the new library have no POI.
+  Future<bool> poiExists(String poiId);
+
   // Media Assets
   Future<void> addMediaAsset(MediaAssetModel asset);
   Future<void> deleteMediaAsset(String id);
@@ -58,6 +62,10 @@ class LocalMediaRepository implements MediaRepository {
       isShared: false,
     );
   }
+
+  @override
+  Future<bool> poiExists(String poiId) async =>
+      await (localDb.select(localDb.pois)..where((p) => p.id.equals(poiId))).getSingleOrNull() != null;
 
   @override
   Future<void> addMediaAsset(MediaAssetModel asset) async {
