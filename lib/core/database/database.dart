@@ -2,6 +2,8 @@ import 'package:drift/drift.dart';
 import 'package:uuid/uuid.dart';
 import 'connection/connection.dart' as db_connection;
 import 'tables.dart';
+import 'tables_v10.dart';
+import 'migrations/migration_v9_to_v10.dart';
 
 part 'database.g.dart';
 
@@ -16,6 +18,17 @@ part 'database.g.dart';
   TimeChunks,
   MediaAssets,
   ReferenceImages,
+  Places,
+  Labels,
+  PlaceLabels,
+  Photos,
+  PlaceVisits,
+  NewReferenceImages,
+  Trips,
+  TripDays,
+  Stops,
+  StopLabels,
+  ScheduleItems,
 ])
 class AppDatabase extends _$AppDatabase {
   AppDatabase() : super(db_connection.openConnection());
@@ -23,11 +36,23 @@ class AppDatabase extends _$AppDatabase {
   AppDatabase.forTesting(super.executor);
 
   @override
-  int get schemaVersion => 9;
+  int get schemaVersion => 10;
 
   @override
   MigrationStrategy get migration => MigrationStrategy(
-        onCreate: (m) => m.createAll(),
+        onCreate: (m) async {
+          await m.createAll();
+          await customStatement('''
+            CREATE UNIQUE INDEX IF NOT EXISTS idx_labels_kind_name
+            ON labels(kind, name)
+            WHERE kind IN ('tag', 'region');
+          ''');
+          await customStatement('''
+            CREATE UNIQUE INDEX IF NOT EXISTS idx_labels_bangumi_id
+            ON labels(bangumi_id)
+            WHERE bangumi_id IS NOT NULL;
+          ''');
+        },
         onUpgrade: (m, from, to) async {
           if (from < 2) {
             await m.createTable(referenceImages);
@@ -65,6 +90,22 @@ class AppDatabase extends _$AppDatabase {
               UPDATE pois SET has_ever_synced = 1
               WHERE roi_id IN (SELECT id FROM rois WHERE is_shared = 1 AND cloud_version > 0);
             ''');
+          }
+          if (from < 10) {
+            await m.createTable(places);
+            await m.createTable(labels);
+            await m.createTable(placeLabels);
+            await m.createTable(photos);
+            await m.createTable(placeVisits);
+            await m.createTable(newReferenceImages);
+            await m.createTable(trips);
+            await m.createTable(tripDays);
+            await m.createTable(stops);
+            await m.createTable(stopLabels);
+            await m.createTable(scheduleItems);
+
+            // Migrate legacy data to v10 tables. (Note: During Stage 1 & 2, legacy UI screens still write to v9 tables; at Stage 2 cutover, re-run idempotent migrateData() before dropLegacyTables().)
+            await MigrationV9ToV10(this).migrateData();
           }
         },
         beforeOpen: (details) async {
@@ -295,8 +336,12 @@ class AppDatabase extends _$AppDatabase {
 
   Future<bool> updateRoi(RoisCompanion roi) => update(rois).replace(roi);
 
-  Future<int> deleteRoi(String id) =>
-      (delete(rois)..where((r) => r.id.equals(id))).go();
+  Future<int> deleteRoi(String id) => transaction(() async {
+        await (update(pois)..where((p) => p.roiId.equals(id))).write(
+          const PoisCompanion(roiId: Value(null)),
+        );
+        return (delete(rois)..where((r) => r.id.equals(id))).go();
+      });
 
   // --- POI Queries ---
   /// Fetches the highest sortOrder currently assigned to a POI within a specific ROI.
@@ -452,8 +497,10 @@ class AppDatabase extends _$AppDatabase {
     );
   }
 
-  Future<int> deleteAnime(String id) =>
-      (delete(animes)..where((a) => a.id.equals(id))).go();
+  Future<int> deleteAnime(String id) => transaction(() async {
+        await (delete(poiAnimes)..where((pa) => pa.animeId.equals(id))).go();
+        return (delete(animes)..where((a) => a.id.equals(id))).go();
+      });
 
   /// Insert anime if bangumiId not present; otherwise return existing.
   /// Returns the anime id (existing or newly created).
@@ -511,8 +558,10 @@ class AppDatabase extends _$AppDatabase {
     );
   }
 
-  Future<int> deleteTag(String id) =>
-      (delete(tags)..where((t) => t.id.equals(id))).go();
+  Future<int> deleteTag(String id) => transaction(() async {
+        await (delete(poiTags)..where((pt) => pt.tagId.equals(id))).go();
+        return (delete(tags)..where((t) => t.id.equals(id))).go();
+      });
 
   // --- POI ↔ Anime junction ---
   Future<void> addAnimeToPoi(String poiId, String animeId) =>
@@ -563,9 +612,11 @@ class AppDatabase extends _$AppDatabase {
 
   Stream<int> watchPoiCountForAnime(String animeId) {
     final count = poiAnimes.poiId.count();
-    final query = selectOnly(poiAnimes)
+    final query = selectOnly(poiAnimes).join([
+      innerJoin(pois, pois.id.equalsExp(poiAnimes.poiId)),
+    ])
       ..addColumns([count])
-      ..where(poiAnimes.animeId.equals(animeId));
+      ..where(poiAnimes.animeId.equals(animeId) & pois.isDeleted.equals(false));
     return query.watchSingle().map((row) => row.read(count) ?? 0);
   }
 
@@ -617,9 +668,11 @@ class AppDatabase extends _$AppDatabase {
 
   Stream<int> watchPoiCountForTag(String tagId) {
     final count = poiTags.poiId.count();
-    final query = selectOnly(poiTags)
+    final query = selectOnly(poiTags).join([
+      innerJoin(pois, pois.id.equalsExp(poiTags.poiId)),
+    ])
       ..addColumns([count])
-      ..where(poiTags.tagId.equals(tagId));
+      ..where(poiTags.tagId.equals(tagId) & pois.isDeleted.equals(false));
     return query.watchSingle().map((row) => row.read(count) ?? 0);
   }
 
