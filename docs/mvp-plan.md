@@ -1,6 +1,6 @@
 # MVP plan
 
-Status: draft, 2026-10-31, updated 2026-11-01 after #74 and #75 merged. It builds on `docs/data-model.md` and `docs/trip-sharing.md`, which were proposed in #72.
+Status: in progress. Drafted 2026-10-31. Updated 2026-11-02: v0.1.3 has shipped, the stage 0 decisions are settled on #72, #81 is approved, and #82 and #83 are waiting for review. It builds on `docs/data-model.md` and `docs/trip-sharing.md`, which were proposed in #72.
 
 ## Goal
 
@@ -20,8 +20,19 @@ Not in the MVP: the activity log and trash, photo sharing, public templates, and
   - Features are missing until their new screens land, so there is no release until v0.2.0.
   - Until then the old code gets bug fixes only.
 - **Ownership.**
-  - ck: the data layer, the migration, sync, and the sharing backend.
-  - bullyee: the screens, the camera and the photo flow, and screen design.
+  - ck: the data layer (tables, repositories, pure logic), the migration, sync, the sharing backend, and services such as the thumbnail cache.
+  - bullyee: screen design, the screens and their controllers, the camera and the photo flow. A controller's shape follows its screen, so the two are built together.
+
+## Working rules
+
+These apply to people and coding agents alike.
+- **One stage at a time in review.** Open the next stacked PR only after the one below it is approved. Fix a PR's review items before adding new work to it.
+- **Stay in your area.** Before writing code in the other person's area, agree on it first, on #72 or on the PR. The stage 2 screens and controllers, for example, are bullyee's.
+- **Deploy from master only.** Never deploy an unmerged branch to the live Firebase project (`trip-planner-2775c`).
+  - Deploy only what changed, e.g. `firebase deploy --only hosting`.
+  - Rules that change `trips/` go live with v0.2.0, since v0.1.x clients still write there.
+- **Check agent output before posting it.** Issue reports and "fixed" replies written by an agent must match the branch: every file, function and line they cite must exist.
+- **Reviews.** Every PR needs an approving review from the other person before it merges.
 
 ## Stage 0: prepare (both)
 
@@ -29,46 +40,50 @@ Not in the MVP: the activity log and trash, photo sharing, public templates, and
 - [x] Merge #73 (#24 cleanup).
 - [x] Merge #75 (#76 file cleanup and thumbnails).
 - [x] Finish #74 (desktop) with the crash guards only. Windows packaging waits until after the MVP; see the review on #74.
-- [ ] Cut **v0.1.3** from master once #74 and #75 are in. It is the last release on the old model, and ships the camera floating window, the photo editor tools, two-way sync and the fixes above. (bullyee)
+- [x] Cut **v0.1.3**, the last release on the old model (2026-11-01). It ships the camera floating window, the photo editor tools, two-way sync and the fixes above. (bullyee)
 - [ ] Fold the #72 feedback into the docs:
   - Schedule times are minutes from the block's start and may pass 24:00, e.g. 25:30. They move with the block when blocks swap.
   - An invite preview screen comes before joining. Its fields live on the invite doc, since non-members can't read the trip.
   - The place / stop page keeps `access_tips` (shared) and `private_note` (yours) visibly separate.
   - Reference image thumbnails are cached for offline use.
   - Later: "Save updates to my place" on a stop, and template attribution.
-- [ ] Freeze the old model: no new features, bug fixes only. Close #55, #77 and #78 for now and reopen them after the MVP, since the code they touch gets replaced. (ck)
-- [ ] Settle before writing code (ck + bullyee):
-  - **Firestore layout for the new sync.** Use a new top-level collection, e.g. `tripsV2/{tripId}/…`, so v0.1.x clients still writing to `trips/` can't corrupt new data. Make `trips/` read-only after the cutover.
-  - **Fractional index for `sort_key`.** Use a package or write our own.
-  - **IDs.** UUIDs everywhere except `place_key`. Labels are matched across people by natural key.
+- [x] Freeze the old model: no new features, bug fixes only. #55, #77 and #78 are closed until after the MVP, since the code they touch gets replaced. (ck)
+- [x] Settled on #72 (ck + bullyee):
+  - **Firestore layout for the new sync.** `tripsV2/{tripId}`, with `days`, `stops`, `schedule_items`, `members` and `invites` subcollections. A new top-level collection means v0.1.x clients still writing to `trips/` can't corrupt new data. `trips/` becomes read-only after the cutover.
+  - **Fractional index for `sort_key`.** The `fractional_indexing_dart` package (#81).
+  - **IDs.** UUIDs everywhere except `place_key`. Labels are matched across people by kind + name, and anime by Bangumi ID.
+- [ ] Still open: the `place_key` of places users create. It is a bare UUID in `docs/data-model.md` and in #81; ck proposed `custom:<uuid>` on #72. Settle this before #82 writes keys to Firestore.
 
 ## Stage 1: data layer (ck)
 
+In #81, approved 2026-11-02 and waiting to merge.
+
 **1a. Contract first**, so the screens can be built in parallel:
-- [ ] Drift tables:
+- [x] Drift tables:
   - personal layer: `places`, `labels`, `place_labels`, `photos`, `place_visits`, `reference_images`;
   - shared layer: `trips`, `trip_days`, `stops`, `stop_labels`, `schedule_items`;
   - sync bookkeeping on the shared tables: `updated_at`, `updated_by`, `deleted_at` and a local sync status.
-- [ ] Repository interfaces and Riverpod providers for the operations the screens need, for example:
+- [x] Repository interfaces and Riverpod providers for the operations the screens need, for example:
   - list and filter places by label;
   - add a place to a trip (copy it into a stop, including its reference images);
   - create a `trip_only` place;
   - schedule a stop, reorder items, swap blocks, pin a date.
-- [ ] Pure logic, with unit tests:
+- [x] Pure logic, with unit tests:
   - day block dates: position, pins, backup blocks, and the rule that pins must increase;
   - the fractional index;
   - schedule times: order, stay, transit, fixed times, past 24:00. Port what applies from `lib/core/utils/schedule_engine.dart`;
   - trip status and the backlog, which are derived rather than stored.
 
 **1b. Migration**
-- [ ] v9 → v10, as described in `docs/data-model.md`:
+- [x] v9 → v10, as described in `docs/data-model.md`:
   - rois → region labels;
-  - pois → `saved` places (Anitabi ones keep `anitabi:<id>`);
-  - animes / tags → labels;
+  - pois → `saved` places (Anitabi ones keep `anitabi:<id>`). Deleted POIs are skipped;
+  - animes / tags → labels, with duplicates merged;
   - reference images and `reference_frame` media → reference images, with the metadata parsed into episode / timestamp;
-  - `user_photo` → photos;
+  - `user_photo` and `uploaded_image` → `original` photos, and `comparison_image` → `comparison` photos;
   - drop `ticket_qr`, `audio_bgm`, `time_chunks` and the old tables.
-- [ ] Migration tests, starting from a v8 and a v9 database.
+  - The upgrade copies the data and keeps the old tables, because the old screens still use them. At the stage 2 cutover, run `migrateData()` again, then drop the old tables.
+- [x] Migration tests, starting from a v8 and a v9 database.
 
 ## Stage 2: screens (bullyee)
 
@@ -81,6 +96,7 @@ Not in the MVP: the activity log and trash, photo sharing, public templates, and
 - [ ] Home: one trip list with All / Shared / Private tabs and a shared badge (#44), and where the library lives.
 
 **Build**, on the stage 1a repositories:
+- [ ] Screen controllers, as Riverpod `Notifier`s, written together with each screen. #83's `TripListController` and `JoinTripController` are kept as they are. Its `TripPlannerController` is a draft until the day planner design is done.
 - [ ] Home screen and routes.
 - [ ] Library:
   - places as a list and a map, with label filters (anime / tag / region) and search;
@@ -101,12 +117,17 @@ Not in the MVP: the activity log and trash, photo sharing, public templates, and
   - save into `photos`, with `kind`, `derived_from_id`, `reference_image_id` and `trip_id`;
   - the reference picker reads the place's or stop's reference images;
   - touches `background_photo_save`, `media_asset_service`, `media_repository`, `photo_edit_screen` and `anime_camera_launcher`.
+  - Fix two bugs from #84:
+    - The photo-edit routes decode `path` and `ref` a second time. `Uri.decodeComponent` runs on values that `queryParameters` has already decoded, so a file name containing `%` throws.
+    - Leaving the isnet cutout panel mid-cutout calls `dispose()`, which releases the ONNX session while `runAsync` may still be using it.
 - [ ] Cache reference image thumbnails for offline use.
 - [ ] Remove the old screens, routes, models and repositories as each is replaced. Remove the v8 sync engine together with the old tables. (both)
 
 **Milestone A:** the whole app runs on the new model on one device. Internal builds only, since sync is off until stage 3.
 
 ## Stage 3: sync on the new model (ck)
+
+In #82. Its review starts after #81 merges.
 
 - [ ] Firestore layout and rules for trips, days, stops, stop labels and schedule items:
   - each document is last-write-wins on `updated_at`;
@@ -127,7 +148,7 @@ Not in the MVP: the activity log and trash, photo sharing, public templates, and
 
 ## Stage 4: group sharing
 
-**Backend (ck)**
+**Backend (ck)**, in #83. Its review starts after #82.
 - [ ] `members` with the roles owner, editor and viewer, enforced in rules. Viewers are read-only. Only owners and editors can invite.
 - [ ] Invites:
   - a token plus a short code;
@@ -140,11 +161,11 @@ Not in the MVP: the activity log and trash, photo sharing, public templates, and
 - [ ] When the owner stops sharing or deletes the trip, every other member keeps a private, unsynced copy.
 - [ ] Member profiles: Google display name and avatar, never the email.
 - [ ] Guest → signed in: before the first share, claim the local trips by setting the owner and author to the uid.
-- [ ] Download page on Firebase Hosting, plus Android App Links (`assetlinks.json`).
+- [ ] Download page on Firebase Hosting, plus Android App Links (`assetlinks.json`). The fingerprint must be the release keystore's SHA-256 (`30:71:A9:32:…`). The page deployed on 2026-11-02 has `BF:1B:D0:62:…` instead.
 
 **Screens (bullyee)**
 - [ ] Share sheet: create an invite with a role; show the link, QR code and short code; revoke.
-- [ ] Join flow: open a link, scan a QR code, or enter a code → invite preview → join.
+- [ ] Join flow: open a link, scan a QR code, or enter a code → invite preview → join. The login redirect still checks `/cloud-share`, which matches no route. Make it check the join route instead (#84).
 - [ ] Member list: roles, remove, leave, transfer ownership.
 - [ ] The shared badge and tabs on home, and a read-only mode for viewers.
 
@@ -181,3 +202,4 @@ Stage 0 ──► 1a ──┬──► 1b (migration) ──┐
 | #76 sync FK / storage leaks | Closed by #75. |
 | #77 offline map tiles | Close for now; reopen after the MVP. It needs a different tile source. The [OpenStreetMap tile policy](https://operations.osmfoundation.org/policies/tiles/) forbids offline use of `tile.openstreetmap.org`, including any "download for offline" feature, and requires a User-Agent that identifies the app. |
 | #78 export / backup | Close for now; reopen after the MVP. The export format should follow the new model, and it overlaps with the personal layer backup. |
+| #84 camera, editor and router notes | Two bugs go into stage 2's camera and editor item, and the `/cloud-share` redirect goes with the join flow. The other items cite code that isn't in the repo or in #81–#83, or old-model screens that stage 2 replaces. |

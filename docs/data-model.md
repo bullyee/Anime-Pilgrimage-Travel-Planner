@@ -1,6 +1,6 @@
 # Data model — proposal
 
-Status: brainstorm result, 2026-10-30. This is a proposal for review, not built. It replaces the schema v8 model (`rois` / `pois` / `time_chunks` …) and is the base for trip sharing (`docs/trip-sharing.md`). The questions, options and answers behind each decision are in `docs/brainstorm-2026-10-30.md`.
+Status: accepted on #72 (2026-11-01). Stage 1 of `docs/mvp-plan.md` builds it in #81. Brainstormed 2026-10-30. It replaces the schema v8 model (`rois` / `pois` / `time_chunks` …) and is the base for trip sharing (`docs/trip-sharing.md`). The questions, options and answers behind each decision are in `docs/brainstorm-2026-10-30.md`.
 
 ## Principles
 
@@ -136,9 +136,10 @@ Pre-1.0 with few users, so the migration keeps places and photos and drops sched
 |---|---|
 | `animes`, `tags` | `labels` (`anime`, `tag`) |
 | `rois` | `labels` (`region`). ROIs really are regions of interest. No trips are created. |
-| `pois` | `places` (`saved`). The ROI, anime and tag links become labels. Anitabi POIs keep `anitabi:<id>` as their `place_key`. |
+| `pois` | `places` (`saved`). The ROI, anime and tag links become labels. Anitabi POIs keep `anitabi:<id>` as their `place_key`. Deleted POIs (`is_deleted`) are skipped. |
 | `reference_images`, `media_assets.reference_frame` | `reference_images` owned by the place. The JSON metadata is parsed into `episode` / `timestamp_s`. |
-| `media_assets.user_photo` | `photos` on the place. |
+| `media_assets.user_photo`, `uploaded_image` | `photos` on the place, `kind` `original`. |
+| `media_assets.comparison_image` | `photos` on the place, `kind` `comparison`. |
 | `media_assets.ticket_qr`, `audio_bgm` | Dropped. |
 | `time_chunks` | Dropped. |
 

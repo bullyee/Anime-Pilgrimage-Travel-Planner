@@ -1,6 +1,6 @@
 # Trip sharing — requirements
 
-Status: brainstorm result, 2026-10-30. Not built yet. This file records requirements. The schema they need is proposed in `docs/data-model.md`. The questions, options and answers behind each decision are in `docs/brainstorm-2026-10-30.md`.
+Status: accepted on #72 (2026-11-01). Phase 1 is part of the MVP (`docs/mvp-plan.md`, stage 4); the backend is in #83. Brainstormed 2026-10-30. This file records requirements. The schema they need is proposed in `docs/data-model.md`. The questions, options and answers behind each decision are in `docs/brainstorm-2026-10-30.md`.
 
 ## Where we are
 
