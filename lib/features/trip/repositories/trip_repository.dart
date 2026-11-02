@@ -41,6 +41,7 @@ abstract class TripRepository {
     required String tripId,
     required String placeKey,
     required String addedBy,
+    String? area,
   });
   Future<Stop> createTripOnlySpot({
     required String tripId,
@@ -51,8 +52,10 @@ abstract class TripRepository {
     String? address,
     String? description,
     String? accessTips,
+    String? area,
   });
   Future<void> updateStop(StopsCompanion stop);
+  Future<void> setStopsArea(List<String> stopIds, String? area);
   Future<void> deleteStop(String stopId);
 
   // Stop Labels & Reference Images
@@ -77,10 +80,24 @@ abstract class TripRepository {
     int transitMinutes = 0,
     int? fixedTime,
   });
+  Future<List<ScheduleItem>> scheduleStops({
+    required String tripId,
+    required String dayId,
+    required List<String> stopIds,
+    List<String>? sortKeys,
+    int stayMinutes = 60,
+    int transitMinutes = 0,
+  });
   Future<void> updateScheduleItem(ScheduleItemsCompanion item);
   Future<void> reorderScheduleItem({
     required String itemId,
     required String newSortKey,
+    String? targetDayId,
+  });
+  Future<void> moveScheduleItems({
+    required List<String> itemIds,
+    required List<String> newSortKeys,
+    String? dayId,
     String? targetDayId,
   });
   Future<void> updateScheduleItemStatus({
@@ -88,6 +105,7 @@ abstract class TripRepository {
     required String status,
   });
   Future<void> deleteScheduleItem(String itemId);
+  Future<void> deleteScheduleItems(List<String> itemIds);
 }
 
 /// Drift implementation of [TripRepository].
@@ -516,6 +534,7 @@ class DriftTripRepository implements TripRepository {
     required String tripId,
     required String placeKey,
     required String addedBy,
+    String? area,
   }) async {
     return _db.transaction(() async {
       final place = await (_db.select(_db.places)..where((tbl) => tbl.placeKey.equals(placeKey))).getSingle();
@@ -540,6 +559,7 @@ class DriftTripRepository implements TripRepository {
         coverRemoteUrl: Value(place.coverRemoteUrl),
         source: Value(place.source),
         sourceUrl: Value(place.sourceUrl),
+        area: Value(area),
         addedBy: addedBy,
         updatedAt: Value(now),
         updatedBy: Value(addedBy),
@@ -592,6 +612,7 @@ class DriftTripRepository implements TripRepository {
     String? address,
     String? description,
     String? accessTips,
+    String? area,
   }) async {
     return _db.transaction(() async {
       final place = await _placeRepository.createTripOnlyPlace(
@@ -607,6 +628,7 @@ class DriftTripRepository implements TripRepository {
         tripId: tripId,
         placeKey: place.placeKey,
         addedBy: addedBy,
+        area: area,
       );
     });
   }
@@ -621,6 +643,25 @@ class DriftTripRepository implements TripRepository {
         syncStatus: const Value(1),
       ),
     );
+  }
+
+  @override
+  Future<void> setStopsArea(List<String> stopIds, String? area) async {
+    if (stopIds.isEmpty) return;
+    final normalizedArea = (area != null && area.trim().isNotEmpty) ? area.trim() : null;
+    await _db.transaction(() async {
+      final now = _now();
+      await (_db.update(_db.stops)
+            ..where((tbl) => tbl.id.isIn(stopIds) & tbl.deletedAt.isNull()))
+          .write(
+        StopsCompanion(
+          area: Value(normalizedArea),
+          updatedAt: Value(now),
+          updatedBy: Value(_currentUserId),
+          syncStatus: const Value(1),
+        ),
+      );
+    });
   }
 
   @override
@@ -815,6 +856,68 @@ class DriftTripRepository implements TripRepository {
   }
 
   @override
+  Future<List<ScheduleItem>> scheduleStops({
+    required String tripId,
+    required String dayId,
+    required List<String> stopIds,
+    List<String>? sortKeys,
+    int stayMinutes = 60,
+    int transitMinutes = 0,
+  }) async {
+    if (stopIds.isEmpty) return const [];
+    if (sortKeys != null && sortKeys.length != stopIds.length) {
+      throw ArgumentError.value(
+        sortKeys.length,
+        'sortKeys',
+        'Must match stopIds.length (${stopIds.length})',
+      );
+    }
+
+    return _db.transaction(() async {
+      final List<String> resolvedSortKeys;
+      if (sortKeys != null) {
+        resolvedSortKeys = sortKeys;
+      } else {
+        final existingItems = await getScheduleItemsForDay(dayId);
+        final lastSortKey = existingItems.isEmpty ? null : existingItems.last.sortKey;
+        resolvedSortKeys = FractionalIndexUtil.generateNKeysBetween(
+          lastSortKey,
+          null,
+          stopIds.length,
+        );
+      }
+
+      final now = _now();
+      final createdIds = <String>[];
+      for (int i = 0; i < stopIds.length; i++) {
+        final itemId = _uuid.v4();
+        createdIds.add(itemId);
+        await _db.into(_db.scheduleItems).insert(
+              ScheduleItemsCompanion.insert(
+                id: itemId,
+                tripId: tripId,
+                stopId: stopIds[i],
+                dayId: dayId,
+                sortKey: resolvedSortKeys[i],
+                stayMinutes: Value(stayMinutes),
+                transitMinutes: Value(transitMinutes),
+                status: const Value('planned'),
+                updatedAt: Value(now),
+                updatedBy: Value(_currentUserId),
+                syncStatus: const Value(1),
+              ),
+            );
+      }
+
+      final inserted = await (_db.select(_db.scheduleItems)
+            ..where((tbl) => tbl.id.isIn(createdIds)))
+          .get();
+      final byId = {for (final item in inserted) item.id: item};
+      return [for (final id in createdIds) byId[id]!];
+    });
+  }
+
+  @override
   Future<void> updateScheduleItem(ScheduleItemsCompanion item) {
     final now = _now();
     return (_db.update(_db.scheduleItems)..where((tbl) => tbl.id.equals(item.id.value))).write(
@@ -845,6 +948,39 @@ class DriftTripRepository implements TripRepository {
   }
 
   @override
+  Future<void> moveScheduleItems({
+    required List<String> itemIds,
+    required List<String> newSortKeys,
+    String? dayId,
+    String? targetDayId,
+  }) async {
+    if (itemIds.length != newSortKeys.length) {
+      throw ArgumentError.value(
+        newSortKeys.length,
+        'newSortKeys',
+        'Must match itemIds.length (${itemIds.length})',
+      );
+    }
+    if (itemIds.isEmpty) return;
+
+    final resolvedDayId = dayId ?? targetDayId;
+    await _db.transaction(() async {
+      final now = _now();
+      for (int i = 0; i < itemIds.length; i++) {
+        await (_db.update(_db.scheduleItems)..where((tbl) => tbl.id.equals(itemIds[i]))).write(
+          ScheduleItemsCompanion(
+            sortKey: Value(newSortKeys[i]),
+            dayId: resolvedDayId != null ? Value(resolvedDayId) : const Value.absent(),
+            updatedAt: Value(now),
+            updatedBy: Value(_currentUserId),
+            syncStatus: const Value(1),
+          ),
+        );
+      }
+    });
+  }
+
+  @override
   Future<void> updateScheduleItemStatus({
     required String itemId,
     required String status,
@@ -871,6 +1007,22 @@ class DriftTripRepository implements TripRepository {
         syncStatus: const Value(1),
       ),
     );
+  }
+
+  @override
+  Future<void> deleteScheduleItems(List<String> itemIds) async {
+    if (itemIds.isEmpty) return;
+    await _db.transaction(() async {
+      final now = _now();
+      await (_db.update(_db.scheduleItems)..where((tbl) => tbl.id.isIn(itemIds))).write(
+        ScheduleItemsCompanion(
+          deletedAt: Value(now),
+          updatedAt: Value(now),
+          updatedBy: Value(_currentUserId),
+          syncStatus: const Value(1),
+        ),
+      );
+    });
   }
 }
 

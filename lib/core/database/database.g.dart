@@ -9855,6 +9855,15 @@ class $StopsTable extends Stops with TableInfo<$StopsTable, Stop> {
     type: DriftSqlType.string,
     requiredDuringInsert: false,
   );
+  static const VerificationMeta _areaMeta = const VerificationMeta('area');
+  @override
+  late final GeneratedColumn<String> area = GeneratedColumn<String>(
+    'area',
+    aliasedName,
+    true,
+    type: DriftSqlType.string,
+    requiredDuringInsert: false,
+  );
   static const VerificationMeta _addedByMeta = const VerificationMeta(
     'addedBy',
   );
@@ -9938,6 +9947,7 @@ class $StopsTable extends Stops with TableInfo<$StopsTable, Stop> {
     coverRemoteUrl,
     source,
     sourceUrl,
+    area,
     addedBy,
     createdAt,
     updatedAt,
@@ -10077,6 +10087,12 @@ class $StopsTable extends Stops with TableInfo<$StopsTable, Stop> {
         sourceUrl.isAcceptableOrUnknown(data['source_url']!, _sourceUrlMeta),
       );
     }
+    if (data.containsKey('area')) {
+      context.handle(
+        _areaMeta,
+        area.isAcceptableOrUnknown(data['area']!, _areaMeta),
+      );
+    }
     if (data.containsKey('added_by')) {
       context.handle(
         _addedByMeta,
@@ -10176,6 +10192,10 @@ class $StopsTable extends Stops with TableInfo<$StopsTable, Stop> {
         DriftSqlType.string,
         data['${effectivePrefix}source_url'],
       ),
+      area: attachedDatabase.typeMapping.read(
+        DriftSqlType.string,
+        data['${effectivePrefix}area'],
+      ),
       addedBy: attachedDatabase.typeMapping.read(
         DriftSqlType.string,
         data['${effectivePrefix}added_by'],
@@ -10237,6 +10257,7 @@ class Stop extends DataClass implements Insertable<Stop> {
   final String? coverRemoteUrl;
   final String? source;
   final String? sourceUrl;
+  final String? area;
   final String addedBy;
   final DateTime createdAt;
   final DateTime updatedAt;
@@ -10260,6 +10281,7 @@ class Stop extends DataClass implements Insertable<Stop> {
     this.coverRemoteUrl,
     this.source,
     this.sourceUrl,
+    this.area,
     required this.addedBy,
     required this.createdAt,
     required this.updatedAt,
@@ -10305,6 +10327,9 @@ class Stop extends DataClass implements Insertable<Stop> {
     }
     if (!nullToAbsent || sourceUrl != null) {
       map['source_url'] = Variable<String>(sourceUrl);
+    }
+    if (!nullToAbsent || area != null) {
+      map['area'] = Variable<String>(area);
     }
     map['added_by'] = Variable<String>(addedBy);
     map['created_at'] = Variable<DateTime>(createdAt);
@@ -10363,6 +10388,9 @@ class Stop extends DataClass implements Insertable<Stop> {
       sourceUrl: sourceUrl == null && nullToAbsent
           ? const Value.absent()
           : Value(sourceUrl),
+      area: area == null && nullToAbsent
+          ? const Value.absent()
+          : Value(area),
       addedBy: Value(addedBy),
       createdAt: Value(createdAt),
       updatedAt: Value(updatedAt),
@@ -10398,6 +10426,7 @@ class Stop extends DataClass implements Insertable<Stop> {
       coverRemoteUrl: serializer.fromJson<String?>(json['coverRemoteUrl']),
       source: serializer.fromJson<String?>(json['source']),
       sourceUrl: serializer.fromJson<String?>(json['sourceUrl']),
+      area: serializer.fromJson<String?>(json['area']),
       addedBy: serializer.fromJson<String>(json['addedBy']),
       createdAt: serializer.fromJson<DateTime>(json['createdAt']),
       updatedAt: serializer.fromJson<DateTime>(json['updatedAt']),
@@ -10426,6 +10455,7 @@ class Stop extends DataClass implements Insertable<Stop> {
       'coverRemoteUrl': serializer.toJson<String?>(coverRemoteUrl),
       'source': serializer.toJson<String?>(source),
       'sourceUrl': serializer.toJson<String?>(sourceUrl),
+      'area': serializer.toJson<String?>(area),
       'addedBy': serializer.toJson<String>(addedBy),
       'createdAt': serializer.toJson<DateTime>(createdAt),
       'updatedAt': serializer.toJson<DateTime>(updatedAt),
@@ -10452,6 +10482,7 @@ class Stop extends DataClass implements Insertable<Stop> {
     Value<String?> coverRemoteUrl = const Value.absent(),
     Value<String?> source = const Value.absent(),
     Value<String?> sourceUrl = const Value.absent(),
+    Value<String?> area = const Value.absent(),
     String? addedBy,
     DateTime? createdAt,
     DateTime? updatedAt,
@@ -10481,6 +10512,7 @@ class Stop extends DataClass implements Insertable<Stop> {
         : this.coverRemoteUrl,
     source: source.present ? source.value : this.source,
     sourceUrl: sourceUrl.present ? sourceUrl.value : this.sourceUrl,
+    area: area.present ? area.value : this.area,
     addedBy: addedBy ?? this.addedBy,
     createdAt: createdAt ?? this.createdAt,
     updatedAt: updatedAt ?? this.updatedAt,
@@ -10518,6 +10550,7 @@ class Stop extends DataClass implements Insertable<Stop> {
           : this.coverRemoteUrl,
       source: data.source.present ? data.source.value : this.source,
       sourceUrl: data.sourceUrl.present ? data.sourceUrl.value : this.sourceUrl,
+      area: data.area.present ? data.area.value : this.area,
       addedBy: data.addedBy.present ? data.addedBy.value : this.addedBy,
       createdAt: data.createdAt.present ? data.createdAt.value : this.createdAt,
       updatedAt: data.updatedAt.present ? data.updatedAt.value : this.updatedAt,
@@ -10548,6 +10581,7 @@ class Stop extends DataClass implements Insertable<Stop> {
           ..write('coverRemoteUrl: $coverRemoteUrl, ')
           ..write('source: $source, ')
           ..write('sourceUrl: $sourceUrl, ')
+          ..write('area: $area, ')
           ..write('addedBy: $addedBy, ')
           ..write('createdAt: $createdAt, ')
           ..write('updatedAt: $updatedAt, ')
@@ -10576,6 +10610,7 @@ class Stop extends DataClass implements Insertable<Stop> {
     coverRemoteUrl,
     source,
     sourceUrl,
+    area,
     addedBy,
     createdAt,
     updatedAt,
@@ -10603,6 +10638,7 @@ class Stop extends DataClass implements Insertable<Stop> {
           other.coverRemoteUrl == this.coverRemoteUrl &&
           other.source == this.source &&
           other.sourceUrl == this.sourceUrl &&
+          other.area == this.area &&
           other.addedBy == this.addedBy &&
           other.createdAt == this.createdAt &&
           other.updatedAt == this.updatedAt &&
@@ -10628,6 +10664,7 @@ class StopsCompanion extends UpdateCompanion<Stop> {
   final Value<String?> coverRemoteUrl;
   final Value<String?> source;
   final Value<String?> sourceUrl;
+  final Value<String?> area;
   final Value<String> addedBy;
   final Value<DateTime> createdAt;
   final Value<DateTime> updatedAt;
@@ -10652,6 +10689,7 @@ class StopsCompanion extends UpdateCompanion<Stop> {
     this.coverRemoteUrl = const Value.absent(),
     this.source = const Value.absent(),
     this.sourceUrl = const Value.absent(),
+    this.area = const Value.absent(),
     this.addedBy = const Value.absent(),
     this.createdAt = const Value.absent(),
     this.updatedAt = const Value.absent(),
@@ -10677,6 +10715,7 @@ class StopsCompanion extends UpdateCompanion<Stop> {
     this.coverRemoteUrl = const Value.absent(),
     this.source = const Value.absent(),
     this.sourceUrl = const Value.absent(),
+    this.area = const Value.absent(),
     required String addedBy,
     this.createdAt = const Value.absent(),
     this.updatedAt = const Value.absent(),
@@ -10708,6 +10747,7 @@ class StopsCompanion extends UpdateCompanion<Stop> {
     Expression<String>? coverRemoteUrl,
     Expression<String>? source,
     Expression<String>? sourceUrl,
+    Expression<String>? area,
     Expression<String>? addedBy,
     Expression<DateTime>? createdAt,
     Expression<int>? updatedAt,
@@ -10733,6 +10773,7 @@ class StopsCompanion extends UpdateCompanion<Stop> {
       if (coverRemoteUrl != null) 'cover_remote_url': coverRemoteUrl,
       if (source != null) 'source': source,
       if (sourceUrl != null) 'source_url': sourceUrl,
+      if (area != null) 'area': area,
       if (addedBy != null) 'added_by': addedBy,
       if (createdAt != null) 'created_at': createdAt,
       if (updatedAt != null) 'updated_at': updatedAt,
@@ -10760,6 +10801,7 @@ class StopsCompanion extends UpdateCompanion<Stop> {
     Value<String?>? coverRemoteUrl,
     Value<String?>? source,
     Value<String?>? sourceUrl,
+    Value<String?>? area,
     Value<String>? addedBy,
     Value<DateTime>? createdAt,
     Value<DateTime>? updatedAt,
@@ -10785,6 +10827,7 @@ class StopsCompanion extends UpdateCompanion<Stop> {
       coverRemoteUrl: coverRemoteUrl ?? this.coverRemoteUrl,
       source: source ?? this.source,
       sourceUrl: sourceUrl ?? this.sourceUrl,
+      area: area ?? this.area,
       addedBy: addedBy ?? this.addedBy,
       createdAt: createdAt ?? this.createdAt,
       updatedAt: updatedAt ?? this.updatedAt,
@@ -10846,6 +10889,9 @@ class StopsCompanion extends UpdateCompanion<Stop> {
     if (sourceUrl.present) {
       map['source_url'] = Variable<String>(sourceUrl.value);
     }
+    if (area.present) {
+      map['area'] = Variable<String>(area.value);
+    }
     if (addedBy.present) {
       map['added_by'] = Variable<String>(addedBy.value);
     }
@@ -10893,6 +10939,7 @@ class StopsCompanion extends UpdateCompanion<Stop> {
           ..write('coverRemoteUrl: $coverRemoteUrl, ')
           ..write('source: $source, ')
           ..write('sourceUrl: $sourceUrl, ')
+          ..write('area: $area, ')
           ..write('addedBy: $addedBy, ')
           ..write('createdAt: $createdAt, ')
           ..write('updatedAt: $updatedAt, ')
