@@ -57,14 +57,20 @@ Future<void> floatReference(
   if (source == null || !context.mounted) return;
   final reference = await _pickReference(context, ref, source, poiId: poiId);
   if (reference == null || !context.mounted) return;
+  await floatReferenceImage(context, reference.path);
+}
 
+/// Floats the image at [path] over other apps, the way [floatReference]
+/// does once a reference is picked: a place page's "Float frame".
+Future<void> floatReferenceImage(BuildContext context, String path) async {
+  if (!floatingReferenceSupported) return;
   if (!await CameraOverlay.canDrawOverlays()) {
     if (!context.mounted) return;
     final openSettings = await _askOverlayPermission(context, floatOnly: true);
     if (openSettings == true) await CameraOverlay.requestPermission();
     return;
   }
-  final shown = await CameraOverlay.show(reference.path, followCamera: false);
+  final shown = await CameraOverlay.show(path, followCamera: false);
   if (!context.mounted) return;
   ScaffoldMessenger.of(context).showSnackBar(
     SnackBar(
@@ -144,7 +150,29 @@ Future<void> _shootWithPhoneCamera(
     reference = await _pickReference(context, ref, source, poiId: poiId);
     if (reference == null || !context.mounted) return;
   }
+  await _shootWith(context, reference, poiId: poiId);
+}
 
+/// Opens the Anime Camera for a place with its frame already chosen: a place
+/// page's "Take photo". The shot goes to the editor with the frame loaded,
+/// and is saved to [placeKey]'s photos. Without a frame it just shoots.
+Future<void> shootWithReference(
+  BuildContext context,
+  WidgetRef ref, {
+  required String placeKey,
+  String? referencePath,
+  String? referenceImageId,
+}) async {
+  if (!animeCameraSupported) return;
+  if (!Platform.isAndroid) {
+    context.push('/camera?poiId=${Uri.encodeComponent(placeKey)}');
+    return;
+  }
+  final reference = referencePath == null ? null : _Reference(referencePath, imageId: referenceImageId, poiId: placeKey);
+  await _shootWith(context, reference, poiId: placeKey);
+}
+
+Future<void> _shootWith(BuildContext context, _Reference? reference, {String? poiId}) async {
   // Float the reference over the camera when allowed. Without the
   // permission the user can still shoot; the reference then only shows up
   // in the editor.

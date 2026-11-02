@@ -56,6 +56,16 @@ void main() {
       expect(stops.every((s) => s.addedBy == 'u1'), isTrue);
     });
 
+    test('a place picked again becomes a second stop of the trip', () async {
+      await _savePlace(db, 'anitabi:1', '宇治橋');
+      await controller().addFromLibrary(tripId: trip.id, placeKeys: ['anitabi:1']);
+      final again = await controller().addFromLibrary(tripId: trip.id, placeKeys: ['anitabi:1'], repeat: true);
+      expect((again as Success<int>).value, 1);
+      final stops = await repo.getStopsForTrip(trip.id);
+      expect(stops.map((s) => s.placeKey), ['anitabi:1', 'anitabi:1']);
+      expect(stops.map((s) => s.id).toSet(), hasLength(2), reason: 'two stops, each with its own plan');
+    });
+
     test('a new spot needs a name and is kept out of the library', () async {
       expect(await controller().createSpot(tripId: trip.id, name: ' ', lat: 1, lng: 2), isA<Failure<Stop>>());
 

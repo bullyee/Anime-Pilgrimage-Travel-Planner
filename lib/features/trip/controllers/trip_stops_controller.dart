@@ -14,10 +14,13 @@ class TripStopsController extends Notifier<AsyncValue<void>> {
   AsyncValue<void> build() => const AsyncData(null);
 
   /// Adds library places as stops and returns how many were added. Places
-  /// that are already stops in the trip are skipped.
+  /// that are already stops in the trip are skipped, unless [repeat] asks to
+  /// add them again: a place can be two stops of one trip, each with its own
+  /// plan, such as one shoot at dusk and another at night.
   Future<AppResult<int>> addFromLibrary({
     required String tripId,
     required List<String> placeKeys,
+    bool repeat = false,
   }) {
     return _run(() async {
       final repo = ref.read(tripRepositoryProvider);
@@ -25,7 +28,7 @@ class TripStopsController extends Notifier<AsyncValue<void>> {
       final inTrip = (await repo.getStopsForTrip(tripId)).map((s) => s.placeKey).toSet();
       var added = 0;
       for (final key in placeKeys) {
-        if (!inTrip.add(key)) continue;
+        if (!inTrip.add(key) && !repeat) continue;
         await repo.addPlaceToTrip(tripId: tripId, placeKey: key, addedBy: userId);
         added++;
       }

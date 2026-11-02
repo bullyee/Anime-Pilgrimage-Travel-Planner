@@ -27,7 +27,9 @@ class _LibraryPickerScreenState extends ConsumerState<LibraryPickerScreen> {
     setState(() => _saving = true);
     final result = await ref
         .read(tripStopsControllerProvider.notifier)
-        .addFromLibrary(tripId: widget.tripId, placeKeys: _selected.toList());
+        // Places already in the trip were ticked on purpose: they become a
+        // second stop.
+        .addFromLibrary(tripId: widget.tripId, placeKeys: _selected.toList(), repeat: true);
     if (!mounted) return;
     setState(() => _saving = false);
     switch (result) {
@@ -94,19 +96,22 @@ class _LibraryPickerScreenState extends ConsumerState<LibraryPickerScreen> {
                   itemBuilder: (context, i) {
                     final place = shown[i];
                     final already = inTrip.contains(place.placeKey);
+                    final picked = _selected.contains(place.placeKey);
                     return CheckboxListTile(
-                      value: already || _selected.contains(place.placeKey),
-                      onChanged: already
-                          ? null
-                          : (v) => setState(() {
-                                if (v == true) {
-                                  _selected.add(place.placeKey);
-                                } else {
-                                  _selected.remove(place.placeKey);
-                                }
-                              }),
+                      value: picked,
+                      onChanged: (v) => setState(() {
+                        if (v == true) {
+                          _selected.add(place.placeKey);
+                        } else {
+                          _selected.remove(place.placeKey);
+                        }
+                      }),
                       title: Text(place.name, maxLines: 1, overflow: TextOverflow.ellipsis),
-                      subtitle: Text(already ? 'Already in this trip' : (place.address ?? place.source ?? 'Saved place')),
+                      subtitle: Text(
+                        already
+                            ? (picked ? 'Already in this trip, added again as a second stop' : 'Already in this trip')
+                            : (place.address ?? place.source ?? 'Saved place'),
+                      ),
                     );
                   },
                 ),

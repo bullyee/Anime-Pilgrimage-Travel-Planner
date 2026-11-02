@@ -20,6 +20,10 @@ import '../../features/anime/screens/bangumi_search_screen.dart';
 import '../../features/tag/screens/tag_edit_screen.dart';
 import '../../features/calendar/screens/calendar_screen.dart';
 import '../../features/camera/screens/camera_screen.dart';
+import '../../features/library/screens/labels_screen.dart';
+import '../../features/library/screens/library_screen.dart';
+import '../../features/library/screens/place_edit_screen.dart';
+import '../../features/library/screens/place_screen.dart';
 import '../../features/trip/screens/library_picker_screen.dart';
 import '../../features/trip/screens/new_spot_screen.dart';
 import '../../features/trip/screens/trip_list_screen.dart';
@@ -103,6 +107,31 @@ GoRouter router(RouterRef ref) {
         builder: (context, state) => NewSpotScreen(
           tripId: state.pathParameters['tripId']!,
         ),
+      ),
+      GoRoute(
+        path: '/library',
+        builder: (context, state) => const LibraryScreen(),
+      ),
+      GoRoute(
+        path: '/library/labels',
+        builder: (context, state) => const LabelsScreen(),
+      ),
+      GoRoute(
+        // A place picked on the map and saved to the library.
+        path: '/library/new',
+        builder: (context, state) => const NewSpotScreen(),
+      ),
+      GoRoute(
+        path: '/library/places/:placeKey',
+        builder: (context, state) => PlaceScreen(placeKey: state.pathParameters['placeKey']!),
+      ),
+      GoRoute(
+        path: '/library/places/:placeKey/edit',
+        builder: (context, state) => PlaceEditScreen(placeKey: state.pathParameters['placeKey']!),
+      ),
+      GoRoute(
+        path: '/library/places/:placeKey/location',
+        builder: (context, state) => NewSpotScreen(movePlaceKey: state.pathParameters['placeKey']!),
       ),
       GoRoute(
         path: '/rois',

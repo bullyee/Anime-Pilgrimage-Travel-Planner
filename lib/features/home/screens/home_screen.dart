@@ -120,6 +120,13 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
                   ),
                   const SizedBox(height: 12),
                   _HomeCard(
+                    icon: Icons.bookmarks_outlined,
+                    title: 'Library',
+                    subtitle: 'Your saved places, by anime, tag and region',
+                    onTap: () => context.push('/library'),
+                  ),
+                  const SizedBox(height: 12),
+                  _HomeCard(
                     icon: Icons.calendar_month,
                     title: 'Trip Calendar',
                     subtitle: 'Schedule your visits',
