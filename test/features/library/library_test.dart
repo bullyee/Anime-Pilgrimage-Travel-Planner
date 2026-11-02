@@ -148,6 +148,25 @@ void main() {
       expect(await places.getLabel(a.id), isNull);
     });
 
+    test('a label nothing uses any more goes away; one a frame still uses stays', () async {
+      await _savePlace(db, 'p1', 'Uji Bridge');
+      await _savePlace(db, 'p2', 'Byodoin');
+      final solo = (await controller().addLabel('p1', kind: 'tag', name: 'Dusk') as Success<Label>).value;
+      final framed = (await controller().addLabel('p1', kind: 'anime', name: 'Euphonium') as Success<Label>).value;
+      await places.addReferenceImage(placeKey: 'p2', localPath: '/nowhere/frame.png', animeLabelId: framed.id);
+      final spare = (await controller().createLabel(kind: 'region', name: 'Uji') as Success<Label>).value;
+
+      await controller().removeLabel('p1', solo.id);
+      expect(await places.getLabel(solo.id), isNull, reason: 'no place, stop or frame used it any more');
+      await controller().removeLabel('p1', framed.id);
+      expect(await places.getLabel(framed.id), isNotNull, reason: 'a frame still names it');
+      expect(await places.getLabel(spare.id), isNotNull, reason: 'made for later, and no change touched it');
+
+      expect((await controller().deleteUnusedLabels() as Success<int>).value, 1);
+      expect(await places.getLabel(spare.id), isNull);
+      expect(await places.getLabel(framed.id), isNotNull);
+    });
+
     test('labels go on and off several places at once', () async {
       for (final key in ['p1', 'p2', 'p3']) {
         await _savePlace(db, key, 'Place $key');
@@ -351,7 +370,7 @@ void main() {
 
       await tester.tap(find.text("I'm here"));
       await tester.pumpAndSettle();
-      expect(find.text('Visited once'), findsOneWidget);
+      expect(find.textContaining('Visited once · last'), findsOneWidget);
       await tester.tap(find.text("I'm here"));
       await tester.pumpAndSettle();
       expect(find.text('Today is on record already.'), findsOneWidget);

@@ -64,6 +64,23 @@ void main() {
       final stops = await repo.getStopsForTrip(trip.id);
       expect(stops.map((s) => s.placeKey), ['anitabi:1', 'anitabi:1']);
       expect(stops.map((s) => s.id).toSet(), hasLength(2), reason: 'two stops, each with its own plan');
+      expect(stops.map((s) => s.name).toSet(), {'宇治橋', '宇治橋 (2)'}, reason: 'a name of its own to tell them apart');
+
+      // A third one takes the next number, or the name it is given.
+      await controller().addFromLibrary(tripId: trip.id, placeKeys: ['anitabi:1'], repeat: true);
+      await controller().addFromLibrary(tripId: trip.id, placeKeys: ['anitabi:1'], repeat: true, names: {'anitabi:1': '宇治橋 (night)'});
+      expect((await repo.getStopsForTrip(trip.id)).map((s) => s.name).toSet(), {'宇治橋', '宇治橋 (2)', '宇治橋 (3)', '宇治橋 (night)'});
+    });
+
+    test('a stop is renamed in its trip without touching the library place', () async {
+      await _savePlace(db, 'anitabi:1', '宇治橋');
+      await controller().addFromLibrary(tripId: trip.id, placeKeys: ['anitabi:1']);
+      final stop = (await repo.getStopsForTrip(trip.id)).single;
+      expect(await controller().renameStop(stop.id, '  '), isA<Failure<void>>());
+      await controller().renameStop(stop.id, '宇治橋 (dusk)');
+      expect((await repo.getStop(stop.id))!.name, '宇治橋 (dusk)');
+      final place = await (db.select(db.places)..where((p) => p.placeKey.equals('anitabi:1'))).getSingle();
+      expect(place.name, '宇治橋');
     });
 
     test('a new spot needs a name and is kept out of the library', () async {

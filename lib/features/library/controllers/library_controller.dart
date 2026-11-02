@@ -65,8 +65,37 @@ class LibraryController extends Notifier<AsyncValue<void>> {
     });
   }
 
-  Future<AppResult<void>> removeLabel(String placeKey, String labelId) =>
-      _run(() => ref.read(placeRepositoryProvider).removeLabelFromPlace(placeKey, labelId));
+  Future<AppResult<void>> removeLabel(String placeKey, String labelId) => _run(() async {
+        await ref.read(placeRepositoryProvider).removeLabelFromPlace(placeKey, labelId);
+        await _dropUnused([labelId]);
+      });
+
+  /// Deletes those of [labelIds] that nothing uses any more: no place, no
+  /// trip stop and no anime frame. Only labels that a change just took off
+  /// something are checked, so one made in the Labels screen for later stays.
+  /// Stops and frames count because trips are shared with other people.
+  Future<int> _dropUnused(Iterable<String> labelIds) async {
+    final db = ref.read(databaseProvider);
+    var dropped = 0;
+    for (final id in labelIds.toSet()) {
+      if (await _inUse(db, id)) continue;
+      await ref.read(placeRepositoryProvider).deleteLabel(id);
+      dropped++;
+    }
+    return dropped;
+  }
+
+  static Future<bool> _inUse(AppDatabase db, String labelId) async =>
+      await (db.select(db.placeLabels)..where((l) => l.labelId.equals(labelId))..limit(1)).getSingleOrNull() != null ||
+      await (db.select(db.stopLabels)..where((l) => l.labelId.equals(labelId))..limit(1)).getSingleOrNull() != null ||
+      await (db.select(db.newReferenceImages)..where((r) => r.animeLabelId.equals(labelId))..limit(1)).getSingleOrNull() != null;
+
+  /// Deletes every label that no place, trip stop or anime frame uses, and
+  /// returns how many went.
+  Future<AppResult<int>> deleteUnusedLabels() => _run(() async {
+        final labels = await ref.read(placeRepositoryProvider).getLabels();
+        return _dropUnused(labels.map((l) => l.id));
+      });
 
   /// Creates a label, or returns the one that already has this name.
   Future<AppResult<Label>> createLabel({required String kind, required String name}) {
@@ -102,6 +131,7 @@ class LibraryController extends Notifier<AsyncValue<void>> {
         return RemovedPlace.hidden;
       }
       await repo.deletePlace(entry.place.placeKey);
+      await _dropUnused(entry.labels.map((l) => l.id));
       return RemovedPlace.deleted;
     });
   }
@@ -134,6 +164,7 @@ class LibraryController extends Notifier<AsyncValue<void>> {
           for (final key in placeKeys) {
             await repo.removeLabelFromPlace(key, labelId);
           }
+          await _dropUnused([labelId]);
         }));
   }
 
@@ -206,6 +237,7 @@ class LibraryController extends Notifier<AsyncValue<void>> {
               deleted++;
             }
           }
+          await _dropUnused([for (final e in entries) ...e.labels.map((l) => l.id)]);
           return (hidden, deleted);
         }));
   }

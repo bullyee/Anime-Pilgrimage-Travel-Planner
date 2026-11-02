@@ -7,6 +7,7 @@ import '../controllers/library_controller.dart';
 import '../models/library_entry.dart';
 import '../providers/library_providers.dart';
 import '../providers/place_providers.dart';
+import '../../../shared/widgets/name_dialog.dart';
 import '../widgets/label_widgets.dart';
 
 /// The labels places are grouped by, one tab per kind: create, rename, merge
@@ -21,6 +22,25 @@ class LabelsScreen extends ConsumerWidget {
       child: Scaffold(
         appBar: AppBar(
           title: const Text('Labels'),
+          actions: [
+            PopupMenuButton<String>(
+              tooltip: 'More',
+              onSelected: (_) async {
+                final result = await ref.read(libraryControllerProvider.notifier).deleteUnusedLabels();
+                if (!context.mounted) return;
+                _report(context, result,
+                    ok: switch (result) {
+                      Success(value: 0) => 'Every label is in use.',
+                      Success(value: 1) => 'Deleted 1 unused label.',
+                      Success(:final value) => 'Deleted $value unused labels.',
+                      Failure() => null,
+                    });
+              },
+              itemBuilder: (_) => const [
+                PopupMenuItem(value: 'unused', child: Text('Delete unused labels')),
+              ],
+            ),
+          ],
           bottom: TabBar(tabs: [for (final kind in labelKinds) Tab(text: labelKindTitle(kind))]),
         ),
         body: TabBarView(children: [for (final kind in labelKinds) _LabelList(kind: kind)]),
@@ -36,7 +56,7 @@ class LabelsScreen extends ConsumerWidget {
   }
 
   Future<void> _create(BuildContext context, WidgetRef ref, String kind) async {
-    final name = await askLabelName(context, title: 'New ${_singular(kind)} label', action: 'Create');
+    final name = await askName(context, title: 'New ${_singular(kind)} label', action: 'Create');
     if (name == null || !context.mounted) return;
     final result = await ref.read(libraryControllerProvider.notifier).createLabel(kind: kind, name: name);
     if (!context.mounted) return;
@@ -125,7 +145,7 @@ class _LabelList extends ConsumerWidget {
   }
 
   Future<void> _rename(BuildContext context, WidgetRef ref, Label label) async {
-    final name = await askLabelName(context, title: 'Rename label', action: 'Rename', initial: label.name);
+    final name = await askName(context, title: 'Rename label', action: 'Rename', initial: label.name);
     if (name == null || name == label.name || !context.mounted) return;
     final result = await ref.read(libraryControllerProvider.notifier).renameLabel(label.id, name);
     if (!context.mounted) return;
@@ -186,58 +206,5 @@ class _LabelList extends ConsumerWidget {
     final result = await ref.read(libraryControllerProvider.notifier).deleteLabel(label.id);
     if (!context.mounted) return;
     _report(context, result, ok: 'Deleted “${label.name}”.');
-  }
-}
-
-/// Asks for a label name. Returns it trimmed, or null when cancelled.
-Future<String?> askLabelName(BuildContext context, {required String title, required String action, String initial = ''}) {
-  return showDialog<String>(
-    context: context,
-    builder: (_) => _NameDialog(title: title, action: action, initial: initial),
-  );
-}
-
-class _NameDialog extends StatefulWidget {
-  final String title;
-  final String action;
-  final String initial;
-
-  const _NameDialog({required this.title, required this.action, required this.initial});
-
-  @override
-  State<_NameDialog> createState() => _NameDialogState();
-}
-
-class _NameDialogState extends State<_NameDialog> {
-  late final _name = TextEditingController(text: widget.initial);
-
-  @override
-  void dispose() {
-    _name.dispose();
-    super.dispose();
-  }
-
-  void _submit() {
-    final name = _name.text.trim();
-    if (name.isNotEmpty) Navigator.pop(context, name);
-  }
-
-  @override
-  Widget build(BuildContext context) {
-    return AlertDialog(
-      title: Text(widget.title),
-      content: TextField(
-        key: const Key('labelDialogField'),
-        controller: _name,
-        autofocus: true,
-        textCapitalization: TextCapitalization.words,
-        decoration: const InputDecoration(labelText: 'Name'),
-        onSubmitted: (_) => _submit(),
-      ),
-      actions: [
-        TextButton(onPressed: () => Navigator.pop(context), child: const Text('Cancel')),
-        FilledButton(onPressed: _submit, child: Text(widget.action)),
-      ],
-    );
   }
 }

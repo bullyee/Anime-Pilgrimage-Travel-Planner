@@ -11,6 +11,7 @@ import 'package:url_launcher/url_launcher.dart';
 import '../../../core/database/database.dart';
 import '../../../core/utils/app_result.dart';
 import '../../../shared/theme/app_theme.dart';
+import '../../../shared/widgets/name_dialog.dart';
 import '../../camera/services/anime_camera_launcher.dart';
 import '../../trip/controllers/trip_stops_controller.dart';
 import '../../trip/models/trip_summary.dart';
@@ -115,8 +116,8 @@ class _PlaceScreenState extends ConsumerState<PlaceScreen> {
                 ),
                 const SizedBox(height: 16),
                 _TitleBlock(place: place, placeKey: _key),
-                const SizedBox(height: 14),
-                _VisitsCard(placeKey: _key, onHere: () async {
+                const SizedBox(height: 8),
+                _VisitsRow(placeKey: _key, onHere: () async {
                   final result = await _place.addVisitToday(_key);
                   _report(result, switch (result) {
                     Success(value: false) => 'Today is on record already.',
@@ -126,6 +127,7 @@ class _PlaceScreenState extends ConsumerState<PlaceScreen> {
                 const SizedBox(height: 14),
                 _FactsCard(place: place),
                 const SizedBox(height: 14),
+                _TripsCard(placeKey: _key),
                 _NoteCard(place: place, onSave: (note) async => _report(await _place.setNote(_key, note), 'Saved your note.')),
                 const SizedBox(height: 14),
                 _PhotosCard(
@@ -133,8 +135,6 @@ class _PlaceScreenState extends ConsumerState<PlaceScreen> {
                   frames: frames,
                   onAdd: () async => _report(await _place.addPhotosFromGallery(_key)),
                 ),
-                const SizedBox(height: 14),
-                _TripsCard(placeKey: _key),
                 const SizedBox(height: 14),
                 _LocationCard(place: place),
               ],
@@ -193,25 +193,25 @@ class _PlaceScreenState extends ConsumerState<PlaceScreen> {
     final trip = await pickTripToAddTo(context, full: inTrips, allowRepeat: true);
     if (trip == null || !mounted) return;
     final again = inTrips.contains(trip.trip.id);
+    String? name;
     if (again) {
-      final confirmed = await showDialog<bool>(
-        context: context,
-        builder: (context) => AlertDialog(
-          title: Text('Add “${place.name}” again?'),
-          content: Text('${trip.trip.title} already has it. A second stop gets its own plan, '
-              'for example one visit at dusk and one at night. To visit the same stop on two days, '
-              'plan it on both days instead.'),
-          actions: [
-            TextButton(onPressed: () => Navigator.pop(context, false), child: const Text('Cancel')),
-            FilledButton(onPressed: () => Navigator.pop(context, true), child: const Text('Add a second stop')),
-          ],
-        ),
+      // A second stop of the same place needs a name of its own to tell the two apart.
+      name = await askName(
+        context,
+        title: 'Add “${place.name}” again?',
+        action: 'Add a second stop',
+        initial: '${place.name} (2)',
+        message: '${trip.trip.title} already has it. A second stop gets its own plan, for example one visit '
+            'at dusk and one at night. Name it so the two are easy to tell apart.',
       );
-      if (confirmed != true || !mounted) return;
+      if (name == null || !mounted) return;
     }
-    final result = await ref
-        .read(tripStopsControllerProvider.notifier)
-        .addFromLibrary(tripId: trip.trip.id, placeKeys: [_key], repeat: again);
+    final result = await ref.read(tripStopsControllerProvider.notifier).addFromLibrary(
+          tripId: trip.trip.id,
+          placeKeys: [_key],
+          repeat: again,
+          names: {if (name != null) _key: name},
+        );
     _report(result, 'Added to ${trip.trip.title}. It waits in the backlog until you plan it.');
   }
 
@@ -533,11 +533,13 @@ class _OnlyYou extends StatelessWidget {
   }
 }
 
-class _VisitsCard extends ConsumerWidget {
+/// One line under the title: how often the user has been here, and a button
+/// to note that they are here now.
+class _VisitsRow extends ConsumerWidget {
   final String placeKey;
   final VoidCallback onHere;
 
-  const _VisitsCard({required this.placeKey, required this.onHere});
+  const _VisitsRow({required this.placeKey, required this.onHere});
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
@@ -546,38 +548,21 @@ class _VisitsCard extends ConsumerWidget {
     final visits = [...?ref.watch(placeVisitsProvider(placeKey)).valueOrNull]..sort((a, b) => b.date.compareTo(a.date));
     final n = visits.length;
     final last = visits.isEmpty ? null : DateTime.tryParse(visits.first.date);
-    return Card(
-      margin: EdgeInsets.zero,
-      elevation: 0,
-      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20), side: BorderSide(color: theme.colorScheme.outlineVariant)),
-      child: Padding(
-        padding: const EdgeInsets.all(12),
-        child: Row(
-          children: [
-            Container(
-              width: 46,
-              height: 46,
-              alignment: Alignment.center,
-              decoration: BoxDecoration(color: p.wisteriaSoft, borderRadius: BorderRadius.circular(14)),
-              child: Text('$n', style: theme.textTheme.titleLarge?.copyWith(color: p.wisteria, fontWeight: FontWeight.w800)),
-            ),
-            const SizedBox(width: 12),
-            Expanded(
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Text(n == 0 ? 'Not visited yet' : n == 1 ? 'Visited once' : 'Visited $n times', style: theme.textTheme.titleSmall),
-                  Text(
-                    last == null ? 'Your visits show here' : 'Last on ${DateFormat.yMMMd().format(last)}',
-                    style: theme.textTheme.bodySmall?.copyWith(color: theme.colorScheme.onSurfaceVariant),
-                  ),
-                ],
-              ),
-            ),
-            OutlinedButton(onPressed: onHere, child: const Text("I'm here")),
-          ],
+    return Row(
+      children: [
+        Icon(n == 0 ? Icons.flag_outlined : Icons.flag, size: 18, color: n == 0 ? theme.colorScheme.onSurfaceVariant : p.wisteria),
+        const SizedBox(width: 6),
+        Expanded(
+          child: Text(
+            [
+              n == 0 ? 'Not visited yet' : n == 1 ? 'Visited once' : 'Visited $n times',
+              if (last != null) 'last ${DateFormat.yMMMd().format(last)}',
+            ].join(' · '),
+            style: theme.textTheme.bodyMedium?.copyWith(color: n == 0 ? theme.colorScheme.onSurfaceVariant : null),
+          ),
         ),
-      ),
+        TextButton(onPressed: onHere, child: const Text("I'm here")),
+      ],
     );
   }
 }
@@ -811,7 +796,10 @@ class _TripsCard extends ConsumerWidget {
     ];
     if (trips.isEmpty) return const SizedBox.shrink();
     final theme = Theme.of(context);
-    return _Section(
+    // It carries its own gap below, so a place in no trip leaves none.
+    return Padding(
+      padding: const EdgeInsets.only(bottom: 14),
+      child: _Section(
       title: 'In your trips',
       child: Column(
         children: [
@@ -825,6 +813,7 @@ class _TripsCard extends ConsumerWidget {
               onTap: () => context.push('/trips/${t.trip.id}?tab=stops'),
             ),
         ],
+      ),
       ),
     );
   }
