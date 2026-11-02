@@ -212,7 +212,8 @@ void main() {
       await places.addVisit(placeKey: 'keep', date: '2026-11-01');
       await places.addVisit(placeKey: 'dupe', date: '2026-11-01'); // the same visit
       await places.addVisit(placeKey: 'dupe', date: '2025-04-29');
-      await trips.addPlaceToTrip(tripId: trip.id, placeKey: 'dupe', addedBy: 'u1');
+      // Added by a trip mate; the merge is this user's edit.
+      await trips.addPlaceToTrip(tripId: trip.id, placeKey: 'dupe', addedBy: 'u2');
 
       expect(await controller().mergePlaces(keep: 'keep', others: ['keep', 'dupe']), isA<Success<void>>());
 
@@ -227,6 +228,7 @@ void main() {
       final stop = (await trips.getStopsForTrip(trip.id)).single;
       expect(stop.placeKey, 'keep');
       expect(stop.name, '宇治橋', reason: 'the trip keeps its own copy of the facts');
+      expect((stop.updatedBy, stop.syncStatus), ('u1', 1), reason: 'stamped as an edit by the user, to sync');
       expect(await controller().mergePlaces(keep: 'keep', others: ['keep']), isA<Failure<void>>());
     });
 
