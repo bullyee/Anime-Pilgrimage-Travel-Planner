@@ -119,8 +119,9 @@ service cloud.firestore {
 
     function isTripOwner(tripId) {
       let tripPath = /databases/$(database)/documents/tripsV2/$(tripId);
-      return (exists(tripPath) && get(tripPath).data.ownerId == request.auth.uid)
-        || (existsAfter(tripPath) && getAfter(tripPath).data.ownerId == request.auth.uid);
+      return exists(tripPath)
+        ? get(tripPath).data.ownerId == request.auth.uid
+        : (existsAfter(tripPath) && getAfter(tripPath).data.ownerId == request.auth.uid);
     }
 
     function isTripMemberV2(tripId) {
@@ -190,10 +191,11 @@ service cloud.firestore {
     }
 
     function isCreatorStillActive(tripId, creatorUid) {
-      let tripDoc = getTripDocV2(tripId);
-      let creatorMemberDoc = getMemberDoc(tripId, creatorUid);
-      return (tripDoc != null && tripDoc.data.ownerId == creatorUid)
-        || (creatorMemberDoc != null && ('role' in creatorMemberDoc.data) && creatorMemberDoc.data.role in ['owner', 'editor']);
+      let tripPath = /databases/$(database)/documents/tripsV2/$(tripId);
+      let memberPath = /databases/$(database)/documents/tripsV2/$(tripId)/members/$(creatorUid);
+      let isOwner = exists(tripPath) && get(tripPath).data.ownerId == creatorUid;
+      let isEditor = exists(memberPath) && ('role' in get(memberPath).data) && get(memberPath).data.role in ['owner', 'editor'];
+      return isOwner || isEditor;
     }
 
     function isValidInviteJoin(tripId, memberUid) {
@@ -338,11 +340,13 @@ service cloud.firestore {
         && request.resource.data.expiresAt <= request.time + duration.value(7, 'd')
         && isTripEditorOrOwner(request.resource.data.tripId);
 
-      // Creator or Trip Owner can revoke or update expiration without mutating core invite fields
+      // Creator or Trip Owner can revoke or update expiration without mutating core invite fields,
+      // with expiry strictly capped at 7 days from now.
       allow update: if isAuthenticated()
         && request.resource.data.tripId == resource.data.tripId
         && request.resource.data.role == resource.data.role
         && request.resource.data.createdBy == resource.data.createdBy
+        && request.resource.data.expiresAt <= request.time + duration.value(7, 'd')
         && (
           resource.data.createdBy == request.auth.uid ||
           isTripOwner(resource.data.tripId)

@@ -343,6 +343,109 @@ def main():
     code, _ = api_request('GET', 'tripsV2/trip_v2_1', user_id='charlie')
     assert_status("Stage 4: Former member cannot read unshared private trip (403)", 403, code)
 
+    # 33. Repro H: Editor attempts to take over trip ownership (patch ownerId) -> DENIED (403)
+    takeover_patch = {
+        'fields': {
+            'ownerId': {'stringValue': 'charlie'},
+            'updatedAt': {'integerValue': '6000'},
+        }
+    }
+    code, _ = api_request('PATCH', 'tripsV2/trip_v2_1?updateMask.fieldPaths=ownerId&updateMask.fieldPaths=updatedAt', takeover_patch, user_id='charlie')
+    assert_status("Stage 4 (Repro H): Editor cannot take over trip ownership (403)", 403, code)
+
+    # 34. Repro I: Invite expiry update > 7 days is denied (403)
+    far_future_expiry = int(time.time() + 365 * 86400)
+    extend_invite_patch = {
+        'fields': {
+            'token': {'stringValue': invite_token},
+            'tripId': {'stringValue': 'trip_v2_1'},
+            'role': {'stringValue': 'viewer'},
+            'createdBy': {'stringValue': 'alice'},
+            'expiresAt': {'timestampValue': f'{time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime(far_future_expiry))}'},
+        }
+    }
+    code, _ = api_request('PATCH', f'invites/{invite_token}?updateMask.fieldPaths=expiresAt', extend_invite_patch, user_id='alice')
+    assert_status("Stage 4 (Repro I): Invite expiry update > 7 days is denied (403)", 403, code)
+
+    # 35. Repro G: Removed editor rejoins with own invite is denied (403)
+    trip_g_data = {
+        'fields': {
+            'id': {'stringValue': 'trip_g1'},
+            'title': {'stringValue': 'Trip G'},
+            'ownerId': {'stringValue': 'alice'},
+            'sharing': {'stringValue': 'group'},
+            'members': {'arrayValue': {'values': [{'stringValue': 'alice'}]}},
+            'dayCount': {'integerValue': '1'},
+            'updatedAt': {'integerValue': '1000'},
+        }
+    }
+    api_request('POST', 'tripsV2?documentId=trip_g1', trip_g_data, user_id='alice')
+    alice_member = {
+        'fields': {
+            'userId': {'stringValue': 'alice'},
+            'tripId': {'stringValue': 'trip_g1'},
+            'role': {'stringValue': 'owner'},
+            'displayName': {'stringValue': 'Alice'},
+        }
+    }
+    api_request('POST', 'tripsV2/trip_g1/members?documentId=alice', alice_member, user_id='alice')
+
+    # Alice creates editor invite for Bob
+    g_invite_token = 'token_g_edit'
+    g_invite = {
+        'fields': {
+            'token': {'stringValue': g_invite_token},
+            'tripId': {'stringValue': 'trip_g1'},
+            'role': {'stringValue': 'editor'},
+            'createdBy': {'stringValue': 'alice'},
+            'isRevoked': {'booleanValue': False},
+            'expiresAt': {'timestampValue': f'{time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime(int(time.time() + 86400)))}'},
+        }
+    }
+    api_request('POST', f'invites?documentId={g_invite_token}', g_invite, user_id='alice')
+
+    # Bob joins as editor
+    bob_member = {
+        'fields': {
+            'userId': {'stringValue': 'bob'},
+            'tripId': {'stringValue': 'trip_g1'},
+            'role': {'stringValue': 'editor'},
+            'inviteToken': {'stringValue': g_invite_token},
+            'displayName': {'stringValue': 'Bob'},
+        }
+    }
+    api_request('POST', 'tripsV2/trip_g1/members?documentId=bob', bob_member, user_id='bob')
+
+    # Bob creates his own invite
+    bob_invite_token = 'token_g_bob'
+    bob_invite = {
+        'fields': {
+            'token': {'stringValue': bob_invite_token},
+            'tripId': {'stringValue': 'trip_g1'},
+            'role': {'stringValue': 'editor'},
+            'createdBy': {'stringValue': 'bob'},
+            'isRevoked': {'booleanValue': False},
+            'expiresAt': {'timestampValue': f'{time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime(int(time.time() + 86400)))}'},
+        }
+    }
+    api_request('POST', f'invites?documentId={bob_invite_token}', bob_invite, user_id='bob')
+
+    # Alice removes Bob
+    api_request('DELETE', 'tripsV2/trip_g1/members/bob', user_id='alice')
+
+    # Bob attempts to rejoin using the invite he created -> MUST BE DENIED (403)
+    bob_rejoin = {
+        'fields': {
+            'userId': {'stringValue': 'bob'},
+            'tripId': {'stringValue': 'trip_g1'},
+            'role': {'stringValue': 'editor'},
+            'inviteToken': {'stringValue': bob_invite_token},
+            'displayName': {'stringValue': 'Bob'},
+        }
+    }
+    code, _ = api_request('POST', 'tripsV2/trip_g1/members?documentId=bob', bob_rejoin, user_id='bob')
+    assert_status("Stage 4 (Repro G): Removed editor cannot rejoin with own invite (403)", 403, code)
+
     print(f"\nALL {tests_passed}/{tests_total} FIRESTORE RULES TESTS PASSED!")
 
 if __name__ == '__main__':
