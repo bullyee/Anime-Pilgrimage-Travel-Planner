@@ -234,6 +234,11 @@ class _LibraryScreenState extends ConsumerState<LibraryScreen> {
               title: const Text('Library'),
               actions: [
                 IconButton(
+                  tooltip: 'Import from Anitabi',
+                  icon: const Icon(Icons.download_outlined),
+                  onPressed: () => context.push('/library/import'),
+                ),
+                IconButton(
                   tooltip: _map ? 'Show as a list' : 'Show on a map',
                   icon: Icon(_map ? Icons.view_list_outlined : Icons.map_outlined),
                   onPressed: () => setState(() => _map = !_map),
@@ -731,6 +736,12 @@ class _EmptyLibrary extends StatelessWidget {
             ),
             const SizedBox(height: 20),
             FilledButton.icon(onPressed: onAdd, icon: const Icon(Icons.add_location_alt_outlined), label: const Text('Add a place')),
+            const SizedBox(height: 8),
+            OutlinedButton.icon(
+              onPressed: () => context.push('/library/import'),
+              icon: const Icon(Icons.download_outlined),
+              label: const Text('Import from Anitabi'),
+            ),
           ],
         ),
       ),

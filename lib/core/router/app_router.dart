@@ -20,6 +20,7 @@ import '../../features/anime/screens/bangumi_search_screen.dart';
 import '../../features/tag/screens/tag_edit_screen.dart';
 import '../../features/calendar/screens/calendar_screen.dart';
 import '../../features/camera/screens/camera_screen.dart';
+import '../../features/library/screens/anitabi_import_screen.dart';
 import '../../features/library/screens/labels_screen.dart';
 import '../../features/library/screens/library_screen.dart';
 import '../../features/library/screens/place_edit_screen.dart';
@@ -120,6 +121,10 @@ GoRouter router(RouterRef ref) {
         // A place picked on the map and saved to the library.
         path: '/library/new',
         builder: (context, state) => const NewSpotScreen(),
+      ),
+      GoRoute(
+        path: '/library/import',
+        builder: (context, state) => const AnitabiImportScreen(),
       ),
       GoRoute(
         path: '/library/places/:placeKey',
