@@ -258,6 +258,48 @@ class TripPlannerController extends StateNotifier<TripPlannerState> {
     );
     await load();
   }
+
+  /// Create, rename, or dissolve (when [area] is null) an area across [stopIds].
+  Future<void> setStopsArea(List<String> stopIds, String? area) async {
+    await _repository.setStopsArea(stopIds, area);
+    await load();
+  }
+
+  /// Schedule several stops at once into [dayId] in a single transaction.
+  Future<List<ScheduleItem>> scheduleStops({
+    required String dayId,
+    required List<String> stopIds,
+    List<String>? sortKeys,
+    int stayMinutes = 60,
+    int transitMinutes = 0,
+  }) async {
+    final items = await _repository.scheduleStops(
+      tripId: tripId,
+      dayId: dayId,
+      stopIds: stopIds,
+      sortKeys: sortKeys,
+      stayMinutes: stayMinutes,
+      transitMinutes: transitMinutes,
+    );
+    await load();
+    return items;
+  }
+
+  /// Move several schedule items to a day with new sort keys in a single transaction.
+  Future<void> moveScheduleItems({
+    required List<String> itemIds,
+    required List<String> newSortKeys,
+    String? dayId,
+    String? targetDayId,
+  }) async {
+    await _repository.moveScheduleItems(
+      itemIds: itemIds,
+      newSortKeys: newSortKeys,
+      dayId: dayId,
+      targetDayId: targetDayId,
+    );
+    await load();
+  }
 }
 
 /// Provider family for TripPlannerController keyed by tripId.
