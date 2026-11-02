@@ -56,6 +56,7 @@ class TripStopsTab extends ConsumerStatefulWidget {
 class _TripStopsTabState extends ConsumerState<TripStopsTab> {
   final _search = TextEditingController();
   String _query = '';
+  StopOrder _order = StopOrder.plan;
 
   @override
   void dispose() {
@@ -73,13 +74,14 @@ class _TripStopsTabState extends ConsumerState<TripStopsTab> {
       data: (entries) {
         if (entries.isEmpty) return _EmptyStops(onAdd: () => openAddStopsSheet(context, widget.tripId));
         final q = _query.trim().toLowerCase();
-        final shown = q.isEmpty
+        final matching = q.isEmpty
             ? entries
             : entries
                 .where((e) =>
                     e.stop.name.toLowerCase().contains(q) ||
                     (e.stop.address?.toLowerCase().contains(q) ?? false))
                 .toList();
+        final shown = orderStopEntries(matching, _order);
         return Align(
           alignment: Alignment.topCenter,
           child: ConstrainedBox(
@@ -87,25 +89,40 @@ class _TripStopsTabState extends ConsumerState<TripStopsTab> {
             child: Column(
               children: [
                 Padding(
-                  padding: const EdgeInsets.fromLTRB(16, 12, 16, 4),
-                  child: TextField(
-                    controller: _search,
-                    decoration: InputDecoration(
-                      prefixIcon: const Icon(Icons.search),
-                      hintText: 'Search ${entries.length} stops',
-                      isDense: true,
-                      suffixIcon: _query.isEmpty
-                          ? null
-                          : IconButton(
-                              tooltip: 'Clear search',
-                              icon: const Icon(Icons.close),
-                              onPressed: () => setState(() {
-                                _search.clear();
-                                _query = '';
-                              }),
-                            ),
-                    ),
-                    onChanged: (v) => setState(() => _query = v),
+                  padding: const EdgeInsets.fromLTRB(16, 12, 8, 4),
+                  child: Row(
+                    children: [
+                      Expanded(
+                        child: TextField(
+                          controller: _search,
+                          decoration: InputDecoration(
+                            prefixIcon: const Icon(Icons.search),
+                            hintText: 'Search ${entries.length} stops',
+                            isDense: true,
+                            suffixIcon: _query.isEmpty
+                                ? null
+                                : IconButton(
+                                    tooltip: 'Clear search',
+                                    icon: const Icon(Icons.close),
+                                    onPressed: () => setState(() {
+                                      _search.clear();
+                                      _query = '';
+                                    }),
+                                  ),
+                          ),
+                          onChanged: (v) => setState(() => _query = v),
+                        ),
+                      ),
+                      PopupMenuButton<StopOrder>(
+                        tooltip: 'Sort stops',
+                        icon: const Icon(Icons.sort),
+                        onSelected: (order) => setState(() => _order = order),
+                        itemBuilder: (context) => [
+                          for (final order in StopOrder.values)
+                            CheckedPopupMenuItem(value: order, checked: order == _order, child: Text(order.label)),
+                        ],
+                      ),
+                    ],
                   ),
                 ),
                 Expanded(

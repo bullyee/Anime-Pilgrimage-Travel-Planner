@@ -133,6 +133,20 @@ void main() {
       expect(stopWhenLine(entries[3]), 'Backup day · 09:00');
       expect(stopWhenLine(entries[4]), 'Not on a day yet');
     });
+
+    test('the list can be ordered by name or by when stops were added', () {
+      Stop added(String id, String name, int day) => stop(id, name).copyWith(createdAt: DateTime(2027, 1, day));
+      final planOrder = [
+        TripStopEntry(stop: added('a', 'zoo', 1), dayIndex: 0),
+        TripStopEntry(stop: added('b', 'Bridge', 3)),
+        TripStopEntry(stop: added('c', 'aquarium', 2)),
+      ];
+      List<String> names(StopOrder order) => [for (final e in orderStopEntries(planOrder, order)) e.stop.name];
+
+      expect(names(StopOrder.plan), ['zoo', 'Bridge', 'aquarium']);
+      expect(names(StopOrder.name), ['aquarium', 'Bridge', 'zoo'], reason: 'letter case aside');
+      expect(names(StopOrder.added), ['Bridge', 'aquarium', 'zoo'], reason: 'the newest first');
+    });
   });
 
   group('screens', () {
@@ -195,6 +209,26 @@ void main() {
       await pump(tester, '/trips/${trip.id}/stops');
       expect(find.text('Day 1 · 09:30'), findsOneWidget);
       expect(find.text('Not on a day yet'), findsOneWidget);
+      await disposeApp(tester);
+    });
+
+    testWidgets('the sort menu orders the stops by name', (tester) async {
+      final repo = DriftTripRepository(db);
+      final trip = await repo.createTrip(title: 'Uji', ownerId: 'u1', dayCount: 1);
+      final day = (await repo.getDaysForTrip(trip.id)).single;
+      final zoo = await repo.createTripOnlySpot(tripId: trip.id, name: 'Zoo', lat: 0, lng: 0, addedBy: 'u1');
+      await repo.createTripOnlySpot(tripId: trip.id, name: 'Aquarium', lat: 0, lng: 0, addedBy: 'u1');
+      await repo.scheduleStop(tripId: trip.id, stopId: zoo.id, dayId: day.id, fixedTime: 9 * 60);
+
+      await pump(tester, '/trips/${trip.id}/stops');
+      double top(String name) => tester.getTopLeft(find.text(name)).dy;
+      expect(top('Zoo'), lessThan(top('Aquarium')), reason: 'planned first');
+
+      await tester.tap(find.byTooltip('Sort stops'));
+      await tester.pumpAndSettle();
+      await tester.tap(find.text('Name'));
+      await tester.pumpAndSettle();
+      expect(top('Aquarium'), lessThan(top('Zoo')));
       await disposeApp(tester);
     });
   });
