@@ -51,8 +51,7 @@ These apply to people and coding agents alike.
 - [x] Settled on #72 (ck + bullyee):
   - **Firestore layout for the new sync.** `tripsV2/{tripId}`, with `days`, `stops`, `schedule_items`, `members` and `invites` subcollections. A new top-level collection means v0.1.x clients still writing to `trips/` can't corrupt new data. `trips/` becomes read-only after the cutover.
   - **Fractional index for `sort_key`.** The `fractional_indexing_dart` package (#81).
-  - **IDs.** UUIDs everywhere except `place_key`. Labels are matched across people by kind + name, and anime by Bangumi ID.
-- [ ] Still open: the `place_key` of places users create. It is a bare UUID in `docs/data-model.md` and in #81; ck proposed `custom:<uuid>` on #72. Settle this before #82 writes keys to Firestore.
+  - **IDs.** UUIDs everywhere. `place_key` is `anitabi:<id>` for Anitabi spots and a bare UUID for places users create, with no `custom:` prefix (decided 2026-11-02). Migrated places keep their v9 IDs. Labels are matched across people by kind + name, and anime by Bangumi ID.
 
 ## Stage 1: data layer (ck)
 

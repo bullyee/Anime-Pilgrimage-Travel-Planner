@@ -43,7 +43,7 @@ Your page for one real-world spot.
 
 | Column | Notes |
 |---|---|
-| `place_key` (PK) | The spot's identity, shared by every person's copy of it: `anitabi:<pointId>` for Anitabi imports, a UUID for places users create. |
+| `place_key` (PK) | The spot's identity, shared by every person's copy of it: `anitabi:<pointId>` for Anitabi imports, a bare UUID for places users create. A UUID never contains `:`, so it can't collide with a prefixed key. |
 | `name`, `lat`, `lng` | Required. |
 | `description`, `address`, `business_hours`, `contact_info` | Shared facts (your own editable copy). |
 | `access_tips` | How to get there, and when to shoot. A shared fact, unlike the private note. |
