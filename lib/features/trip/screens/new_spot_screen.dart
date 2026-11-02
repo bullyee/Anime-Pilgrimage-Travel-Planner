@@ -186,8 +186,11 @@ class _NewSpotScreenState extends ConsumerState<NewSpotScreen> {
   /// Offers a saved place that looks like the one being added: close by and
   /// with a similar name. True to go on adding the new one.
   Future<bool> _confirmNotDuplicate(LatLng at) async {
-    final places = ref.read(placesListProvider(null)).valueOrNull ?? const <Place>[];
-    final match = likelyDuplicate(places.where((p) => p.visibility == 'saved'), name: _name.text, at: at);
+    // Asked of the database: the places provider only has data while some
+    // other screen watches it, which isn't so from a trip or the editor.
+    final places = await ref.read(placeRepositoryProvider).getPlaces(visibility: 'saved');
+    if (!mounted) return false;
+    final match = likelyDuplicate(places, name: _name.text, at: at);
     if (match == null) return true;
     final tripId = widget.tripId;
     final choice = await showDialog<String>(
