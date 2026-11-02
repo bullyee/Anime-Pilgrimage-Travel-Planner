@@ -1,0 +1,13 @@
+[
+  {
+    "relation": ["delegate_permission/common.handle_all_urls"],
+    "target": {
+      "namespace": "android_app",
+      "package_name": "com.example.trip_planner",
+      "sha256_cert_fingerprints": [
+        "30:71:A9:32:2C:A7:E9:D4:13:64:A7:D4:8A:4D:78:7F:BB:C5:35:6D:78:01:19:FD:6F:9F:E7:6D:C3:0D:A3:F1"
+      ]
+    }
+  }
+]
+
