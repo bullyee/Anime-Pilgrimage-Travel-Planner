@@ -20,6 +20,8 @@ import '../../features/anime/screens/bangumi_search_screen.dart';
 import '../../features/tag/screens/tag_edit_screen.dart';
 import '../../features/calendar/screens/calendar_screen.dart';
 import '../../features/camera/screens/camera_screen.dart';
+import '../../features/trip/screens/trip_list_screen.dart';
+import '../../features/trip/screens/trip_overview_screen.dart';
 
 part 'app_router.g.dart';
 
@@ -69,6 +71,16 @@ GoRouter router(RouterRef ref) {
       GoRoute(
         path: '/',
         builder: (context, state) => const HomeScreen(),
+      ),
+      GoRoute(
+        path: '/trips',
+        builder: (context, state) => const TripListScreen(),
+      ),
+      GoRoute(
+        path: '/trips/:tripId',
+        builder: (context, state) => TripOverviewScreen(
+          tripId: state.pathParameters['tripId']!,
+        ),
       ),
       GoRoute(
         path: '/rois',
