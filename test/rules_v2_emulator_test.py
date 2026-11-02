@@ -108,6 +108,36 @@ def main():
     code, _ = api_request('POST', 'tripsV2/trip_v2_1/stops?documentId=stop_1', stop_data, user_id='alice')
     assert_status("tripsV2/stops: Member create stop succeeds (200)", 200, code)
 
+    # 9b. tripsV2: Member creating stop with valid note (<= 2000 chars) succeeds (200)
+    stop_with_note = {
+        'fields': {
+            'id': {'stringValue': 'stop_note_valid'},
+            'tripId': {'stringValue': 'trip_v2_1'},
+            'placeKey': {'stringValue': 'anitabi:42'},
+            'name': {'stringValue': 'Toyosato School with Note'},
+            'note': {'stringValue': 'Meet at 09:00 AM at the gate'},
+            'addedBy': {'stringValue': 'alice'},
+            'updatedAt': {'integerValue': '1000'},
+        }
+    }
+    code, _ = api_request('POST', 'tripsV2/trip_v2_1/stops?documentId=stop_note_valid', stop_with_note, user_id='alice')
+    assert_status("tripsV2/stops: Stop with valid note succeeds (200)", 200, code)
+
+    # 9c. tripsV2: Stop with oversized note (> 2000 chars) denied (403)
+    stop_oversized_note = {
+        'fields': {
+            'id': {'stringValue': 'stop_note_invalid'},
+            'tripId': {'stringValue': 'trip_v2_1'},
+            'placeKey': {'stringValue': 'anitabi:42'},
+            'name': {'stringValue': 'Oversized Note Stop'},
+            'note': {'stringValue': 'x' * 2001},
+            'addedBy': {'stringValue': 'alice'},
+            'updatedAt': {'integerValue': '1000'},
+        }
+    }
+    code, _ = api_request('POST', 'tripsV2/trip_v2_1/stops?documentId=stop_note_invalid', stop_oversized_note, user_id='alice')
+    assert_status("tripsV2/stops: Stop with oversized note > 2000 chars denied (403)", 403, code)
+
     # 10. tripsV2: Member creating schedule item succeeds
     item_data = {
         'fields': {

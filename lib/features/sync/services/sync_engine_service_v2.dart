@@ -714,6 +714,7 @@ class SyncEngineServiceV2 {
       source: Value(data['source'] as String?),
       sourceUrl: Value(data['sourceUrl'] as String?),
       area: Value(data['area'] as String?),
+      note: Value(data['note'] as String?),
       addedBy: Value(data['addedBy'] as String? ?? currentUserId),
       updatedAt: Value(remoteUpdatedAt ?? DateTime.now()),
       updatedBy: Value(data['updatedBy'] as String?),

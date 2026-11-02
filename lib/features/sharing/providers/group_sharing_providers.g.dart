@@ -7,7 +7,7 @@ part of 'group_sharing_providers.dart';
 // **************************************************************************
 
 String _$groupSharingServiceHash() =>
-    r'78de856ce20b6d8275a26e350b3bcca6afe3e412';
+    r'ec4a86a0110b88a944496c62c7c9ead6b91b29d0';
 
 /// See also [groupSharingService].
 @ProviderFor(groupSharingService)

@@ -133,6 +133,7 @@ class FakeFirestoreSyncV2Service implements FirestoreSyncV2Service {
         'source': stop.source,
         'sourceUrl': stop.sourceUrl,
         'area': stop.area,
+        'note': stop.note,
         'addedBy': stop.addedBy,
         'updatedAt': stop.updatedAt,
         'updatedBy': stop.updatedBy,
@@ -314,6 +315,7 @@ void main() {
               lat: 35.201,
               lng: 136.234,
               area: const Value('Toyosato'),
+              note: const Value('Meet at the front gate at 09:00'),
               addedBy: currentUserId,
               updatedAt: Value(now),
               syncStatus: const Value(1), // Dirty
@@ -341,8 +343,10 @@ void main() {
             ),
           );
 
-      // Wait for debounce timer (300ms) to trigger push
-      await Future.delayed(const Duration(milliseconds: 500));
+      for (var i = 0; i < 30; i++) {
+        if (fakeFirestore.trips.containsKey('trip_1')) break;
+        await Future.delayed(const Duration(milliseconds: 50));
+      }
 
       // Verify FakeFirestore received the records
       expect(fakeFirestore.trips.containsKey('trip_1'), isTrue);
@@ -355,6 +359,7 @@ void main() {
       final remoteStop = fakeFirestore.tripStops['trip_1']!['stop_1']!;
       expect(remoteStop['name'], 'Former Toyosato Elementary School');
       expect(remoteStop['area'], 'Toyosato');
+      expect(remoteStop['note'], 'Meet at the front gate at 09:00');
       final remoteLabels = remoteStop['labels'] as List;
       expect(remoteLabels.length, 1);
       expect(remoteLabels.first['name'], 'K-ON!');
@@ -409,7 +414,10 @@ void main() {
       };
 
       syncEngine.startSync();
-      await Future.delayed(const Duration(milliseconds: 900));
+      for (var i = 0; i < 30; i++) {
+        if (fakeFirestore.trips['trip_concurrent']?['title'] == 'Updated Mid-Flight Title') break;
+        await Future.delayed(const Duration(milliseconds: 50));
+      }
 
       expect(fakeFirestore.trips['trip_concurrent']!['title'], equals('Updated Mid-Flight Title'));
       final localTrip = await (db.select(db.trips)..where((t) => t.id.equals('trip_concurrent'))).getSingle();
@@ -430,7 +438,10 @@ void main() {
             ),
           );
 
-      await Future.delayed(const Duration(milliseconds: 500));
+      for (var i = 0; i < 30; i++) {
+        if (syncEngine.getTripSyncStatus('trip_offline') == TripSyncStatus.offline) break;
+        await Future.delayed(const Duration(milliseconds: 50));
+      }
 
       final localTrip = await (db.select(db.trips)..where((t) => t.id.equals('trip_offline'))).getSingle();
       expect(localTrip.syncStatus, 1); // Still dirty
@@ -501,6 +512,7 @@ void main() {
           'lat': 35.306,
           'lng': 139.502,
           'area': 'Enoden Line',
+          'note': 'Remote note for Alice',
           'addedBy': 'user_bob',
           'updatedAt': now,
           'labels': [
@@ -528,6 +540,7 @@ void main() {
       expect(localStop, isNotNull);
       expect(localStop!.name, 'Kamakurakokomae Station');
       expect(localStop.area, 'Enoden Line');
+      expect(localStop.note, 'Remote note for Alice');
 
       // Verify labels were naturally matched or created locally
       final labels = await db.select(db.labels).get();

@@ -118,6 +118,7 @@ class FirestoreSyncV2Service {
       'source': stop.source,
       'sourceUrl': stop.sourceUrl,
       'area': stop.area,
+      'note': stop.note,
       'addedBy': stop.addedBy,
       'updatedAt': Timestamp.fromDate(stop.updatedAt),
       'updatedBy': stop.updatedBy,

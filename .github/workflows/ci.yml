@@ -32,3 +32,9 @@ jobs:
 
       - run: flutter pub get
       - run: flutter test
+
+      - name: Install Firebase CLI
+        run: npm install -g firebase-tools
+
+      - name: Run Firestore Rules Emulator Tests
+        run: firebase emulators:exec "python3 test/rules_v2_emulator_test.py" --only firestore --project trip-planner-2775c

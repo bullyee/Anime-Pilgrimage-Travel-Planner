@@ -152,5 +152,25 @@ void main() {
       final result = await service.getOrFetchThumbnail('https://example.com/not_found.jpg');
       expect(result, isNull);
     });
+
+    test('getCacheSizeBytes and clearCache operate on thumbnail cache directory', () async {
+      final mockClient = MockClient((request) async {
+        return http.Response('IMAGE_BYTES_12345', 200, headers: {'content-type': 'image/jpeg'});
+      });
+
+      final service = ThumbnailCacheService(
+        client: mockClient,
+        overrideCacheDir: tempDir,
+      );
+
+      expect(await service.getCacheSizeBytes(), equals(0));
+
+      await service.getOrFetchThumbnail('https://image.anitabi.cn/test1.jpg');
+      final size = await service.getCacheSizeBytes();
+      expect(size, greaterThan(0));
+
+      await service.clearCache();
+      expect(await service.getCacheSizeBytes(), equals(0));
+    });
   });
 }
