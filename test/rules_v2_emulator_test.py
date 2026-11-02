@@ -42,16 +42,7 @@ def main():
             print(f" [FAIL] {desc}: expected {expected_code}, got {actual_code}")
             sys.exit(1)
 
-    # 1. Legacy trips collection must be completely frozen for writes
-    legacy_trip_data = {
-        'fields': {
-            'id': {'stringValue': 'old_trip_1'},
-            'authorId': {'stringValue': 'alice'},
-            'members': {'arrayValue': {'values': [{'stringValue': 'alice'}]}},
-        }
-    }
-    code, _ = api_request('POST', 'trips?documentId=old_trip_1', legacy_trip_data, user_id='alice')
-    assert_status("Legacy trips: writes must be denied (403)", 403, code)
+    # 1. Legacy trips writes are preserved for v0.1.x clients (tested in test_rules.py)
 
     # 2. tripsV2: Unauthenticated create must be denied
     v2_trip_data = {

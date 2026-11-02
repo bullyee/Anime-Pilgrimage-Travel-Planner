@@ -648,11 +648,14 @@ class DriftTripRepository implements TripRepository {
   @override
   Future<void> setStopsArea(List<String> stopIds, String? area) async {
     if (stopIds.isEmpty) return;
+    final normalizedArea = (area != null && area.trim().isNotEmpty) ? area.trim() : null;
     await _db.transaction(() async {
       final now = _now();
-      await (_db.update(_db.stops)..where((tbl) => tbl.id.isIn(stopIds))).write(
+      await (_db.update(_db.stops)
+            ..where((tbl) => tbl.id.isIn(stopIds) & tbl.deletedAt.isNull()))
+          .write(
         StopsCompanion(
-          area: Value(area),
+          area: Value(normalizedArea),
           updatedAt: Value(now),
           updatedBy: Value(_currentUserId),
           syncStatus: const Value(1),

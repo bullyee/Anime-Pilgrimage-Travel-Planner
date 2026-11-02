@@ -30,18 +30,77 @@ service cloud.firestore {
       );
     }
 
+    function isStrictTimeChunkSafe() {
+      let data = request.resource.data;
+      let allowedKeys = [
+        'id', 'poiId', 'date', 'startTime', 'endTime',
+        'status', 'sortOrder', 'duration', 'transitDuration',
+        'isFixedTime', 'authorId', 'updatedAt'
+      ];
+      let hasOnlyAllowedKeys = data.keys().hasOnly(allowedKeys);
+
+      let isStatusSafe = !('status' in data) || data.status == null || (data.status is string && data.status.size() <= 30);
+      let isIdSafe = !('id' in data) || (data.id is string && data.id.size() <= 100);
+      let isDurationSafe = !('duration' in data) || (data.duration is number && data.duration >= 0);
+
+      return hasOnlyAllowedKeys && isStatusSafe && isIdSafe && isDurationSafe;
+    }
+
+    function isStrictPoiSafe() {
+      let data = request.resource.data;
+      let allowedKeys = [
+        'id', 'roiId', 'authorId', 'name', 'description', 'address',
+        'lat', 'lng', 'businessHours', 'contactInfo',
+        'remoteCoverImageUrl', 'sortOrder', 'updatedAt'
+      ];
+      return data.keys().hasOnly(allowedKeys)
+        && (!('id' in data) || (data.id is string && data.id.size() <= 100))
+        && (!('name' in data) || (data.name is string && data.name.size() <= 300));
+    }
+
     // ==========================================
-    // 3. Legacy Shared Trips (v0.1.x, Frozen / Read-Only)
+    // 3. Dual-Track: Shared Trips (v0.1.x Legacy)
     // ==========================================
     match /trips/{tripId} {
-      // Allow reading existing trip doc if caller is member/author
-      allow read: if isAuthenticated() && (resource == null || isTripMember(tripId));
-      // Writes are completely frozen on legacy trips collection after v0.1.x cutover
-      allow write: if false;
+      // Creator must be the author and list themselves as a member.
+      allow create: if isAuthenticated()
+        && request.resource.data.authorId == request.auth.uid
+        && (request.auth.uid in request.resource.data.members);
 
-      match /{allChildren=**} {
-        allow read: if isAuthenticated() && isTripMember(tripId);
-        allow write: if false;
+      allow read: if isAuthenticated() && (resource == null || isTripMember(tripId));
+      allow delete: if isAuthenticated() && isTripMember(tripId);
+
+      allow update: if isAuthenticated() && isTripMember(tripId) && (
+        (request.resource.data.diff(resource.data).affectedKeys().hasOnly(['syncLock']))
+        ||
+        (
+          request.resource.data.diff(resource.data).affectedKeys().hasOnly(['members'])
+          && resource.data.members.hasAll(request.resource.data.members)
+          && request.resource.data.members.size() == resource.data.members.size() - 1
+          && !(request.auth.uid in request.resource.data.members)
+        )
+        ||
+        (
+          request.resource.data.cloudVersion == resource.data.cloudVersion + 1
+          && request.resource.data.authorId == resource.data.authorId
+          && request.resource.data.members == resource.data.members
+          && (!('syncLock' in request.resource.data) || request.resource.data.syncLock == null)
+          && (
+            resource.data.syncLock == null
+            || request.time > resource.data.syncLock.expiresAt
+            || resource.data.syncLock.userId == request.auth.uid
+          )
+        )
+      );
+
+      match /timeChunks/{chunkId} {
+        allow read, delete: if isAuthenticated() && isTripMember(tripId);
+        allow create, update: if isAuthenticated() && isTripMember(tripId) && isStrictTimeChunkSafe();
+      }
+
+      match /pois/{poiId} {
+        allow read, delete: if isAuthenticated() && isTripMember(tripId);
+        allow create, update: if isAuthenticated() && isTripMember(tripId) && isStrictPoiSafe();
       }
     }
 
@@ -57,9 +116,6 @@ service cloud.firestore {
     }
 
     function isLwwValid() {
-      // Last-Write-Wins based on updatedAt:
-      // If document is newly created, valid.
-      // If updated, request's updatedAt must be >= existing document's updatedAt.
       return resource == null || (
         !('updatedAt' in resource.data) ||
         !('updatedAt' in request.resource.data) ||
@@ -104,11 +160,13 @@ service cloud.firestore {
 
       allow create: if isAuthenticated()
         && request.resource.data.ownerId == request.auth.uid
-        && (request.auth.uid in request.resource.data.members)
+        && request.resource.data.members == [request.auth.uid]
         && isTripV2Safe();
 
       allow update: if isAuthenticated()
         && isTripMemberV2(tripId)
+        && request.resource.data.ownerId == resource.data.ownerId
+        && request.resource.data.members == resource.data.members
         && isLwwValid()
         && isTripV2Safe();
 

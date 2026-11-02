@@ -34,17 +34,6 @@ class FirestoreSyncV2Service {
       'updatedBy': trip.updatedBy ?? currentUserId,
       'deletedAt': null,
     });
-    final memberRef = docRef.collection('members').doc(currentUserId);
-    batch.set(
-      memberRef,
-      {
-        'tripId': trip.id,
-        'userId': currentUserId,
-        'role': 'owner',
-        'joinedAt': Timestamp.fromDate(trip.createdAt),
-      },
-      SetOptions(merge: true),
-    );
     await batch.commit();
   }
 
