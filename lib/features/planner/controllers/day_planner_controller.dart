@@ -69,6 +69,24 @@ class DayPlannerController extends Notifier<AsyncValue<void>> {
         ));
   }
 
+  /// Fixes a stop's start time, in minutes from the day's midnight (past
+  /// 24:00 for the small hours), or lets it follow the stop before again
+  /// when [minutes] is null.
+  Future<AppResult<void>> setFixedTime(String itemId, int? minutes) {
+    if (minutes != null && minutes < 0) return Future.value(const Failure('A time can\'t be negative.'));
+    return _run(() => ref.read(tripRepositoryProvider).updateScheduleItem(
+          ScheduleItemsCompanion(id: Value(itemId), fixedTime: Value(minutes)),
+        ));
+  }
+
+  /// Sets the travel time from a stop to the one after it.
+  Future<AppResult<void>> setTransit(String itemId, int minutes) {
+    if (minutes < 0) return Future.value(const Failure('Travel time can\'t be negative.'));
+    return _run(() => ref.read(tripRepositoryProvider).updateScheduleItem(
+          ScheduleItemsCompanion(id: Value(itemId), transitMinutes: Value(minutes)),
+        ));
+  }
+
   Future<AppResult<void>> setVisited(String itemId, bool visited) => _run(() => ref
       .read(tripRepositoryProvider)
       .updateScheduleItemStatus(itemId: itemId, status: visited ? 'done' : 'planned'));
