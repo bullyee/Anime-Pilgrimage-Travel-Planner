@@ -33,6 +33,55 @@ class _FakeCollectionReference implements CollectionReference<Map<String, dynami
   }
 
   @override
+  Future<QuerySnapshot<Map<String, dynamic>>> get([GetOptions? options]) async {
+    final parts = _path.split('/');
+    final docs = <QueryDocumentSnapshot<Map<String, dynamic>>>[];
+    if (parts.length == 3 && parts[0] == 'tripsV2' && parts[2] == 'members') {
+      final tripId = parts[1];
+      final memberMap = _db.members[tripId] ?? {};
+      for (final entry in memberMap.entries) {
+        docs.add(_FakeQueryDocumentSnapshot(
+          _FakeDocumentReference(_db, '$_path/${entry.key}'),
+          entry.key,
+          entry.value,
+        ));
+      }
+    }
+    return _FakeQuerySnapshot(docs);
+  }
+
+  @override
+  dynamic noSuchMethod(Invocation invocation) => super.noSuchMethod(invocation);
+}
+
+class _FakeQuerySnapshot implements QuerySnapshot<Map<String, dynamic>> {
+  final List<QueryDocumentSnapshot<Map<String, dynamic>>> _docs;
+  _FakeQuerySnapshot(this._docs);
+
+  @override
+  List<QueryDocumentSnapshot<Map<String, dynamic>>> get docs => _docs;
+
+  @override
+  dynamic noSuchMethod(Invocation invocation) => super.noSuchMethod(invocation);
+}
+
+class _FakeQueryDocumentSnapshot implements QueryDocumentSnapshot<Map<String, dynamic>> {
+  final DocumentReference<Map<String, dynamic>> _ref;
+  final String _id;
+  final Map<String, dynamic> _data;
+
+  _FakeQueryDocumentSnapshot(this._ref, this._id, this._data);
+
+  @override
+  DocumentReference<Map<String, dynamic>> get reference => _ref;
+
+  @override
+  String get id => _id;
+
+  @override
+  Map<String, dynamic> data() => _data;
+
+  @override
   dynamic noSuchMethod(Invocation invocation) => super.noSuchMethod(invocation);
 }
 

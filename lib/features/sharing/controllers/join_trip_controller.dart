@@ -85,6 +85,7 @@ class JoinTripController extends StateNotifier<JoinTripState> {
     try {
       final invite = await _sharingService.getInvitePreview(target);
       if (!mounted) return;
+      if (state.code != target) return;
       if (invite == null) {
         state = state.copyWith(
           isLoading: false,

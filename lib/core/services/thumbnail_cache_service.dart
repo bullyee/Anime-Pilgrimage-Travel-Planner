@@ -1,7 +1,6 @@
 import 'dart:async';
 import 'dart:convert';
 import 'dart:io';
-// ignore: depend_on_referenced_packages
 import 'package:crypto/crypto.dart';
 import 'package:flutter/foundation.dart';
 import 'package:http/http.dart' as http;
@@ -45,7 +44,7 @@ class ThumbnailCacheService {
 
   /// Returns a deterministic cache file path for the given [url].
   Future<File> getCacheFile(String url) async {
-    final dir = _overrideCacheDir ?? await getApplicationCacheDirectory();
+    final dir = _overrideCacheDir ?? await getApplicationSupportDirectory();
     final thumbDir = Directory(p.join(dir.path, 'reference_thumbnails'));
     if (!await thumbDir.exists()) {
       await thumbDir.create(recursive: true);
@@ -114,7 +113,9 @@ class ThumbnailCacheService {
         }
 
         if (response.statusCode == 200 && response.bodyBytes.isNotEmpty) {
-          await targetFile.writeAsBytes(response.bodyBytes, flush: true);
+          final tempFile = File('${targetFile.path}.tmp');
+          await tempFile.writeAsBytes(response.bodyBytes, flush: true);
+          await tempFile.rename(targetFile.path);
           return targetFile.path;
         }
       } catch (e) {

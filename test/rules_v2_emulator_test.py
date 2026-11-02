@@ -52,6 +52,7 @@ def main():
             'id': {'stringValue': 'trip_v2_1'},
             'title': {'stringValue': 'Kyoto Trip'},
             'ownerId': {'stringValue': 'alice'},
+            'sharing': {'stringValue': 'group'},
             'members': {'arrayValue': {'values': [{'stringValue': 'alice'}]}},
             'dayCount': {'integerValue': '3'},
             'updatedAt': {'integerValue': '1000'},
@@ -294,6 +295,53 @@ def main():
     # 26. Alice (sole owner) tries to self-delete from members -> DENIED (403)
     code, _ = api_request('DELETE', 'tripsV2/trip_v2_1/members/alice', user_id='alice')
     assert_status("Stage 4: Owner cannot leave without transferring ownership (403)", 403, code)
+
+    # 27. Invite with > 7 days expiry is denied (403)
+    expires_in_30_days = int(time.time() + 30 * 86400)
+    invalid_expiry_invite = {
+        'fields': {
+            'token': {'stringValue': 'token_long_expiry'},
+            'tripId': {'stringValue': 'trip_v2_1'},
+            'role': {'stringValue': 'viewer'},
+            'createdBy': {'stringValue': 'alice'},
+            'isRevoked': {'booleanValue': False},
+            'expiresAt': {'timestampValue': f'{time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime(expires_in_30_days))}'},
+        }
+    }
+    code, _ = api_request('POST', 'invites?documentId=token_long_expiry', invalid_expiry_invite, user_id='alice')
+    assert_status("Stage 4: Invite with expiry > 7 days is denied (403)", 403, code)
+
+    # 28. Short code create pointing to existing valid invite succeeds (200)
+    code_data = {
+        'fields': {
+            'token': {'stringValue': invite_token},
+        }
+    }
+    code, _ = api_request('POST', 'invite_codes?documentId=CODE42', code_data, user_id='alice')
+    assert_status("Stage 4: Short code create pointing to owned invite succeeds (200)", 200, code)
+
+    # 29. Short code delete by non-owner intruder is denied (403)
+    code, _ = api_request('DELETE', 'invite_codes/CODE42', user_id='intruder_bob')
+    assert_status("Stage 4: Intruder cannot delete short code (403)", 403, code)
+
+    # 30. Short code delete by owner succeeds (200)
+    code, _ = api_request('DELETE', 'invite_codes/CODE42', user_id='alice')
+    assert_status("Stage 4: Owner can delete short code (200)", 200, code)
+
+    # 31. Alice unshares trip to private -> former members cannot read trip (403)
+    unshare_patch = {
+        'fields': {
+            'sharing': {'stringValue': 'private'},
+            'members': {'arrayValue': {'values': [{'stringValue': 'alice'}]}},
+            'updatedAt': {'integerValue': '5000'},
+        }
+    }
+    code, _ = api_request('PATCH', 'tripsV2/trip_v2_1?updateMask.fieldPaths=sharing&updateMask.fieldPaths=members&updateMask.fieldPaths=updatedAt', unshare_patch, user_id='alice')
+    assert_status("Stage 4: Owner can unshare trip (200)", 200, code)
+
+    # 32. Charlie (former member) reads unshared trip -> DENIED (403)
+    code, _ = api_request('GET', 'tripsV2/trip_v2_1', user_id='charlie')
+    assert_status("Stage 4: Former member cannot read unshared private trip (403)", 403, code)
 
     print(f"\nALL {tests_passed}/{tests_total} FIRESTORE RULES TESTS PASSED!")
 

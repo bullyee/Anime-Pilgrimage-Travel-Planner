@@ -695,8 +695,11 @@ void main() {
       syncEngine.startSync();
       await syncEngine.shareTrip('trip_private');
 
-      // Wait for debounced push
-      await Future.delayed(const Duration(milliseconds: 500));
+      // Wait for debounced push to complete
+      for (var i = 0; i < 20; i++) {
+        if (fakeFirestore.trips.containsKey('trip_private')) break;
+        await Future.delayed(const Duration(milliseconds: 100));
+      }
 
       final updatedTrip = await (db.select(db.trips)..where((t) => t.id.equals('trip_private'))).getSingle();
       expect(updatedTrip.sharing, 'group');

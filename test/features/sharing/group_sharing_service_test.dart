@@ -212,6 +212,45 @@ void main() {
       // Bob removes Alice
       await bobService.removeMember('trip_test', currentUserId);
       expect(fakeFirestore.members['trip_test']?.containsKey(currentUserId), isFalse);
+
+      // updateMemberRole rejects owner role
+      expect(
+        () => bobService.updateMemberRole('trip_test', currentUserId, TripMemberRole.owner),
+        throwsArgumentError,
+      );
+    });
+
+    test('unshareTrip resets sharing to private and cleans up non-owner member docs', () async {
+      fakeFirestore.tripsV2['trip_unshare'] = {
+        'id': 'trip_unshare',
+        'ownerId': currentUserId,
+        'sharing': 'group',
+        'members': [currentUserId, 'user_bob', 'user_charlie'],
+      };
+      fakeFirestore.members['trip_unshare'] = {
+        currentUserId: {'userId': currentUserId, 'role': 'owner'},
+        'user_bob': {'userId': 'user_bob', 'role': 'editor'},
+        'user_charlie': {'userId': 'user_charlie', 'role': 'viewer'},
+      };
+      await db.into(db.trips).insert(
+            TripsCompanion.insert(
+              id: 'trip_unshare',
+              title: 'Unshare Test',
+              ownerId: currentUserId,
+              sharing: const Value('group'),
+            ),
+          );
+
+      await sharingService.unshareTrip('trip_unshare');
+
+      expect(fakeFirestore.tripsV2['trip_unshare']!['sharing'], 'private');
+      expect(fakeFirestore.tripsV2['trip_unshare']!['members'], [currentUserId]);
+      expect(fakeFirestore.members['trip_unshare']?.containsKey('user_bob'), isFalse);
+      expect(fakeFirestore.members['trip_unshare']?.containsKey('user_charlie'), isFalse);
+      expect(fakeFirestore.members['trip_unshare']?.containsKey(currentUserId), isTrue);
+
+      final localTrip = await (db.select(db.trips)..where((t) => t.id.equals('trip_unshare'))).getSingle();
+      expect(localTrip.sharing, 'private');
     });
 
     test('revokes or expires invite prevents subsequent joins', () async {

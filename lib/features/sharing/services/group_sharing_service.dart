@@ -67,8 +67,8 @@ class GroupSharingService {
     if (trip != null && trip.ownerId == currentUserId) {
       final tripRef = _firestore.collection('tripsV2').doc(tripId);
       final tripSnap = await tripRef.get();
+      final initBatch = _firestore.batch();
       if (!tripSnap.exists) {
-        final initBatch = _firestore.batch();
         initBatch.set(tripRef, {
           'id': trip.id,
           'title': trip.title,
@@ -83,18 +83,21 @@ class GroupSharingService {
           'updatedBy': trip.updatedBy ?? currentUserId,
           'deletedAt': null,
         });
-        initBatch.set(
-          tripRef.collection('members').doc(currentUserId),
-          {
-            'tripId': trip.id,
-            'userId': currentUserId,
-            'role': 'owner',
-            'joinedAt': Timestamp.fromDate(trip.createdAt),
-          },
-          SetOptions(merge: true),
-        );
-        await initBatch.commit();
       }
+      // Always write/merge the owner member doc so watchTripMembers and ownership transfers find it
+      initBatch.set(
+        tripRef.collection('members').doc(currentUserId),
+        {
+          'tripId': trip.id,
+          'userId': currentUserId,
+          'role': 'owner',
+          'displayName': inviterName ?? 'Owner',
+          'avatarUrl': inviterAvatarUrl,
+          'joinedAt': Timestamp.fromDate(trip.createdAt),
+        },
+        SetOptions(merge: true),
+      );
+      await initBatch.commit();
     }
 
     final activeStops = await (_db.select(_db.stops)
@@ -104,6 +107,7 @@ class GroupSharingService {
     final token = const Uuid().v4();
     final shortCode = generateShortCode();
     final expiresAt = now.add(const Duration(days: 7));
+    final normalizedEmailAllowlist = emailAllowlist?.map((e) => e.trim().toLowerCase()).where((e) => e.isNotEmpty).toList() ?? const [];
 
     final invite = TripInvite(
       token: token,
@@ -119,7 +123,7 @@ class GroupSharingService {
       createdAt: now,
       expiresAt: expiresAt,
       isRevoked: false,
-      emailAllowlist: emailAllowlist ?? const [],
+      emailAllowlist: normalizedEmailAllowlist,
     );
 
     final batch = _firestore.batch();
@@ -142,6 +146,8 @@ class GroupSharingService {
 
     batch.set(_firestore.collection('invite_codes').doc(shortCode), {
       'token': token,
+      'tripId': tripId,
+      'createdBy': currentUserId,
       'createdAt': Timestamp.fromDate(now),
     });
 
@@ -203,7 +209,6 @@ class GroupSharingService {
 
     final tripRef = _firestore.collection('tripsV2').doc(invite.tripId);
     final memberRef = tripRef.collection('members').doc(currentUserId);
-    final tripSnap = await tripRef.get();
 
     final batch = _firestore.batch();
     batch.set(memberRef, {
@@ -217,11 +222,9 @@ class GroupSharingService {
     });
 
     // Also add currentUserId to tripsV2/{tripId}.members so watchUserTrips queries match
-    if (tripSnap.exists) {
-      batch.update(tripRef, {
-        'members': FieldValue.arrayUnion([currentUserId]),
-      });
-    }
+    batch.update(tripRef, {
+      'members': FieldValue.arrayUnion([currentUserId]),
+    });
 
     await batch.commit();
 
@@ -252,6 +255,9 @@ class GroupSharingService {
     String memberUserId,
     TripMemberRole newRole,
   ) async {
+    if (newRole == TripMemberRole.owner) {
+      throw ArgumentError('Cannot set role to owner via updateMemberRole. Use transferOwnership instead.');
+    }
     await _firestore
         .collection('tripsV2')
         .doc(tripId)
@@ -329,12 +335,22 @@ class GroupSharingService {
     final tripRef = _firestore.collection('tripsV2').doc(tripId);
     final tripSnap = await tripRef.get();
     if (tripSnap.exists) {
-      await tripRef.update({
+      final batch = _firestore.batch();
+      batch.update(tripRef, {
         'sharing': 'private',
         'members': [currentUserId],
         'updatedAt': Timestamp.fromDate(now),
         'updatedBy': currentUserId,
       });
+
+      // Also clean up non-owner member docs in members/ subcollection
+      final membersSnap = await tripRef.collection('members').get();
+      for (final doc in membersSnap.docs) {
+        if (doc.id != currentUserId) {
+          batch.delete(doc.reference);
+        }
+      }
+      await batch.commit();
     }
 
     await _db.transaction(() async {
@@ -372,13 +388,21 @@ class GroupSharingService {
       'updatedBy': currentUserId,
     });
 
-    // 2. Update new owner's member doc to 'owner'
+    // 2. Update new owner's member doc to 'owner' (merge so it creates if missing)
     final newOwnerRef = tripRef.collection('members').doc(newOwnerId);
-    batch.update(newOwnerRef, {'role': 'owner'});
+    batch.set(newOwnerRef, {
+      'tripId': tripId,
+      'userId': newOwnerId,
+      'role': 'owner',
+    }, SetOptions(merge: true));
 
-    // 3. Demote current owner's member doc to 'editor'
+    // 3. Demote current owner's member doc to 'editor' (merge so it creates if missing)
     final currentOwnerRef = tripRef.collection('members').doc(currentUserId);
-    batch.update(currentOwnerRef, {'role': 'editor'});
+    batch.set(currentOwnerRef, {
+      'tripId': tripId,
+      'userId': currentUserId,
+      'role': 'editor',
+    }, SetOptions(merge: true));
 
     await batch.commit();
 
