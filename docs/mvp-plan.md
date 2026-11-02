@@ -1,6 +1,12 @@
 # MVP plan
 
-Status: in progress. Drafted 2026-10-31. Updated 2026-11-02: v0.1.3 has shipped, the stage 0 decisions are settled on #72, #81 is approved, and #82 and #83 are waiting for review. It builds on `docs/data-model.md` and `docs/trip-sharing.md`, which were proposed in #72.
+Status: in progress. Drafted 2026-10-31. Updated on the evening of 2026-11-02:
+- #81, #82 and #87 have merged.
+- #88 (the library, place pages and Anitabi import) is waiting for review.
+- What's left of stage 3 is tracked in #89.
+- #83 has review findings to fix.
+
+It builds on `docs/data-model.md` and `docs/trip-sharing.md`, which were proposed in #72.
 
 ## Goal
 
@@ -55,7 +61,7 @@ These apply to people and coding agents alike.
 
 ## Stage 1: data layer (ck)
 
-In #81, approved 2026-11-02 and waiting to merge.
+Merged in #81 on 2026-11-02.
 
 **1a. Contract first**, so the screens can be built in parallel:
 - [x] Drift tables:
@@ -87,67 +93,86 @@ In #81, approved 2026-11-02 and waiting to merge.
 ## Stage 2: screens (bullyee)
 
 **Design first.** These are the "Still to design" items, worked through with Claude:
-- [ ] Place page and stop page: which shared and personal fields each shows, and the layout.
-- [ ] Day planner on a phone:
+- [x] Place page and stop page: which shared and personal fields each shows, and the layout. One design serves both. The anime frames lead, and the personal parts (note, photos by trip, visits) are kept apart from the shared facts. A stop adds a plan card.
+- [x] Day planner on a phone:
   - a zoomed-out mode for reordering blocks;
   - auto-scroll while dragging;
   - how backlog and backup blocks are shown.
-- [ ] Home: one trip list with All / Shared / Private tabs and a shared badge (#44), and where the library lives.
+- [ ] Home: one trip list with All / Shared / Private tabs and a shared badge (#44), and where the library lives. The library leads Home, followed by My Trips (#88). The tabs are left.
 
 **Build**, on the stage 1a repositories:
-- [ ] Screen controllers, as Riverpod `Notifier`s, written together with each screen. #83's `TripListController` and `JoinTripController` are kept as they are. Its `TripPlannerController` is a draft until the day planner design is done.
-- [ ] Home screen and routes.
-- [ ] Library:
+- [x] Screen controllers, as Riverpod `Notifier`s, written together with each screen. The day planner's is `DayPlannerController` (#87). #83 dropped its draft `TripListController` and `TripPlannerController` (e02e045) and keeps `JoinTripController`.
+- [ ] Home screen and routes. Done: the library and trips lead Home, and the old screens sit under "Old screens", marked deprecated (#88). Left: the tabs (see Design).
+- [x] Library (#88):
   - places as a list and a map, with label filters (anime / tag / region) and search;
-  - `saved` vs `trip_only` places.
-  - Replaces `poi_browse_screen`, `pois_by_filter_screen`, `poi_map_screen` and the ROI list / detail screens.
-- [ ] Place page: facts, private note, labels, reference images, my photos, visits. Replaces `poi_detail_screen` and `poi_create_screen`.
-- [ ] Trip page:
-  - the stop list, sortable and searchable;
-  - the backlog;
-  - adding a stop from the library, or creating a new spot (a `trip_only` place);
-  - trip settings (title, start date, day count).
+  - `saved` vs `trip_only` places;
+  - picking several to label, add to a trip, merge or remove;
+  - a warning when a new place looks like a saved one, and merging places;
+  - map search with Nominatim and Google Maps links, on the new place, new spot and move pin screens.
+  - Replaces `poi_browse_screen`, `pois_by_filter_screen`, `poi_map_screen` and the ROI list / detail screens, once they're removed.
+- [x] Place page: facts, private note, labels, reference images, my photos, visits (#88). Replaces `poi_detail_screen` and `poi_create_screen`.
+- [ ] Trip page (#87):
+  - [ ] the stop list: searchable; sorting is left;
+  - [x] the backlog;
+  - [x] adding a stop from the library, or creating a new spot (a `trip_only` place). A place can be added more than once, and each stop gets its own name, e.g. "Uji Bridge (2)" (#88);
+  - [x] trip settings (title, start date, day count).
   - Replaces `roi_detail_screen` and `roi_edit_screen`, and drops the "Real-time collaboration is active" text.
-- [ ] Day planner: blocks, dragging stops and blocks, pins, backup blocks, times. Replaces `calendar_screen` and the time-chunk widgets.
-- [ ] Stop page.
-- [ ] Anitabi import: a checkbox list with "select all". Picked spots go into the library, and optionally into a new or existing trip. A rework of `bangumi_search_screen`.
-- [ ] Labels: create, rename and merge anime, tag and region labels. Replaces the anime and tag edit screens.
-- [ ] Camera and editor:
+- [x] Day planner: blocks, dragging stops and blocks, pins, backup blocks (#87), and times (#88). Replaces `calendar_screen` and the time-chunk widgets.
+- [ ] Stop page, built on the place page's design. A shared per-stop trip note is proposed on #72 and waits for ck's answer.
+- [x] Anitabi import: a checkbox list with "select all". Picked spots go into the library, and optionally into a new or existing trip. A rework of `bangumi_search_screen` (#88).
+- [x] Labels: create, rename and merge anime, tag and region labels (#88). Unused labels are deleted. Replaces the anime and tag edit screens.
+- [ ] Camera and editor, in progress (bullyee):
   - save into `photos`, with `kind`, `derived_from_id`, `reference_image_id` and `trip_id`;
   - the reference picker reads the place's or stop's reference images;
   - touches `background_photo_save`, `media_asset_service`, `media_repository`, `photo_edit_screen` and `anime_camera_launcher`.
   - Fix two bugs from #84:
     - The photo-edit routes decode `path` and `ref` a second time. `Uri.decodeComponent` runs on values that `queryParameters` has already decoded, so a file name containing `%` throws.
     - Leaving the isnet cutout panel mid-cutout calls `dispose()`, which releases the ONNX session while `runAsync` may still be using it.
-- [ ] Cache reference image thumbnails for offline use.
+- [ ] Cache reference image thumbnails for offline use, with #83's `ThumbnailCacheService` once it merges.
 - [ ] Remove the old screens, routes, models and repositories as each is replaced. Remove the v8 sync engine together with the old tables. (both)
+  - Re-run `migrateData()` before the old tables go.
+  - `persistMediaAsset` writes each new photo to `media_assets` and `photos` under the same id until then (#88), so the re-run doesn't copy it twice.
 
 **Milestone A:** the whole app runs on the new model on one device. Internal builds only, since sync is off until stage 3.
 
 ## Stage 3: sync on the new model (ck)
 
-In #82. Its review starts after #81 merges.
+The engine and rules merged in #82 on 2026-11-02. What's left is tracked in #89.
 
-- [ ] Firestore layout and rules for trips, days, stops, stop labels and schedule items:
+- [x] Firestore layout and rules for trips, days, stops, stop labels and schedule items (#82):
   - each document is last-write-wins on `updated_at`;
   - deletes are `deleted_at` tombstones.
-- [ ] Sync engine:
+- [x] Sync engine (#82):
   - upload dirty rows;
   - listen for remote changes per trip and apply them;
   - work offline, and never await a Firestore write inside a Drift transaction (#65 round 3, fixed in #79).
-- [ ] Labels sync by natural key. A label that's missing locally is created.
-- [ ] Turning a private trip into a shared one uploads its stops, days and schedule. Photos are not uploaded.
-- [ ] One sync status icon per trip: synced, pending, or offline. (UI: bullyee)
+- [ ] Run the engine in the app: `main.dart` only watches the v8 engine, and nothing reads `syncEngineServiceV2Provider` yet (#89).
+- [x] Labels sync by natural key. A label that's missing locally is created (#82).
+- [x] Turning a private trip into a shared one uploads its stops, days and schedule. Photos are not uploaded (#82).
+- [ ] One sync status icon per trip: synced, pending, or offline. The engine side is `tripSyncStatusProvider` (#82). The icon is bullyee's, once the engine runs.
 - [ ] Tests:
-  - reuse the fake Firestore harness from #65;
-  - add rules tests on the Firebase emulator, in CI if feasible. The #65 rule hole showed that untested rules slip through.
-- [ ] Make the old `trips/` collection read-only after the cutover.
+  - [x] reuse the fake Firestore harness from #65 (#82);
+  - [x] add rules tests on the Firebase emulator: `test/rules_v2_emulator_test.py`, run by hand;
+  - [ ] run them in CI if feasible. The #65 rule hole showed that untested rules slip through (#89);
+  - [ ] steady `sync_engine_v2_test`, which waits fixed times for the debounced push and failed once on a busy machine (#89).
+- [ ] Deploy the `tripsV2` rules from master when v0.2.0 ships (#89).
+- [ ] Make the old `trips/` collection read-only after the cutover (#89).
+- [ ] The trip note, if agreed on #72: `stops.note`, a v12 migration, sync, and a size limit in the rules (#89).
 
 **Release v0.2.0:** the new model, plus sync across your own devices. Sharing with other people is still not possible, the same as in v0.1.x.
 
 ## Stage 4: group sharing
 
-**Backend (ck)**, in #83. Its review starts after #82.
+**Backend (ck)**, in #83. It implements the list below. The [review on 2026-11-02](https://github.com/bullyee/trip_planner/pull/83#pullrequestreview-5738700283) ran the rules on the Firestore emulator and found these to fix before it merges:
+- [ ] Joining fails: `joinTripWithInvite` reads the trip before the user is a member.
+- [ ] The first share fails: the trip doc and the owner's member doc go in one batch, and the rules' `get()` sees the database as it was before the batch.
+- [ ] Once the trip doc exists, the owner gets no member doc, so the member list leaves them out and `transferOwnership` fails.
+- [ ] Stopping sharing leaves the other members' docs, so they keep access, and old invite links still join.
+- [ ] Any signed-in user can delete or retarget a short code in `invite_codes`.
+- [ ] The rules don't enforce the 7-day expiry, and a removed editor can rejoin with an invite they made.
+- [ ] Smaller items: owner rights through a member doc, the allowlist's letter case, a race in the join preview, and where and how the thumbnail cache writes.
+
+The plan for the backend:
 - [ ] `members` with the roles owner, editor and viewer, enforced in rules. Viewers are read-only. Only owners and editors can invite.
 - [ ] Invites:
   - a token plus a short code;
@@ -160,13 +185,17 @@ In #82. Its review starts after #81 merges.
 - [ ] When the owner stops sharing or deletes the trip, every other member keeps a private, unsynced copy.
 - [ ] Member profiles: Google display name and avatar, never the email.
 - [ ] Guest → signed in: before the first share, claim the local trips by setting the owner and author to the uid.
-- [ ] Download page on Firebase Hosting, plus Android App Links (`assetlinks.json`). The fingerprint must be the release keystore's SHA-256 (`30:71:A9:32:…`). The page deployed on 2026-11-02 has `BF:1B:D0:62:…` instead.
+- [ ] Download page on Firebase Hosting, plus Android App Links (`assetlinks.json`). The fingerprint must be the release keystore's SHA-256 (`30:71:A9:32:…`).
+  - #83's branch has the right one, but the live site still serves `BF:1B:D0:62:…`, so redeploy hosting from master after #83 merges.
+  - The download button opens `/releases/latest`. While every release is a pre-release, that redirects to the release list.
 
 **Screens (bullyee)**
 - [ ] Share sheet: create an invite with a role; show the link, QR code and short code; revoke.
-- [ ] Join flow: open a link, scan a QR code, or enter a code → invite preview → join. The login redirect still checks `/cloud-share`, which matches no route. Make it check the join route instead (#84).
+- [ ] Join flow: open a link, scan a QR code, or enter a code → invite preview → join.
+  - The login redirect still checks `/cloud-share`, which matches no route. Make it check the join route instead (#84).
+  - Add a `/join` route: #83's App Links open `/join` links in the app, which has no such route yet.
 - [ ] Member list: roles, remove, leave, transfer ownership.
-- [ ] The shared badge and tabs on home, and a read-only mode for viewers.
+- [ ] The shared badge and tabs on home (#44), and a read-only mode for viewers.
 
 **Release v0.3.0, the MVP.**
 
@@ -187,6 +216,7 @@ Stage 0 ──► 1a ──┬──► 1b (migration) ──┐
 
 - Phases 2–4 of `docs/trip-sharing.md`: the safety net, photos, templates.
 - Personal layer backup, "save updates to my place", template attribution, closed-day warnings, trip cover, split tracks within a day.
+- Areas in the day planner: grouping stops by area by hand. Postponed on 2026-11-02, so `stops.area` stays unused until then.
 
 ## Existing issues
 
@@ -202,3 +232,4 @@ Stage 0 ──► 1a ──┬──► 1b (migration) ──┐
 | #77 offline map tiles | Close for now; reopen after the MVP. It needs a different tile source. The [OpenStreetMap tile policy](https://operations.osmfoundation.org/policies/tiles/) forbids offline use of `tile.openstreetmap.org`, including any "download for offline" feature, and requires a User-Agent that identifies the app. |
 | #78 export / backup | Close for now; reopen after the MVP. The export format should follow the new model, and it overlaps with the personal layer backup. |
 | #84 camera, editor and router notes | Two bugs go into stage 2's camera and editor item, and the `/cloud-share` redirect goes with the join flow. The other items cite code that isn't in the repo or in #81–#83, or old-model screens that stage 2 replaces. |
+| #89 stage 3, what's left after #82 | Stage 3. |
