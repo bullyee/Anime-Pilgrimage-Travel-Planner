@@ -11,10 +11,19 @@ enum TripSyncStatus {
   synced,
   pending,
   offline,
+  error,
 }
 
 /// Orchestrates two-way synchronization for V10 tables (Trips, Days, Stops, ScheduleItems).
 class SyncEngineServiceV2 {
+  bool _isPermanentError(Object error) {
+    final str = error.toString().toLowerCase();
+    return str.contains('permission-denied') ||
+        str.contains('permission_denied') ||
+        str.contains('invalid-argument') ||
+        str.contains('invalid_argument');
+  }
+
   final AppDatabase localDb;
   final FirestoreSyncV2Service firestoreSync;
   final String currentUserId;
@@ -232,17 +241,20 @@ class SyncEngineServiceV2 {
 
         // If unshared (sharing != 'group'), push the unshared state to cloud if it was previously in cloud
         if (trip.sharing != 'group') {
-          if (trip.syncStatus == 1 && await firestoreSync.tripExists(tripId)) {
-            final batch = firestoreSync.createBatch();
-            firestoreSync.buildTripBatchOperations(batch, trip);
-            await firestoreSync.commitBatch(batch);
-            if (_isStopped) break;
+          if (trip.syncStatus == 1) {
+            final existsInCloud = await firestoreSync.tripExists(tripId);
+            if (existsInCloud) {
+              final batch = firestoreSync.createBatch();
+              firestoreSync.buildTripBatchOperations(batch, trip);
+              await firestoreSync.commitBatch(batch);
+              if (_isStopped) break;
+              _cancelSubcollectionWatchers(tripId);
+            }
             await localDb.transaction(() async {
               await (localDb.update(localDb.trips)
                     ..where((t) => t.id.equals(tripId) & t.updatedAt.equalsValue(trip.updatedAt)))
                   .write(const TripsCompanion(syncStatus: Value(0)));
             });
-            _cancelSubcollectionWatchers(tripId);
             _updateStatus(tripId, TripSyncStatus.synced);
           }
           continue;
@@ -392,9 +404,13 @@ class SyncEngineServiceV2 {
         }
       } catch (e, stack) {
         debugPrint('[SyncEngineV2] Push failed for trip $tripId: $e\n$stack');
-        _updateStatus(tripId, TripSyncStatus.offline);
-        _pendingTripIdsToPush.add(tripId);
-        hasOfflineErrors = true;
+        if (_isPermanentError(e)) {
+          _updateStatus(tripId, TripSyncStatus.error);
+        } else {
+          _updateStatus(tripId, TripSyncStatus.offline);
+          _pendingTripIdsToPush.add(tripId);
+          hasOfflineErrors = true;
+        }
       }
     }
 
@@ -648,11 +664,12 @@ class SyncEngineServiceV2 {
 
       final localDay = await (localDb.select(localDb.tripDays)..where((d) => d.id.equals(dayId))).getSingleOrNull();
       if (localDay != null) {
+        if (localDay.tripId != tripId) return;
         if (remoteUpdatedAt != null && !remoteUpdatedAt.isAfter(localDay.updatedAt)) {
           return;
         }
         await (localDb.update(localDb.tripDays)
-              ..where((d) => d.id.equals(dayId) & d.updatedAt.isSmallerThanValue((remoteUpdatedAt ?? DateTime.now()).millisecondsSinceEpoch)))
+              ..where((d) => d.id.equals(dayId) & d.tripId.equals(tripId) & d.updatedAt.isSmallerThanValue((remoteUpdatedAt ?? DateTime.now()).millisecondsSinceEpoch)))
             .write(companion);
       } else {
         await localDb.into(localDb.tripDays).insert(companion, mode: InsertMode.insertOrIgnore);
@@ -710,11 +727,12 @@ class SyncEngineServiceV2 {
 
       final localStop = await (localDb.select(localDb.stops)..where((s) => s.id.equals(stopId))).getSingleOrNull();
       if (localStop != null) {
+        if (localStop.tripId != tripId) return;
         if (remoteUpdatedAt != null && !remoteUpdatedAt.isAfter(localStop.updatedAt)) {
           return;
         }
         final updated = await (localDb.update(localDb.stops)
-              ..where((s) => s.id.equals(stopId) & s.updatedAt.isSmallerThanValue((remoteUpdatedAt ?? DateTime.now()).millisecondsSinceEpoch)))
+              ..where((s) => s.id.equals(stopId) & s.tripId.equals(tripId) & s.updatedAt.isSmallerThanValue((remoteUpdatedAt ?? DateTime.now()).millisecondsSinceEpoch)))
             .write(companion);
         if (updated == 0) return;
       } else {
@@ -734,23 +752,43 @@ class SyncEngineServiceV2 {
           final name = raw['name'] as String? ?? '';
           final bangumiId = raw['bangumiId'] as String?;
 
-          // Insert or ignore if (kind, name) already exists
-          await localDb.into(localDb.labels).insert(
-                LabelsCompanion(
-                  id: Value(const Uuid().v4()),
-                  kind: Value(kind),
-                  name: Value(name),
-                  bangumiId: Value(bangumiId),
-                  createdAt: Value(DateTime.now()),
-                ),
-                mode: InsertMode.insertOrIgnore,
-              );
+          // Lookup existing label first with limit(1) to avoid Bad state: Too many elements (N1, N1b)
+          Label? label;
+          if (bangumiId != null && bangumiId.isNotEmpty) {
+            label = await (localDb.select(localDb.labels)
+                  ..where((l) => l.bangumiId.equals(bangumiId))
+                  ..limit(1))
+                .getSingleOrNull();
+          }
+          if (label == null) {
+            label = await (localDb.select(localDb.labels)
+                  ..where((l) => l.kind.equals(kind) & l.name.equals(name))
+                  ..limit(1))
+                .getSingleOrNull();
+            if (label != null && label.bangumiId == null && bangumiId != null && bangumiId.isNotEmpty) {
+              await (localDb.update(localDb.labels)..where((l) => l.id.equals(label!.id)))
+                  .write(LabelsCompanion(bangumiId: Value(bangumiId)));
+              label = label.copyWith(bangumiId: Value(bangumiId));
+            }
+          }
 
-          final label = await (localDb.select(localDb.labels)
-                ..where((l) => bangumiId != null
-                    ? l.bangumiId.equals(bangumiId)
-                    : (l.kind.equals(kind) & l.name.equals(name))))
-              .getSingleOrNull();
+          if (label == null) {
+            final newId = const Uuid().v4();
+            await localDb.into(localDb.labels).insert(
+                  LabelsCompanion(
+                    id: Value(newId),
+                    kind: Value(kind),
+                    name: Value(name),
+                    bangumiId: Value(bangumiId),
+                    createdAt: Value(DateTime.now()),
+                  ),
+                  mode: InsertMode.insertOrIgnore,
+                );
+            label = await (localDb.select(localDb.labels)
+                  ..where((l) => l.id.equals(newId))
+                  ..limit(1))
+                .getSingleOrNull();
+          }
 
           if (label != null) {
             if (raw['id'] is String) {
@@ -894,11 +932,12 @@ class SyncEngineServiceV2 {
       final localItem =
           await (localDb.select(localDb.scheduleItems)..where((i) => i.id.equals(itemId))).getSingleOrNull();
       if (localItem != null) {
+        if (localItem.tripId != tripId) return;
         if (remoteUpdatedAt != null && !remoteUpdatedAt.isAfter(localItem.updatedAt)) {
           return;
         }
         await (localDb.update(localDb.scheduleItems)
-              ..where((i) => i.id.equals(itemId) & i.updatedAt.isSmallerThanValue((remoteUpdatedAt ?? DateTime.now()).millisecondsSinceEpoch)))
+              ..where((i) => i.id.equals(itemId) & i.tripId.equals(tripId) & i.updatedAt.isSmallerThanValue((remoteUpdatedAt ?? DateTime.now()).millisecondsSinceEpoch)))
             .write(companion);
       } else {
         await localDb.into(localDb.scheduleItems).insert(companion, mode: InsertMode.insertOrIgnore);

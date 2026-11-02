@@ -42,7 +42,7 @@ def main():
             print(f" [FAIL] {desc}: expected {expected_code}, got {actual_code}")
             sys.exit(1)
 
-    # 1. Legacy trips writes are preserved for v0.1.x clients (tested in test_rules.py)
+    # 1. Legacy trips writes are preserved for v0.1.x clients (dual-track mode)
 
     # 2. tripsV2: Unauthenticated create must be denied
     v2_trip_data = {
