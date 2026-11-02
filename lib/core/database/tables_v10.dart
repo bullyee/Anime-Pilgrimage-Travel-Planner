@@ -219,6 +219,7 @@ class Stops extends Table {
   TextColumn get coverRemoteUrl => text().nullable()();
   TextColumn get source => text().nullable()();
   TextColumn get sourceUrl => text().nullable()();
+  TextColumn get area => text().nullable()();
 
   TextColumn get addedBy => text()();
   DateTimeColumn get createdAt => dateTime().clientDefault(() => DateTime.now())();
