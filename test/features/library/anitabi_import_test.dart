@@ -124,7 +124,8 @@ void main() {
         builder: (_, _) => AnitabiImportScreen(
           searchAnime: (q) async => [const BangumiSubject(id: '115908', name: '響け！ユーフォニアム', nameCn: '吹响吧！上低音号')],
           loadWork: (id) async => AnitabiWork(title: '響け！ユーフォニアム', spots: [
-            _spot('1', '宇治橋'),
+            // Tests have no network: the thumbnail fails and shows its placeholder.
+            _spot('1', '宇治橋', image: 'https://image.anitabi.cn/points/1.jpg?plan=h360'),
             _spot('2', '朝霧橋'),
             _spot('3', '大吉山', located: false),
           ]),
@@ -148,8 +149,12 @@ void main() {
     expect(find.text('2 spots · 1 without a location'), findsOneWidget);
     expect(find.text('Import 2 spots'), findsOneWidget, reason: 'everything importable starts ticked');
 
-    await tester.tap(find.text('朝霧橋'));
+    await tester.tap(find.text('None'));
     await tester.pumpAndSettle();
+    expect(find.text('Import 0 spots'), findsOneWidget);
+    await tester.tap(find.text('With frames 1'));
+    await tester.pumpAndSettle();
+    expect(find.text('Import 1 spot'), findsOneWidget, reason: 'only 宇治橋 has a frame');
     await tester.tap(find.byKey(const Key('anitabiImportButton')));
     await tester.pumpAndSettle();
     await tester.tap(find.text('Save to the library'));

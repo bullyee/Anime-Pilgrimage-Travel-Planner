@@ -325,7 +325,10 @@ class _AnitabiImportScreenState extends ConsumerState<AnitabiImportScreen> {
     final saved = {for (final p in ref.watch(placesListProvider(null)).valueOrNull ?? const <Place>[]) p.placeKey};
     final spots = work?.spots ?? const <AnitabiSpot>[];
     final importable = spots.where((s) => s.hasLocation).toList();
-    final allPicked = importable.isNotEmpty && importable.every((s) => _picked.contains(s.id));
+    final withFrames = importable.where((s) => s.imageUrl != null).toList();
+    void pickOnly(Iterable<AnitabiSpot> these) => setState(() => _picked
+      ..clear()
+      ..addAll(these.map((s) => s.id)));
 
     return Scaffold(
       appBar: AppBar(
@@ -344,23 +347,38 @@ class _AnitabiImportScreenState extends ConsumerState<AnitabiImportScreen> {
               : Column(
                   children: [
                     Padding(
-                      padding: const EdgeInsets.fromLTRB(16, 8, 8, 0),
-                      child: Row(
+                      padding: const EdgeInsets.fromLTRB(16, 8, 16, 0),
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
                         children: [
-                          Expanded(
-                            child: Text(
-                              [
-                                '${importable.length} spots',
-                                if (spots.length > importable.length) '${spots.length - importable.length} without a location',
-                              ].join(' · '),
-                              style: theme.textTheme.bodyMedium?.copyWith(color: theme.colorScheme.onSurfaceVariant),
-                            ),
+                          Text(
+                            [
+                              '${importable.length} spots',
+                              if (spots.length > importable.length) '${spots.length - importable.length} without a location',
+                            ].join(' · '),
+                            style: theme.textTheme.bodyMedium?.copyWith(color: theme.colorScheme.onSurfaceVariant),
                           ),
-                          TextButton(
-                            onPressed: () => setState(() => allPicked
-                                ? _picked.clear()
-                                : _picked.addAll(importable.map((s) => s.id))),
-                            child: Text(allPicked ? 'Select none' : 'Select all'),
+                          const SizedBox(height: 6),
+                          Wrap(
+                            spacing: 8,
+                            runSpacing: 4,
+                            children: [
+                              ActionChip(
+                                avatar: const Icon(Icons.done_all, size: 18),
+                                label: Text('All ${importable.length}'),
+                                onPressed: () => pickOnly(importable),
+                              ),
+                              ActionChip(
+                                avatar: const Icon(Icons.image_outlined, size: 18),
+                                label: Text('With frames ${withFrames.length}'),
+                                onPressed: () => pickOnly(withFrames),
+                              ),
+                              ActionChip(
+                                avatar: const Icon(Icons.remove_done, size: 18),
+                                label: const Text('None'),
+                                onPressed: () => pickOnly(const []),
+                              ),
+                            ],
                           ),
                         ],
                       ),
