@@ -62,15 +62,57 @@ class TripSummary {
   }
 }
 
+/// The sections of the trip list, in order. Their headers carry the trip's
+/// status, so the cards don't repeat it.
+enum TripSection {
+  ongoing('Ongoing'),
+  comingUp('Coming up'),
+  undated('No dates yet'),
+  finished('Finished');
+
+  final String title;
+
+  const TripSection(this.title);
+
+  static TripSection of(TripSummary t) => switch (t.status) {
+        TripStatus.ongoing => TripSection.ongoing,
+        TripStatus.planning => t.firstDate == null ? TripSection.undated : TripSection.comingUp,
+        TripStatus.finished => TripSection.finished,
+      };
+}
+
+/// Which trips the list shows: all, the ones shared with a group, or the
+/// private ones.
+enum TripFilter {
+  all,
+  shared,
+  private;
+
+  bool matches(Trip trip) => switch (this) {
+        TripFilter.all => true,
+        TripFilter.shared => trip.sharing == 'group',
+        TripFilter.private => trip.sharing != 'group',
+      };
+}
+
+/// [trips], already in [sortTripSummaries] order, under their sections,
+/// leaving out the empty ones.
+List<(TripSection, List<TripSummary>)> groupTripSummaries(Iterable<TripSummary> trips) {
+  final bySection = <TripSection, List<TripSummary>>{};
+  for (final t in trips) {
+    bySection.putIfAbsent(TripSection.of(t), () => []).add(t);
+  }
+  return [
+    for (final section in TripSection.values)
+      if (bySection[section] case final items?) (section, items),
+  ];
+}
+
 /// Orders the trip list: trips under way first, then upcoming trips by start
 /// date, then trips without dates (newest first), then finished trips with
 /// the most recent first.
 List<TripSummary> sortTripSummaries(Iterable<TripSummary> trips) {
-  int group(TripSummary t) => switch (t.status) {
-        TripStatus.ongoing => 0,
-        TripStatus.planning => t.firstDate == null ? 2 : 1,
-        TripStatus.finished => 3,
-      };
+  int group(TripSummary t) => TripSection.of(t).index;
 
   return trips.toList()
     ..sort((a, b) {

@@ -3,16 +3,27 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 
 import '../../../core/utils/app_result.dart';
+import '../../../shared/theme/app_theme.dart';
 import '../controllers/trips_controller.dart';
+import '../models/trip_summary.dart';
 import '../providers/trip_list_providers.dart';
 import '../widgets/trip_card.dart';
 import '../widgets/trip_form_sheet.dart';
 
-class TripListScreen extends ConsumerWidget {
+/// The trip list: all trips, the shared ones or the private ones, under
+/// sections that say whether each is under way, coming up, undated or over.
+class TripListScreen extends ConsumerStatefulWidget {
   const TripListScreen({super.key});
 
   @override
-  Widget build(BuildContext context, WidgetRef ref) {
+  ConsumerState<TripListScreen> createState() => _TripListScreenState();
+}
+
+class _TripListScreenState extends ConsumerState<TripListScreen> {
+  TripFilter _filter = TripFilter.all;
+
+  @override
+  Widget build(BuildContext context) {
     final summaries = ref.watch(tripSummariesProvider);
 
     return Scaffold(
@@ -27,18 +38,53 @@ class TripListScreen extends ConsumerWidget {
         ),
         data: (trips) {
           if (trips.isEmpty) return _EmptyTrips(onCreate: () => _createTrip(context, ref));
+          final shown = [for (final t in trips) if (_filter.matches(t.trip)) t];
+          int count(TripFilter f) => trips.where((t) => f.matches(t.trip)).length;
           return Align(
             alignment: Alignment.topCenter,
             child: ConstrainedBox(
               constraints: const BoxConstraints(maxWidth: 720),
-              child: ListView.separated(
-                padding: const EdgeInsets.fromLTRB(16, 8, 16, 96),
-                itemCount: trips.length,
-                separatorBuilder: (_, _) => const SizedBox(height: 8),
-                itemBuilder: (context, i) => TripCard(
-                  summary: trips[i],
-                  onTap: () => context.push('/trips/${trips[i].trip.id}'),
-                ),
+              child: Column(
+                children: [
+                  Padding(
+                    padding: const EdgeInsets.fromLTRB(16, 8, 16, 4),
+                    child: SizedBox(
+                      width: double.infinity,
+                      child: SegmentedButton<TripFilter>(
+                        segments: [
+                          for (final (filter, label) in const [
+                            (TripFilter.all, 'All'),
+                            (TripFilter.shared, 'Shared'),
+                            (TripFilter.private, 'Private'),
+                          ])
+                            ButtonSegment(value: filter, label: _FilterLabel(label, count(filter))),
+                        ],
+                        selected: {_filter},
+                        onSelectionChanged: (picked) => setState(() => _filter = picked.first),
+                      ),
+                    ),
+                  ),
+                  Expanded(
+                    child: shown.isEmpty
+                        ? _EmptyFilter(filter: _filter)
+                        : ListView(
+                            padding: const EdgeInsets.fromLTRB(16, 0, 16, 96),
+                            children: [
+                              for (final (section, items) in groupTripSummaries(shown)) ...[
+                                _SectionHeader(section.title),
+                                for (final t in items)
+                                  Padding(
+                                    padding: const EdgeInsets.only(bottom: 8),
+                                    child: TripCard(
+                                      summary: t,
+                                      onTap: () => context.push('/trips/${t.trip.id}'),
+                                    ),
+                                  ),
+                              ],
+                            ],
+                          ),
+                  ),
+                ],
               ),
             ),
           );
@@ -72,6 +118,89 @@ class TripListScreen extends ConsumerWidget {
           SnackBar(content: Text("Couldn't create the trip: $error")),
         );
     }
+  }
+}
+
+/// "Shared 2": a filter's name and how many trips it holds.
+class _FilterLabel extends StatelessWidget {
+  final String label;
+  final int count;
+
+  const _FilterLabel(this.label, this.count);
+
+  @override
+  Widget build(BuildContext context) {
+    final muted = Theme.of(context).colorScheme.onSurfaceVariant;
+    return Text.rich(TextSpan(children: [
+      TextSpan(text: '$label '),
+      TextSpan(text: '$count', style: TextStyle(color: muted)),
+    ]));
+  }
+}
+
+class _SectionHeader extends StatelessWidget {
+  final String title;
+
+  const _SectionHeader(this.title);
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    return Padding(
+      padding: const EdgeInsets.fromLTRB(4, 16, 4, 8),
+      child: Text(
+        title.toUpperCase(),
+        style: theme.textTheme.labelSmall?.copyWith(letterSpacing: 1.1, color: theme.colorScheme.onSurfaceVariant),
+      ),
+    );
+  }
+}
+
+/// A filter with nothing in it. Sharing comes with stage 4, so for now the
+/// shared one only says where shared trips will show up.
+class _EmptyFilter extends StatelessWidget {
+  final TripFilter filter;
+
+  const _EmptyFilter({required this.filter});
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    final (icon, title, text) = switch (filter) {
+      TripFilter.shared => (
+          Icons.group_outlined,
+          'No shared trips yet',
+          'Trips you share with friends, or join from an invite, show up here. Sharing comes in a later version.',
+        ),
+      _ => (
+          Icons.lock_outline,
+          'No private trips',
+          'Trips only you can see show up here.',
+        ),
+    };
+    return Center(
+      child: Padding(
+        padding: const EdgeInsets.fromLTRB(32, 32, 32, 96),
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            CircleAvatar(
+              radius: 32,
+              backgroundColor: theme.trip.wisteriaSoft,
+              child: Icon(icon, size: 30, color: theme.trip.wisteria),
+            ),
+            const SizedBox(height: 16),
+            Text(title, style: theme.textTheme.titleLarge),
+            const SizedBox(height: 8),
+            Text(
+              text,
+              textAlign: TextAlign.center,
+              style: theme.textTheme.bodyMedium?.copyWith(color: theme.colorScheme.onSurfaceVariant),
+            ),
+          ],
+        ),
+      ),
+    );
   }
 }
 

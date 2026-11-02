@@ -102,22 +102,41 @@ void main() {
     ]);
   });
 
+  test('the list shows trips under their sections, leaving out empty ones', () {
+    final now = DateTime(2027, 5, 1);
+    TripSummary summary(String id, {String? start}) =>
+        TripSummary.from(trip: _trip(id, start: start), days: null, stopCount: 0, now: now);
+    final sorted = sortTripSummaries([
+      summary('past', start: '2027-04-01'),
+      summary('undated'),
+      summary('now', start: '2027-04-30'),
+      summary('soon', start: '2027-06-01'),
+    ]);
+    String show(List<(TripSection, List<TripSummary>)> groups) =>
+        [for (final (section, items) in groups) '${section.title}: ${items.map((t) => t.trip.id).join(', ')}'].join(' | ');
+
+    expect(show(groupTripSummaries(sorted)), 'Ongoing: now | Coming up: soon | No dates yet: undated | Finished: past');
+    expect(show(groupTripSummaries([summary('undated')])), 'No dates yet: undated');
+  });
+
+  test('the filter tells shared trips from private ones', () {
+    final private = _trip('a');
+    final shared = _trip('b').copyWith(sharing: 'group');
+    expect([TripFilter.all.matches(private), TripFilter.all.matches(shared)], [true, true]);
+    expect([TripFilter.shared.matches(private), TripFilter.shared.matches(shared)], [false, true]);
+    expect([TripFilter.private.matches(private), TripFilter.private.matches(shared)], [true, false]);
+  });
+
   group('tripDateLine', () {
     final now = DateTime(2027, 3, 1);
-    test('shows the range and the number of days', () {
-      expect(
-        tripDateLine(firstDate: _utc(2027, 4, 29), lastDate: _utc(2027, 5, 4), dayCount: 6, now: now),
-        'Apr 29 – May 4 · 6 days',
-      );
+    test('shows the range, without the number of days', () {
+      expect(tripDateLine(firstDate: _utc(2027, 4, 29), lastDate: _utc(2027, 5, 4), now: now), 'Apr 29 – May 4');
     });
     test('adds the year for another year, and handles one day', () {
-      expect(
-        tripDateLine(firstDate: _utc(2028, 1, 3), lastDate: _utc(2028, 1, 3), dayCount: 1, now: now),
-        'Jan 3, 2028 · 1 day',
-      );
+      expect(tripDateLine(firstDate: _utc(2028, 1, 3), lastDate: _utc(2028, 1, 3), now: now), 'Jan 3, 2028');
     });
     test('says when there are no dates yet', () {
-      expect(tripDateLine(firstDate: null, lastDate: null, dayCount: 3, now: now), 'No dates yet · 3 days');
+      expect(tripDateLine(firstDate: null, lastDate: null, now: now), 'No dates yet');
     });
   });
 }
