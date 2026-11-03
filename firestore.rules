@@ -228,7 +228,10 @@ service cloud.firestore {
     }
 
     match /tripsV2/{tripId} {
-      allow read: if isAuthenticated() && (
+      // The app's trip listener: tripsV2 where members array-contains uid.
+      allow list: if isAuthenticated() && request.auth.uid in resource.data.members;
+
+      allow get: if isAuthenticated() && (
         resource == null ||
         request.auth.uid == resource.data.ownerId ||
         (resource.data.sharing == 'group' && (

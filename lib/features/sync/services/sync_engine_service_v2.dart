@@ -144,25 +144,47 @@ class SyncEngineServiceV2 {
     });
 
     // 5. Downstream watchUserTrips listener (serialized)
-    _userTripsSub = firestoreSync.watchUserTrips(currentUserId).listen((remoteTrips) {
-      if (_isStopped) return;
-      _userTripsChain = _userTripsChain.then((_) async {
+    _userTripsSub = firestoreSync.watchUserTrips(currentUserId).listen(
+      (remoteTrips) {
         if (_isStopped) return;
-        for (final remoteTrip in remoteTrips) {
-          final tripId = remoteTrip['id'] as String?;
-          if (tripId == null || tripId.isEmpty) continue;
+        _userTripsChain = _userTripsChain.then((_) async {
+          if (_isStopped) return;
 
-          try {
-            final keepWatching = await _applyRemoteTrip(remoteTrip);
-            if (keepWatching && !_isStopped) {
-              _ensureSubcollectionWatchers(tripId);
+          // Detect collaborator trips where access was lost (removed from members or unshared)
+          final remoteTripIds = remoteTrips.map((t) => t['id'] as String?).whereType<String>().toSet();
+          final localCollaboratorTrips = await (localDb.select(localDb.trips)
+                ..where((t) => t.sharing.equals('group') & t.ownerId.equals(currentUserId).not() & t.deletedAt.isNull()))
+              .get();
+
+          for (final local in localCollaboratorTrips) {
+            if (!remoteTripIds.contains(local.id)) {
+              try {
+                await _convertCollaboratorTripToPrivate(local.id, DateTime.now());
+              } catch (e, stack) {
+                debugPrint('[SyncEngineV2] Error converting lost trip ${local.id} to private: $e\n$stack');
+              }
             }
-          } catch (e, stack) {
-            debugPrint('[SyncEngineV2] Error applying remote trip $tripId: $e\n$stack');
           }
-        }
-      });
-    });
+
+          for (final remoteTrip in remoteTrips) {
+            final tripId = remoteTrip['id'] as String?;
+            if (tripId == null || tripId.isEmpty) continue;
+
+            try {
+              final keepWatching = await _applyRemoteTrip(remoteTrip);
+              if (keepWatching && !_isStopped) {
+                _ensureSubcollectionWatchers(tripId);
+              }
+            } catch (e, stack) {
+              debugPrint('[SyncEngineV2] Error applying remote trip $tripId: $e\n$stack');
+            }
+          }
+        });
+      },
+      onError: (error, stack) {
+        debugPrint('[SyncEngineV2] Error in watchUserTrips: $error\n$stack');
+      },
+    );
   }
 
   void _scheduleDebouncedPush() {

@@ -601,6 +601,37 @@ void main() {
       expect(localTrip.syncStatus, equals(0));
     });
 
+    test('when a collaborator loses access (dropped from members query), local copy becomes private', () async {
+      syncEngine.startSync();
+      final t1 = DateTime(2026, 11, 1, 10, 0);
+
+      // Collaborator (user_alice) receives a shared trip owned by user_bob
+      fakeFirestore.emitUserTrips([
+        {
+          'id': 'trip_bob_kicked',
+          'title': 'Bob Shared Trip',
+          'ownerId': 'user_bob',
+          'sharing': 'group',
+          'dayCount': 1,
+          'updatedAt': t1,
+        }
+      ]);
+      await Future.delayed(const Duration(milliseconds: 100));
+
+      var localTrip = await (db.select(db.trips)..where((t) => t.id.equals('trip_bob_kicked'))).getSingle();
+      expect(localTrip.sharing, equals('group'));
+      expect(localTrip.ownerId, equals('user_bob'));
+
+      // Bob removes Alice from members or unshares: the trip drops out of query results
+      fakeFirestore.emitUserTrips([]);
+      await Future.delayed(const Duration(milliseconds: 100));
+
+      localTrip = await (db.select(db.trips)..where((t) => t.id.equals('trip_bob_kicked'))).getSingle();
+      expect(localTrip.sharing, equals('private'));
+      expect(localTrip.ownerId, equals(currentUserId));
+      expect(localTrip.syncStatus, equals(0));
+    });
+
     test('respects Last-Write-Wins (LWW) and does not overwrite newer local updates', () async {
       syncEngine.startSync();
 

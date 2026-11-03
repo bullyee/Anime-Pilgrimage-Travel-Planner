@@ -16,7 +16,7 @@ def create_jwt(user_id, email=None):
 BASE_URL = 'http://127.0.0.1:8080/v1/projects/trip-planner-2775c/databases/(default)/documents'
 
 def api_request(method, path, data=None, user_id=None, email=None):
-    url = f"{BASE_URL}/{path}"
+    url = f"{BASE_URL}{path}" if path.startswith(':') else f"{BASE_URL}/{path}"
     headers = {'Content-Type': 'application/json'}
     if user_id:
         headers['Authorization'] = f"Bearer {create_jwt(user_id, email=email)}"
@@ -34,7 +34,7 @@ def main():
     tests_passed = 0
     tests_total = 0
 
-    def assert_status(desc, expected_code, actual_code):
+    def assert_status(desc, expected_code, actual_code, resp=None):
         nonlocal tests_passed, tests_total
         tests_total += 1
         if actual_code == expected_code:
@@ -42,6 +42,8 @@ def main():
             tests_passed += 1
         else:
             print(f" [FAIL] {desc}: expected {expected_code}, got {actual_code}")
+            if resp:
+                print(f"   Response: {resp}")
             sys.exit(1)
 
     # 1. Legacy trips writes are preserved for v0.1.x clients (dual-track mode)
@@ -475,6 +477,43 @@ def main():
     }
     code, _ = api_request('POST', 'tripsV2/trip_g1/members?documentId=bob', bob_rejoin, user_id='bob')
     assert_status("Stage 4 (Repro G): Removed editor cannot rejoin with own invite (403)", 403, code)
+
+    # 44. tripsV2 query (Issue #89): structuredQuery with members array-contains
+    def run_trip_query(member_uid, user_id=None):
+        q = {
+            'structuredQuery': {
+                'from': [{'collectionId': 'tripsV2'}],
+            }
+        }
+        if member_uid is not None:
+            q['structuredQuery']['where'] = {
+                'fieldFilter': {
+                    'field': {'fieldPath': 'members'},
+                    'op': 'ARRAY_CONTAINS',
+                    'value': {'stringValue': member_uid}
+                }
+            }
+        return api_request('POST', ':runQuery', q, user_id=user_id)
+
+    # alice queries for herself (has trips) -> 200
+    code, resp = run_trip_query('alice', user_id='alice')
+    assert_status("tripsV2 query: Alice querying own trips succeeds (200)", 200, code, resp=resp)
+
+    # charlie queries for himself (has no trips) -> 200
+    code, resp = run_trip_query('charlie', user_id='charlie')
+    assert_status("tripsV2 query: Charlie querying own empty trips succeeds (200)", 200, code, resp=resp)
+
+    # intruder_bob querying for alice's trips -> 403
+    code, resp = run_trip_query('alice', user_id='intruder_bob')
+    assert_status("tripsV2 query: Intruder querying another user's trips denied (403)", 403, code, resp=resp)
+
+    # unauthenticated query -> 403
+    code, resp = run_trip_query('alice', user_id=None)
+    assert_status("tripsV2 query: Unauthenticated query denied (403)", 403, code, resp=resp)
+
+    # unconstrained query (all trips without members filter) -> 403
+    code, resp = run_trip_query(None, user_id='alice')
+    assert_status("tripsV2 query: Unconstrained query without members filter denied (403)", 403, code, resp=resp)
 
     print(f"\nALL {tests_passed}/{tests_total} FIRESTORE RULES TESTS PASSED!")
 
