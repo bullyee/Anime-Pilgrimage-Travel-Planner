@@ -11,6 +11,7 @@ import 'package:path_provider/path_provider.dart';
 import 'package:uuid/uuid.dart';
 
 import '../../auth/providers/auth_provider.dart';
+import '../../library/providers/place_providers.dart';
 import '../repositories/media_repository.dart';
 import 'media_asset_service.dart';
 
@@ -151,6 +152,7 @@ class BackgroundPhotoSaves extends Notifier<List<PendingPhotoSave>> {
         final persisted = _persistQueue.then(
           (_) => persistMediaAsset(
             mediaRepo: ref.read(mediaRepositoryProvider),
+            places: ref.read(placeRepositoryProvider),
             source: source,
             poiId: poiId,
             type: type,

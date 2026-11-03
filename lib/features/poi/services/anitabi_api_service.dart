@@ -194,6 +194,19 @@ class AnitabiApiService {
     }
   }
 
+  /// A client that sends [userAgent] on every request, as Anitabi asks.
+  static http.Client identifiedClient([http.Client? inner]) => _UserAgentClient(inner ?? http.Client());
+
+  /// Where Anitabi's static map data is cached.
+  static Future<Directory> staticDataCacheDir() => _defaultCacheDir();
+
+  /// Downloads an Anitabi image into the app's reference images, trying the
+  /// image mirror when the official host refuses. Null when neither works;
+  /// it never retries a refusal.
+  static Future<String?> downloadReferenceImage(String url, http.Client client) async =>
+      await downloadCoverImage(url, subdir: 'reference_images', client: client) ??
+      await _downloadFromImageMirror(url, client);
+
   static Future<Directory> _defaultCacheDir() async {
     final base = await getApplicationSupportDirectory();
     final dir = Directory(p.join(base.path, 'anitabi_static'));
@@ -221,12 +234,7 @@ class AnitabiApiService {
         final next = queue.removeFirst();
 
         try {
-          final localPath = await downloadCoverImage(
-                next.url,
-                subdir: 'reference_images',
-                client: httpClient,
-              ) ??
-              await _downloadFromImageMirror(next.url, httpClient);
+          final localPath = await downloadReferenceImage(next.url, httpClient);
 
           if (localPath != null) {
             await mediaRepository.addReferenceImage(

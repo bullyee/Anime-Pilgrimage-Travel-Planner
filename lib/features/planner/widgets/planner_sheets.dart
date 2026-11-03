@@ -4,6 +4,7 @@ import 'package:intl/intl.dart';
 
 import '../../../core/utils/app_result.dart';
 import '../../../core/utils/schedule_logic.dart';
+import '../../../shared/theme/app_theme.dart';
 import '../controllers/day_planner_controller.dart';
 import '../models/planner_view.dart';
 import '../providers/planner_providers.dart';
@@ -89,6 +90,33 @@ class _StopSheet extends ConsumerWidget {
         : '${_dayWithDate(day!)} · ${formatTimelineMinutes(item.startMinutes)}–${formatTimelineMinutes(item.endMinutes)}'
             '${item.fixed ? ' (fixed time)' : ''}';
 
+    // The stop before this one on its day, and when this stop would start
+    // after it: its end plus the travel time from it.
+    final index = item == null ? -1 : day!.items.indexOf(item);
+    final previous = index > 0 ? day!.items[index - 1] : null;
+    final followsAt = previous == null ? null : previous.endMinutes + previous.item.transitMinutes;
+    final isLast = item != null && index == day!.items.length - 1;
+
+    Widget stepper({
+      required int value,
+      required int min,
+      required String less,
+      required String more,
+      required String unit,
+      required ValueChanged<int> onChanged,
+    }) =>
+        Row(
+          children: [
+            IconButton.outlined(
+              tooltip: less,
+              onPressed: value - 5 < min ? null : () => onChanged(value - 5),
+              icon: const Icon(Icons.remove),
+            ),
+            SizedBox(width: 72, child: Text('$value $unit', textAlign: TextAlign.center, style: theme.textTheme.titleSmall)),
+            IconButton.outlined(tooltip: more, onPressed: () => onChanged(value + 5), icon: const Icon(Icons.add)),
+          ],
+        );
+
     return SafeArea(
       child: ConstrainedBox(
         constraints: BoxConstraints(maxHeight: MediaQuery.sizeOf(context).height * 0.8),
@@ -103,32 +131,75 @@ class _StopSheet extends ConsumerWidget {
             ),
             const SizedBox(height: 8),
             fact('When', text(when)),
+            if (item != null && editing)
+              fact(
+                'Starts',
+                Row(
+                  children: [
+                    Text(
+                      formatTimelineMinutes(item.startMinutes),
+                      style: theme.textTheme.titleSmall?.copyWith(
+                        color: item.conflict ? theme.trip.vermilion : item.fixed ? theme.trip.tea : null,
+                      ),
+                    ),
+                    const SizedBox(width: 8),
+                    Expanded(
+                      child: Text(
+                        item.fixed ? 'fixed' : previous == null ? 'start of the day' : 'after the stop before',
+                        style: theme.textTheme.bodySmall?.copyWith(color: theme.colorScheme.onSurfaceVariant),
+                      ),
+                    ),
+                    TextButton(
+                      onPressed: () async {
+                        final minutes = await pickStartTime(context, initial: item.startMinutes, followsAt: followsAt);
+                        if (minutes != null) await controller.setFixedTime(item.item.id, minutes);
+                      },
+                      child: Text(item.fixed ? 'Change' : 'Set a time'),
+                    ),
+                    if (item.fixed)
+                      IconButton(
+                        tooltip: 'Clear the fixed time',
+                        onPressed: () => controller.setFixedTime(item.item.id, null),
+                        icon: const Icon(Icons.close),
+                      ),
+                  ],
+                ),
+              ),
+            if (item != null && item.conflict && followsAt != null)
+              Padding(
+                padding: const EdgeInsets.only(left: 96, bottom: 4),
+                child: Text(
+                  'Starts before the stop before it is done (${formatTimelineMinutes(followsAt)}).',
+                  style: theme.textTheme.bodySmall?.copyWith(color: theme.trip.vermilion),
+                ),
+              ),
             if (item != null)
               fact(
                 'Stay',
                 editing
-                    ? Row(
-                        children: [
-                          IconButton.outlined(
-                            tooltip: '5 minutes shorter',
-                            onPressed: item.item.stayMinutes <= 5
-                                ? null
-                                : () => controller.setStay(item.item.id, item.item.stayMinutes - 5),
-                            icon: const Icon(Icons.remove),
-                          ),
-                          SizedBox(
-                            width: 72,
-                            child: Text('${item.item.stayMinutes} min',
-                                textAlign: TextAlign.center, style: theme.textTheme.titleSmall),
-                          ),
-                          IconButton.outlined(
-                            tooltip: '5 minutes longer',
-                            onPressed: () => controller.setStay(item.item.id, item.item.stayMinutes + 5),
-                            icon: const Icon(Icons.add),
-                          ),
-                        ],
+                    ? stepper(
+                        value: item.item.stayMinutes,
+                        min: 5,
+                        less: '5 minutes shorter',
+                        more: '5 minutes longer',
+                        unit: 'min',
+                        onChanged: (m) => controller.setStay(item.item.id, m),
                       )
                     : text('${item.item.stayMinutes} min'),
+              ),
+            if (item != null && !isLast && (editing || item.item.transitMinutes > 0))
+              fact(
+                'Travel on',
+                editing
+                    ? stepper(
+                        value: item.item.transitMinutes,
+                        min: 0,
+                        less: '5 minutes less travel',
+                        more: '5 minutes more travel',
+                        unit: 'min',
+                        onChanged: (m) => controller.setTransit(item.item.id, m),
+                      )
+                    : text('${item.item.transitMinutes} min to the next stop'),
               ),
             if (stop.address?.trim().isNotEmpty ?? false) fact('Address', text(stop.address)),
             if (stop.description?.trim().isNotEmpty ?? false) fact('About', text(stop.description)),
@@ -190,6 +261,28 @@ class _StopSheet extends ConsumerWidget {
       ),
     );
   }
+}
+
+/// Asks for a stop's start time, in minutes from the day's midnight. A time
+/// in the small hours after an evening counts as the same night, so it runs
+/// past 24:00 (01:30 becomes 25:30), the way late pilgrimage spots are planned.
+Future<int?> pickStartTime(BuildContext context, {required int initial, int? followsAt}) async {
+  final picked = await showTimePicker(
+    context: context,
+    helpText: 'Start time',
+    initialTime: TimeOfDay(hour: (initial ~/ 60) % 24, minute: initial % 60),
+  );
+  if (picked == null) return null;
+  return startMinutesFor(picked.hour * 60 + picked.minute, after: followsAt ?? initial);
+}
+
+/// [clock] minutes on the day, moved past midnight when it falls in the
+/// small hours and [after] (when the stop would otherwise start) is in the
+/// evening or later.
+int startMinutesFor(int clock, {required int after}) {
+  const evening = 18 * 60;
+  const smallHours = 6 * 60;
+  return clock < smallHours && after >= evening ? clock + 24 * 60 : clock;
 }
 
 /// "between Fri, Apr 30 and Sat, May 1", "on Fri, Apr 30 or later", or

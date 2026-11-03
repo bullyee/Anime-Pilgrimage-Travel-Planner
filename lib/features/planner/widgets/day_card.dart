@@ -171,9 +171,15 @@ class _DayCardState extends State<DayCard> {
     final here = dragging != null && slot != null && slot.dayId == _dayId;
 
     final rows = <Widget>[];
+    PlannerItem? previous;
     for (final it in d.items) {
       if (here && slot.beforeItemId == it.item.id) rows.add(const _InsertLine());
-      if (it != d.items.first) rows.add(Divider(height: 1, indent: 72, endIndent: 12, color: theme.colorScheme.outlineVariant.withValues(alpha: 0.5)));
+      if (previous != null) {
+        rows.add(previous.item.transitMinutes > 0
+            ? _TravelLine(minutes: previous.item.transitMinutes)
+            : Divider(height: 1, indent: 72, endIndent: 12, color: theme.colorScheme.outlineVariant.withValues(alpha: 0.5)));
+      }
+      previous = it;
       rows.add(KeyedSubtree(
         key: _rowKeys.putIfAbsent(it.item.id, GlobalKey.new),
         child: StopRow(
@@ -480,6 +486,29 @@ class DragFeedbackCard extends StatelessWidget {
             Expanded(child: Text(title, maxLines: 1, overflow: TextOverflow.ellipsis, style: theme.textTheme.titleSmall)),
           ],
         ),
+      ),
+    );
+  }
+}
+
+/// The travel time between two stops, in place of the line between them.
+class _TravelLine extends StatelessWidget {
+  final int minutes;
+
+  const _TravelLine({required this.minutes});
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    final muted = theme.colorScheme.onSurfaceVariant;
+    return Padding(
+      padding: const EdgeInsets.only(left: 72, top: 2, bottom: 2),
+      child: Row(
+        children: [
+          Icon(Icons.directions_walk, size: 14, color: muted),
+          const SizedBox(width: 4),
+          Text('$minutes min', style: theme.textTheme.bodySmall?.copyWith(color: muted)),
+        ],
       ),
     );
   }

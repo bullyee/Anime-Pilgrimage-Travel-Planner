@@ -10,6 +10,7 @@ import 'package:trip_planner/core/utils/app_result.dart';
 import 'package:trip_planner/features/auth/providers/auth_provider.dart';
 import 'package:trip_planner/features/planner/controllers/day_planner_controller.dart';
 import 'package:trip_planner/features/planner/models/planner_view.dart';
+import 'package:trip_planner/features/planner/widgets/planner_sheets.dart';
 import 'package:trip_planner/features/trip/controllers/trips_controller.dart';
 import 'package:trip_planner/features/trip/providers/trip_providers.dart';
 import 'package:trip_planner/features/trip/repositories/trip_repository.dart';
@@ -147,6 +148,38 @@ void main() {
       final it = (await view(trip.id)).days[0].items.single;
       expect(it.item.stayMinutes, 25);
       expect(it.done, isTrue);
+    });
+
+    test('travel times and fixed start times shape the day', () async {
+      for (final name in ['A', 'B', 'C']) {
+        final s = await spot(trip.id, name);
+        await controller().scheduleStop(tripId: trip.id, stopId: s.id, dayId: days[0].id);
+      }
+      var v = await view(trip.id);
+      final [a, b, c] = v.days[0].items.map((it) => it.item.id).toList();
+
+      await controller().setTransit(a, 15);
+      await controller().setFixedTime(c, 14 * 60);
+      v = await view(trip.id);
+      expect(v.days[0].items.map((it) => it.startMinutes), [540, 615, 840]); // 09:00, 10:15, 14:00
+      expect(v.days[0].items.last.fixed, isTrue);
+
+      // B fixed at 09:30 starts before A is done and the walk is over.
+      await controller().setFixedTime(b, 9 * 60 + 30);
+      v = await view(trip.id);
+      expect(v.days[0].items[1].conflict, isTrue);
+
+      await controller().setFixedTime(b, null);
+      v = await view(trip.id);
+      expect(v.days[0].items[1].startMinutes, 615);
+      expect(v.days[0].items[1].fixed, isFalse);
+      expect(await controller().setTransit(a, -5), isA<Failure<void>>());
+    });
+
+    test('a time in the small hours after an evening stop runs past midnight', () {
+      expect(startMinutesFor(90, after: 22 * 60), 25 * 60 + 30); // 01:30 → 25:30
+      expect(startMinutesFor(90, after: 9 * 60), 90);
+      expect(startMinutesFor(7 * 60, after: 23 * 60), 7 * 60);
     });
 
     test('a new day goes before the backup days and makes the trip longer', () async {

@@ -5,6 +5,7 @@ import 'package:go_router/go_router.dart';
 import '../../../core/utils/app_result.dart';
 import '../../../core/utils/schedule_logic.dart';
 import '../../../shared/theme/app_theme.dart';
+import '../../../shared/widgets/name_dialog.dart';
 import '../controllers/trip_stops_controller.dart';
 import '../providers/trip_stop_providers.dart';
 
@@ -244,6 +245,39 @@ Future<void> showStopDetails(BuildContext context, WidgetRef ref, TripStopEntry 
               row('Hours', stop.businessHours),
               row('Location', '${stop.lat.toStringAsFixed(5)}, ${stop.lng.toStringAsFixed(5)}'),
               const SizedBox(height: 12),
+              Wrap(
+                spacing: 8,
+                runSpacing: 8,
+                children: [
+                  OutlinedButton.icon(
+                    onPressed: () async {
+                      final name = await askName(sheetContext, title: 'Rename this stop', action: 'Rename', initial: stop.name);
+                      if (name == null || name == stop.name || !sheetContext.mounted) return;
+                      final result = await ref.read(tripStopsControllerProvider.notifier).renameStop(stop.id, name);
+                      if (!sheetContext.mounted) return;
+                      Navigator.pop(sheetContext);
+                      if (!context.mounted) return;
+                      ScaffoldMessenger.of(context).showSnackBar(SnackBar(
+                        content: Text(switch (result) {
+                          Success() => 'Renamed to $name. Your library keeps its own name.',
+                          Failure(:final error) => error,
+                        }),
+                      ));
+                    },
+                    icon: const Icon(Icons.edit_outlined),
+                    label: const Text('Rename'),
+                  ),
+                  OutlinedButton.icon(
+                    onPressed: () {
+                      Navigator.pop(sheetContext);
+                      context.push('/library/places/${Uri.encodeComponent(stop.placeKey)}');
+                    },
+                    icon: const Icon(Icons.bookmarks_outlined),
+                    label: const Text('Place page'),
+                  ),
+                ],
+              ),
+              const SizedBox(height: 4),
               Row(
                 children: [
                   TextButton.icon(
