@@ -4,48 +4,82 @@ import 'dart:io';
 import 'package:drift/drift.dart' hide isNull, isNotNull;
 import 'package:drift/native.dart';
 import 'package:flutter_test/flutter_test.dart';
+import 'package:sqlite3/sqlite3.dart' as sqlite;
 import 'package:trip_planner/core/database/database.dart';
 import 'package:trip_planner/core/database/migrations/migration_v9_to_v10.dart';
 import 'package:trip_planner/core/utils/schedule_logic.dart';
 import 'package:trip_planner/features/library/repositories/place_repository.dart';
 import 'package:trip_planner/features/trip/repositories/trip_repository.dart';
 
-const v10Tables = [
-  'stop_labels', 'schedule_items', 'stops', 'trip_days', 'trips',
-  'place_labels', 'photos', 'place_visits', 'v10_reference_images',
-  'labels', 'places',
-];
-
-/// Builds a real v9 database file: today's schema minus the v10 tables,
-/// with user_version 9, seeded by [seed]. Reopening it runs onUpgrade(9 → 10)
-/// exactly like an installed v0.1.3 app updating.
-Future<File> v9File(Future<void> Function(AppDatabase db) seed) async {
+/// Builds a real v9 database file with user_version 9, seeded by [seed].
+/// Reopening it with AppDatabase runs onUpgrade(9 → 13) exactly like
+/// an installed v0.1.3 app updating.
+Future<File> v9File(void Function(sqlite.Database raw) seed) async {
   final dir = await Directory.systemTemp.createTemp('pr81_');
   final file = File('${dir.path}/app.sqlite');
-  final db = AppDatabase.forTesting(NativeDatabase(file));
-  await seed(db);
-  await db.customStatement('PRAGMA foreign_keys = OFF');
-  for (final t in v10Tables) {
-    await db.customStatement('DROP TABLE $t');
-  }
-  await db.customStatement('PRAGMA user_version = 9');
-  await db.close();
+  final raw = sqlite.sqlite3.open(file.path);
+  raw.execute('''
+    CREATE TABLE rois (
+      id TEXT PRIMARY KEY,
+      name TEXT NOT NULL,
+      description TEXT,
+      author_id TEXT NOT NULL,
+      is_shared INTEGER DEFAULT 0,
+      is_offline_cached INTEGER DEFAULT 0,
+      created_at INTEGER DEFAULT 0,
+      cloud_version INTEGER DEFAULT 0,
+      sync_lock_expires_at INTEGER
+    );
+    CREATE TABLE pois (
+      id TEXT PRIMARY KEY,
+      roi_id TEXT,
+      name TEXT NOT NULL,
+      description TEXT,
+      address TEXT,
+      lat REAL NOT NULL,
+      lng REAL NOT NULL,
+      business_hours TEXT,
+      contact_info TEXT,
+      local_cover_image_path TEXT,
+      remote_cover_image_url TEXT,
+      sort_order INTEGER DEFAULT 0,
+      created_at INTEGER DEFAULT 0,
+      sync_status INTEGER DEFAULT 0,
+      is_deleted INTEGER DEFAULT 0,
+      has_ever_synced INTEGER DEFAULT 0,
+      last_modified_at INTEGER,
+      author_id TEXT NOT NULL,
+      is_shared INTEGER DEFAULT 0
+    );
+    CREATE TABLE media_assets (
+      id TEXT PRIMARY KEY,
+      poi_id TEXT NOT NULL,
+      type TEXT NOT NULL,
+      local_path TEXT,
+      remote_url TEXT,
+      metadata TEXT,
+      reference_image_id TEXT,
+      created_at INTEGER DEFAULT 0,
+      author_id TEXT NOT NULL
+    );
+  ''');
+  seed(raw);
+  raw.execute('PRAGMA user_version = 9;');
+  raw.dispose();
   return file;
 }
 
 void main() {
   group('migration (real upgrade from a v9 file)', () {
     test('every photo a v0.1.3 user saved survives the upgrade', () async {
-      final file = await v9File((db) async {
-        await db.into(db.pois).insert(PoisCompanion.insert(
-            id: 'p', name: 'Uji bridge', lat: 34.9, lng: 135.8, authorId: 'u'));
+      final file = await v9File((raw) {
+        raw.execute("INSERT INTO pois (id, name, lat, lng, author_id) VALUES ('p', 'Uji bridge', 34.9, 135.8, 'u');");
         for (final (id, type) in [
           ('shot', 'user_photo'),
           ('compare', 'comparison_image'), // Compose → comparison
           ('upload', 'uploaded_image'), // Edit Photo on a gallery image
         ]) {
-          await db.into(db.mediaAssets).insert(MediaAssetsCompanion.insert(
-              id: id, poiId: 'p', authorId: 'u', type: type, localPath: Value('/x/$id.jpg')));
+          raw.execute("INSERT INTO media_assets (id, poi_id, author_id, type, local_path) VALUES ('$id', 'p', 'u', '$type', '/x/$id.jpg');");
         }
       });
 
@@ -58,10 +92,8 @@ void main() {
     });
 
     test('a spot deleted but not yet pushed stays deleted', () async {
-      final file = await v9File((db) async {
-        await db.into(db.pois).insert(PoisCompanion.insert(
-            id: 'gone', name: 'Deleted spot', lat: 0, lng: 0, authorId: 'u',
-            isDeleted: const Value(true), hasEverSynced: const Value(true)));
+      final file = await v9File((raw) {
+        raw.execute("INSERT INTO pois (id, name, lat, lng, author_id, is_deleted, has_ever_synced) VALUES ('gone', 'Deleted spot', 0, 0, 'u', 1, 1);");
       });
 
       final db = AppDatabase.forTesting(NativeDatabase(file));
@@ -87,8 +119,15 @@ void main() {
 
     test('two v9 regions with the same name do not break label lookup', () async {
       // ROIs were used as trips, so two named "Kyoto" is ordinary.
+      await db.customStatement('''
+        CREATE TABLE IF NOT EXISTS rois (
+          id TEXT PRIMARY KEY,
+          name TEXT NOT NULL,
+          created_at INTEGER DEFAULT 0
+        );
+      ''');
       for (final id in ['kyoto-2025', 'kyoto-2026']) {
-        await db.into(db.rois).insert(RoisCompanion.insert(id: id, name: 'Kyoto', authorId: 'u'));
+        await db.customStatement("INSERT INTO rois (id, name, created_at) VALUES (?, 'Kyoto', 1000);", [id]);
       }
       await MigrationV9ToV10(db).migrateData();
 
@@ -168,4 +207,3 @@ void main() {
     });
   });
 }
-

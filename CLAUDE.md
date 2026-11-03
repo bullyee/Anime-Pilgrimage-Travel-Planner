@@ -7,28 +7,29 @@ Built with Flutter (Dart). SQLite via Drift for local storage. Riverpod for stat
 ## Architecture
 - **Mobile App (Flutter)**: Primary execution environment. Offline-first, GPS, camera, AR.
 - **PC Web (Next.js/React)**: Deep planning environment (future phase).
-- **Sync Model**: two-way Firestore sync for shared trips (`lib/features/sync/`, #65, #79): dirty POIs and time chunks are pushed after a 2 s debounce, and a trip is pulled when its `cloudVersion` rises. A trip's only member is its creator (there are no invites yet), so sync runs between one user's devices; photos and reference images don't sync. Manual JSON export/import was removed from the UI in v0.1.1.
-- **Data model status**: frozen, bug fixes only. #72 proposes the replacement (a personal `places` library plus shared `trips` with day blocks), planned for v0.2.0.
+- **Sync Model**: two-way Firestore sync for shared trips (`lib/features/sync/`): personal library (`places`, `labels`, `photos`) remains private on device; shared trips (`tripsV2`) with day blocks, stops, and schedule items sync across group members (Stage 4 RBAC rules and backend services in place; UI share sheet and join flow in progress).
+- **Data model**: unified `places` library and `trips` planner (schemaVersion 13).
 
 ## Core Modules
-1. **ROI (Region of Interest)**: Macro-container (e.g., "Kyoto City", "Akihabara") for grouping POIs
-2. **POI (Point of Interest)**: Core location node with spatial data, metadata, media, scheduling
-3. **Trip Calendar**: Time chunks for scheduling POIs with drag-and-drop
-4. **Anime Camera**: shoot against an anime reference, then a photo editor (filters, rotate, crop) with a Compose/cutout flow. Android opens the phone's own camera app with the reference in a small draggable floating window (`ReferenceOverlay.kt`, `SYSTEM_ALERT_WINDOW`); iOS uses the in-app camera (`camera_screen.dart`); desktop/web have none. Entry point: `openAnimeCamera`. Why: `docs/anime-camera-decision.md`
-5. **Anime & Tag**: first-class entities linked to POIs many-to-many; anime can be imported from Bangumi + Anitabi
-6. **Ticket Organizer**: removed in v0.1.1 (the `ticket_qr` media type remains)
-7. **VLM Pipeline**: planned, not implemented — Gemini API for parsing screenshots into POI data via share extension
+1. **Library (`places`, `labels`, `photos`)**: Personal library of pilgrimage spots, anime & region labels, user photos and comparison frames.
+2. **Trip Planner (`trips`, `trip_days`, `stops`, `schedule_items`)**: Multi-day trip itineraries, day blocks, sequenced stops, and schedule items.
+3. **Anime Camera**: shoot against an anime reference, then a photo editor (filters, rotate, crop) with a Compose/cutout flow. Android opens the phone's own camera app with the reference in a small draggable floating window (`ReferenceOverlay.kt`, `SYSTEM_ALERT_WINDOW`); iOS uses the in-app camera (`camera_screen.dart`); desktop/web have none. Entry point: `openAnimeCamera`. Why: `docs/anime-camera-decision.md`
+4. **Labels**: Anime, tag, and region labels (`labels` table with kind `anime`/`tag`/`region`) linked to places and stops via `place_labels` and `stop_labels`; anime can be imported from Bangumi + Anitabi.
+5. **VLM Pipeline**: planned, not implemented — Gemini API for parsing screenshots into POI data via share extension.
 
-## Database Schema (SQLite via Drift, schemaVersion 9)
-Source of truth: `lib/core/database/tables.dart`; migrations live in `lib/core/database/database.dart`. Rows carry `author_id` (and `is_shared` on shareable tables) for cloud sync.
-- `rois`: id, name, description, is_offline_cached, created_at, cloud_version, sync_lock_expires_at
-- `pois`: id, roi_id (nullable), name, description, address, lat, lng, business_hours, contact_info, local_cover_image_path, remote_cover_image_url, sort_order, created_at, sync_status, is_deleted, has_ever_synced, last_modified_at
-- `animes`: id, name, description, bangumi_id (unique), created_at
-- `tags`: id, name, description, created_at
-- `poi_animes`, `poi_tags`: many-to-many junctions, cascade on delete
-- `time_chunks`: id, poi_id, date, start_time, end_time, status (backlog/scheduled/skipped/completed), sort_order, duration, transit_duration, is_fixed_time, sync_status, is_deleted, has_ever_synced, original_start_time, original_end_time, last_modified_at
-- `reference_images`: id, poi_id, local_path, remote_url, metadata, created_at
-- `media_assets`: id, poi_id, type (reference_frame/user_photo/ticket_qr/audio_bgm), local_path, remote_url, metadata, reference_image_id, created_at
+## Database Schema (SQLite via Drift, schemaVersion 13)
+Source of truth: `lib/core/database/tables_v10.dart`; migrations live in `lib/core/database/database.dart`.
+- `places`: personal pilgrimage spot library (anitabi imports & custom user spots)
+- `labels`: unified tags, regions, and animes
+- `place_labels`: many-to-many junction between places and labels
+- `photos`: user-taken photos and edits
+- `place_visits`: visit history for places
+- `v10_reference_images`: scene reference frames and metadata
+- `trips`: multi-day travel plans (private or group-shared)
+- `trip_days`: day blocks within trips
+- `stops`: spots added to trips
+- `stop_labels`: label associations for trip stops
+- `schedule_items`: scheduled visits within day blocks
 
 ## Tech Stack
 - Flutter / Dart

@@ -30,77 +30,21 @@ service cloud.firestore {
       );
     }
 
-    function isStrictTimeChunkSafe() {
-      let data = request.resource.data;
-      let allowedKeys = [
-        'id', 'poiId', 'date', 'startTime', 'endTime',
-        'status', 'sortOrder', 'duration', 'transitDuration',
-        'isFixedTime', 'authorId', 'updatedAt'
-      ];
-      let hasOnlyAllowedKeys = data.keys().hasOnly(allowedKeys);
-
-      let isStatusSafe = !('status' in data) || data.status == null || (data.status is string && data.status.size() <= 30);
-      let isIdSafe = !('id' in data) || (data.id is string && data.id.size() <= 100);
-      let isDurationSafe = !('duration' in data) || (data.duration is number && data.duration >= 0);
-
-      return hasOnlyAllowedKeys && isStatusSafe && isIdSafe && isDurationSafe;
-    }
-
-    function isStrictPoiSafe() {
-      let data = request.resource.data;
-      let allowedKeys = [
-        'id', 'roiId', 'authorId', 'name', 'description', 'address',
-        'lat', 'lng', 'businessHours', 'contactInfo',
-        'remoteCoverImageUrl', 'sortOrder', 'updatedAt'
-      ];
-      return data.keys().hasOnly(allowedKeys)
-        && (!('id' in data) || (data.id is string && data.id.size() <= 100))
-        && (!('name' in data) || (data.name is string && data.name.size() <= 300));
-    }
-
     // ==========================================
-    // 3. Dual-Track: Shared Trips (v0.1.x Legacy)
+    // 3. Dual-Track: Shared Trips (v0.1.x Legacy - Read Only)
     // ==========================================
     match /trips/{tripId} {
-      // Creator must be the author and list themselves as a member.
-      allow create: if isAuthenticated()
-        && request.resource.data.authorId == request.auth.uid
-        && (request.auth.uid in request.resource.data.members);
-
       allow read: if isAuthenticated() && (resource == null || isTripMember(tripId));
-      allow delete: if isAuthenticated() && isTripMember(tripId);
-
-      allow update: if isAuthenticated() && isTripMember(tripId) && (
-        (request.resource.data.diff(resource.data).affectedKeys().hasOnly(['syncLock']))
-        ||
-        (
-          request.resource.data.diff(resource.data).affectedKeys().hasOnly(['members'])
-          && resource.data.members.hasAll(request.resource.data.members)
-          && request.resource.data.members.size() == resource.data.members.size() - 1
-          && !(request.auth.uid in request.resource.data.members)
-        )
-        ||
-        (
-          request.resource.data.cloudVersion == resource.data.cloudVersion + 1
-          && request.resource.data.authorId == resource.data.authorId
-          && request.resource.data.members == resource.data.members
-          && (!('syncLock' in request.resource.data) || request.resource.data.syncLock == null)
-          && (
-            resource.data.syncLock == null
-            || request.time > resource.data.syncLock.expiresAt
-            || resource.data.syncLock.userId == request.auth.uid
-          )
-        )
-      );
+      allow create, update, delete: if false;
 
       match /timeChunks/{chunkId} {
-        allow read, delete: if isAuthenticated() && isTripMember(tripId);
-        allow create, update: if isAuthenticated() && isTripMember(tripId) && isStrictTimeChunkSafe();
+        allow read: if isAuthenticated() && isTripMember(tripId);
+        allow create, update, delete: if false;
       }
 
       match /pois/{poiId} {
-        allow read, delete: if isAuthenticated() && isTripMember(tripId);
-        allow create, update: if isAuthenticated() && isTripMember(tripId) && isStrictPoiSafe();
+        allow read: if isAuthenticated() && isTripMember(tripId);
+        allow create, update, delete: if false;
       }
     }
 

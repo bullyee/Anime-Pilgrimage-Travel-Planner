@@ -46,7 +46,30 @@ def main():
                 print(f"   Response: {resp}")
             sys.exit(1)
 
-    # 1. Legacy trips writes are preserved for v0.1.x clients (dual-track mode)
+    # 1. Legacy trips writes are denied (read-only mode in schema v13)
+    legacy_trip_data = {
+        'fields': {
+            'id': {'stringValue': 'legacy_trip_1'},
+            'authorId': {'stringValue': 'alice'},
+            'members': {'arrayValue': {'values': [{'stringValue': 'alice'}]}},
+        }
+    }
+    code, _ = api_request('POST', 'trips?documentId=legacy_trip_1', legacy_trip_data, user_id='alice')
+    assert_status("Legacy trips: Create is denied in v13 (403)", 403, code)
+
+    code, _ = api_request('PATCH', 'trips/legacy_trip_1', legacy_trip_data, user_id='alice')
+    assert_status("Legacy trips: Update is denied in v13 (403)", 403, code)
+
+    code, _ = api_request('DELETE', 'trips/legacy_trip_1', user_id='alice')
+    assert_status("Legacy trips: Delete is denied in v13 (403)", 403, code)
+
+    time_chunk_data = {'fields': {'id': {'stringValue': 'chunk_1'}}}
+    code, _ = api_request('POST', 'trips/legacy_trip_1/timeChunks?documentId=chunk_1', time_chunk_data, user_id='alice')
+    assert_status("Legacy timeChunks: Create is denied in v13 (403)", 403, code)
+
+    poi_data = {'fields': {'id': {'stringValue': 'poi_1'}}}
+    code, _ = api_request('POST', 'trips/legacy_trip_1/pois?documentId=poi_1', poi_data, user_id='alice')
+    assert_status("Legacy pois: Create is denied in v13 (403)", 403, code)
 
     # 2. tripsV2: Unauthenticated create must be denied
     v2_trip_data = {
