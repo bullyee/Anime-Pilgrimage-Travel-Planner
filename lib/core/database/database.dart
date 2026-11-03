@@ -68,10 +68,10 @@ class AppDatabase extends _$AppDatabase {
             // Migrate legacy data to v10 tables (runs once for any upgrade from < 10).
             await MigrationV9ToV10(this).migrateData();
           }
-          if (from < 11 && from >= 10) {
+          if (from < 11 && from >= 10 && !await _hasColumn('stops', 'area')) {
             await m.addColumn(stops, stops.area);
           }
-          if (from < 12 && from >= 10) {
+          if (from < 12 && from >= 10 && !await _hasColumn('stops', 'note')) {
             await m.addColumn(stops, stops.note);
           }
           if (from < 13) {
@@ -84,4 +84,9 @@ class AppDatabase extends _$AppDatabase {
           await customStatement('PRAGMA foreign_keys = ON');
         },
       );
+
+  Future<bool> _hasColumn(String table, String column) async {
+    final columns = await customSelect('PRAGMA table_info($table)').get();
+    return columns.any((c) => c.read<String>('name') == column);
+  }
 }

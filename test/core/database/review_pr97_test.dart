@@ -2,6 +2,7 @@
 // 41ca90e and passes once the upgrade is fixed.
 import 'dart:io';
 
+import 'package:drift/drift.dart';
 import 'package:drift/native.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:sqlite3/sqlite3.dart' as sqlite;
@@ -55,8 +56,8 @@ void _createSchema5Tables(sqlite.Database raw) {
       cover_image_uri TEXT, created_at INTEGER NOT NULL);
     CREATE TABLE poi_animes (poi_id TEXT, anime_id TEXT, PRIMARY KEY (poi_id, anime_id));
     CREATE TABLE poi_tags (poi_id TEXT, tag_id TEXT, PRIMARY KEY (poi_id, tag_id));
-    CREATE TABLE reference_images (id TEXT PRIMARY KEY, poi_id TEXT, local_uri TEXT, metadata TEXT, created_at INTEGER NOT NULL);
-    CREATE TABLE media_assets (id TEXT PRIMARY KEY, poi_id TEXT NOT NULL, type TEXT NOT NULL, local_uri TEXT, metadata TEXT, reference_image_id TEXT, created_at INTEGER NOT NULL);
+    CREATE TABLE reference_images (id TEXT PRIMARY KEY, poi_id TEXT, local_uri TEXT, remote_url TEXT, metadata TEXT, created_at INTEGER NOT NULL);
+    CREATE TABLE media_assets (id TEXT PRIMARY KEY, poi_id TEXT NOT NULL, type TEXT NOT NULL, local_uri TEXT, remote_url TEXT, metadata TEXT, reference_image_id TEXT, created_at INTEGER NOT NULL);
     CREATE TABLE time_chunks (id TEXT PRIMARY KEY, poi_id TEXT, date TEXT, start_time TEXT, end_time TEXT, status TEXT);
   ''');
 }
@@ -215,5 +216,43 @@ void main() {
       final links = await db.select(db.placeLabels).get();
       expect([...labels.map((l) => l.name), ...links.map((l) => '${l.placeKey} -> ${l.labelId}')], isEmpty);
     });
+  });
+
+  test('reopening a database stamped back to schema 10 does not fail on duplicate column name', () async {
+    // 1. Create a database with the current schema (v13)
+    var db = await _open(file);
+    await db.into(db.trips).insert(
+      TripsCompanion.insert(
+        id: 't1',
+        title: 'Kyoto Trip',
+        ownerId: 'u1',
+      ),
+    );
+    await db.into(db.stops).insert(
+      StopsCompanion.insert(
+        id: 's1',
+        tripId: 't1',
+        placeKey: 'p1',
+        name: 'Uji Bridge',
+        lat: 34.89,
+        lng: 135.80,
+        area: const Value('Uji'),
+        note: const Value('Watch sunset'),
+        addedBy: 'u1',
+      ),
+    );
+    await db.close();
+
+    // 2. Simulate dev phone where version was stamped back to 10
+    final raw = sqlite.sqlite3.open(file.path);
+    raw.execute('PRAGMA user_version = 10;');
+    raw.dispose();
+
+    // 3. Reopening must succeed without throwing "duplicate column name: area"
+    db = await _open(file);
+    final stop = await (db.select(db.stops)..where((s) => s.id.equals('s1'))).getSingle();
+    expect(stop.area, 'Uji');
+    expect(stop.note, 'Watch sunset');
+    expect(db.schemaVersion, 13);
   });
 }

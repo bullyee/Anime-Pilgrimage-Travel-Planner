@@ -68,10 +68,8 @@ class MigrationV9ToV10 {
 
   /// Migrates all data from v9 tables into v10 tables.
   ///
-  /// This operation is idempotent (`INSERT OR IGNORE` / `insertOnConflictUpdate`)
-  /// and keeps legacy tables intact until [dropLegacyTables] is called at Stage 2
-  /// cutover. Re-run [migrateData] right before dropping the legacy tables so
-  /// any writes made through legacy screens during the transition are migrated.
+  /// Runs once, when upgrading from below 10. Re-running it on a v10+ database
+  /// undoes library edits (photo kinds reset, merged/deleted places and labels resurrected).
   Future<void> migrateData() async {
     // Ensure unique partial indexes on labels exist before inserting so
     // INSERT OR IGNORE naturally deduplicates against both legacy and v10 rows.

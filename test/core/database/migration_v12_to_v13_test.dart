@@ -154,7 +154,7 @@ void main() {
       }
     });
 
-    test('real upgrade from v12 file drops legacy tables and brings over rows written after v10 exactly once', () async {
+    test('real upgrade from v12 file drops legacy tables and preserves v10 library without re-migration', () async {
       final tempDir = await Directory.systemTemp.createTemp('db_v12_v13_test_');
       final dbFile = File('${tempDir.path}/app_v12.db');
       addTearDown(() async {

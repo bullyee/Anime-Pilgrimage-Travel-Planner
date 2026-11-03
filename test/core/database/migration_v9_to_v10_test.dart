@@ -369,7 +369,7 @@ void main() {
       expect(pl.single.placeKey, equals('poi_1'));
       expect(pl.single.labelId, equals('anime_with_bgm'));
 
-      // Re-running migrateData() at Stage 2 cutover after another POI is added in v9 is idempotent
+      // Re-running migrateData() directly (without library edits in v10) is idempotent
       await db.customStatement(
         'INSERT INTO pois (id, name, lat, lng, author_id) VALUES (?, ?, ?, ?, ?);',
         ['poi_2', 'Music Room', 35.21, 136.21, 'u1'],
