@@ -193,7 +193,9 @@ class _DayRow extends StatelessWidget {
         style: today ? TextStyle(color: p.tea, fontWeight: FontWeight.w700) : null,
       ),
       subtitle: Text(
-        block.isBackup ? (block.block.title ?? 'No date') : date == null ? 'No date yet' : DateFormat.MMMEd().format(date),
+        block.isBackup
+            ? (block.block.title ?? 'No date')
+            : [date == null ? 'No date yet' : DateFormat.MMMEd().format(date), ?block.block.title].join(' · '),
       ),
       trailing: block.block.pinnedDate == null
           ? null

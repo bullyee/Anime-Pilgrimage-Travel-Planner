@@ -42,6 +42,16 @@ final libraryEntriesProvider = Provider.autoDispose<AsyncValue<List<LibraryEntry
   ));
 });
 
+/// Each place's cover file, by place key, for the places that have one.
+final placeCoversProvider = StreamProvider.autoDispose<Map<String, String>>((ref) {
+  final db = ref.watch(databaseProvider);
+  final query = db.select(db.places)..where((p) => p.coverLocalPath.isNotNull());
+  return query.watch().map((places) => {
+        for (final p in places)
+          if (p.coverLocalPath!.isNotEmpty) p.placeKey: p.coverLocalPath!,
+      });
+});
+
 /// The files of each place's anime frames, oldest first, by place key: the
 /// camera's place picker shows the first as a thumbnail. Frames that only
 /// have a remote copy are left out.

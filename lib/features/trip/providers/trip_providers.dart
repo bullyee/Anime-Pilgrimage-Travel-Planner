@@ -51,6 +51,11 @@ final scheduleItemsForDayProvider = StreamProvider.autoDispose.family<List<Sched
 });
 
 /// Streams labels attached to a specific [stopId].
+final stopDetailProvider = StreamProvider.autoDispose.family<Stop?, String>((ref, stopId) {
+  final repo = ref.watch(tripRepositoryProvider);
+  return repo.watchStop(stopId);
+});
+
 final stopLabelsProvider = StreamProvider.autoDispose.family<List<Label>, String>((ref, stopId) {
   final repo = ref.watch(tripRepositoryProvider);
   return repo.watchLabelsForStop(stopId);

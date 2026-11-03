@@ -7,6 +7,7 @@ import 'package:intl/intl.dart';
 import '../../../core/utils/app_result.dart';
 import '../../../core/utils/schedule_logic.dart';
 import '../../../shared/theme/app_theme.dart';
+import '../../../shared/widgets/name_dialog.dart';
 import '../controllers/day_planner_controller.dart';
 import '../models/planner_view.dart';
 import '../providers/planner_providers.dart';
@@ -319,6 +320,18 @@ class _DayPlannerState extends ConsumerState<DayPlanner> {
       onMoveToTrip: (day) async =>
           _report(await _controller.moveDayToTrip(widget.tripId, day.day), ok: 'Added the backup day to the trip.'),
       onRemove: _removeDay,
+      onRename: (day) async {
+        final title = await askName(
+          context,
+          title: day.day.title == null ? 'Name ${dayLabel(day)}' : 'Rename ${dayLabel(day)}',
+          action: 'Save',
+          initial: day.day.title ?? '',
+          allowEmpty: true,
+          message: 'For example "Uji" or "Rainy day". Leave it empty to take the name off.',
+        );
+        if (title == null) return;
+        _report(await _controller.setDayTitle(day.day.id, title));
+      },
       onZoomOut: () => widget.onGridChanged(true),
       registerList: (id, handle) => _lists[id] = handle,
       unregisterList: (id, handle) {

@@ -1,5 +1,3 @@
-import 'dart:io';
-
 import 'package:flutter/material.dart';
 import 'package:flutter_map/flutter_map.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
@@ -15,6 +13,7 @@ import '../models/library_entry.dart';
 import '../providers/library_providers.dart';
 import '../providers/place_providers.dart';
 import '../widgets/label_widgets.dart';
+import '../widgets/spot_thumb.dart';
 import '../widgets/trip_picker.dart';
 
 /// The personal library: saved places as a list or on a map, narrowed by a
@@ -588,21 +587,21 @@ class _PlaceTile extends StatelessWidget {
       selectedTileColor: theme.trip.teaSoft,
       selectedColor: theme.colorScheme.onSurface,
       onLongPress: onLongPress,
-      leading: selecting
-          ? Container(
-              width: 48,
-              height: 48,
-              decoration: BoxDecoration(
-                color: selected ? theme.trip.tea : Colors.transparent,
-                borderRadius: BorderRadius.circular(12),
-                border: Border.all(color: selected ? theme.trip.tea : theme.colorScheme.outline, width: 2),
-              ),
-              child: selected ? Icon(Icons.check, color: theme.colorScheme.surface) : null,
-            )
-          : PlaceThumb(entry: entry),
+      leading: PlaceThumb(entry: entry),
       title: Text(place.name, maxLines: 1, overflow: TextOverflow.ellipsis),
       subtitle: subtitle.isEmpty ? null : Text(subtitle, maxLines: 1, overflow: TextOverflow.ellipsis),
-      trailing: !entry.isSaved
+      trailing: selecting
+          ? Container(
+              width: 28,
+              height: 28,
+              decoration: BoxDecoration(
+                color: selected ? theme.trip.tea : Colors.transparent,
+                borderRadius: BorderRadius.circular(8),
+                border: Border.all(color: selected ? theme.trip.tea : theme.colorScheme.outline, width: 2),
+              ),
+              child: selected ? Icon(Icons.check, size: 18, color: theme.colorScheme.surface) : null,
+            )
+          : !entry.isSaved
           ? Text('Only in trips', style: theme.textTheme.labelSmall?.copyWith(color: theme.colorScheme.onSurfaceVariant))
           : trips == 0
               ? null
@@ -619,9 +618,9 @@ class _PlaceTile extends StatelessWidget {
   }
 }
 
-/// A place's own cover photo, or an icon tinted by its first label. Covers
-/// are only read from the device; remote covers (Anitabi's image hosts) are
-/// never fetched for a list.
+/// A place's cover, else its first anime frame, else an icon tinted by its
+/// first label. Only files on the device are shown; remote covers (Anitabi's
+/// image hosts) are never fetched for a list.
 class PlaceThumb extends StatelessWidget {
   final LibraryEntry entry;
 
@@ -639,19 +638,7 @@ class PlaceThumb extends StatelessWidget {
       child: Icon(entry.labels.any((l) => l.kind == 'anime') ? Icons.photo_camera_outlined : Icons.place_outlined,
           color: foreground),
     );
-    final path = entry.place.coverLocalPath;
-    if (path == null || path.isEmpty) return fallback;
-    return ClipRRect(
-      borderRadius: BorderRadius.circular(12),
-      child: Image.file(
-        File(path),
-        width: 48,
-        height: 48,
-        fit: BoxFit.cover,
-        cacheWidth: 144,
-        errorBuilder: (_, _, _) => fallback,
-      ),
-    );
+    return SpotThumb(placeKey: entry.place.placeKey, fallback: fallback);
   }
 }
 

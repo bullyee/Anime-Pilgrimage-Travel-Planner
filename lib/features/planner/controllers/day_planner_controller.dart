@@ -91,6 +91,15 @@ class DayPlannerController extends Notifier<AsyncValue<void>> {
       .read(tripRepositoryProvider)
       .updateScheduleItemStatus(itemId: itemId, status: visited ? 'done' : 'planned'));
 
+  /// Names a day, such as "Uji" or "Rainy day", or takes the name off when
+  /// [title] is empty.
+  Future<AppResult<void>> setDayTitle(String dayId, String title) {
+    final trimmed = title.trim();
+    return _run(() => ref
+        .read(tripRepositoryProvider)
+        .updateDayBlock(TripDaysCompanion(id: Value(dayId), title: Value(trimmed.isEmpty ? null : trimmed))));
+  }
+
   /// Swaps two days: their stops trade places, and the dates stay with the
   /// positions. Pinned days stay where they are, so they can't be swapped.
   Future<AppResult<void>> swapDays({required TripDay a, required TripDay b}) {

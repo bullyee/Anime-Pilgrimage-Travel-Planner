@@ -87,6 +87,16 @@ class PlaceController extends Notifier<AsyncValue<void>> {
     });
   }
 
+  /// Takes back today's visit recorded for [tripId], when marking a stop
+  /// visited was a mistake. Earlier visits stay.
+  Future<AppResult<void>> removeVisitToday(String placeKey, {required String tripId}) => _run(() async {
+        final repo = ref.read(placeRepositoryProvider);
+        final today = isoDate(DateTime.now());
+        for (final v in await repo.getVisitsForPlace(placeKey)) {
+          if (v.date == today && v.tripId == tripId) await repo.deleteVisit(v.id);
+        }
+      });
+
   Future<AppResult<void>> deleteVisit(String visitId) => _run(() => ref.read(placeRepositoryProvider).deleteVisit(visitId));
 
   /// Lets the user pick anime frames (screenshots) from the gallery and adds

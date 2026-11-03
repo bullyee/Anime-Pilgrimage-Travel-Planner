@@ -377,16 +377,17 @@ void main() {
       await tester.pumpAndSettle();
       expect(find.text('Today is on record already.'), findsOneWidget);
 
-      await tester.ensureVisible(find.text('Write'));
+      // Notes, like the facts, are written in the page's edit mode.
+      expect(find.byKey(const Key('placeNoteField')), findsNothing);
+      await tester.tap(find.byTooltip('Edit'));
       await tester.pumpAndSettle();
-      await tester.tap(find.text('Write'));
+      await tester.ensureVisible(find.byKey(const Key('placeNoteField')));
       await tester.pumpAndSettle();
       await tester.enterText(find.byKey(const Key('placeNoteField')), 'Bring the tripod.');
-      await tester.ensureVisible(find.text('Save'));
-      await tester.pumpAndSettle();
-      await tester.tap(find.text('Save'));
+      await tester.tap(find.text('Done'));
       await tester.pumpAndSettle();
       expect(find.text('Bring the tripod.'), findsOneWidget);
+      expect(find.byKey(const Key('placeNoteField')), findsNothing);
       final places = DriftPlaceRepository(db);
       expect((await places.getPlace('anitabi:42'))!.privateNote, 'Bring the tripod.');
       expect((await places.getVisitsForPlace('anitabi:42')), hasLength(1));
@@ -397,6 +398,9 @@ void main() {
       await _savePlace(db, 'p1', 'Uji Bridge');
       await pump(tester);
       await tester.tap(find.text('Uji Bridge'));
+      await tester.pumpAndSettle();
+      expect(find.widgetWithText(ActionChip, 'Label'), findsNothing, reason: 'labels are changed in edit mode');
+      await tester.tap(find.byTooltip('Edit'));
       await tester.pumpAndSettle();
       await tester.tap(find.widgetWithText(ActionChip, 'Label'));
       await tester.pumpAndSettle();

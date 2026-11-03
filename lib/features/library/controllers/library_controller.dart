@@ -71,6 +71,23 @@ class LibraryController extends Notifier<AsyncValue<void>> {
         await _dropUnused([labelId]);
       });
 
+  /// Puts a label on a trip's stop, for everyone in the trip, creating the
+  /// label when it doesn't exist yet.
+  Future<AppResult<Label>> addStopLabel(String stopId, {required String kind, required String name}) {
+    final trimmed = name.trim();
+    if (trimmed.isEmpty) return Future.value(const Failure('Give the label a name.'));
+    return _run(() async {
+      final label = await ref.read(placeRepositoryProvider).getOrCreateLabel(kind: kind, name: trimmed);
+      await ref.read(tripRepositoryProvider).attachLabelToStop(stopId, label.id);
+      return label;
+    });
+  }
+
+  Future<AppResult<void>> removeStopLabel(String stopId, String labelId) => _run(() async {
+        await ref.read(tripRepositoryProvider).removeLabelFromStop(stopId, labelId);
+        await _dropUnused([labelId]);
+      });
+
   /// Deletes those of [labelIds] that nothing uses any more: no place, no
   /// trip stop and no anime frame. Only labels that a change just took off
   /// something are checked, so one made in the Labels screen for later stays.
