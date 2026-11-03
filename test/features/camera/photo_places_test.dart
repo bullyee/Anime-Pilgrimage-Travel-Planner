@@ -165,7 +165,8 @@ void main() {
       expect((photo.kind, photo.derivedFromId, photo.tripId, photo.referenceImageId), ('edited', 'photo-0', 'kansai', 'frame-1'));
       expect(photo.takenAt, takenAt);
       expect(File(photo.localPath).existsSync(), isTrue, reason: 'a copy in the app');
-      expect(await db.select(db.mediaAssets).get(), isEmpty, reason: 'photos no longer go to the old table');
+      final oldTables = await db.customSelect("SELECT name FROM sqlite_master WHERE type='table' AND name='media_assets'").get();
+      expect(oldTables, isEmpty, reason: 'legacy media_assets table is dropped in schema v13');
     });
 
     test('a key that is not a place fails, and leaves no copy behind', () async {

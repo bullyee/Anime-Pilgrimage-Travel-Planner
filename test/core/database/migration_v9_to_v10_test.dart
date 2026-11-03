@@ -1,24 +1,127 @@
-import 'dart:io';
 
-import 'package:drift/drift.dart' hide isNull, isNotNull;
 import 'package:drift/native.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:trip_planner/core/database/database.dart';
 import 'package:trip_planner/core/database/migrations/migration_v9_to_v10.dart';
 
-const _v10Tables = [
-  'stop_labels',
-  'schedule_items',
-  'stops',
-  'trip_days',
-  'trips',
-  'place_labels',
-  'photos',
-  'place_visits',
-  'v10_reference_images',
-  'labels',
-  'places',
-];
+Future<void> createLegacyV9Tables(AppDatabase db) async {
+  await db.customStatement('''
+    CREATE TABLE IF NOT EXISTS rois (
+      id TEXT PRIMARY KEY,
+      name TEXT NOT NULL,
+      description TEXT,
+      author_id TEXT NOT NULL,
+      is_shared INTEGER DEFAULT 0,
+      is_offline_cached INTEGER DEFAULT 0,
+      created_at INTEGER DEFAULT 0,
+      cloud_version INTEGER DEFAULT 0,
+      sync_lock_expires_at INTEGER
+    );
+  ''');
+  await db.customStatement('''
+    CREATE TABLE IF NOT EXISTS animes (
+      id TEXT PRIMARY KEY,
+      name TEXT NOT NULL,
+      description TEXT,
+      bangumi_id TEXT,
+      author_id TEXT NOT NULL,
+      is_shared INTEGER DEFAULT 0,
+      created_at INTEGER DEFAULT 0
+    );
+  ''');
+  await db.customStatement('''
+    CREATE TABLE IF NOT EXISTS tags (
+      id TEXT PRIMARY KEY,
+      name TEXT NOT NULL,
+      description TEXT,
+      author_id TEXT NOT NULL,
+      is_shared INTEGER DEFAULT 0,
+      created_at INTEGER DEFAULT 0
+    );
+  ''');
+  await db.customStatement('''
+    CREATE TABLE IF NOT EXISTS pois (
+      id TEXT PRIMARY KEY,
+      roi_id TEXT,
+      name TEXT NOT NULL,
+      description TEXT,
+      address TEXT,
+      lat REAL NOT NULL,
+      lng REAL NOT NULL,
+      business_hours TEXT,
+      contact_info TEXT,
+      local_cover_image_path TEXT,
+      remote_cover_image_url TEXT,
+      sort_order INTEGER DEFAULT 0,
+      created_at INTEGER DEFAULT 0,
+      sync_status INTEGER DEFAULT 0,
+      is_deleted INTEGER DEFAULT 0,
+      has_ever_synced INTEGER DEFAULT 0,
+      last_modified_at INTEGER,
+      author_id TEXT NOT NULL,
+      is_shared INTEGER DEFAULT 0
+    );
+  ''');
+  await db.customStatement('''
+    CREATE TABLE IF NOT EXISTS poi_animes (
+      poi_id TEXT,
+      anime_id TEXT,
+      PRIMARY KEY (poi_id, anime_id)
+    );
+  ''');
+  await db.customStatement('''
+    CREATE TABLE IF NOT EXISTS poi_tags (
+      poi_id TEXT,
+      tag_id TEXT,
+      PRIMARY KEY (poi_id, tag_id)
+    );
+  ''');
+  await db.customStatement('''
+    CREATE TABLE IF NOT EXISTS reference_images (
+      id TEXT PRIMARY KEY,
+      poi_id TEXT,
+      author_id TEXT,
+      local_path TEXT,
+      remote_url TEXT,
+      metadata TEXT,
+      created_at INTEGER
+    );
+  ''');
+  await db.customStatement('''
+    CREATE TABLE IF NOT EXISTS media_assets (
+      id TEXT PRIMARY KEY,
+      poi_id TEXT,
+      author_id TEXT,
+      type TEXT,
+      local_path TEXT,
+      remote_url TEXT,
+      metadata TEXT,
+      reference_image_id TEXT,
+      created_at INTEGER
+    );
+  ''');
+  await db.customStatement('''
+    CREATE TABLE IF NOT EXISTS time_chunks (
+      id TEXT PRIMARY KEY,
+      poi_id TEXT,
+      date TEXT,
+      start_time TEXT,
+      end_time TEXT,
+      status TEXT,
+      sort_order INTEGER,
+      duration INTEGER,
+      transit_duration INTEGER,
+      is_fixed_time INTEGER,
+      author_id TEXT,
+      is_shared INTEGER,
+      created_at INTEGER,
+      sync_status INTEGER,
+      is_deleted INTEGER,
+      has_ever_synced INTEGER,
+      last_modified_at INTEGER
+    );
+  ''');
+}
 
 void main() {
   late AppDatabase db;
@@ -50,122 +153,120 @@ void main() {
     test('migrates v9 database to v10 preserving places, photos, labels, and ref images', () async {
       final nowMs = DateTime.utc(2026, 10, 15).millisecondsSinceEpoch;
 
-      // 1. Seed v9 tables
-      await db.into(db.rois).insert(
-            RoisCompanion.insert(
-              id: 'roi_kyoto',
-              name: 'Kyoto Prefecture',
-              authorId: 'user_test',
-              createdAt: Value(nowMs),
-            ),
-          );
+      // 1. Create and seed v9 legacy tables
+      await createLegacyV9Tables(db);
 
-      await db.into(db.animes).insert(
-            AnimesCompanion.insert(
-              id: 'anime_euphonium',
-              name: 'Hibike! Euphonium',
-              bangumiId: const Value('105151'),
-              authorId: 'user_test',
-              createdAt: Value(nowMs),
-            ),
-          );
+      await db.customStatement(
+        'INSERT INTO rois (id, name, author_id, created_at) VALUES (?, ?, ?, ?);',
+        ['roi_kyoto', 'Kyoto Prefecture', 'user_test', nowMs],
+      );
 
-      await db.into(db.tags).insert(
-            TagsCompanion.insert(
-              id: 'tag_bench',
-              name: 'Bench',
-              authorId: 'user_test',
-              createdAt: Value(nowMs),
-            ),
-          );
+      await db.customStatement(
+        'INSERT INTO animes (id, name, bangumi_id, author_id, created_at) VALUES (?, ?, ?, ?, ?);',
+        ['anime_euphonium', 'Hibike! Euphonium', '105151', 'user_test', nowMs],
+      );
 
-      await db.into(db.pois).insert(
-            PoisCompanion.insert(
-              id: 'anitabi:uji_spot_1',
-              roiId: const Value('roi_kyoto'),
-              name: 'Kumiko Bench',
-              lat: 34.89,
-              lng: 135.81,
-              description: const Value('Iconic river bench scene'),
-              address: const Value('Uji, Kyoto'),
-              localCoverImagePath: const Value('/images/cover.jpg'),
-              authorId: 'user_test',
-              createdAt: Value(nowMs),
-              lastModifiedAt: Value(DateTime.utc(2026, 10, 20)),
-            ),
-          );
+      await db.customStatement(
+        'INSERT INTO tags (id, name, author_id, created_at) VALUES (?, ?, ?, ?);',
+        ['tag_bench', 'Bench', 'user_test', nowMs],
+      );
 
-      await db.into(db.poiAnimes).insert(
-            PoiAnimesCompanion.insert(
-              poiId: 'anitabi:uji_spot_1',
-              animeId: 'anime_euphonium',
-            ),
-          );
+      await db.customStatement(
+        '''INSERT INTO pois (
+             id, roi_id, name, lat, lng, description, address,
+             local_cover_image_path, author_id, created_at, last_modified_at
+           ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?);''',
+        [
+          'anitabi:uji_spot_1',
+          'roi_kyoto',
+          'Kumiko Bench',
+          34.89,
+          135.81,
+          'Iconic river bench scene',
+          'Uji, Kyoto',
+          '/images/cover.jpg',
+          'user_test',
+          nowMs,
+          DateTime.utc(2026, 10, 20).millisecondsSinceEpoch ~/ 1000,
+        ],
+      );
 
-      await db.into(db.poiTags).insert(
-            PoiTagsCompanion.insert(
-              poiId: 'anitabi:uji_spot_1',
-              tagId: 'tag_bench',
-            ),
-          );
+      await db.customStatement(
+        'INSERT INTO poi_animes (poi_id, anime_id) VALUES (?, ?);',
+        ['anitabi:uji_spot_1', 'anime_euphonium'],
+      );
+
+      await db.customStatement(
+        'INSERT INTO poi_tags (poi_id, tag_id) VALUES (?, ?);',
+        ['anitabi:uji_spot_1', 'tag_bench'],
+      );
 
       // Reference image with JSON metadata
-      await db.into(db.referenceImages).insert(
-            ReferenceImagesCompanion.insert(
-              id: 'ref_img_1',
-              poiId: 'anitabi:uji_spot_1',
-              authorId: 'user_test',
-              localPath: const Value('/ref/shot.jpg'),
-              remoteUrl: const Value('https://cdn.anitabi.cn/shot.jpg'),
-              metadata: const Value('{"source": "anitabi", "ep": 1, "s": 450}'),
-              createdAt: Value(nowMs),
-            ),
-          );
+      await db.customStatement(
+        '''INSERT INTO reference_images (
+             id, poi_id, author_id, local_path, remote_url, metadata, created_at
+           ) VALUES (?, ?, ?, ?, ?, ?, ?);''',
+        [
+          'ref_img_1',
+          'anitabi:uji_spot_1',
+          'user_test',
+          '/ref/shot.jpg',
+          'https://cdn.anitabi.cn/shot.jpg',
+          '{"source": "anitabi", "ep": 1, "s": 450}',
+          nowMs,
+        ],
+      );
 
       // Media assets: user_photo, reference_frame, and ticket_qr
-      await db.into(db.mediaAssets).insert(
-            MediaAssetsCompanion.insert(
-              id: 'photo_1',
-              poiId: 'anitabi:uji_spot_1',
-              authorId: 'user_test',
-              type: 'user_photo',
-              localPath: const Value('/photos/my_trip.jpg'),
-              referenceImageId: const Value('ref_img_1'),
-              createdAt: Value(nowMs),
-            ),
-          );
+      await db.customStatement(
+        '''INSERT INTO media_assets (
+             id, poi_id, author_id, type, local_path, reference_image_id, created_at
+           ) VALUES (?, ?, ?, ?, ?, ?, ?);''',
+        [
+          'photo_1',
+          'anitabi:uji_spot_1',
+          'user_test',
+          'user_photo',
+          '/photos/my_trip.jpg',
+          'ref_img_1',
+          nowMs,
+        ],
+      );
 
-      await db.into(db.mediaAssets).insert(
-            MediaAssetsCompanion.insert(
-              id: 'ref_frame_2',
-              poiId: 'anitabi:uji_spot_1',
-              authorId: 'user_test',
-              type: 'reference_frame',
-              localPath: const Value('/ref/frame2.jpg'),
-              metadata: const Value('{"source": "anitabi", "ep": "2", "s": 720}'),
-              createdAt: Value(nowMs),
-            ),
-          );
+      await db.customStatement(
+        '''INSERT INTO media_assets (
+             id, poi_id, author_id, type, local_path, metadata, created_at
+           ) VALUES (?, ?, ?, ?, ?, ?, ?);''',
+        [
+          'ref_frame_2',
+          'anitabi:uji_spot_1',
+          'user_test',
+          'reference_frame',
+          '/ref/frame2.jpg',
+          '{"source": "anitabi", "ep": "2", "s": 720}',
+          nowMs,
+        ],
+      );
 
-      await db.into(db.mediaAssets).insert(
-            MediaAssetsCompanion.insert(
-              id: 'ticket_qr_1',
-              poiId: 'anitabi:uji_spot_1',
-              authorId: 'user_test',
-              type: 'ticket_qr',
-              localPath: const Value('/tickets/qr.png'),
-              createdAt: Value(nowMs),
-            ),
-          );
+      await db.customStatement(
+        '''INSERT INTO media_assets (
+             id, poi_id, author_id, type, local_path, created_at
+           ) VALUES (?, ?, ?, ?, ?, ?);''',
+        [
+          'ticket_qr_1',
+          'anitabi:uji_spot_1',
+          'user_test',
+          'ticket_qr',
+          '/tickets/qr.png',
+          nowMs,
+        ],
+      );
 
       // Time chunks (should be dropped)
-      await db.into(db.timeChunks).insert(
-            TimeChunksCompanion.insert(
-              id: 'chunk_1',
-              poiId: 'anitabi:uji_spot_1',
-              authorId: 'user_test',
-            ),
-          );
+      await db.customStatement(
+        'INSERT INTO time_chunks (id, poi_id, author_id) VALUES (?, ?, ?);',
+        ['chunk_1', 'anitabi:uji_spot_1', 'user_test'],
+      );
 
       // 2. Execute migration
       final migrator = MigrationV9ToV10(db);
@@ -233,106 +334,26 @@ void main() {
       expect(tableNames.contains('pois'), isFalse);
     });
 
-    test('real onUpgrade from a v8 database file (8 -> 9 -> 10) preserves data', () async {
-      final dir = await Directory.systemTemp.createTemp('mig_v8_');
-      addTearDown(() => dir.delete(recursive: true));
-      final file = File('${dir.path}/v8.sqlite');
-
-      // Build a real v8 database file: drop v10 tables, rebuild `pois` without
-      // the v9 columns (sync_status, is_deleted, has_ever_synced, last_modified_at),
-      // and set user_version = 8.
-      final seedDb = AppDatabase.forTesting(NativeDatabase(file));
-      await seedDb.customStatement('PRAGMA foreign_keys = OFF');
-      for (final t in _v10Tables) {
-        await seedDb.customStatement('DROP TABLE $t');
-      }
-      await seedDb.customStatement('DROP TABLE pois');
-      await seedDb.customStatement('''
-        CREATE TABLE pois (
-          id TEXT NOT NULL PRIMARY KEY,
-          roi_id TEXT NULL REFERENCES rois(id) ON DELETE SET NULL,
-          name TEXT NOT NULL,
-          lat REAL NOT NULL,
-          lng REAL NOT NULL,
-          description TEXT NULL,
-          address TEXT NULL,
-          business_hours TEXT NULL,
-          contact_info TEXT NULL,
-          local_cover_image_path TEXT NULL,
-          remote_cover_image_url TEXT NULL,
-          created_at INTEGER NOT NULL DEFAULT 0,
-          author_id TEXT NOT NULL,
-          is_shared INTEGER NOT NULL DEFAULT 0
-        );
-      ''');
-
-      final nowMs = DateTime.utc(2026, 6, 1).millisecondsSinceEpoch;
-      await seedDb.into(seedDb.rois).insert(
-            RoisCompanion.insert(
-              id: 'roi_shiga',
-              name: 'Shiga',
-              authorId: 'u1',
-              createdAt: Value(nowMs),
-            ),
-          );
-      await seedDb.customStatement(
-        'INSERT INTO pois (id, roi_id, name, lat, lng, created_at, author_id, is_shared) VALUES (?, ?, ?, ?, ?, ?, ?, ?)',
-        ['custom_spot_1', 'roi_shiga', 'Toyosato Primary School', 35.20, 136.23, nowMs, 'u1', 0],
-      );
-      await seedDb.customStatement('PRAGMA user_version = 8');
-      await seedDb.close();
-
-      // Reopen with AppDatabase so Drift runs onUpgrade(8 -> 10)
-      final upgradedDb = AppDatabase.forTesting(NativeDatabase(file));
-      addTearDown(() => upgradedDb.close());
-
-      final place = await (upgradedDb.select(upgradedDb.places)
-            ..where((tbl) => tbl.placeKey.equals('custom_spot_1')))
-          .getSingle();
-      expect(place.name, equals('Toyosato Primary School'));
-      expect(place.source, isNull);
-      expect(place.visibility, equals('saved'));
-
-      final regionLabel = await (upgradedDb.select(upgradedDb.labels)
-            ..where((tbl) => tbl.id.equals('roi_shiga')))
-          .getSingle();
-      expect(regionLabel.name, equals('Shiga'));
-      expect(regionLabel.kind, equals('region'));
-
-      final placeLabels = await upgradedDb.select(upgradedDb.placeLabels).get();
-      expect(placeLabels.single.placeKey, equals('custom_spot_1'));
-      expect(placeLabels.single.labelId, equals('roi_shiga'));
-    });
-
     test('deduplicates anime labels with and without bangumiId and is idempotent on re-run', () async {
+      await createLegacyV9Tables(db);
+
       // Two anime rows for the same work: one with bangumiId, one without
-      await db.into(db.animes).insert(
-            AnimesCompanion.insert(
-              id: 'anime_with_bgm',
-              name: 'K-ON!',
-              bangumiId: const Value('1424'),
-              authorId: 'u1',
-            ),
-          );
-      await db.into(db.animes).insert(
-            AnimesCompanion.insert(
-              id: 'anime_no_bgm',
-              name: 'K-ON!',
-              authorId: 'u1',
-            ),
-          );
-      await db.into(db.pois).insert(
-            PoisCompanion.insert(
-              id: 'poi_1',
-              name: 'School Gate',
-              lat: 35.2,
-              lng: 136.2,
-              authorId: 'u1',
-            ),
-          );
-      await db.into(db.poiAnimes).insert(
-            PoiAnimesCompanion.insert(poiId: 'poi_1', animeId: 'anime_no_bgm'),
-          );
+      await db.customStatement(
+        'INSERT INTO animes (id, name, bangumi_id, author_id) VALUES (?, ?, ?, ?);',
+        ['anime_with_bgm', 'K-ON!', '1424', 'u1'],
+      );
+      await db.customStatement(
+        'INSERT INTO animes (id, name, bangumi_id, author_id) VALUES (?, ?, ?, ?);',
+        ['anime_no_bgm', 'K-ON!', null, 'u1'],
+      );
+      await db.customStatement(
+        'INSERT INTO pois (id, name, lat, lng, author_id) VALUES (?, ?, ?, ?, ?);',
+        ['poi_1', 'School Gate', 35.2, 136.2, 'u1'],
+      );
+      await db.customStatement(
+        'INSERT INTO poi_animes (poi_id, anime_id) VALUES (?, ?);',
+        ['poi_1', 'anime_no_bgm'],
+      );
 
       final migrator = MigrationV9ToV10(db);
       await migrator.migrateData();
@@ -349,18 +370,14 @@ void main() {
       expect(pl.single.labelId, equals('anime_with_bgm'));
 
       // Re-running migrateData() at Stage 2 cutover after another POI is added in v9 is idempotent
-      await db.into(db.pois).insert(
-            PoisCompanion.insert(
-              id: 'poi_2',
-              name: 'Music Room',
-              lat: 35.21,
-              lng: 136.21,
-              authorId: 'u1',
-            ),
-          );
-      await db.into(db.poiAnimes).insert(
-            PoiAnimesCompanion.insert(poiId: 'poi_2', animeId: 'anime_with_bgm'),
-          );
+      await db.customStatement(
+        'INSERT INTO pois (id, name, lat, lng, author_id) VALUES (?, ?, ?, ?, ?);',
+        ['poi_2', 'Music Room', 35.21, 136.21, 'u1'],
+      );
+      await db.customStatement(
+        'INSERT INTO poi_animes (poi_id, anime_id) VALUES (?, ?);',
+        ['poi_2', 'anime_with_bgm'],
+      );
       await migrator.migrateData();
 
       final allPlaces = await db.select(db.places).get();

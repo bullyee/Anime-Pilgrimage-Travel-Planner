@@ -2,7 +2,6 @@ import 'dart:ui'; // Added for PlatformDispatcher
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:firebase_core/firebase_core.dart';
-import 'package:trip_planner/core/providers/sync_provider.dart';
 import 'firebase_options.dart';
 
 import 'core/router/app_router.dart';
@@ -68,7 +67,6 @@ class TripPlannerApp extends ConsumerWidget {
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     final goRouter = ref.watch(routerProvider);
-    ref.watch(syncEngineProvider);
     ref.watch(syncEngineServiceV2Provider);
 
     return MaterialApp.router(
