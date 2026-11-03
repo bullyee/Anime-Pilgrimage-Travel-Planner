@@ -159,7 +159,7 @@ class ThumbnailCacheService {
   /// Calculate total size of cached thumbnails in bytes.
   Future<int> getCacheSizeBytes() async {
     try {
-      final dir = _overrideCacheDir ?? await getApplicationCacheDirectory();
+      final dir = _overrideCacheDir ?? await getApplicationSupportDirectory();
       final thumbDir = Directory(p.join(dir.path, 'reference_thumbnails'));
       if (!await thumbDir.exists()) return 0;
 
@@ -178,7 +178,7 @@ class ThumbnailCacheService {
   /// Clear the thumbnail cache from disk.
   Future<void> clearCache() async {
     try {
-      final dir = _overrideCacheDir ?? await getApplicationCacheDirectory();
+      final dir = _overrideCacheDir ?? await getApplicationSupportDirectory();
       final thumbDir = Directory(p.join(dir.path, 'reference_thumbnails'));
       if (await thumbDir.exists()) {
         await thumbDir.delete(recursive: true);

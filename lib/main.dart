@@ -7,6 +7,7 @@ import 'firebase_options.dart';
 
 import 'core/router/app_router.dart';
 import 'features/poi/services/background_photo_save.dart';
+import 'features/sync/providers/sync_v2_providers.dart';
 import 'shared/theme/app_theme.dart';
 // Added for custom error monitoring
 import 'core/utils/app_logger.dart';
@@ -68,6 +69,7 @@ class TripPlannerApp extends ConsumerWidget {
   Widget build(BuildContext context, WidgetRef ref) {
     final goRouter = ref.watch(routerProvider);
     ref.watch(syncEngineProvider);
+    ref.watch(syncEngineServiceV2Provider);
 
     return MaterialApp.router(
       title: 'Trip Planner',

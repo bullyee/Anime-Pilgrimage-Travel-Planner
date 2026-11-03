@@ -9864,6 +9864,15 @@ class $StopsTable extends Stops with TableInfo<$StopsTable, Stop> {
     type: DriftSqlType.string,
     requiredDuringInsert: false,
   );
+  static const VerificationMeta _noteMeta = const VerificationMeta('note');
+  @override
+  late final GeneratedColumn<String> note = GeneratedColumn<String>(
+    'note',
+    aliasedName,
+    true,
+    type: DriftSqlType.string,
+    requiredDuringInsert: false,
+  );
   static const VerificationMeta _addedByMeta = const VerificationMeta(
     'addedBy',
   );
@@ -9948,6 +9957,7 @@ class $StopsTable extends Stops with TableInfo<$StopsTable, Stop> {
     source,
     sourceUrl,
     area,
+    note,
     addedBy,
     createdAt,
     updatedAt,
@@ -10093,6 +10103,12 @@ class $StopsTable extends Stops with TableInfo<$StopsTable, Stop> {
         area.isAcceptableOrUnknown(data['area']!, _areaMeta),
       );
     }
+    if (data.containsKey('note')) {
+      context.handle(
+        _noteMeta,
+        note.isAcceptableOrUnknown(data['note']!, _noteMeta),
+      );
+    }
     if (data.containsKey('added_by')) {
       context.handle(
         _addedByMeta,
@@ -10196,6 +10212,10 @@ class $StopsTable extends Stops with TableInfo<$StopsTable, Stop> {
         DriftSqlType.string,
         data['${effectivePrefix}area'],
       ),
+      note: attachedDatabase.typeMapping.read(
+        DriftSqlType.string,
+        data['${effectivePrefix}note'],
+      ),
       addedBy: attachedDatabase.typeMapping.read(
         DriftSqlType.string,
         data['${effectivePrefix}added_by'],
@@ -10258,6 +10278,7 @@ class Stop extends DataClass implements Insertable<Stop> {
   final String? source;
   final String? sourceUrl;
   final String? area;
+  final String? note;
   final String addedBy;
   final DateTime createdAt;
   final DateTime updatedAt;
@@ -10282,6 +10303,7 @@ class Stop extends DataClass implements Insertable<Stop> {
     this.source,
     this.sourceUrl,
     this.area,
+    this.note,
     required this.addedBy,
     required this.createdAt,
     required this.updatedAt,
@@ -10330,6 +10352,9 @@ class Stop extends DataClass implements Insertable<Stop> {
     }
     if (!nullToAbsent || area != null) {
       map['area'] = Variable<String>(area);
+    }
+    if (!nullToAbsent || note != null) {
+      map['note'] = Variable<String>(note);
     }
     map['added_by'] = Variable<String>(addedBy);
     map['created_at'] = Variable<DateTime>(createdAt);
@@ -10388,9 +10413,8 @@ class Stop extends DataClass implements Insertable<Stop> {
       sourceUrl: sourceUrl == null && nullToAbsent
           ? const Value.absent()
           : Value(sourceUrl),
-      area: area == null && nullToAbsent
-          ? const Value.absent()
-          : Value(area),
+      area: area == null && nullToAbsent ? const Value.absent() : Value(area),
+      note: note == null && nullToAbsent ? const Value.absent() : Value(note),
       addedBy: Value(addedBy),
       createdAt: Value(createdAt),
       updatedAt: Value(updatedAt),
@@ -10427,6 +10451,7 @@ class Stop extends DataClass implements Insertable<Stop> {
       source: serializer.fromJson<String?>(json['source']),
       sourceUrl: serializer.fromJson<String?>(json['sourceUrl']),
       area: serializer.fromJson<String?>(json['area']),
+      note: serializer.fromJson<String?>(json['note']),
       addedBy: serializer.fromJson<String>(json['addedBy']),
       createdAt: serializer.fromJson<DateTime>(json['createdAt']),
       updatedAt: serializer.fromJson<DateTime>(json['updatedAt']),
@@ -10456,6 +10481,7 @@ class Stop extends DataClass implements Insertable<Stop> {
       'source': serializer.toJson<String?>(source),
       'sourceUrl': serializer.toJson<String?>(sourceUrl),
       'area': serializer.toJson<String?>(area),
+      'note': serializer.toJson<String?>(note),
       'addedBy': serializer.toJson<String>(addedBy),
       'createdAt': serializer.toJson<DateTime>(createdAt),
       'updatedAt': serializer.toJson<DateTime>(updatedAt),
@@ -10483,6 +10509,7 @@ class Stop extends DataClass implements Insertable<Stop> {
     Value<String?> source = const Value.absent(),
     Value<String?> sourceUrl = const Value.absent(),
     Value<String?> area = const Value.absent(),
+    Value<String?> note = const Value.absent(),
     String? addedBy,
     DateTime? createdAt,
     DateTime? updatedAt,
@@ -10513,6 +10540,7 @@ class Stop extends DataClass implements Insertable<Stop> {
     source: source.present ? source.value : this.source,
     sourceUrl: sourceUrl.present ? sourceUrl.value : this.sourceUrl,
     area: area.present ? area.value : this.area,
+    note: note.present ? note.value : this.note,
     addedBy: addedBy ?? this.addedBy,
     createdAt: createdAt ?? this.createdAt,
     updatedAt: updatedAt ?? this.updatedAt,
@@ -10551,6 +10579,7 @@ class Stop extends DataClass implements Insertable<Stop> {
       source: data.source.present ? data.source.value : this.source,
       sourceUrl: data.sourceUrl.present ? data.sourceUrl.value : this.sourceUrl,
       area: data.area.present ? data.area.value : this.area,
+      note: data.note.present ? data.note.value : this.note,
       addedBy: data.addedBy.present ? data.addedBy.value : this.addedBy,
       createdAt: data.createdAt.present ? data.createdAt.value : this.createdAt,
       updatedAt: data.updatedAt.present ? data.updatedAt.value : this.updatedAt,
@@ -10582,6 +10611,7 @@ class Stop extends DataClass implements Insertable<Stop> {
           ..write('source: $source, ')
           ..write('sourceUrl: $sourceUrl, ')
           ..write('area: $area, ')
+          ..write('note: $note, ')
           ..write('addedBy: $addedBy, ')
           ..write('createdAt: $createdAt, ')
           ..write('updatedAt: $updatedAt, ')
@@ -10611,6 +10641,7 @@ class Stop extends DataClass implements Insertable<Stop> {
     source,
     sourceUrl,
     area,
+    note,
     addedBy,
     createdAt,
     updatedAt,
@@ -10639,6 +10670,7 @@ class Stop extends DataClass implements Insertable<Stop> {
           other.source == this.source &&
           other.sourceUrl == this.sourceUrl &&
           other.area == this.area &&
+          other.note == this.note &&
           other.addedBy == this.addedBy &&
           other.createdAt == this.createdAt &&
           other.updatedAt == this.updatedAt &&
@@ -10665,6 +10697,7 @@ class StopsCompanion extends UpdateCompanion<Stop> {
   final Value<String?> source;
   final Value<String?> sourceUrl;
   final Value<String?> area;
+  final Value<String?> note;
   final Value<String> addedBy;
   final Value<DateTime> createdAt;
   final Value<DateTime> updatedAt;
@@ -10690,6 +10723,7 @@ class StopsCompanion extends UpdateCompanion<Stop> {
     this.source = const Value.absent(),
     this.sourceUrl = const Value.absent(),
     this.area = const Value.absent(),
+    this.note = const Value.absent(),
     this.addedBy = const Value.absent(),
     this.createdAt = const Value.absent(),
     this.updatedAt = const Value.absent(),
@@ -10716,6 +10750,7 @@ class StopsCompanion extends UpdateCompanion<Stop> {
     this.source = const Value.absent(),
     this.sourceUrl = const Value.absent(),
     this.area = const Value.absent(),
+    this.note = const Value.absent(),
     required String addedBy,
     this.createdAt = const Value.absent(),
     this.updatedAt = const Value.absent(),
@@ -10748,6 +10783,7 @@ class StopsCompanion extends UpdateCompanion<Stop> {
     Expression<String>? source,
     Expression<String>? sourceUrl,
     Expression<String>? area,
+    Expression<String>? note,
     Expression<String>? addedBy,
     Expression<DateTime>? createdAt,
     Expression<int>? updatedAt,
@@ -10774,6 +10810,7 @@ class StopsCompanion extends UpdateCompanion<Stop> {
       if (source != null) 'source': source,
       if (sourceUrl != null) 'source_url': sourceUrl,
       if (area != null) 'area': area,
+      if (note != null) 'note': note,
       if (addedBy != null) 'added_by': addedBy,
       if (createdAt != null) 'created_at': createdAt,
       if (updatedAt != null) 'updated_at': updatedAt,
@@ -10802,6 +10839,7 @@ class StopsCompanion extends UpdateCompanion<Stop> {
     Value<String?>? source,
     Value<String?>? sourceUrl,
     Value<String?>? area,
+    Value<String?>? note,
     Value<String>? addedBy,
     Value<DateTime>? createdAt,
     Value<DateTime>? updatedAt,
@@ -10828,6 +10866,7 @@ class StopsCompanion extends UpdateCompanion<Stop> {
       source: source ?? this.source,
       sourceUrl: sourceUrl ?? this.sourceUrl,
       area: area ?? this.area,
+      note: note ?? this.note,
       addedBy: addedBy ?? this.addedBy,
       createdAt: createdAt ?? this.createdAt,
       updatedAt: updatedAt ?? this.updatedAt,
@@ -10892,6 +10931,9 @@ class StopsCompanion extends UpdateCompanion<Stop> {
     if (area.present) {
       map['area'] = Variable<String>(area.value);
     }
+    if (note.present) {
+      map['note'] = Variable<String>(note.value);
+    }
     if (addedBy.present) {
       map['added_by'] = Variable<String>(addedBy.value);
     }
@@ -10940,6 +10982,7 @@ class StopsCompanion extends UpdateCompanion<Stop> {
           ..write('source: $source, ')
           ..write('sourceUrl: $sourceUrl, ')
           ..write('area: $area, ')
+          ..write('note: $note, ')
           ..write('addedBy: $addedBy, ')
           ..write('createdAt: $createdAt, ')
           ..write('updatedAt: $updatedAt, ')
@@ -20351,6 +20394,8 @@ typedef $$StopsTableCreateCompanionBuilder =
       Value<String?> coverRemoteUrl,
       Value<String?> source,
       Value<String?> sourceUrl,
+      Value<String?> area,
+      Value<String?> note,
       required String addedBy,
       Value<DateTime> createdAt,
       Value<DateTime> updatedAt,
@@ -20377,6 +20422,8 @@ typedef $$StopsTableUpdateCompanionBuilder =
       Value<String?> coverRemoteUrl,
       Value<String?> source,
       Value<String?> sourceUrl,
+      Value<String?> area,
+      Value<String?> note,
       Value<String> addedBy,
       Value<DateTime> createdAt,
       Value<DateTime> updatedAt,
@@ -20524,6 +20571,16 @@ class $$StopsTableFilterComposer extends Composer<_$AppDatabase, $StopsTable> {
 
   ColumnFilters<String> get sourceUrl => $composableBuilder(
     column: $table.sourceUrl,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<String> get area => $composableBuilder(
+    column: $table.area,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<String> get note => $composableBuilder(
+    column: $table.note,
     builder: (column) => ColumnFilters(column),
   );
 
@@ -20717,6 +20774,16 @@ class $$StopsTableOrderingComposer
     builder: (column) => ColumnOrderings(column),
   );
 
+  ColumnOrderings<String> get area => $composableBuilder(
+    column: $table.area,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<String> get note => $composableBuilder(
+    column: $table.note,
+    builder: (column) => ColumnOrderings(column),
+  );
+
   ColumnOrderings<String> get addedBy => $composableBuilder(
     column: $table.addedBy,
     builder: (column) => ColumnOrderings(column),
@@ -20836,6 +20903,12 @@ class $$StopsTableAnnotationComposer
 
   GeneratedColumn<String> get sourceUrl =>
       $composableBuilder(column: $table.sourceUrl, builder: (column) => column);
+
+  GeneratedColumn<String> get area =>
+      $composableBuilder(column: $table.area, builder: (column) => column);
+
+  GeneratedColumn<String> get note =>
+      $composableBuilder(column: $table.note, builder: (column) => column);
 
   GeneratedColumn<String> get addedBy =>
       $composableBuilder(column: $table.addedBy, builder: (column) => column);
@@ -20979,6 +21052,8 @@ class $$StopsTableTableManager
                 Value<String?> coverRemoteUrl = const Value.absent(),
                 Value<String?> source = const Value.absent(),
                 Value<String?> sourceUrl = const Value.absent(),
+                Value<String?> area = const Value.absent(),
+                Value<String?> note = const Value.absent(),
                 Value<String> addedBy = const Value.absent(),
                 Value<DateTime> createdAt = const Value.absent(),
                 Value<DateTime> updatedAt = const Value.absent(),
@@ -21003,6 +21078,8 @@ class $$StopsTableTableManager
                 coverRemoteUrl: coverRemoteUrl,
                 source: source,
                 sourceUrl: sourceUrl,
+                area: area,
+                note: note,
                 addedBy: addedBy,
                 createdAt: createdAt,
                 updatedAt: updatedAt,
@@ -21029,6 +21106,8 @@ class $$StopsTableTableManager
                 Value<String?> coverRemoteUrl = const Value.absent(),
                 Value<String?> source = const Value.absent(),
                 Value<String?> sourceUrl = const Value.absent(),
+                Value<String?> area = const Value.absent(),
+                Value<String?> note = const Value.absent(),
                 required String addedBy,
                 Value<DateTime> createdAt = const Value.absent(),
                 Value<DateTime> updatedAt = const Value.absent(),
@@ -21053,6 +21132,8 @@ class $$StopsTableTableManager
                 coverRemoteUrl: coverRemoteUrl,
                 source: source,
                 sourceUrl: sourceUrl,
+                area: area,
+                note: note,
                 addedBy: addedBy,
                 createdAt: createdAt,
                 updatedAt: updatedAt,

@@ -179,7 +179,9 @@ service cloud.firestore {
       let data = request.resource.data;
       return (!('id' in data) || (data.id is string && data.id.size() <= 100))
         && (!('name' in data) || (data.name is string && data.name.size() <= 300))
-        && (!('placeKey' in data) || (data.placeKey is string && data.placeKey.size() <= 200));
+        && (!('placeKey' in data) || (data.placeKey is string && data.placeKey.size() <= 200))
+        && (!('area' in data) || data.area == null || (data.area is string && data.area.size() <= 100))
+        && (!('note' in data) || data.note == null || (data.note is string && data.note.size() <= 2000));
     }
 
     function isScheduleItemSafe() {
@@ -226,7 +228,10 @@ service cloud.firestore {
     }
 
     match /tripsV2/{tripId} {
-      allow read: if isAuthenticated() && (
+      // The app's trip listener: tripsV2 where members array-contains uid.
+      allow list: if isAuthenticated() && request.auth.uid in resource.data.members;
+
+      allow get: if isAuthenticated() && (
         resource == null ||
         request.auth.uid == resource.data.ownerId ||
         (resource.data.sharing == 'group' && (

@@ -13,8 +13,8 @@ class FakeFirestoreSyncV2Service implements FirestoreSyncV2Service {
   final Map<String, Map<String, Map<String, dynamic>>> tripStops = {};
   final Map<String, Map<String, Map<String, dynamic>>> tripScheduleItems = {};
 
-  final StreamController<List<Map<String, dynamic>>> userTripsController =
-      StreamController<List<Map<String, dynamic>>>.broadcast();
+  final StreamController<UserTripsSnapshot> userTripsController =
+      StreamController<UserTripsSnapshot>.broadcast();
   final Map<String, StreamController<List<Map<String, dynamic>>>> daysControllers = {};
   final Map<String, StreamController<List<Map<String, dynamic>>>> stopsControllers = {};
   final Map<String, StreamController<List<Map<String, dynamic>>>> itemsControllers = {};
@@ -22,8 +22,8 @@ class FakeFirestoreSyncV2Service implements FirestoreSyncV2Service {
   bool failCommit = false;
   Future<void> Function()? onBeforeCommit;
 
-  void emitUserTrips(List<Map<String, dynamic>> data) {
-    userTripsController.add(data);
+  void emitUserTrips(List<Map<String, dynamic>> data, {bool isFromCache = false}) {
+    userTripsController.add(UserTripsSnapshot(trips: data, isFromCache: isFromCache));
   }
 
   void emitDays(String tripId, List<Map<String, dynamic>> days) {
@@ -133,6 +133,7 @@ class FakeFirestoreSyncV2Service implements FirestoreSyncV2Service {
         'source': stop.source,
         'sourceUrl': stop.sourceUrl,
         'area': stop.area,
+        'note': stop.note,
         'addedBy': stop.addedBy,
         'updatedAt': stop.updatedAt,
         'updatedBy': stop.updatedBy,
@@ -183,7 +184,7 @@ class FakeFirestoreSyncV2Service implements FirestoreSyncV2Service {
   }
 
   @override
-  Stream<List<Map<String, dynamic>>> watchUserTrips(String userId) {
+  Stream<UserTripsSnapshot> watchUserTrips(String userId) {
     return userTripsController.stream;
   }
 
@@ -314,6 +315,7 @@ void main() {
               lat: 35.201,
               lng: 136.234,
               area: const Value('Toyosato'),
+              note: const Value('Meet at the front gate at 09:00'),
               addedBy: currentUserId,
               updatedAt: Value(now),
               syncStatus: const Value(1), // Dirty
@@ -341,8 +343,10 @@ void main() {
             ),
           );
 
-      // Wait for debounce timer (300ms) to trigger push
-      await Future.delayed(const Duration(milliseconds: 500));
+      for (var i = 0; i < 30; i++) {
+        if (fakeFirestore.trips.containsKey('trip_1')) break;
+        await Future.delayed(const Duration(milliseconds: 50));
+      }
 
       // Verify FakeFirestore received the records
       expect(fakeFirestore.trips.containsKey('trip_1'), isTrue);
@@ -355,6 +359,7 @@ void main() {
       final remoteStop = fakeFirestore.tripStops['trip_1']!['stop_1']!;
       expect(remoteStop['name'], 'Former Toyosato Elementary School');
       expect(remoteStop['area'], 'Toyosato');
+      expect(remoteStop['note'], 'Meet at the front gate at 09:00');
       final remoteLabels = remoteStop['labels'] as List;
       expect(remoteLabels.length, 1);
       expect(remoteLabels.first['name'], 'K-ON!');
@@ -409,7 +414,10 @@ void main() {
       };
 
       syncEngine.startSync();
-      await Future.delayed(const Duration(milliseconds: 900));
+      for (var i = 0; i < 30; i++) {
+        if (fakeFirestore.trips['trip_concurrent']?['title'] == 'Updated Mid-Flight Title') break;
+        await Future.delayed(const Duration(milliseconds: 50));
+      }
 
       expect(fakeFirestore.trips['trip_concurrent']!['title'], equals('Updated Mid-Flight Title'));
       final localTrip = await (db.select(db.trips)..where((t) => t.id.equals('trip_concurrent'))).getSingle();
@@ -430,7 +438,10 @@ void main() {
             ),
           );
 
-      await Future.delayed(const Duration(milliseconds: 500));
+      for (var i = 0; i < 30; i++) {
+        if (syncEngine.getTripSyncStatus('trip_offline') == TripSyncStatus.offline) break;
+        await Future.delayed(const Duration(milliseconds: 50));
+      }
 
       final localTrip = await (db.select(db.trips)..where((t) => t.id.equals('trip_offline'))).getSingle();
       expect(localTrip.syncStatus, 1); // Still dirty
@@ -501,6 +512,7 @@ void main() {
           'lat': 35.306,
           'lng': 139.502,
           'area': 'Enoden Line',
+          'note': 'Remote note for Alice',
           'addedBy': 'user_bob',
           'updatedAt': now,
           'labels': [
@@ -528,6 +540,7 @@ void main() {
       expect(localStop, isNotNull);
       expect(localStop!.name, 'Kamakurakokomae Station');
       expect(localStop.area, 'Enoden Line');
+      expect(localStop.note, 'Remote note for Alice');
 
       // Verify labels were naturally matched or created locally
       final labels = await db.select(db.labels).get();
@@ -586,6 +599,67 @@ void main() {
       expect(localTrip.sharing, equals('private'));
       expect(localTrip.ownerId, equals(currentUserId));
       expect(localTrip.syncStatus, equals(0));
+    });
+
+    test('when a collaborator loses access (dropped from members query), local copy becomes private', () async {
+      syncEngine.startSync();
+      final t1 = DateTime(2026, 11, 1, 10, 0);
+
+      // Collaborator (user_alice) receives a shared trip owned by user_bob
+      fakeFirestore.emitUserTrips([
+        {
+          'id': 'trip_bob_kicked',
+          'title': 'Bob Shared Trip',
+          'ownerId': 'user_bob',
+          'sharing': 'group',
+          'dayCount': 1,
+          'updatedAt': t1,
+        }
+      ]);
+      await Future.delayed(const Duration(milliseconds: 100));
+
+      var localTrip = await (db.select(db.trips)..where((t) => t.id.equals('trip_bob_kicked'))).getSingle();
+      expect(localTrip.sharing, equals('group'));
+      expect(localTrip.ownerId, equals('user_bob'));
+
+      // Bob removes Alice from members or unshares: the trip drops out of query results
+      fakeFirestore.emitUserTrips([]);
+      await Future.delayed(const Duration(milliseconds: 100));
+
+      localTrip = await (db.select(db.trips)..where((t) => t.id.equals('trip_bob_kicked'))).getSingle();
+      expect(localTrip.sharing, equals('private'));
+      expect(localTrip.ownerId, equals(currentUserId));
+      expect(localTrip.syncStatus, equals(0));
+    });
+
+    test('cache snapshot with missing trips does not convert collaborator trips to private', () async {
+      syncEngine.startSync();
+      final t1 = DateTime(2026, 11, 1, 10, 0);
+
+      // Collaborator receives shared trip from server
+      fakeFirestore.emitUserTrips([
+        {
+          'id': 'trip_cache_test',
+          'title': 'Cache Test Trip',
+          'ownerId': 'user_bob',
+          'sharing': 'group',
+          'dayCount': 1,
+          'updatedAt': t1,
+        }
+      ], isFromCache: false);
+      await Future.delayed(const Duration(milliseconds: 100));
+
+      var localTrip = await (db.select(db.trips)..where((t) => t.id.equals('trip_cache_test'))).getSingle();
+      expect(localTrip.sharing, equals('group'));
+
+      // Empty cache snapshot arrives (e.g. offline cache warm-up miss)
+      fakeFirestore.emitUserTrips([], isFromCache: true);
+      await Future.delayed(const Duration(milliseconds: 100));
+
+      // Must NOT be converted to private!
+      localTrip = await (db.select(db.trips)..where((t) => t.id.equals('trip_cache_test'))).getSingle();
+      expect(localTrip.sharing, equals('group'));
+      expect(localTrip.ownerId, equals('user_bob'));
     });
 
     test('respects Last-Write-Wins (LWW) and does not overwrite newer local updates', () async {
