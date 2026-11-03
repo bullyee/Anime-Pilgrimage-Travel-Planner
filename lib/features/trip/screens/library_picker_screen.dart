@@ -5,6 +5,7 @@ import 'package:go_router/go_router.dart';
 import '../../../core/database/database.dart';
 import '../../../core/utils/app_result.dart';
 import '../../library/providers/place_providers.dart';
+import '../../library/widgets/spot_thumb.dart';
 import '../controllers/trip_stops_controller.dart';
 import '../providers/trip_providers.dart';
 
@@ -106,6 +107,18 @@ class _LibraryPickerScreenState extends ConsumerState<LibraryPickerScreen> {
                           _selected.remove(place.placeKey);
                         }
                       }),
+                      secondary: SpotThumb(
+                        placeKey: place.placeKey,
+                        fallback: Container(
+                          width: 48,
+                          height: 48,
+                          decoration: BoxDecoration(
+                            color: Theme.of(context).colorScheme.surfaceContainerHighest,
+                            borderRadius: BorderRadius.circular(12),
+                          ),
+                          child: Icon(Icons.place_outlined, color: Theme.of(context).colorScheme.onSurfaceVariant),
+                        ),
+                      ),
                       title: Text(place.name, maxLines: 1, overflow: TextOverflow.ellipsis),
                       subtitle: Text(
                         already

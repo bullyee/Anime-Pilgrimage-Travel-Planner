@@ -4,6 +4,7 @@ import 'package:go_router/go_router.dart';
 
 import '../../../core/utils/schedule_logic.dart';
 import '../../../shared/theme/app_theme.dart';
+import '../../library/widgets/spot_thumb.dart';
 import '../providers/trip_stop_providers.dart';
 
 /// Offers the two ways to add stops: from the library, or a new spot.
@@ -169,10 +170,15 @@ class _StopTile extends StatelessWidget {
             ? (p.wisteriaSoft, p.wisteria)
             : (p.teaSoft, p.tea);
     return ListTile(
-      leading: CircleAvatar(
-        backgroundColor: background,
-        foregroundColor: foreground,
-        child: Icon(fromAnitabi ? Icons.photo_camera_outlined : Icons.place_outlined, size: 20),
+      leading: SpotThumb(
+        placeKey: entry.stop.placeKey,
+        extraCover: entry.stop.coverLocalPath,
+        fallback: Container(
+          width: 48,
+          height: 48,
+          decoration: BoxDecoration(color: background, borderRadius: BorderRadius.circular(12)),
+          child: Icon(fromAnitabi ? Icons.photo_camera_outlined : Icons.place_outlined, size: 20, color: foreground),
+        ),
       ),
       title: Text(entry.stop.name, maxLines: 1, overflow: TextOverflow.ellipsis),
       subtitle: Text(
