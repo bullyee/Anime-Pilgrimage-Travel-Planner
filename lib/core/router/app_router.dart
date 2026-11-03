@@ -24,10 +24,10 @@ import '../../features/camera/services/photo_edit_route.dart';
 import '../../features/library/screens/anitabi_import_screen.dart';
 import '../../features/library/screens/labels_screen.dart';
 import '../../features/library/screens/library_screen.dart';
-import '../../features/library/screens/place_edit_screen.dart';
 import '../../features/library/screens/place_screen.dart';
 import '../../features/trip/screens/library_picker_screen.dart';
 import '../../features/trip/screens/new_spot_screen.dart';
+import '../../features/trip/screens/stop_screen.dart';
 import '../../features/trip/screens/trip_list_screen.dart';
 import '../../features/trip/screens/trip_screen.dart';
 
@@ -111,6 +111,13 @@ GoRouter router(RouterRef ref) {
         ),
       ),
       GoRoute(
+        path: '/trips/:tripId/stops/:stopId',
+        builder: (context, state) => StopScreen(
+          tripId: state.pathParameters['tripId']!,
+          stopId: state.pathParameters['stopId']!,
+        ),
+      ),
+      GoRoute(
         path: '/library',
         builder: (context, state) => const LibraryScreen(),
       ),
@@ -131,10 +138,6 @@ GoRouter router(RouterRef ref) {
       GoRoute(
         path: '/library/places/:placeKey',
         builder: (context, state) => PlaceScreen(placeKey: state.pathParameters['placeKey']!),
-      ),
-      GoRoute(
-        path: '/library/places/:placeKey/edit',
-        builder: (context, state) => PlaceEditScreen(placeKey: state.pathParameters['placeKey']!),
       ),
       GoRoute(
         path: '/library/places/:placeKey/location',

@@ -4,7 +4,13 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../../../core/database/database.dart';
 import '../../../core/utils/app_result.dart';
 import '../../auth/providers/auth_provider.dart';
+import '../../library/controllers/place_controller.dart' show PlaceFacts;
 import '../providers/trip_providers.dart';
+
+/// The longest trip note, in UTF-16 code units: Dart's `String.length`, and
+/// what the Firestore rules' `size()` counts. The rules refuse a longer note,
+/// and with it the rest of the trip's upload.
+const maxTripNoteLength = 2000;
 
 /// [base] numbered so it differs from [taken]: "Uji Bridge (2)", then "(3)".
 String numberedName(String base, Set<String> taken) {
@@ -65,6 +71,36 @@ class TripStopsController extends Notifier<AsyncValue<void>> {
     final trimmed = name.trim();
     if (trimmed.isEmpty) return Future.value(const Failure('Give the stop a name.'));
     return _run(() => ref.read(tripRepositoryProvider).updateStop(StopsCompanion(id: Value(stopId), name: Value(trimmed))));
+  }
+
+  /// Sets the stop's trip note, which everyone in the trip sees. An empty
+  /// note clears it.
+  Future<AppResult<void>> setNote(String stopId, String note) {
+    final trimmed = note.trim();
+    if (trimmed.length > maxTripNoteLength) {
+      return Future.value(const Failure('A trip note can be at most $maxTripNoteLength characters.'));
+    }
+    return _run(() => ref
+        .read(tripRepositoryProvider)
+        .updateStop(StopsCompanion(id: Value(stopId), note: Value(trimmed.isEmpty ? null : trimmed))));
+  }
+
+  /// Changes the stop's copy of the spot's facts, for everyone in the trip.
+  /// The library place keeps its own.
+  Future<AppResult<void>> updateFacts(String stopId, PlaceFacts facts) {
+    final name = facts.name.trim();
+    if (name.isEmpty) return Future.value(const Failure('Give the stop a name.'));
+    String? clean(String? s) => s == null || s.trim().isEmpty ? null : s.trim();
+    return _run(() => ref.read(tripRepositoryProvider).updateStop(StopsCompanion(
+          id: Value(stopId),
+          name: Value(name),
+          address: Value(clean(facts.address)),
+          description: Value(clean(facts.description)),
+          accessTips: Value(clean(facts.accessTips)),
+          businessHours: Value(clean(facts.businessHours)),
+          contactInfo: Value(clean(facts.contactInfo)),
+          links: Value(clean(facts.links)),
+        )));
   }
 
   /// Creates a spot that exists only in this trip (a `trip_only` place) and

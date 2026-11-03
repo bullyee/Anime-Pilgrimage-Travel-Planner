@@ -2,11 +2,8 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 
-import '../../../core/utils/app_result.dart';
 import '../../../core/utils/schedule_logic.dart';
 import '../../../shared/theme/app_theme.dart';
-import '../../../shared/widgets/name_dialog.dart';
-import '../controllers/trip_stops_controller.dart';
 import '../providers/trip_stop_providers.dart';
 
 /// Offers the two ways to add stops: from the library, or a new spot.
@@ -134,7 +131,7 @@ class _TripStopsTabState extends ConsumerState<TripStopsTab> {
                           itemCount: shown.length,
                           itemBuilder: (context, i) => _StopTile(
                             entry: shown[i],
-                            onTap: () => showStopDetails(context, ref, shown[i]),
+                            onTap: () => context.push('/trips/${widget.tripId}/stops/${shown[i].stop.id}'),
                           ),
                         ),
                 ),
@@ -218,124 +215,4 @@ class _EmptyStops extends StatelessWidget {
       ),
     );
   }
-}
-
-/// Shows a stop's details, with a way to remove it from the trip.
-Future<void> showStopDetails(BuildContext context, WidgetRef ref, TripStopEntry entry) {
-  final stop = entry.stop;
-  return showModalBottomSheet<void>(
-    context: context,
-    showDragHandle: true,
-    isScrollControlled: true,
-    builder: (sheetContext) {
-      final theme = Theme.of(sheetContext);
-      Widget row(String label, String? value) => value == null || value.trim().isEmpty
-          ? const SizedBox.shrink()
-          : Padding(
-              padding: const EdgeInsets.symmetric(vertical: 6),
-              child: Row(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  SizedBox(width: 96, child: Text(label, style: theme.textTheme.labelLarge)),
-                  Expanded(child: Text(value, style: theme.textTheme.bodyMedium)),
-                ],
-              ),
-            );
-      return SafeArea(
-        child: Padding(
-          padding: const EdgeInsets.fromLTRB(20, 0, 20, 16),
-          child: Column(
-            mainAxisSize: MainAxisSize.min,
-            crossAxisAlignment: CrossAxisAlignment.stretch,
-            children: [
-              Text(stop.name, style: theme.textTheme.titleLarge),
-              const SizedBox(height: 4),
-              Text(
-                stop.source == null ? 'Your own spot' : 'From ${stop.source}',
-                style: theme.textTheme.bodySmall?.copyWith(color: theme.colorScheme.onSurfaceVariant),
-              ),
-              const SizedBox(height: 12),
-              row('When', stopWhenLine(entry)),
-              row('Address', stop.address),
-              row('About', stop.description),
-              row('Getting there', stop.accessTips),
-              row('Hours', stop.businessHours),
-              row('Location', '${stop.lat.toStringAsFixed(5)}, ${stop.lng.toStringAsFixed(5)}'),
-              const SizedBox(height: 12),
-              Wrap(
-                spacing: 8,
-                runSpacing: 8,
-                children: [
-                  OutlinedButton.icon(
-                    onPressed: () async {
-                      final name = await askName(sheetContext, title: 'Rename this stop', action: 'Rename', initial: stop.name);
-                      if (name == null || name == stop.name || !sheetContext.mounted) return;
-                      final result = await ref.read(tripStopsControllerProvider.notifier).renameStop(stop.id, name);
-                      if (!sheetContext.mounted) return;
-                      Navigator.pop(sheetContext);
-                      if (!context.mounted) return;
-                      ScaffoldMessenger.of(context).showSnackBar(SnackBar(
-                        content: Text(switch (result) {
-                          Success() => 'Renamed to $name. Your library keeps its own name.',
-                          Failure(:final error) => error,
-                        }),
-                      ));
-                    },
-                    icon: const Icon(Icons.edit_outlined),
-                    label: const Text('Rename'),
-                  ),
-                  OutlinedButton.icon(
-                    onPressed: () {
-                      Navigator.pop(sheetContext);
-                      context.push('/library/places/${Uri.encodeComponent(stop.placeKey)}');
-                    },
-                    icon: const Icon(Icons.bookmarks_outlined),
-                    label: const Text('Place page'),
-                  ),
-                ],
-              ),
-              const SizedBox(height: 4),
-              Row(
-                children: [
-                  TextButton.icon(
-                    style: TextButton.styleFrom(foregroundColor: theme.colorScheme.error),
-                    onPressed: () async {
-                      final confirmed = await showDialog<bool>(
-                        context: sheetContext,
-                        builder: (dialogContext) => AlertDialog(
-                          title: Text('Remove “${stop.name}”?'),
-                          content: Text(entry.isPlanned
-                              ? 'This also takes it off ${stopWhenLine(entry).split(' · ').first}. Your library is not changed.'
-                              : 'Your library is not changed.'),
-                          actions: [
-                            TextButton(onPressed: () => Navigator.pop(dialogContext, false), child: const Text('Cancel')),
-                            FilledButton(onPressed: () => Navigator.pop(dialogContext, true), child: const Text('Remove')),
-                          ],
-                        ),
-                      );
-                      if (confirmed != true || !sheetContext.mounted) return;
-                      final result = await ref.read(tripStopsControllerProvider.notifier).removeStop(stop.id);
-                      if (!sheetContext.mounted) return;
-                      Navigator.pop(sheetContext);
-                      if (!context.mounted) return;
-                      ScaffoldMessenger.of(context).showSnackBar(SnackBar(
-                        content: Text(switch (result) {
-                          Success() => 'Removed ${stop.name}.',
-                          Failure(:final error) => "Couldn't remove ${stop.name}: $error",
-                        }),
-                      ));
-                    },
-                    icon: const Icon(Icons.delete_outline),
-                    label: const Text('Remove from trip'),
-                  ),
-                  const Spacer(),
-                  FilledButton(onPressed: () => Navigator.pop(sheetContext), child: const Text('Done')),
-                ],
-              ),
-            ],
-          ),
-        ),
-      );
-    },
-  );
 }

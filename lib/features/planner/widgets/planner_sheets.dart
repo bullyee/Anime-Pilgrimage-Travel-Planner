@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:go_router/go_router.dart';
 import 'package:intl/intl.dart';
 
 import '../../../core/utils/app_result.dart';
@@ -198,6 +199,7 @@ class _StopSheet extends ConsumerWidget {
                       )
                     : text('${item.item.transitMinutes} min to the next stop'),
               ),
+            if (stop.note?.trim().isNotEmpty ?? false) fact('Trip note', text(stop.note)),
             if (stop.address?.trim().isNotEmpty ?? false) fact('Address', text(stop.address)),
             if (stop.description?.trim().isNotEmpty ?? false) fact('About', text(stop.description)),
             if (stop.accessTips?.trim().isNotEmpty ?? false) fact('Getting there', text(stop.accessTips)),
@@ -207,6 +209,16 @@ class _StopSheet extends ConsumerWidget {
               spacing: 8,
               runSpacing: 8,
               children: [
+                OutlinedButton.icon(
+                  onPressed: () {
+                    // The sheet's context is gone once it closes, so take the router first.
+                    final router = GoRouter.of(context);
+                    Navigator.pop(context);
+                    router.push('/trips/$tripId/stops/${stop.id}');
+                  },
+                  icon: const Icon(Icons.open_in_full),
+                  label: const Text('Open stop page'),
+                ),
                 if (item != null)
                   OutlinedButton.icon(
                     onPressed: () => controller.setVisited(item.item.id, !item.done),
