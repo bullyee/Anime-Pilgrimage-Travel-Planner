@@ -50,6 +50,11 @@ class SyncEngineServiceV2 {
   bool _isPushing = false;
   bool _isStopped = false;
 
+  /// Tracks trip IDs that have appeared in server snapshots for the current user session,
+  /// used to safely detect access loss without misinterpreting local cache misses or trips
+  /// belonging to other accounts on the same device.
+  final Set<String> _knownServerTripIds = {};
+
   /// Chains to guarantee serialized processing of remote stream snapshots per collection.
   Future<void> _userTripsChain = Future.value();
   final Map<String, Future<void>> _subcollectionChains = {};
@@ -145,25 +150,34 @@ class SyncEngineServiceV2 {
 
     // 5. Downstream watchUserTrips listener (serialized)
     _userTripsSub = firestoreSync.watchUserTrips(currentUserId).listen(
-      (remoteTrips) {
+      (snapshot) {
         if (_isStopped) return;
         _userTripsChain = _userTripsChain.then((_) async {
           if (_isStopped) return;
 
-          // Detect collaborator trips where access was lost (removed from members or unshared)
-          final remoteTripIds = remoteTrips.map((t) => t['id'] as String?).whereType<String>().toSet();
-          final localCollaboratorTrips = await (localDb.select(localDb.trips)
-                ..where((t) => t.sharing.equals('group') & t.ownerId.equals(currentUserId).not() & t.deletedAt.isNull()))
-              .get();
+          final remoteTrips = snapshot.trips;
+          final currentTripIds = remoteTrips.map((t) => t['id'] as String?).whereType<String>().toSet();
 
-          for (final local in localCollaboratorTrips) {
-            if (!remoteTripIds.contains(local.id)) {
-              try {
-                await _convertCollaboratorTripToPrivate(local.id, DateTime.now());
-              } catch (e, stack) {
-                debugPrint('[SyncEngineV2] Error converting lost trip ${local.id} to private: $e\n$stack');
+          // Only server snapshots can confirm a removal. Local cache misses must never trigger conversions.
+          // Furthermore, only trips that were previously part of this account's server snapshots are converted,
+          // preventing cross-account contamination when switching accounts on the same device.
+          if (!snapshot.isFromCache) {
+            final lostTripIds = _knownServerTripIds.difference(currentTripIds);
+            for (final tripId in lostTripIds) {
+              final localTrip = await (localDb.select(localDb.trips)..where((t) => t.id.equals(tripId))).getSingleOrNull();
+              if (localTrip != null && localTrip.sharing == 'group' && localTrip.ownerId != currentUserId) {
+                try {
+                  await _convertCollaboratorTripToPrivate(tripId, DateTime.now());
+                } catch (e, stack) {
+                  debugPrint('[SyncEngineV2] Error converting lost trip $tripId to private: $e\n$stack');
+                }
               }
             }
+            _knownServerTripIds
+              ..removeAll(lostTripIds)
+              ..addAll(currentTripIds);
+          } else {
+            _knownServerTripIds.addAll(currentTripIds);
           }
 
           for (final remoteTrip in remoteTrips) {
@@ -453,6 +467,7 @@ class SyncEngineServiceV2 {
   void stopSync() {
     debugPrint('[SyncEngineV2] Stopping sync orchestrator...');
     _isStopped = true;
+    _knownServerTripIds.clear();
     _debounceTimer?.cancel();
     _debounceTimer = null;
     _retryTimer?.cancel();

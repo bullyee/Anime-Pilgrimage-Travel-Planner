@@ -1,6 +1,14 @@
 import 'package:cloud_firestore/cloud_firestore.dart';
 import '../../../../core/database/database.dart';
 
+/// A snapshot of user trips from [FirestoreSyncV2Service], carrying whether it originated from local cache.
+class UserTripsSnapshot {
+  final List<Map<String, dynamic>> trips;
+  final bool isFromCache;
+
+  const UserTripsSnapshot({required this.trips, this.isFromCache = false});
+}
+
 /// Service responsible for communicating with Firestore under the new `/tripsV2/{tripId}` collection.
 class FirestoreSyncV2Service {
   final FirebaseFirestore _db;
@@ -186,13 +194,16 @@ class FirestoreSyncV2Service {
   }
 
   /// Watch trips accessible to the given user.
-  Stream<List<Map<String, dynamic>>> watchUserTrips(String userId) {
+  Stream<UserTripsSnapshot> watchUserTrips(String userId) {
     return _db
         .collection('tripsV2')
         .where('members', arrayContains: userId)
         .snapshots(includeMetadataChanges: true)
         .where((snapshot) => !snapshot.metadata.hasPendingWrites)
-        .map((snapshot) => snapshot.docs.map((doc) => doc.data()).toList());
+        .map((snapshot) => UserTripsSnapshot(
+              trips: snapshot.docs.map((doc) => doc.data()).toList(),
+              isFromCache: snapshot.metadata.isFromCache,
+            ));
   }
 
   /// Watch a specific trip document.
