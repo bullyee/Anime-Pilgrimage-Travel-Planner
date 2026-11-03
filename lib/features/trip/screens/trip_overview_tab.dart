@@ -24,10 +24,8 @@ class TripOverviewTab extends ConsumerWidget {
     final theme = Theme.of(context);
     final blocks = ref.watch(tripResolvedBlockDatesProvider(trip.id));
     final status = ref.watch(tripStatusProvider(trip.id));
-    final stopCount = ref.watch(tripStopsProvider(trip.id)).valueOrNull?.length ?? 0;
     final view = ref.watch(plannerViewProvider(trip.id)).valueOrNull;
     final dated = blocks.where((b) => !b.isBackup && b.date != null).toList();
-    final datedCount = blocks.where((b) => !b.isBackup).length;
 
     final today = normalizeDateOnly(DateTime.now());
     final todayDay = status == TripStatus.ongoing
@@ -48,18 +46,12 @@ class TripOverviewTab extends ConsumerWidget {
                     tripDateLine(
                       firstDate: dated.isEmpty ? null : dated.first.date,
                       lastDate: dated.isEmpty ? null : dated.last.date,
-                      dayCount: blocks.isEmpty ? trip.dayCount : datedCount,
                     ),
                     style: theme.textTheme.titleMedium,
                   ),
                 ),
                 TripStatusChip(status: status),
               ],
-            ),
-            const SizedBox(height: 4),
-            Text(
-              stopCount == 0 ? 'No stops yet' : stopCount == 1 ? '1 stop' : '$stopCount stops',
-              style: theme.textTheme.bodyMedium?.copyWith(color: theme.colorScheme.onSurfaceVariant),
             ),
             if (trip.description != null && trip.description!.trim().isNotEmpty) ...[
               const SizedBox(height: 8),

@@ -28,6 +28,34 @@ class TripStopEntry {
   bool get isPlanned => dayIndex != null;
 }
 
+/// How the stop list is ordered.
+enum StopOrder {
+  /// Planned stops by day and time, then the rest by name: the order
+  /// [buildStopEntries] gives.
+  plan('Plan order'),
+  name('Name'),
+
+  /// The most recently added first.
+  added('Recently added');
+
+  final String label;
+
+  const StopOrder(this.label);
+}
+
+/// [entries], which come in plan order, put in [order].
+List<TripStopEntry> orderStopEntries(List<TripStopEntry> entries, StopOrder order) => switch (order) {
+      StopOrder.plan => entries,
+      StopOrder.name => [...entries]..sort((a, b) {
+          final byName = a.stop.name.toLowerCase().compareTo(b.stop.name.toLowerCase());
+          return byName != 0 ? byName : a.stop.id.compareTo(b.stop.id);
+        }),
+      StopOrder.added => [...entries]..sort((a, b) {
+          final byTime = b.stop.createdAt.compareTo(a.stop.createdAt);
+          return byTime != 0 ? byTime : a.stop.name.toLowerCase().compareTo(b.stop.name.toLowerCase());
+        }),
+    };
+
 /// Orders the stops for the list: planned stops by day and time, then the
 /// stops that are not on a day yet, by name.
 List<TripStopEntry> buildStopEntries({

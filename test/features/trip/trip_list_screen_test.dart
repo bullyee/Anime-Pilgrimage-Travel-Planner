@@ -1,3 +1,4 @@
+import 'package:drift/drift.dart' show Value;
 import 'package:drift/native.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
@@ -72,23 +73,55 @@ void main() {
     await disposeApp(tester);
   });
 
-  testWidgets('trips show their dates and come in order', (tester) async {
+  testWidgets('trips come under their sections, with the year only when it is not this year', (tester) async {
     final repo = DriftTripRepository(db);
     await repo.createTrip(title: 'Someday', ownerId: 'u1', dayCount: 2);
     await repo.createTrip(title: 'Long ago', ownerId: 'u1', startDate: '2020-03-01', dayCount: 2);
     await repo.createTrip(title: 'Next year', ownerId: 'u1', startDate: '${DateTime.now().year + 1}-04-29', dayCount: 5);
 
     await pumpList(tester);
-    final titles = tester
-        .widgetList<Text>(find.byType(Text))
-        .map((t) => t.data)
-        .where((s) => s == 'Someday' || s == 'Long ago' || s == 'Next year')
-        .toList();
-    expect(titles, ['Next year', 'Someday', 'Long ago']);
-    expect(find.text('Apr 29 – May 3, ${DateTime.now().year + 1} · 5 days'), findsOneWidget);
-    expect(find.text('No dates yet · 2 days'), findsOneWidget);
-    expect(find.text('Finished'), findsOneWidget);
+    const shown = {'COMING UP', 'Next year', 'NO DATES YET', 'Someday', 'FINISHED', 'Long ago'};
+    final texts = tester.widgetList<Text>(find.byType(Text)).map((t) => t.data).whereType<String>();
+    expect(texts.where(shown.contains), ['COMING UP', 'Next year', 'NO DATES YET', 'Someday', 'FINISHED', 'Long ago']);
+    expect(find.text('${DateTime.now().year + 1}'), findsOneWidget);
+    expect(find.text('2020'), findsOneWidget);
+    expect(find.textContaining(' days'), findsNothing, reason: 'cards leave out how long a trip is');
+    expect(find.text('Finished'), findsNothing, reason: 'the section says it; the card has no status chip');
     expect(find.byType(FloatingActionButton), findsOneWidget);
+    await disposeApp(tester);
+  });
+
+  testWidgets('the filter shows the shared or the private trips', (tester) async {
+    final repo = DriftTripRepository(db);
+    final shared = await repo.createTrip(title: 'Kansai with friends', ownerId: 'u1', dayCount: 2);
+    await repo.createTrip(title: 'Solo walk', ownerId: 'u1');
+    await (db.update(db.trips)..where((t) => t.id.equals(shared.id))).write(const TripsCompanion(sharing: Value('group')));
+
+    await pumpList(tester);
+    expect(find.text('Kansai with friends'), findsOneWidget);
+    expect(find.text('Solo walk'), findsOneWidget);
+    expect(find.text('Shared'), findsOneWidget, reason: 'the shared trip says so');
+
+    await tester.tap(find.text('Shared 1'));
+    await tester.pumpAndSettle();
+    expect(find.text('Kansai with friends'), findsOneWidget);
+    expect(find.text('Solo walk'), findsNothing);
+
+    await tester.tap(find.text('Private 1'));
+    await tester.pumpAndSettle();
+    expect(find.text('Kansai with friends'), findsNothing);
+    expect(find.text('Solo walk'), findsOneWidget);
+    await disposeApp(tester);
+  });
+
+  testWidgets('the shared filter says where shared trips will show up while there are none', (tester) async {
+    await DriftTripRepository(db).createTrip(title: 'Solo walk', ownerId: 'u1');
+    await pumpList(tester);
+    await tester.tap(find.text('Shared 0'));
+    await tester.pumpAndSettle();
+    expect(find.text('No shared trips yet'), findsOneWidget);
+    expect(find.text('Solo walk'), findsNothing);
+    expect(find.byType(FloatingActionButton), findsOneWidget, reason: 'a new trip can still be made');
     await disposeApp(tester);
   });
 }
