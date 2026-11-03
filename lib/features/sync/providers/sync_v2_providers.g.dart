@@ -26,11 +26,11 @@ final firestoreSyncV2ServiceProvider =
 // ignore: unused_element
 typedef FirestoreSyncV2ServiceRef = ProviderRef<FirestoreSyncV2Service>;
 String _$syncEngineServiceV2Hash() =>
-    r'80417c20b820d3dd6123908677079778fc909ea9';
+    r'fb5255d006c3d216534123c23a8bd1cd429798f9';
 
 /// See also [syncEngineServiceV2].
 @ProviderFor(syncEngineServiceV2)
-final syncEngineServiceV2Provider = Provider<SyncEngineServiceV2>.internal(
+final syncEngineServiceV2Provider = Provider<SyncEngineServiceV2?>.internal(
   syncEngineServiceV2,
   name: r'syncEngineServiceV2Provider',
   debugGetCreateSourceHash: const bool.fromEnvironment('dart.vm.product')
@@ -42,8 +42,8 @@ final syncEngineServiceV2Provider = Provider<SyncEngineServiceV2>.internal(
 
 @Deprecated('Will be removed in 3.0. Use Ref instead')
 // ignore: unused_element
-typedef SyncEngineServiceV2Ref = ProviderRef<SyncEngineServiceV2>;
-String _$tripSyncStatusHash() => r'72c0bd41e99ab889ea7c749127008b08821f070b';
+typedef SyncEngineServiceV2Ref = ProviderRef<SyncEngineServiceV2?>;
+String _$tripSyncStatusHash() => r'a300d1af98c512ba6c126ffa13702e9faeccbbc6';
 
 /// Copied from Dart SDK
 class _SystemHash {

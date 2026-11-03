@@ -72,11 +72,9 @@ class _TripScreenState extends ConsumerState<TripScreen> with SingleTickerProvid
     final theme = Theme.of(context);
     final blocks = ref.watch(tripResolvedBlockDatesProvider(trip.id));
     final dated = blocks.where((b) => !b.isBackup && b.date != null).toList();
-    final datedCount = blocks.where((b) => !b.isBackup).length;
     final subtitle = tripDateLine(
       firstDate: dated.isEmpty ? null : dated.first.date,
       lastDate: dated.isEmpty ? null : dated.last.date,
-      dayCount: blocks.isEmpty ? trip.dayCount : datedCount,
     );
     final tab = TripTab.values[_tabs.index];
     final hasStops = ref.watch(tripStopsProvider(trip.id)).valueOrNull?.isNotEmpty ?? false;

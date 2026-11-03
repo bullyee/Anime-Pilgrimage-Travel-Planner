@@ -6,7 +6,7 @@ part of 'app_router.dart';
 // RiverpodGenerator
 // **************************************************************************
 
-String _$routerHash() => r'58f3ae65496514283c59ee76c40a66995156c0e2';
+String _$routerHash() => r'612c254b4c705091e9eeca9278544fbec9d59177';
 
 /// Wrap the existing router in a Provider to react to Auth state changes.
 ///

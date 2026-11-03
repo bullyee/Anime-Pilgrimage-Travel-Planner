@@ -30,12 +30,25 @@
               android:name="io.flutter.embedding.android.NormalTheme"
               android:resource="@style/NormalTheme"
               />
-              <!-- Google Maps API Key，新加的 -->
-            
 
             <intent-filter>
                 <action android:name="android.intent.action.MAIN"/>
                 <category android:name="android.intent.category.LAUNCHER"/>
+            </intent-filter>
+
+            <!-- Android App Links for Trip Sharing (Stage 4) -->
+            <intent-filter android:autoVerify="true">
+                <action android:name="android.intent.action.VIEW" />
+                <category android:name="android.intent.category.DEFAULT" />
+                <category android:name="android.intent.category.BROWSABLE" />
+                <data
+                    android:scheme="https"
+                    android:host="trip-planner-2775c.web.app"
+                    android:pathPrefix="/join" />
+                <data
+                    android:scheme="https"
+                    android:host="trip-planner-2775c.firebaseapp.com"
+                    android:pathPrefix="/join" />
             </intent-filter>
         </activity>
         <!-- Don't delete the meta-data below.

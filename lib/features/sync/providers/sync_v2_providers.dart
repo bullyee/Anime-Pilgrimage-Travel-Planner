@@ -15,15 +15,19 @@ FirestoreSyncV2Service firestoreSyncV2Service(Ref ref) {
 }
 
 @Riverpod(keepAlive: true)
-SyncEngineServiceV2 syncEngineServiceV2(Ref ref) {
+SyncEngineServiceV2? syncEngineServiceV2(Ref ref) {
+  final user = ref.watch(authStateChangesProvider).valueOrNull;
+  if (user == null) {
+    return null;
+  }
   final db = ref.watch(databaseProvider);
   final firestoreSync = ref.watch(firestoreSyncV2ServiceProvider);
-  final userId = ref.watch(currentUserIdProvider);
+
 
   final service = SyncEngineServiceV2(
     localDb: db,
     firestoreSync: firestoreSync,
-    currentUserId: userId,
+    currentUserId: user.uid,
   );
 
   ref.onDispose(() {
@@ -38,6 +42,9 @@ SyncEngineServiceV2 syncEngineServiceV2(Ref ref) {
 @riverpod
 Stream<TripSyncStatus> tripSyncStatus(Ref ref, String tripId) {
   final syncEngine = ref.watch(syncEngineServiceV2Provider);
+  if (syncEngine == null) {
+    return Stream.value(TripSyncStatus.synced);
+  }
   return syncEngine.statusStream
       .map((statuses) => statuses[tripId] ?? TripSyncStatus.synced);
 }

@@ -5,6 +5,7 @@ import 'package:uuid/uuid.dart';
 import '../../../core/database/database.dart';
 import '../../../core/providers/database_provider.dart';
 import '../../../core/utils/app_result.dart';
+import '../../trip/providers/trip_providers.dart';
 import '../models/library_entry.dart';
 import '../providers/place_providers.dart';
 
@@ -202,11 +203,12 @@ class LibraryController extends Notifier<AsyncValue<void>> {
                 await (db.update(db.placeVisits)..where((x) => x.id.equals(v.id))).write(PlaceVisitsCompanion(placeKey: Value(keep)));
               }
             }
-            await (db.update(db.stops)..where((s) => s.placeKey.equals(key))).write(StopsCompanion(
-                  placeKey: Value(keep),
-                  updatedAt: Value(DateTime.now()),
-                  syncStatus: const Value(1),
-                ));
+            // Through the trip repository, so each stop is stamped like any
+            // other edit of a shared row (updated at and by) and queued to sync.
+            final stops = await (db.select(db.stops)..where((s) => s.placeKey.equals(key))).get();
+            for (final s in stops) {
+              await ref.read(tripRepositoryProvider).updateStop(StopsCompanion(id: Value(s.id), placeKey: Value(keep)));
+            }
           }
           // The kept place takes over the cover before the others go, so its
           // file counts as still in use when they are deleted.
