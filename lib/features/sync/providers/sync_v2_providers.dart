@@ -38,13 +38,22 @@ SyncEngineServiceV2? syncEngineServiceV2(Ref ref) {
   return service;
 }
 
-/// Stream of sync status for a specific trip (synced, pending, or offline).
+/// Stream of sync status for a specific trip (synced, pending, offline or
+/// error), starting with its current one.
 @riverpod
 Stream<TripSyncStatus> tripSyncStatus(Ref ref, String tripId) {
   final syncEngine = ref.watch(syncEngineServiceV2Provider);
   if (syncEngine == null) {
     return Stream.value(TripSyncStatus.synced);
   }
-  return syncEngine.statusStream
-      .map((statuses) => statuses[tripId] ?? TripSyncStatus.synced);
+  // The engine's stream only reports changes, so a trip that failed before
+  // anyone listened would never show it. Reading the current status and
+  // subscribing happen in one go, so no change slips in between.
+  return Stream<TripSyncStatus>.multi((controller) {
+    controller.add(syncEngine.getTripSyncStatus(tripId));
+    final sub = syncEngine.statusStream
+        .map((statuses) => statuses[tripId] ?? TripSyncStatus.synced)
+        .listen(controller.add, onError: controller.addError, onDone: controller.close);
+    controller.onCancel = sub.cancel;
+  }).distinct();
 }
