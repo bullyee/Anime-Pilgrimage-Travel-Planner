@@ -15,7 +15,6 @@ import 'package:trip_planner/features/camera/services/photo_edit_route.dart';
 import 'package:trip_planner/features/camera/widgets/capture_sheets.dart';
 import 'package:trip_planner/features/library/repositories/place_repository.dart';
 import 'package:trip_planner/features/library/services/photo_trip.dart';
-import 'package:trip_planner/features/poi/repositories/media_repository.dart';
 import 'package:trip_planner/features/poi/services/media_asset_service.dart';
 import 'package:trip_planner/features/trip/controllers/trips_controller.dart' show isoDate;
 import 'package:trip_planner/features/trip/screens/new_spot_screen.dart';
@@ -151,13 +150,10 @@ void main() {
       final source = File('${docs.path}/edit.jpg')..writeAsBytesSync([0xFF, 0xD8, 0xFF]);
       final takenAt = DateTime(2026, 11, 2, 17, 30);
 
-      final ok = await persistMediaAsset(
-        mediaRepo: LocalMediaRepository(db),
+      final ok = await persistPlacePhoto(
         places: DriftPlaceRepository(db),
         source: source,
         placeKey: 'uji',
-        type: 'user_photo',
-        authorId: 'u1',
         referenceImageId: 'frame-1',
         kind: 'edited',
         derivedFromId: 'photo-0',
@@ -170,20 +166,14 @@ void main() {
       expect((photo.kind, photo.derivedFromId, photo.tripId, photo.referenceImageId), ('edited', 'photo-0', 'kansai', 'frame-1'));
       expect(photo.takenAt, takenAt);
       expect(File(photo.localPath).existsSync(), isTrue, reason: 'a copy in the app');
-      expect(await db.select(db.mediaAssets).get(), isEmpty, reason: 'no POI has this key');
+      expect(await db.select(db.mediaAssets).get(), isEmpty, reason: 'photos no longer go to the old table');
     });
 
-    test('a key that is neither a POI nor a place fails', () async {
+    test('a key that is not a place fails, and leaves no copy behind', () async {
       final source = File('${docs.path}/edit.jpg')..writeAsBytesSync([0xFF, 0xD8, 0xFF]);
-      final ok = await persistMediaAsset(
-        mediaRepo: LocalMediaRepository(db),
-        places: DriftPlaceRepository(db),
-        source: source,
-        placeKey: 'nowhere',
-        type: 'user_photo',
-        authorId: 'u1',
-      );
+      final ok = await persistPlacePhoto(places: DriftPlaceRepository(db), source: source, placeKey: 'nowhere');
       expect(ok, isFalse);
+      expect(Directory('${docs.path}/camera_photos').existsSync(), isFalse);
     });
   });
 

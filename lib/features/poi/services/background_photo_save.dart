@@ -11,10 +11,8 @@ import 'package:path_provider/path_provider.dart';
 import 'package:uuid/uuid.dart';
 
 import '../../../core/providers/database_provider.dart';
-import '../../auth/providers/auth_provider.dart';
 import '../../library/providers/place_providers.dart';
 import '../../library/services/photo_trip.dart';
-import '../repositories/media_repository.dart';
 import 'media_asset_service.dart';
 
 /// Messenger for snackbars that outlive the page that started them — a save
@@ -66,8 +64,7 @@ class BackgroundPhotoSaves extends Notifier<List<PendingPhotoSave>> {
   ///
   /// The photo is filed under [tripId], or else under the trip that has the
   /// place on the day it was [takenAt] (now, unless given). [derivedFromId]
-  /// is the place photo it was edited from. [type] is what the old POI
-  /// pages' media list shows, until they go.
+  /// is the place photo it was edited from.
   ///
   /// [render] runs when it's this save's turn — after the saves queued
   /// before it — so it must not need the caller's page, which is gone by
@@ -80,7 +77,6 @@ class BackgroundPhotoSaves extends Notifier<List<PendingPhotoSave>> {
     DateTime? takenAt,
     bool toGallery = false,
     bool originalToGallery = false,
-    required String type,
     required Future<Uint8List?> Function() render,
     File? original,
     String? referenceImageId,
@@ -100,7 +96,6 @@ class BackgroundPhotoSaves extends Notifier<List<PendingPhotoSave>> {
         job,
         toGallery: toGallery,
         originalToGallery: originalToGallery,
-        type: type,
         render: render,
         original: original,
         referenceImageId: referenceImageId,
@@ -117,7 +112,6 @@ class BackgroundPhotoSaves extends Notifier<List<PendingPhotoSave>> {
     PendingPhotoSave job, {
     required bool toGallery,
     required bool originalToGallery,
-    required String type,
     required Future<Uint8List?> Function() render,
     required File? original,
     required String? referenceImageId,
@@ -173,18 +167,15 @@ class BackgroundPhotoSaves extends Notifier<List<PendingPhotoSave>> {
             await tripForPhoto(ref.read(databaseProvider), placeKey, takenAt)
                 .catchError((Object _) => null);
         final persisted = _persistQueue.then(
-          (_) => persistMediaAsset(
-            mediaRepo: ref.read(mediaRepositoryProvider),
+          (_) => persistPlacePhoto(
             places: ref.read(placeRepositoryProvider),
             source: source,
             placeKey: placeKey,
-            type: type,
             referenceImageId: referenceImageId,
             kind: kind,
             derivedFromId: derivedFromId,
             tripId: trip,
             takenAt: takenAt,
-            authorId: ref.read(currentUserIdProvider),
           ),
         );
         _persistQueue = persisted.then((_) {}, onError: (_) {});
