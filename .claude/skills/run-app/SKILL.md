@@ -66,7 +66,7 @@ ui() {   # visible widgets with their tap bounds
 shot() { "$ADB" exec-out screencap -p > "$1"; }   # then Read the PNG
 ```
 
-- Flutter exposes widgets through accessibility, so labels appear as `content-desc`, e.g. `content-desc="View POIs&#10;Browse and manage…" bounds="[42,567][1038,798]"`. Tap the center of `bounds`.
+- Flutter exposes widgets through accessibility, so labels appear as `content-desc`, e.g. `content-desc="Library&#10;Your saved places, by anime, tag and region" bounds="[42,567][1038,798]"`. Tap the center of `bounds`.
 - Some widgets are missing from the dump (speed-dial labels, dialog body text, snackbars on some frames). Take a screenshot and read coordinates off it; the Read tool shows it scaled and states the factor to multiply by.
 - Save screenshots in the session scratchpad, never in the repo.
 - To wait for something, poll `ui | grep -q "<label>"` in a loop of ~10 iterations (one dump takes ~1 s) instead of sleeping.
@@ -92,11 +92,13 @@ Observed on Pixel_Test with a small database; positions move with content, so co
 
 | Goal | Path (tap centers) |
 |---|---|
-| Home cards | View POIs (540,682) · Map (540,934) · My Trips (540,1176) · Trip Calendar (540,1417) · Anime Camera (540,1659) |
-| Import from Bangumi | View POIs → **Add** FAB (964,2221) → *Import from Bangumi* (964,1224, not in the dump) → type a name → **Import** on a result → dialog **Import** (793,1385) → snackbar with the outcome |
-| New POI / Region / Anime / Tag | View POIs → **Add** FAB → the matching speed-dial entry (screenshot for positions) |
-| Anime Camera (Android) | Home **Anime Camera** (540,1659), or a POI page's **Take photo** → reference sheet (POI references / gallery / none) → the emulator's Camera app opens with the reference in a floating window → shutter (540,2238) → ✓ (539,2242) → photo editor (its AppBar's POI button shows "No POI" for a home-entry shot without a POI reference) |
-| Floating Reference (Android) | Home **Floating Reference** (the card under Anime Camera), or a POI page's **Float reference** → reference sheet → the window floats over every app until ✕ or a double-tap; no camera opens |
+| Home cards | Library (540,682) · My Trips (540,934) · Anime Camera (540,1176) · Floating Reference (540,1427) · Edit Photo (540,1690) |
+| New place | Library → **Add a place** (empty library) or the **Add place** FAB → type `lat,lng` in the search box (parsed on the device, no Nominatim call) and press Enter → Name (540,1544) → **Save to library** |
+| Import from Anitabi | Library → **Import from Anitabi** (app bar, or the empty library's button) → search a title → tick spots → save. Confirm the labels with `ui`; the Anitabi rules in CLAUDE.md apply |
+| New trip | My Trips → **New trip** → title field (540,745) → **Decide later** opens the date picker → **Create trip** |
+| A stop's page | My Trips → a trip → **Stops** tab → **Add stops** → *From my library* → tick places → **Add N stops**; tap a stop to open its page |
+| Anime Camera (Android) | Home **Anime Camera**, or a place or stop page's **Take photo** → place and frame sheets → the emulator's Camera app opens with the frame in a floating window → shutter (540,2238) → ✓ (539,2242) → photo editor |
+| Floating Reference (Android) | Home **Floating Reference**, or a place or stop page's **Float frame** → the window floats over every app until ✕ or a double-tap; no camera opens |
 
 ## Anime Camera on Android
 

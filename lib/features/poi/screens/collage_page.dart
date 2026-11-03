@@ -270,7 +270,6 @@ class _CollagePageState extends ConsumerState<CollagePage> {
           toGallery: true,
           originalToGallery: widget.originalCapture != null,
           original: widget.originalCapture,
-          type: compare ? 'comparison_image' : 'user_photo',
           render: () => _renderCollage(
             renderEditedImage(sourcePath, recipe),
             layers,

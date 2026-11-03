@@ -970,7 +970,6 @@ class _PhotoEditScreenState extends ConsumerState<PhotoEditScreen> {
           takenAt: _takenAt(),
           toGallery: toGallery,
           originalToGallery: widget.isCapture,
-          type: widget.wasUpload ? 'uploaded_image' : 'user_photo',
           render: () async =>
               edited ? await renderEditedJpeg(sourcePath, recipe) : null,
           original: File(sourcePath),

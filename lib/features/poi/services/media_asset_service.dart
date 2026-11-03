@@ -9,90 +9,56 @@ import 'package:drift/drift.dart' show Value;
 
 import '../../../core/database/database.dart';
 import '../../library/repositories/place_repository.dart';
-import '../models/media_asset_model.dart';
-import '../repositories/media_repository.dart';
 
 /// Copies [source] into the app's permanent `camera_photos` directory
-/// (filename derived from a unique UUID) and inserts a matching `MediaAsset`
-/// row pointing at the new path.
+/// (filename derived from a unique UUID) and adds it to [placeKey]'s photos.
 ///
-/// [type] should be `user_photo` for fresh camera captures or
-/// `uploaded_image` for gallery-picked photos — the POI detail list
-/// chooses its icon from this column.
-///
-/// While the old POI screens and the new place pages both exist, the photo
-/// joins both models: the POI's media when [placeKey] is a POI, and the
-/// place's photos (from [places]) when it is a place. Migrated places keep
-/// their POI ids, so most photos land in both, under the same id, which
-/// keeps the v9 → v10 migration from copying them twice when it re-runs at
-/// the cutover.
-///
-/// In `photos`, [kind] is `original`, `edited`, `composite` or `comparison`;
+/// [kind] is `original`, `edited`, `composite` or `comparison`;
 /// [derivedFromId] is the place photo it was edited from, and [tripId] the
 /// trip it was taken on.
 ///
 /// Returns `true` on success, `false` on any I/O or database failure
 /// — callers decide whether to surface that via a SnackBar.
-Future<bool> persistMediaAsset({
-  required MediaRepository mediaRepo,
+Future<bool> persistPlacePhoto({
+  required PlaceRepository places,
   required File source,
   required String placeKey,
-  required String type,
-  required String authorId, // CRITICAL FIX: Mandate authorId from the caller
   String? referenceImageId,
-  PlaceRepository? places,
   String kind = 'original',
   String? derivedFromId,
   String? tripId,
   DateTime? takenAt,
 }) async {
   try {
+    // Checked first, so a photo for a missing place leaves no copy behind.
+    if (await places.getPlace(placeKey) == null) throw StateError('$placeKey is not a place');
+
     final appDir = await getApplicationDocumentsDirectory();
     final photosDir = Directory(p.join(appDir.path, 'camera_photos'));
     if (!await photosDir.exists()) {
       await photosDir.create(recursive: true);
     }
 
-    final assetId = const Uuid().v4();
+    final photoId = const Uuid().v4();
     final extension =
         p.extension(source.path).isEmpty ? '.jpg' : p.extension(source.path);
-    final savedPath = p.join(photosDir.path, 'photo_$assetId$extension');
+    final savedPath = p.join(photosDir.path, 'photo_$photoId$extension');
     await source.copy(savedPath);
 
-    final newAsset = MediaAssetModel(
-      id: assetId,
-      poiId: placeKey,
-      type: type,
-      authorId: authorId, // CRITICAL FIX: Use the injected ID
+    await places.upsertPhoto(PhotosCompanion.insert(
+      id: photoId,
+      placeKey: placeKey,
+      tripId: Value(tripId),
+      kind: Value(kind),
+      derivedFromId: Value(derivedFromId),
+      referenceImageId: Value(referenceImageId),
       localPath: savedPath,
-      referenceImageId: referenceImageId,
-      createdAt: DateTime.now().millisecondsSinceEpoch,
-    );
-
-    var saved = false;
-    if (await mediaRepo.poiExists(placeKey)) {
-      await mediaRepo.addMediaAsset(newAsset);
-      saved = true;
-    }
-    if (places != null && await places.getPlace(placeKey) != null) {
-      await places.upsertPhoto(PhotosCompanion.insert(
-        id: assetId,
-        placeKey: placeKey,
-        tripId: Value(tripId),
-        kind: Value(kind),
-        derivedFromId: Value(derivedFromId),
-        referenceImageId: Value(referenceImageId),
-        localPath: savedPath,
-        takenAt: Value(takenAt ?? DateTime.now()),
-      ));
-      saved = true;
-    }
-    if (!saved) throw StateError('$placeKey is neither a POI nor a place');
+      takenAt: Value(takenAt ?? DateTime.now()),
+    ));
     return true;
   } catch (e, st) {
     // CRITICAL FIX: Stop silent failures. Log the exact I/O or DB error.
-    debugPrint('[MediaAssetService] Failed to persist media asset: $e\n$st');
+    debugPrint('[MediaAssetService] Failed to persist the photo: $e\n$st');
     return false;
   }
 }
-

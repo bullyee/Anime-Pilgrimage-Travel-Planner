@@ -1,17 +1,12 @@
 import 'dart:convert';
 import 'dart:io';
 
-import 'package:drift/drift.dart' hide isNull;
-import 'package:drift/native.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:http/http.dart' as http;
 import 'package:http/testing.dart';
 import 'package:path_provider_platform_interface/path_provider_platform_interface.dart';
 import 'package:plugin_platform_interface/plugin_platform_interface.dart';
-import 'package:trip_planner/core/database/database.dart';
 import 'package:trip_planner/features/poi/services/anitabi_api_service.dart';
-import 'package:trip_planner/features/poi/repositories/poi_repository.dart';
-import 'package:trip_planner/features/poi/repositories/media_repository.dart';
 import 'package:trip_planner/features/poi/services/anitabi_static_data.dart';
 
 const _host = 'https://w.junreimap.com/d';
@@ -48,21 +43,16 @@ class _FakePathProvider extends Fake
 }
 
 void main() {
-  late AppDatabase db;
   late Directory cache;
   late List<http.Request> requests;
 
   setUp(() {
-    db = AppDatabase.forTesting(NativeDatabase.memory());
     cache = Directory.systemTemp.createTempSync('anitabi_test_');
     requests = [];
     AnitabiStaticData.resetPreferredHost();
   });
 
-  tearDown(() async {
-    await db.close();
-    cache.deleteSync(recursive: true);
-  });
+  tearDown(() => cache.deleteSync(recursive: true));
 
   /// Serves [files] (by name) from the first static host; anything else 404s.
   MockClient serve(Map<String, String> files) => MockClient((request) async {
@@ -186,184 +176,31 @@ void main() {
     });
   });
 
-  group('AnitabiApiService.importBangumiSubject', () {
-    late PoiRepository poiRepo;
-    late MediaRepository mediaRepo;
+  group('AnitabiApiService.downloadReferenceImage', () {
+    const url = 'https://image.anitabi.cn/points/1424/a.jpg?plan=h360';
 
-    setUp(() {
-      poiRepo = LocalPoiRepository(db, 'user-1');
-      mediaRepo = LocalMediaRepository(db);
-    });
-
-    Future<AnitabiImportResult?> import(http.Client client) =>
-        AnitabiApiService.importBangumiSubject(
-          poiRepository: poiRepo,
-          mediaRepository: mediaRepo,
-          subjectId: '1424',
-          authorId: 'user-1',
-          fallbackName: 'K-On!',
-          client: client,
-          cacheDir: () async => cache,
-        );
-
-    test('imports spots with coordinates from the static data only',
-        () async {
-      final result = await import(serve({
-        'g.json': _index([kOn]),
-        'g0.json': _page(1424, [
-          _row('a', 0, cn: '修学院站'), // no original name: Chinese fallback
-          _row('b', '豊郷小学校', cn: '丰乡小学'),
-          _row('c', '第10話アバン'), // no coordinates
-        ]),
-      }));
-
-      expect(result!.poisImported, 2);
-      final names = await (db.select(db.pois)).map((p) => p.name).get();
-      expect(names.toSet(), {'修学院站', '豊郷小学校'});
-      expect(result.poisWithoutCoordinates, 1);
-      expect(result.animeName, 'けいおん！');
-      final b = await (db.select(db.pois)
-            ..where((p) => p.id.equals('anitabi:b')))
-          .getSingle();
-      expect(b.lat, 35.2);
-      expect(b.lng, 136.23);
-      expect(b.description, contains('Ep 3 - 02:05'));
-      expect(b.description, contains('音乐室'));
-      // Never the open API, which blocks callers and has no coordinates.
-      expect(requests.map((r) => r.url.host).toSet(), {'w.junreimap.com'});
-      for (final r in requests) {
-        expect(r.headers['User-Agent'], AnitabiApiService.userAgent);
-      }
-    });
-
-    test('throws when no spot has coordinates, without creating the anime',
-        () async {
-      final noCoords = _work(1424, '轻音少女', 'けいおん！', const []);
-      await expectLater(
-        import(serve({
-          'g.json': _index([noCoords]),
-          'g0.json': _page(1424, [_row('a', 'x'), _row('b', 'y')]),
-        })),
-        throwsA(isA<AnitabiNoCoordinatesException>()
-            .having((e) => e.spotCount, 'spotCount', 2)),
-      );
-      expect(await db.getAllAnimes(), isEmpty);
-    });
-
-    test('returns null when Anitabi has no such work', () async {
-      final result = await import(serve({
-        'g.json': _index([_work(999, 'x', 'y', const [])]),
-      }));
-      expect(result, isNull);
-    });
-
-    test('fetches a refused cover from the image mirror', () async {
+    test('fetches a refused image from the mirror, asking each host once', () async {
       PathProviderPlatform.instance = _FakePathProvider(cache.path);
-      final result = await import(MockClient((request) async {
+      final path = await AnitabiApiService.downloadReferenceImage(url, MockClient((request) async {
         requests.add(request);
-        return switch (request.url.host) {
-          'image.anitabi.cn' => http.Response('blocked', 403),
-          'img-tc.anitabi.cn' => http.Response.bytes([0xFF, 0xD8, 0xFF], 200),
-          _ => switch (request.url.pathSegments.last) {
-              'g.json' => _ok(_index([kOn])),
-              _ => _ok(_page(1424, [
-                  _row('a', '修学院駅', image: '/images/points/1424/a.jpg'),
-                ])),
-            },
-        };
+        return request.url.host == 'img-tc.anitabi.cn'
+            ? http.Response.bytes([0xFF, 0xD8, 0xFF], 200)
+            : http.Response('blocked', 403);
       }));
-      await result!.coverDownloadCompletion;
 
-      final images = await db.select(db.referenceImages).get();
-      expect(images, hasLength(1));
-      expect(images.single.authorId, 'user-1');
-      expect(images.single.remoteUrl,
-          'https://image.anitabi.cn/points/1424/a.jpg?plan=h360');
-      expect(File(images.single.localPath!).existsSync(), isTrue);
-      expect(
-        requests.where((r) => r.url.host == 'img-tc.anitabi.cn'),
-        hasLength(1),
-      );
+      expect(File(path!).existsSync(), isTrue);
+      expect(requests.map((r) => r.url.host), ['image.anitabi.cn', 'img-tc.anitabi.cn']);
     });
 
-    test('maps a blocked network to a blocked unavailable error', () async {
-      await expectLater(
-        import(MockClient((_) async => http.Response('blocked', 403))),
-        throwsA(isA<AnitabiUnavailableException>()
-            .having((e) => e.blocked, 'blocked', isTrue)),
-      );
-    });
+    test('gives up when both hosts refuse, without retrying', () async {
+      PathProviderPlatform.instance = _FakePathProvider(cache.path);
+      final path = await AnitabiApiService.downloadReferenceImage(url, MockClient((request) async {
+        requests.add(request);
+        return http.Response('blocked', 403);
+      }));
 
-    test('re-importing an existing subject preserves edits and dedups cleanly',
-        () async {
-      http.Client serveStatic() => MockClient((request) async {
-            requests.add(request);
-            return switch (request.url.host) {
-              'img-tc.anitabi.cn' =>
-                http.Response.bytes([0xFF, 0xD8, 0xFF], 200),
-              _ => switch (request.url.pathSegments.last) {
-                  'g.json' => _ok(_index([kOn])),
-                  _ => _ok(_page(1424, [
-                      _row('a', 0,
-                          cn: '修学院站', image: '/images/points/1424/a.jpg'),
-                      _row('b', '豊郷小学校', cn: '丰乡小学'),
-                    ])),
-                },
-            };
-          });
-
-      // 1. Initial import
-      final first = await import(serveStatic());
-      expect(first!.poisImported, 2);
-      expect(first.poisSkipped, 0);
-      expect(first.coversPending, 1);
-      await first.coverDownloadCompletion;
-
-      final initialAnimeId = first.animeId;
-      final initialImages = await db.select(db.referenceImages).get();
-      expect(initialImages, hasLength(1));
-
-      // 2. User edits one POI
-      await (db.update(db.pois)..where((p) => p.id.equals('anitabi:a'))).write(
-        const PoisCompanion(
-          description: Value('Custom user edit for spot A'),
-        ),
-      );
-      final editedA = await (db.select(db.pois)
-            ..where((p) => p.id.equals('anitabi:a')))
-          .getSingle();
-      expect(editedA.description, 'Custom user edit for spot A');
-
-      // 3. Re-import the same subject
-      final second = await import(serveStatic());
-      expect(second!.animeId, initialAnimeId);
-      expect(second.poisImported, 0);
-      expect(second.poisSkipped, 2);
-      expect(second.coversPending, 0);
-
-      // Verify user's edit was preserved (not overwritten)
-      final preservedA = await (db.select(db.pois)
-            ..where((p) => p.id.equals('anitabi:a')))
-          .getSingle();
-      expect(preservedA.description, 'Custom user edit for spot A');
-
-      // Verify reference images count remains exactly one
-      final secondImages = await db.select(db.referenceImages).get();
-      expect(secondImages, hasLength(1));
-
-      // Verify poi_animes links are intact
-      final links = await (db.select(db.poiAnimes)).get();
-      expect(links.length, 2);
-
-      // 4. If poi_animes links are deleted first, re-import adds them back
-      await (db.delete(db.poiAnimes)).go();
-      expect(await (db.select(db.poiAnimes)).get(), isEmpty);
-
-      final third = await import(serveStatic());
-      expect(third!.poisImported, 0);
-      expect(third.poisSkipped, 2);
-      final restoredLinks = await (db.select(db.poiAnimes)).get();
-      expect(restoredLinks.length, 2);
+      expect(path, isNull);
+      expect(requests, hasLength(2));
     });
   });
 }
