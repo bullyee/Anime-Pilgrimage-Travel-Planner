@@ -20,6 +20,7 @@ import '../../features/anime/screens/bangumi_search_screen.dart';
 import '../../features/tag/screens/tag_edit_screen.dart';
 import '../../features/calendar/screens/calendar_screen.dart';
 import '../../features/camera/screens/camera_screen.dart';
+import '../../features/camera/services/photo_edit_route.dart';
 import '../../features/library/screens/anitabi_import_screen.dart';
 import '../../features/library/screens/labels_screen.dart';
 import '../../features/library/screens/library_screen.dart';
@@ -120,7 +121,8 @@ GoRouter router(RouterRef ref) {
       GoRoute(
         // A place picked on the map and saved to the library.
         path: '/library/new',
-        builder: (context, state) => const NewSpotScreen(),
+        // `?pick=1`: hand the new place's key back instead of opening it.
+        builder: (context, state) => NewSpotScreen(returnsPlaceKey: state.uri.queryParameters['pick'] == '1'),
       ),
       GoRoute(
         path: '/library/import',
@@ -185,16 +187,15 @@ GoRouter router(RouterRef ref) {
         ),
       ),
       GoRoute(
-        // A photo with no POI yet: Edit Photo from the home screen, or an
-        // Anime Camera shot taken without one. The editor's POI button can
-        // pick one.
+        // The photo editor, for a place or for none yet: see PhotoEditArgs.
         path: '/photo-edit',
         builder: (context, state) => _photoEditScreen(state),
       ),
       GoRoute(
+        // The old POI page's way in. Migrated places keep their POI ids.
         path: '/pois/:poiId/photo-edit',
         builder: (context, state) =>
-            _photoEditScreen(state, poiId: state.pathParameters['poiId']!),
+            _photoEditScreen(state, placeKey: state.pathParameters['poiId']!),
       ),
       GoRoute(
         path: '/animes/:animeId/edit',
@@ -227,7 +228,8 @@ GoRouter router(RouterRef ref) {
       GoRoute(
         path: '/camera',
         builder: (context, state) => CameraScreen(
-          poiId: state.uri.queryParameters['poiId'],
+          placeKey: state.uri.queryParameters['place'],
+          tripId: state.uri.queryParameters['trip'],
         ),
       ),
       GoRoute(
@@ -242,23 +244,22 @@ GoRouter router(RouterRef ref) {
   );
 }
 
-/// The photo editor for both of its routes, from the query: `path` (the
-/// photo), `ref` / `refId` (its reference), `upload=1` (picked from the
-/// gallery) and `capture=1` (just shot with the Anime Camera).
-Widget _photoEditScreen(GoRouterState state, {String? poiId}) {
-  final qp = state.uri.queryParameters;
-  final source = qp['path'];
-  if (source == null) {
+/// The photo editor for both of its routes, from the query ([PhotoEditArgs]).
+Widget _photoEditScreen(GoRouterState state, {String? placeKey}) {
+  final args = PhotoEditArgs.fromQuery(state.uri.queryParameters, placeKey: placeKey);
+  if (args == null) {
     return const Scaffold(
       body: Center(child: Text('Missing source path.')),
     );
   }
   return PhotoEditScreen(
-    poiId: poiId,
-    sourcePath: Uri.decodeComponent(source),
-    referencePath: qp['ref'] != null ? Uri.decodeComponent(qp['ref']!) : null,
-    referenceImageId: qp['refId'],
-    wasUpload: qp['upload'] == '1',
-    isCapture: qp['capture'] == '1',
+    placeKey: args.placeKey,
+    tripId: args.tripId,
+    derivedFromId: args.photoId,
+    sourcePath: args.path,
+    referencePath: args.referencePath,
+    referenceImageId: args.referenceImageId,
+    wasUpload: args.upload,
+    isCapture: args.capture,
   );
 }

@@ -25,7 +25,12 @@ class NewSpotScreen extends ConsumerStatefulWidget {
   final String? tripId;
   final String? movePlaceKey;
 
-  const NewSpotScreen({super.key, this.tripId, this.movePlaceKey});
+  /// For a new library place: close with its key, or with the key of the
+  /// saved place the user picks instead of a duplicate, rather than opening
+  /// it. The photo editor's place picker makes places this way.
+  final bool returnsPlaceKey;
+
+  const NewSpotScreen({super.key, this.tripId, this.movePlaceKey, this.returnsPlaceKey = false});
 
   @override
   ConsumerState<NewSpotScreen> createState() => _NewSpotScreenState();
@@ -186,8 +191,11 @@ class _NewSpotScreenState extends ConsumerState<NewSpotScreen> {
   /// Offers a saved place that looks like the one being added: close by and
   /// with a similar name. True to go on adding the new one.
   Future<bool> _confirmNotDuplicate(LatLng at) async {
-    final places = ref.read(placesListProvider(null)).valueOrNull ?? const <Place>[];
-    final match = likelyDuplicate(places.where((p) => p.visibility == 'saved'), name: _name.text, at: at);
+    // Asked of the database: the places provider only has data while some
+    // other screen watches it, which isn't so from a trip or the editor.
+    final places = await ref.read(placeRepositoryProvider).getPlaces(visibility: 'saved');
+    if (!mounted) return false;
+    final match = likelyDuplicate(places, name: _name.text, at: at);
     if (match == null) return true;
     final tripId = widget.tripId;
     final choice = await showDialog<String>(
@@ -198,13 +206,18 @@ class _NewSpotScreenState extends ConsumerState<NewSpotScreen> {
             '${tripId == null ? 'Open it instead of adding a second one?' : 'Add it to the trip instead of a new spot?'}'),
         actions: [
           TextButton(onPressed: () => Navigator.pop(context, 'new'), child: const Text('Add a new one')),
-          FilledButton(onPressed: () => Navigator.pop(context, 'existing'), child: Text(tripId == null ? 'Open it' : 'Use it')),
+          FilledButton(
+            onPressed: () => Navigator.pop(context, 'existing'),
+            child: Text(tripId == null && !widget.returnsPlaceKey ? 'Open it' : 'Use it'),
+          ),
         ],
       ),
     );
     if (choice != 'existing' || !mounted) return choice == 'new';
     final key = match.place.placeKey;
-    if (tripId == null) {
+    if (widget.returnsPlaceKey) {
+      context.pop(key);
+    } else if (tripId == null) {
       context.pushReplacement('/library/places/${Uri.encodeComponent(key)}');
     } else {
       final result = await ref.read(tripStopsControllerProvider.notifier).addFromLibrary(tripId: tripId, placeKeys: [key], repeat: true);
@@ -275,35 +288,41 @@ class _NewSpotScreenState extends ConsumerState<NewSpotScreen> {
     final at = _center.value;
     if (!await _confirmNotDuplicate(at) || !mounted) return;
     setState(() => _saving = true);
-    final AppResult<String> result = tripId != null
-        ? switch (await ref.read(tripStopsControllerProvider.notifier).createSpot(
-            tripId: tripId,
-            name: _name.text,
-            lat: at.latitude,
-            lng: at.longitude,
-            address: _address.text,
-            description: _about.text,
-          )) {
-            Success(:final value) => Success('Added ${value.name}.'),
-            Failure(:final error) => Failure("Couldn't add the spot: $error"),
-          }
-        : switch (await ref.read(libraryControllerProvider.notifier).createPlace(
-            name: _name.text,
-            lat: at.latitude,
-            lng: at.longitude,
-            address: _address.text,
-            description: _about.text,
-          )) {
-            Success(:final value) => Success('Saved ${value.name} to your library.'),
-            Failure(:final error) => Failure("Couldn't save the place: $error"),
-          };
+    String? createdKey;
+    final AppResult<String> result;
+    if (tripId != null) {
+      result = switch (await ref.read(tripStopsControllerProvider.notifier).createSpot(
+        tripId: tripId,
+        name: _name.text,
+        lat: at.latitude,
+        lng: at.longitude,
+        address: _address.text,
+        description: _about.text,
+      )) {
+        Success(:final value) => Success('Added ${value.name}.'),
+        Failure(:final error) => Failure("Couldn't add the spot: $error"),
+      };
+    } else {
+      final created = await ref.read(libraryControllerProvider.notifier).createPlace(
+        name: _name.text,
+        lat: at.latitude,
+        lng: at.longitude,
+        address: _address.text,
+        description: _about.text,
+      );
+      if (created case Success(:final value)) createdKey = value.placeKey;
+      result = switch (created) {
+        Success(:final value) => Success('Saved ${value.name} to your library.'),
+        Failure(:final error) => Failure("Couldn't save the place: $error"),
+      };
+    }
     if (!mounted) return;
     setState(() => _saving = false);
     switch (result) {
       case Success(:final value):
         ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(value)));
         if (context.canPop()) {
-          context.pop();
+          context.pop(widget.returnsPlaceKey ? createdKey : null);
         } else {
           context.go(tripId == null ? '/library' : '/trips/$tripId/stops');
         }

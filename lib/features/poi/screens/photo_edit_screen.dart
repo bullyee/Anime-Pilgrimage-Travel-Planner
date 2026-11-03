@@ -12,7 +12,7 @@ import 'package:image_picker/image_picker.dart';
 
 import '../../camera/services/reinhard_match_service.dart';
 import '../../camera/widgets/capture_sheets.dart';
-import '../providers/poi_provider.dart';
+import '../../library/providers/place_providers.dart';
 import '../services/background_photo_save.dart';
 import '../services/brightness_service.dart';
 import '../services/edit_preview_service.dart';
@@ -98,17 +98,25 @@ class _EditState {
 /// Standalone photo editor — reads everything it needs from its
 /// constructor args and saves through [BackgroundPhotoSaves], so the
 /// same screen serves both the live camera flow ("just shot this") and
-/// the POI-detail flow ("picked this from gallery") without either
-/// path needing to seed any global state. Lives under `poi/screens`
-/// because the result is a POI's media asset; reuses the colour-match
-/// service that still ships from the camera feature.
+/// the place page flow ("edit this photo") without either path needing
+/// to seed any global state. Lives under `poi/screens` until the old POI
+/// screens go; reuses the colour-match service that still ships from the
+/// camera feature.
 class PhotoEditScreen extends ConsumerStatefulWidget {
-  /// POI whose media assets list the saved photo joins, until the user picks
-  /// another with the AppBar's POI button. Null when the photo has no POI
-  /// yet — Edit Photo, or an Anime Camera shot taken without one: the result
-  /// then only goes to the phone's gallery, unless the user picks a POI or a
-  /// reference from one.
-  final String? poiId;
+  /// Place whose photos the saved photo joins, until the user picks another
+  /// with the AppBar's place button. Null when the photo has no place yet —
+  /// Edit Photo, or an Anime Camera shot taken without one: the result then
+  /// only goes to the phone's gallery, unless the user picks a place or a
+  /// frame from one.
+  final String? placeKey;
+
+  /// The trip the saved photo is filed under. Null lets the save find the
+  /// trip that has the place on the day the photo was taken.
+  final String? tripId;
+
+  /// The place photo being edited, when it is one: the saved edit derives
+  /// from it.
+  final String? derivedFromId;
 
   /// File on disk that this screen edits. It's never written to — the
   /// edited result is rendered into its own temp file in the background
@@ -126,8 +134,8 @@ class PhotoEditScreen extends ConsumerStatefulWidget {
   final String? referenceImageId;
 
   /// `true` when [sourcePath] is a gallery-picked image rather than a
-  /// fresh camera capture, so the saved row's `type` column is
-  /// `uploaded_image` and the POI detail list renders the upload icon.
+  /// fresh camera capture, so the old POI page's media list shows the
+  /// upload icon for it.
   final bool wasUpload;
 
   /// `true` for a photo just taken with the Anime Camera. It isn't in the
@@ -137,7 +145,9 @@ class PhotoEditScreen extends ConsumerStatefulWidget {
 
   const PhotoEditScreen({
     super.key,
-    this.poiId,
+    this.placeKey,
+    this.tripId,
+    this.derivedFromId,
     required this.sourcePath,
     this.referencePath,
     this.referenceImageId,
@@ -163,10 +173,10 @@ class _PhotoEditScreenState extends ConsumerState<PhotoEditScreen> {
   // mislead the user.
   String? _referencePath;
   String? _referenceImageId;
-  // POI the photo is saved into (null: only the phone's gallery). Starts as
-  // [PhotoEditScreen.poiId]; the AppBar's POI button changes it, and picking
-  // a reference from a POI fills it in when it's still empty.
-  String? _poiId;
+  // Place the photo is saved into (null: only the phone's gallery). Starts
+  // as [PhotoEditScreen.placeKey]; the AppBar's place button changes it, and
+  // picking a frame from a place fills it in when it's still empty.
+  String? _placeKey;
 
   // Reference overlay starts visible (when a reference image is in
   // play) to match the live camera — the floating bar provides the eye
@@ -198,7 +208,7 @@ class _PhotoEditScreenState extends ConsumerState<PhotoEditScreen> {
   // a free angle in degrees clockwise. Kept as global editor properties
   // rather than history steps: they're geometry sitting on top of the
   // filter chain (the per-pixel filters are orientation-agnostic), and at
-  // Save they're baked into the saved file so the POI photo matches the
+  // Save they're baked into the saved file so the saved photo matches the
   // preview.
   bool _mirrored = false;
   int _rotationQuarters = 0;
@@ -290,7 +300,7 @@ class _PhotoEditScreenState extends ConsumerState<PhotoEditScreen> {
     super.initState();
     _referencePath = widget.referencePath;
     _referenceImageId = widget.referenceImageId;
-    _poiId = widget.poiId;
+    _placeKey = widget.placeKey;
     unawaited(_prepareEditingBase());
     unawaited(_loadReferenceSize());
   }
@@ -926,7 +936,7 @@ class _PhotoEditScreenState extends ConsumerState<PhotoEditScreen> {
 
   /// Hands the full-res render to [BackgroundPhotoSaves] and closes the
   /// editor at once: a 12 MP render takes seconds, and the user shouldn't
-  /// have to sit through it. The photo shows up on the POI page (or in the
+  /// have to sit through it. The photo shows up on the place page (or in the
   /// phone's gallery, for Edit Photo) when the save finishes; the render
   /// never touches the source file.
   void _save() {
@@ -937,12 +947,15 @@ class _PhotoEditScreenState extends ConsumerState<PhotoEditScreen> {
     final recipe = _recipe();
     final edited = !recipe.isEmpty;
     final sourcePath = widget.sourcePath;
-    final poiId = _poiId;
+    final placeKey = _placeKey;
     // Every new picture also goes to the phone's gallery. An unedited photo
     // that isn't a fresh capture is already there (or already in the app),
-    // so it's skipped.
+    // so it's skipped. So is an unedited place photo going back to its own
+    // place.
     final toGallery = edited || widget.isCapture;
-    if (poiId == null && !toGallery) {
+    final unchangedPlacePhoto =
+        !edited && widget.derivedFromId != null && placeKey == widget.placeKey;
+    if ((placeKey == null && !toGallery) || unchangedPlacePhoto) {
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(content: Text('No changes to save.')),
       );
@@ -950,7 +963,11 @@ class _PhotoEditScreenState extends ConsumerState<PhotoEditScreen> {
     }
     _saving = true;
     ref.read(backgroundPhotoSavesProvider.notifier).save(
-          poiId: poiId,
+          placeKey: placeKey,
+          tripId: widget.tripId,
+          kind: edited ? 'edited' : 'original',
+          derivedFromId: widget.derivedFromId,
+          takenAt: _takenAt(),
           toGallery: toGallery,
           originalToGallery: widget.isCapture,
           type: widget.wasUpload ? 'uploaded_image' : 'user_photo',
@@ -963,6 +980,18 @@ class _PhotoEditScreenState extends ConsumerState<PhotoEditScreen> {
       const SnackBar(content: Text('Saving in the background…')),
     );
     Navigator.of(context).pop();
+  }
+
+  /// When the photo was taken, as far as the editor can tell: now for a fresh
+  /// capture, else the file's date. The save files the photo under the trip
+  /// that has its place on that day.
+  DateTime? _takenAt() {
+    if (widget.isCapture) return null;
+    try {
+      return _sourceFile.lastModifiedSync();
+    } catch (_) {
+      return null;
+    }
   }
 
   /// Bake the manual orientation, then the crop, into the downscaled
@@ -1006,12 +1035,12 @@ class _PhotoEditScreenState extends ConsumerState<PhotoEditScreen> {
     Navigator.of(context).pop();
   }
 
-  /// Add or replace the reference image: one of this POI's reference
-  /// images, or any image from the gallery (e.g. a screenshot the user
-  /// saved themselves).
+  /// Add or replace the reference image: one of this place's anime frames,
+  /// or any image from the gallery (e.g. a screenshot the user saved
+  /// themselves).
   Future<void> _changeReference() async {
     if (_processing) return;
-    final fromPoi = await showModalBottomSheet<bool>(
+    final fromPlace = await showModalBottomSheet<bool>(
       context: context,
       backgroundColor: Colors.grey[900],
       builder: (ctx) => SafeArea(
@@ -1021,15 +1050,15 @@ class _PhotoEditScreenState extends ConsumerState<PhotoEditScreen> {
             ListTile(
               leading: const Icon(Icons.collections, color: Colors.white),
               title: Text(
-                _poiId != null
-                    ? "This POI's reference images"
-                    : "A POI's reference images",
+                _placeKey != null
+                    ? "This place's anime frames"
+                    : "A place's anime frames",
                 style: const TextStyle(color: Colors.white),
               ),
-              subtitle: _poiId != null
+              subtitle: _placeKey != null
                   ? null
                   : const Text(
-                      'The photo is also saved to that POI.',
+                      'The photo is also saved to that place.',
                       style: TextStyle(color: Colors.white54),
                     ),
               onTap: () => Navigator.pop(ctx, true),
@@ -1046,16 +1075,16 @@ class _PhotoEditScreenState extends ConsumerState<PhotoEditScreen> {
         ),
       ),
     );
-    if (fromPoi == null || !mounted) return;
-    if (fromPoi) {
-      await _pickPoiReference();
+    if (fromPlace == null || !mounted) return;
+    if (fromPlace) {
+      await _pickPlaceReference();
     } else {
       await _pickGalleryReference();
     }
   }
 
-  /// Any image from the gallery. It has no `ReferenceImages` row, so the
-  /// saved photo isn't linked to a reference frame.
+  /// Any image from the gallery. It isn't one of a place's frames, so the
+  /// saved photo isn't linked to a frame.
   Future<void> _pickGalleryReference() async {
     final XFile? picked;
     try {
@@ -1071,43 +1100,43 @@ class _PhotoEditScreenState extends ConsumerState<PhotoEditScreen> {
     _useReference(picked.path);
   }
 
-  /// One of a POI's `ReferenceImages` rows — keeping the foreign-key link
-  /// so the saved MediaAsset records which reference frame it was matched
-  /// against. Without a POI yet, the editor asks which POI first, and the
-  /// result is saved into that POI's media as well.
-  Future<void> _pickPoiReference() async {
-    final poiId = _poiId ?? await pickPoiId(context, ref);
-    if (poiId == null || !mounted) return;
-    final picked = await pickPoiReferenceImage(context, ref, poiId);
+  /// One of a place's anime frames — keeping its id, so the saved photo
+  /// records which frame it was matched against. Without a place yet, the
+  /// editor asks which place first, and the result is saved into that
+  /// place's photos as well.
+  Future<void> _pickPlaceReference() async {
+    final placeKey = _placeKey ?? await pickPlaceKey(context, ref);
+    if (placeKey == null || !mounted) return;
+    final picked = await pickPlaceFrame(context, ref, placeKey);
     if (picked == null || !mounted) return;
-    _useReference(picked.localPath!, imageId: picked.id, poiId: poiId);
+    _useReference(picked.localPath!, imageId: picked.id, placeKey: placeKey);
   }
 
-  /// The AppBar's POI button: save the photo into another POI, a new one
-  /// (made with the POI form, which hands back its id), or none — then it
-  /// only goes to the phone's gallery.
-  Future<void> _choosePoi() async {
-    final choice = await pickPhotoPoi(context, ref, current: _poiId);
+  /// The AppBar's place button: save the photo into another place, a new
+  /// one (made on the new place page, which hands back its key), or none —
+  /// then it only goes to the phone's gallery.
+  Future<void> _choosePlace() async {
+    final choice = await pickPhotoPlace(context, ref, current: _placeKey);
     if (choice == null || !mounted) return;
     if (!choice.createNew) {
-      setState(() => _poiId = choice.poiId);
+      setState(() => _placeKey = choice.placeKey);
       return;
     }
-    final created = await context.push<String>('/pois/new');
-    if (created != null && mounted) setState(() => _poiId = created);
+    final created = await context.push<String>('/library/new?pick=1');
+    if (created != null && mounted) setState(() => _placeKey = created);
   }
 
-  /// Switch to the reference at [path] — from [poiId] when it's one of a
-  /// POI's reference images, which also becomes the photo's POI if it has
+  /// Switch to the reference at [path] — from [placeKey] when it's one of a
+  /// place's anime frames, which also becomes the photo's place if it has
   /// none yet. When the user is editing through a Match Color result, push a
   /// fresh original step on top of the history — the existing matched bytes
   /// were computed against the previous reference and would be misleading
   /// to keep displayed.
-  void _useReference(String path, {String? imageId, String? poiId}) {
+  void _useReference(String path, {String? imageId, String? placeKey}) {
     setState(() {
       _referencePath = path;
       _referenceImageId = imageId;
-      _poiId ??= poiId;
+      _placeKey ??= placeKey;
       _overlayOffset = Offset.zero;
       _overlayScale = 0.8;
       _overlayOpacity = 0.4;
@@ -1462,8 +1491,8 @@ class _PhotoEditScreenState extends ConsumerState<PhotoEditScreen> {
         : baseDisplay();
   }
 
-  /// Default-mode AppBar: back/undo/redo on the left, the POI the photo is
-  /// saved into in the middle, Save on the right. Use while no tool is
+  /// Default-mode AppBar: back/undo/redo on the left, the place the photo
+  /// is saved into in the middle, Save on the right. Use while no tool is
   /// being dialled in, so the user can step through edit history and
   /// commit to disk. Save is always here; Compose (which saves from its own
   /// page), the reference and rotation are tools in the bottom strip.
@@ -1475,7 +1504,7 @@ class _PhotoEditScreenState extends ConsumerState<PhotoEditScreen> {
       // pushing the title.
       leadingWidth: 168,
       titleSpacing: 0,
-      title: _buildPoiButton(),
+      title: _buildPlaceButton(),
       leading: Row(
         mainAxisSize: MainAxisSize.min,
         children: [
@@ -1521,22 +1550,22 @@ class _PhotoEditScreenState extends ConsumerState<PhotoEditScreen> {
     );
   }
 
-  /// The main AppBar's POI button: the POI the photo is saved into, or "No
-  /// POI" when it only goes to the phone's gallery. Tapping it picks another
-  /// ([_choosePoi]).
-  Widget _buildPoiButton() {
-    final id = _poiId;
-    final name = id == null
-        ? 'No POI'
-        : ref.watch(allPoisProvider).valueOrNull?[id]?.name ?? 'POI';
+  /// The main AppBar's place button: the place the photo is saved into, or
+  /// "No place" when it only goes to the phone's gallery. Tapping it picks
+  /// another ([_choosePlace]).
+  Widget _buildPlaceButton() {
+    final key = _placeKey;
+    final name = key == null
+        ? 'No place'
+        : ref.watch(placeDetailProvider(key)).valueOrNull?.name ?? 'Place';
     return TextButton.icon(
-      onPressed: _processing ? null : _choosePoi,
+      onPressed: _processing ? null : _choosePlace,
       style: TextButton.styleFrom(
         foregroundColor: Colors.white,
         disabledForegroundColor: Colors.white38,
         padding: const EdgeInsets.symmetric(horizontal: 8),
       ),
-      icon: Icon(id == null ? Icons.location_off : Icons.place, size: 18),
+      icon: Icon(key == null ? Icons.location_off : Icons.place, size: 18),
       label: Row(
         mainAxisSize: MainAxisSize.min,
         children: [
@@ -1845,7 +1874,10 @@ class _PhotoEditScreenState extends ConsumerState<PhotoEditScreen> {
           sourcePath: widget.sourcePath,
           recipe: _recipe(),
           referencePath: refPath,
-          poiId: _poiId,
+          placeKey: _placeKey,
+          tripId: widget.tripId,
+          derivedFromId: widget.derivedFromId,
+          takenAt: _takenAt(),
           originalCapture: widget.isCapture ? _sourceFile : null,
           onBack: () => setState(() => _collagePage = false),
         ),

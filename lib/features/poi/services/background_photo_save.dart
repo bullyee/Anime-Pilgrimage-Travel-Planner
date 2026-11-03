@@ -10,8 +10,10 @@ import 'package:path/path.dart' as p;
 import 'package:path_provider/path_provider.dart';
 import 'package:uuid/uuid.dart';
 
+import '../../../core/providers/database_provider.dart';
 import '../../auth/providers/auth_provider.dart';
 import '../../library/providers/place_providers.dart';
+import '../../library/services/photo_trip.dart';
 import '../repositories/media_repository.dart';
 import 'media_asset_service.dart';
 
@@ -22,13 +24,13 @@ final rootMessengerKey = GlobalKey<ScaffoldMessengerState>();
 /// Album that photos saved to the phone's gallery land in.
 const galleryAlbum = 'Trip Planner';
 
-/// A save still in flight, so the POI page can show "Saving…". [poiId] is
-/// null for a save that only goes to the phone's gallery.
+/// A save still in flight, so the POI page can show "Saving…". [placeKey]
+/// is null for a save that only goes to the phone's gallery.
 class PendingPhotoSave {
   final String id;
-  final String? poiId;
+  final String? placeKey;
 
-  const PendingPhotoSave(this.id, this.poiId);
+  const PendingPhotoSave(this.id, this.placeKey);
 }
 
 /// Saves edited photos in the background. The editor and Compose hand their
@@ -55,18 +57,27 @@ class BackgroundPhotoSaves extends Notifier<List<PendingPhotoSave>> {
   List<PendingPhotoSave> build() => const [];
 
   /// Saves the bytes [render] produces — or [original] as-is when it returns
-  /// null — to [poiId]'s media as [type], and with [toGallery] to the
+  /// null — to [placeKey]'s photos as [kind], and with [toGallery] to the
   /// phone's gallery ([galleryAlbum]) as well. With [originalToGallery] (a
   /// fresh camera capture, which isn't in the gallery yet) the untouched
   /// [original] goes to the gallery next to the edit. Returns at once; the
   /// outcome shows up as a snackbar and, on success, as the new photo on the
-  /// POI page.
+  /// place page.
+  ///
+  /// The photo is filed under [tripId], or else under the trip that has the
+  /// place on the day it was [takenAt] (now, unless given). [derivedFromId]
+  /// is the place photo it was edited from. [type] is what the old POI
+  /// pages' media list shows, until they go.
   ///
   /// [render] runs when it's this save's turn — after the saves queued
   /// before it — so it must not need the caller's page, which is gone by
   /// then.
   void save({
-    String? poiId,
+    String? placeKey,
+    String? tripId,
+    String kind = 'original',
+    String? derivedFromId,
+    DateTime? takenAt,
     bool toGallery = false,
     bool originalToGallery = false,
     required String type,
@@ -74,40 +85,48 @@ class BackgroundPhotoSaves extends Notifier<List<PendingPhotoSave>> {
     File? original,
     String? referenceImageId,
   }) {
-    final job = PendingPhotoSave(const Uuid().v4(), poiId);
+    final job = PendingPhotoSave(const Uuid().v4(), placeKey);
     state = [...state, job];
     final isDesktop =
         !kIsWeb && (Platform.isWindows || Platform.isMacOS || Platform.isLinux);
     final targetName = isDesktop ? 'Pictures folder' : 'gallery';
     final message = !toGallery
         ? 'Photo saved.'
-        : poiId == null
+        : placeKey == null
         ? 'Saved to the $targetName.'
-        : 'Saved to the POI and the $targetName.';
+        : 'Saved to the place and the $targetName.';
     unawaited(
       _run(
         job,
-        toGallery,
-        originalToGallery,
-        type,
-        render,
-        original,
-        referenceImageId,
-        message,
+        toGallery: toGallery,
+        originalToGallery: originalToGallery,
+        type: type,
+        render: render,
+        original: original,
+        referenceImageId: referenceImageId,
+        kind: kind,
+        derivedFromId: derivedFromId,
+        tripId: tripId,
+        takenAt: takenAt ?? DateTime.now(),
+        savedMessage: message,
       ),
     );
   }
 
   Future<void> _run(
-    PendingPhotoSave job,
-    bool toGallery,
-    bool originalToGallery,
-    String type,
-    Future<Uint8List?> Function() render,
-    File? original,
-    String? referenceImageId,
-    String savedMessage,
-  ) async {
+    PendingPhotoSave job, {
+    required bool toGallery,
+    required bool originalToGallery,
+    required String type,
+    required Future<Uint8List?> Function() render,
+    required File? original,
+    required String? referenceImageId,
+    required String kind,
+    required String? derivedFromId,
+    required String? tripId,
+    required DateTime takenAt,
+    required String savedMessage,
+  }) async {
     File? temp;
     var ok = false;
     Object? error;
@@ -145,18 +164,26 @@ class BackgroundPhotoSaves extends Notifier<List<PendingPhotoSave>> {
         }
         galleryMs = watch.elapsedMilliseconds - galleryStart;
       }
-      final poiId = job.poiId;
-      if (poiId == null) {
+      final placeKey = job.placeKey;
+      if (placeKey == null) {
         ok = true;
       } else {
+        // Not knowing the trip shouldn't lose the photo.
+        final trip = tripId ??
+            await tripForPhoto(ref.read(databaseProvider), placeKey, takenAt)
+                .catchError((Object _) => null);
         final persisted = _persistQueue.then(
           (_) => persistMediaAsset(
             mediaRepo: ref.read(mediaRepositoryProvider),
             places: ref.read(placeRepositoryProvider),
             source: source,
-            poiId: poiId,
+            placeKey: placeKey,
             type: type,
             referenceImageId: referenceImageId,
+            kind: kind,
+            derivedFromId: derivedFromId,
+            tripId: trip,
+            takenAt: takenAt,
             authorId: ref.read(currentUserIdProvider),
           ),
         );

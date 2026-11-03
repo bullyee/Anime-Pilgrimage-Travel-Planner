@@ -9,10 +9,12 @@ import 'package:path_provider/path_provider.dart';
 import 'package:uuid/uuid.dart';
 
 import '../../../core/database/database.dart';
+import '../../../core/providers/database_provider.dart';
 import '../../../core/utils/app_result.dart';
 import '../../poi/services/background_photo_save.dart' show galleryAlbum;
 import '../../trip/controllers/trips_controller.dart' show isoDate;
 import '../providers/place_providers.dart';
+import '../services/photo_trip.dart';
 
 /// The facts of a place that the user edits by hand.
 class PlaceFacts {
@@ -109,14 +111,22 @@ class PlaceController extends Notifier<AsyncValue<void>> {
   }
 
   /// Lets the user pick photos from the gallery and adds copies of them to
-  /// the place. Returns how many were added.
+  /// the place, each filed under the trip that had the place on the day it
+  /// was taken. Returns how many were added.
   Future<AppResult<int>> addPhotosFromGallery(String placeKey) {
     return _run(() async {
       final picked = await ImagePicker().pickMultiImage();
       final repo = ref.read(placeRepositoryProvider);
+      final db = ref.read(databaseProvider);
       for (final file in picked) {
+        final takenAt = await File(file.path).lastModified();
         final path = await _copyIntoApp(file.path, 'camera_photos', 'photo');
-        await repo.addPhoto(placeKey: placeKey, localPath: path, takenAt: await File(file.path).lastModified());
+        await repo.addPhoto(
+          placeKey: placeKey,
+          localPath: path,
+          takenAt: takenAt,
+          tripId: await tripForPhoto(db, placeKey, takenAt),
+        );
       }
       return picked.length;
     });
