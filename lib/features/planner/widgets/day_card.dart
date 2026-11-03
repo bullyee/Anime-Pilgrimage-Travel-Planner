@@ -18,6 +18,7 @@ class DayCardActions {
   final void Function(PlannerDay day) onMoveToBackup;
   final void Function(PlannerDay day) onMoveToTrip;
   final void Function(PlannerDay day) onRemove;
+  final void Function(PlannerDay day) onRename;
   final VoidCallback onZoomOut;
   final void Function(String dayId, ListHandle handle) registerList;
   final void Function(String dayId, ListHandle handle) unregisterList;
@@ -31,6 +32,7 @@ class DayCardActions {
     required this.onMoveToBackup,
     required this.onMoveToTrip,
     required this.onRemove,
+    required this.onRename,
     required this.onZoomOut,
     required this.registerList,
     required this.unregisterList,
@@ -39,6 +41,21 @@ class DayCardActions {
 
 /// "Day 2", or "Backup day".
 String dayLabel(PlannerDay day) => day.isBackup ? 'Backup day' : 'Day ${day.index + 1}';
+
+/// [dayLabel] with the day's title when it has one: "Day 2 · Uji", or
+/// "Backup · Rainy day", so backup days can be told apart.
+String dayName(PlannerDay day) {
+  final title = day.day.title?.trim() ?? '';
+  if (title.isEmpty) return dayLabel(day);
+  return day.isBackup ? 'Backup · $title' : '${dayLabel(day)} · $title';
+}
+
+/// "Day 2 · Wed, Nov 4 · Uji": the day, its date and its title, as far as known.
+String dayWithDate(PlannerDay day) => [
+      dayLabel(day),
+      if (day.date != null) DateFormat.MMMEd().format(day.date!),
+      if (day.day.title?.trim().isNotEmpty ?? false) day.day.title!.trim(),
+    ].join(' · ');
 
 /// Notes the free dates a pin left before [day], or null when there are none.
 String? freeDaysLabel(PlannerDay day) => switch (day.freeDaysBefore) {
@@ -321,9 +338,12 @@ class _DayHeader extends StatelessWidget {
                       actions.onMoveToTrip(day);
                     case 'remove':
                       actions.onRemove(day);
+                    case 'rename':
+                      actions.onRename(day);
                   }
                 },
                 itemBuilder: (_) => [
+                  PopupMenuItem(value: 'rename', child: Text(day.day.title == null ? 'Name this day' : 'Rename this day')),
                   if (!day.isBackup)
                     PopupMenuItem(
                       value: 'backup',

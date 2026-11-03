@@ -120,7 +120,9 @@ class PlannerGrid extends StatelessWidget {
     final date = day.date;
     final summary = _Summary(
       title: day.isBackup ? 'Backup' : dayLabel(day),
-      detail: day.isBackup ? (day.day.title ?? 'No date') : (date == null ? 'No date yet' : DateFormat.MMMEd().format(date)),
+      detail: day.isBackup
+          ? (day.day.title ?? 'No date')
+          : [date == null ? 'No date yet' : DateFormat.MMMEd().format(date), ?day.day.title].join(' · '),
       note: freeDaysLabel(day),
       pinned: day.isPinned,
       pinConflict: day.pinConflict,

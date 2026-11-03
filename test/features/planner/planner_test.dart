@@ -284,6 +284,41 @@ void main() {
       await disposeApp(tester);
     });
 
+    testWidgets('while editing, a day is named from its menu, and the name can be taken off', (tester) async {
+      tester.view.physicalSize = const Size(1080, 2400);
+      tester.view.devicePixelRatio = 3;
+      addTearDown(tester.view.reset);
+      final r = DriftTripRepository(db);
+      final trip = await r.createTrip(title: 'Uji', ownerId: 'u1', dayCount: 1);
+      final day = (await r.getDaysForTrip(trip.id)).single;
+
+      await pump(tester, trip.id);
+      await tester.tap(find.text('Plan'));
+      await tester.pumpAndSettle();
+      await tester.tap(find.byTooltip('Edit the plan'));
+      await tester.pumpAndSettle();
+      await tester.tap(find.byTooltip('Day options').first);
+      await tester.pumpAndSettle();
+      await tester.tap(find.text('Name this day'));
+      await tester.pumpAndSettle();
+      await tester.enterText(find.byKey(const Key('nameDialogField')), 'Rainy day');
+      await tester.tap(find.text('Save'));
+      await tester.pumpAndSettle();
+      expect((await r.getDaysForTrip(trip.id)).single.title, 'Rainy day');
+      expect(find.text('Rainy day'), findsWidgets);
+
+      await tester.tap(find.byTooltip('Day options').first);
+      await tester.pumpAndSettle();
+      await tester.tap(find.text('Rename this day'));
+      await tester.pumpAndSettle();
+      await tester.enterText(find.byKey(const Key('nameDialogField')), '');
+      await tester.tap(find.text('Save'));
+      await tester.pumpAndSettle();
+      expect((await r.getDaysForTrip(trip.id)).single.title, isNull);
+      expect(day.id, isNotEmpty);
+      await disposeApp(tester);
+    });
+
     testWidgets("the Today card opens the plan on today's day", (tester) async {
       tester.view.physicalSize = const Size(1080, 2400);
       tester.view.devicePixelRatio = 3;

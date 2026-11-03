@@ -8,10 +8,7 @@ import '../../../shared/theme/app_theme.dart';
 import '../controllers/day_planner_controller.dart';
 import '../models/planner_view.dart';
 import '../providers/planner_providers.dart';
-import 'day_card.dart' show dayLabel;
-
-String _dayWithDate(PlannerDay d) =>
-    d.date == null ? dayLabel(d) : '${dayLabel(d)} · ${DateFormat.MMMEd().format(d.date!)}';
+import 'day_card.dart' show dayLabel, dayName, dayWithDate;
 
 /// Shows [result]'s error, or [ok] when it worked.
 void reportResult(BuildContext context, AppResult<dynamic> result, {String? ok, SnackBarAction? action}) {
@@ -87,7 +84,7 @@ class _StopSheet extends ConsumerWidget {
 
     final when = item == null
         ? 'Not on a day yet'
-        : '${_dayWithDate(day!)} · ${formatTimelineMinutes(item.startMinutes)}–${formatTimelineMinutes(item.endMinutes)}'
+        : '${dayWithDate(day!)} · ${formatTimelineMinutes(item.startMinutes)}–${formatTimelineMinutes(item.endMinutes)}'
             '${item.fixed ? ' (fixed time)' : ''}';
 
     // The stop before this one on its day, and when this stop would start
@@ -240,7 +237,7 @@ class _StopSheet extends ConsumerWidget {
                   ListTile(
                     contentPadding: EdgeInsets.zero,
                     leading: Icon(d.isBackup ? Icons.beach_access_outlined : Icons.today_outlined),
-                    title: Text(_dayWithDate(d)),
+                    title: Text(dayWithDate(d)),
                     trailing: const Icon(Icons.chevron_right),
                     onTap: () async {
                       final result = item == null
@@ -248,7 +245,7 @@ class _StopSheet extends ConsumerWidget {
                           : await controller.moveItem(itemId: item.item.id, toDayId: d.day.id);
                       if (!context.mounted) return;
                       Navigator.pop(context);
-                      reportResult(context, result, ok: 'Moved ${stop.name} to ${dayLabel(d)}.');
+                      reportResult(context, result, ok: 'Moved ${stop.name} to ${dayName(d)}.');
                     },
                   ),
             ],
@@ -416,7 +413,7 @@ class _AddFromBacklogSheet extends ConsumerWidget {
           children: [
             Padding(
               padding: const EdgeInsets.fromLTRB(20, 0, 20, 8),
-              child: Text('Add to ${_dayWithDate(day)}', style: theme.textTheme.titleLarge),
+              child: Text('Add to ${dayWithDate(day)}', style: theme.textTheme.titleLarge),
             ),
             if (view.backlog.isEmpty)
               Padding(

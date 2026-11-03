@@ -1,17 +1,19 @@
 import 'package:flutter/material.dart';
 
 /// Asks for a name, with [message] above the field when given. Returns it
-/// trimmed, or null when cancelled.
+/// trimmed, or null when cancelled. With [allowEmpty], an empty name comes
+/// back as '' rather than keeping the dialog open.
 Future<String?> askName(
   BuildContext context, {
   required String title,
   required String action,
   String initial = '',
   String? message,
+  bool allowEmpty = false,
 }) {
   return showDialog<String>(
     context: context,
-    builder: (_) => _NameDialog(title: title, action: action, initial: initial, message: message),
+    builder: (_) => _NameDialog(title: title, action: action, initial: initial, message: message, allowEmpty: allowEmpty),
   );
 }
 
@@ -20,8 +22,9 @@ class _NameDialog extends StatefulWidget {
   final String action;
   final String initial;
   final String? message;
+  final bool allowEmpty;
 
-  const _NameDialog({required this.title, required this.action, required this.initial, this.message});
+  const _NameDialog({required this.title, required this.action, required this.initial, this.message, this.allowEmpty = false});
 
   @override
   State<_NameDialog> createState() => _NameDialogState();
@@ -38,7 +41,7 @@ class _NameDialogState extends State<_NameDialog> {
 
   void _submit() {
     final name = _name.text.trim();
-    if (name.isNotEmpty) Navigator.pop(context, name);
+    if (name.isNotEmpty || widget.allowEmpty) Navigator.pop(context, name);
   }
 
   @override
