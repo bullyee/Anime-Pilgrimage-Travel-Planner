@@ -41,12 +41,12 @@ class PhotoEditArgs {
   ///
   /// The router has decoded the values already, so they're used as they are.
   /// Decoding them again broke file names with a `%` in them (#84).
-  static PhotoEditArgs? fromQuery(Map<String, String> query, {String? placeKey}) {
+  static PhotoEditArgs? fromQuery(Map<String, String> query) {
     final path = query['path'];
     if (path == null || path.isEmpty) return null;
     return PhotoEditArgs(
       path: path,
-      placeKey: placeKey ?? query['place'],
+      placeKey: query['place'],
       tripId: query['trip'],
       photoId: query['photo'],
       referencePath: query['ref'],

@@ -93,7 +93,6 @@ void main() {
     });
 
     test('the old POI route supplies the place, and a query without a path is refused', () {
-      expect(PhotoEditArgs.fromQuery({'path': '/a.jpg'}, placeKey: 'poi-1')!.placeKey, 'poi-1');
       expect(PhotoEditArgs.fromQuery({'ref': '/a.jpg'}), isNull);
     });
   });

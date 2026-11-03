@@ -140,41 +140,6 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
                         'against a reference',
                     onTap: () => editPhotoFromGallery(context, ref),
                   ),
-                  // The old model's screens, until stage 2 replaces and
-                  // removes them: the library and the trips take over.
-                  Padding(
-                    padding: const EdgeInsets.fromLTRB(4, 28, 4, 8),
-                    child: Text(
-                      'OLD SCREENS',
-                      style: theme.textTheme.labelSmall?.copyWith(
-                        letterSpacing: 1.1,
-                        color: theme.colorScheme.onSurfaceVariant,
-                      ),
-                    ),
-                  ),
-                  _HomeCard(
-                    icon: Icons.layers,
-                    title: 'View POIs',
-                    subtitle: 'Regions, anime, tags and POIs. Being replaced by the Library',
-                    deprecated: true,
-                    onTap: () => context.push('/pois'),
-                  ),
-                  const SizedBox(height: 12),
-                  _HomeCard(
-                    icon: Icons.map,
-                    title: 'Map',
-                    subtitle: 'POIs on a map. The Library has its own map now',
-                    deprecated: true,
-                    onTap: () => context.push('/map'),
-                  ),
-                  const SizedBox(height: 12),
-                  _HomeCard(
-                    icon: Icons.calendar_month,
-                    title: 'Trip Calendar',
-                    subtitle: 'The old schedule. Replaced by the planner in My Trips',
-                    deprecated: true,
-                    onTap: () => context.push('/calendar'),
-                  ),
                 ],
               ),
             ),
@@ -191,43 +156,21 @@ class _HomeCard extends StatelessWidget {
   final String subtitle;
   final VoidCallback onTap;
 
-  /// An old-model screen that still works but is being replaced.
-  final bool deprecated;
-
   const _HomeCard({
     required this.icon,
     required this.title,
     required this.subtitle,
     required this.onTap,
-    this.deprecated = false,
   });
 
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
-    final muted = theme.colorScheme.onSurfaceVariant;
 
     return Card(
-      elevation: deprecated ? 0 : null,
-      color: deprecated ? theme.colorScheme.surfaceContainerLow : null,
       child: ListTile(
-        leading: Icon(icon, color: deprecated ? muted : theme.colorScheme.primary, size: 32),
-        title: Row(
-          children: [
-            Flexible(child: Text(title, style: const TextStyle(fontWeight: FontWeight.w600))),
-            if (deprecated) ...[
-              const SizedBox(width: 8),
-              Container(
-                padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 1),
-                decoration: BoxDecoration(
-                  color: theme.colorScheme.surfaceContainerHighest,
-                  borderRadius: BorderRadius.circular(999),
-                ),
-                child: Text('Deprecated', style: theme.textTheme.labelSmall?.copyWith(color: muted)),
-              ),
-            ],
-          ],
-        ),
+        leading: Icon(icon, color: theme.colorScheme.primary, size: 32),
+        title: Text(title, style: const TextStyle(fontWeight: FontWeight.w600)),
         subtitle: Text(subtitle),
         trailing: const Icon(Icons.chevron_right),
         onTap: onTap,
