@@ -295,39 +295,17 @@ void main() {
         VALUES ('existing_v10_place', 'Already in V10', 35.0, 135.0, $nowSec, $nowSec);
       ''');
 
-      // Legacy rows written through old screens during transition (after v10)
+      // Legacy rows written to old tables in the past
       final legacyMs = DateTime.utc(2026, 10, 20).millisecondsSinceEpoch;
       raw.execute('''
-        INSERT INTO rois (id, name, author_id, created_at)
-        VALUES ('roi_transition', 'Nara Prefecture', 'u1', $legacyMs);
-
-        INSERT INTO animes (id, name, bangumi_id, author_id, created_at)
-        VALUES ('anime_transition', 'Beyond the Boundary', '76800', 'u1', $legacyMs);
-
-        INSERT INTO tags (id, name, author_id, created_at)
-        VALUES ('tag_transition', 'Shrine', 'u1', $legacyMs);
-
         INSERT INTO pois (id, roi_id, name, lat, lng, author_id, created_at, local_cover_image_path)
-        VALUES ('poi_transition', 'roi_transition', 'Kashihara Jingu', 34.48, 135.79, 'u1', $legacyMs, '/img/cover.jpg');
+        VALUES ('poi_legacy_only', 'roi_transition', 'Old Spot', 34.48, 135.79, 'u1', $legacyMs, '/img/cover.jpg');
 
-        INSERT INTO poi_animes (poi_id, anime_id)
-        VALUES ('poi_transition', 'anime_transition');
-
-        INSERT INTO poi_tags (poi_id, tag_id)
-        VALUES ('poi_transition', 'tag_transition');
-
-        INSERT INTO reference_images (id, poi_id, author_id, local_path, metadata, created_at)
-        VALUES ('ref_transition', 'poi_transition', 'u1', '/ref/kashihara.jpg', '{"source":"anitabi","ep":3,"s":300}', $legacyMs);
-
-        INSERT INTO media_assets (id, poi_id, author_id, type, local_path, reference_image_id, created_at)
-        VALUES ('photo_transition', 'poi_transition', 'u1', 'user_photo', '/photos/my_kashihara.jpg', 'ref_transition', $legacyMs);
-
-        -- Time chunk and ticket QR should be dropped without crashing
         INSERT INTO time_chunks (id, poi_id, author_id)
-        VALUES ('chunk_deprecated', 'poi_transition', 'u1');
+        VALUES ('chunk_deprecated', 'poi_legacy_only', 'u1');
 
         INSERT INTO media_assets (id, poi_id, author_id, type, local_path)
-        VALUES ('ticket_deprecated', 'poi_transition', 'u1', 'ticket_qr', '/tickets/qr.png');
+        VALUES ('ticket_deprecated', 'poi_legacy_only', 'u1', 'ticket_qr', '/tickets/qr.png');
       ''');
 
       raw.execute('PRAGMA user_version = 12;');
@@ -352,32 +330,9 @@ void main() {
       expect(existingPlace, isNotNull);
       expect(existingPlace!.name, equals('Already in V10'));
 
-      // 5. Verify transition legacy rows arrived exactly once in v10 tables
-      final migratedPlace = await (db.select(db.places)..where((p) => p.placeKey.equals('poi_transition'))).getSingleOrNull();
-      expect(migratedPlace, isNotNull);
-      expect(migratedPlace!.name, equals('Kashihara Jingu'));
-      expect(migratedPlace.lat, equals(34.48));
-      expect(migratedPlace.lng, equals(135.79));
-      expect(migratedPlace.visibility, equals('saved'));
-
-      final migratedLabels = await db.select(db.labels).get();
-      expect(migratedLabels.any((l) => l.kind == 'region' && l.name == 'Nara Prefecture'), isTrue);
-      expect(migratedLabels.any((l) => l.kind == 'anime' && l.name == 'Beyond the Boundary' && l.bangumiId == '76800'), isTrue);
-      expect(migratedLabels.any((l) => l.kind == 'tag' && l.name == 'Shrine'), isTrue);
-
-      final migratedPlaceLabels = await (db.select(db.placeLabels)..where((pl) => pl.placeKey.equals('poi_transition'))).get();
-      expect(migratedPlaceLabels.length, equals(3));
-
-      final migratedRefImage = await (db.select(db.newReferenceImages)..where((r) => r.id.equals('ref_transition'))).getSingleOrNull();
-      expect(migratedRefImage, isNotNull);
-      expect(migratedRefImage!.episode, equals('3'));
-      expect(migratedRefImage.timestampS, equals(300));
-
-      final migratedPhoto = await (db.select(db.photos)..where((p) => p.id.equals('photo_transition'))).getSingleOrNull();
-      expect(migratedPhoto, isNotNull);
-      expect(migratedPhoto!.placeKey, equals('poi_transition'));
-      expect(migratedPhoto.referenceImageId, equals('ref_transition'));
-      expect(migratedPhoto.localPath, equals('/photos/my_kashihara.jpg'));
+      // 5. Verify migrateData() was NOT re-run (avoiding overwrites / resurrections on dev phones)
+      final unmigratedPlace = await (db.select(db.places)..where((p) => p.placeKey.equals('poi_legacy_only'))).getSingleOrNull();
+      expect(unmigratedPlace, isNull, reason: 'legacy rows must not be re-migrated when upgrading from v12');
     });
 
     test('real upgrade directly from v9 file creates v10 tables, migrates data, and drops legacy tables', () async {

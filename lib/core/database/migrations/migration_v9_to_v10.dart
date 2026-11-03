@@ -100,6 +100,17 @@ class MigrationV9ToV10 {
     final hasRefImages = existingTables.contains('reference_images');
     final hasMediaAssets = existingTables.contains('media_assets');
 
+    // Discover column availability in legacy tables to support upgrades from
+    // older schemas (v0.1.0 was schema 5, v0.1.1-v0.1.2 were schema 8).
+    Set<String> poiColumns = const {};
+    if (hasPois) {
+      poiColumns = (await db.customSelect(
+        "PRAGMA table_info(pois)",
+      ).get()).map((r) => r.read<String>('name')).toSet();
+    }
+    final hasPoiIsDeleted = poiColumns.contains('is_deleted');
+    final poiWhereClause = hasPoiIsDeleted ? 'WHERE COALESCE(p.is_deleted, 0) = 0' : '';
+
     // 1. Migrate ROIs -> labels (kind: 'region'), deduplicating by name
     if (hasRois) {
       await db.customStatement('''
@@ -145,6 +156,20 @@ class MigrationV9ToV10 {
 
     // 4. Migrate POIs -> places (visibility: 'saved'), skipping deleted spots (tombstones)
     if (hasPois) {
+      final coverLocalExpr = poiColumns.contains('local_cover_image_path')
+          ? 'local_cover_image_path'
+          : (poiColumns.contains('cover_image_uri') ? 'cover_image_uri' : 'NULL');
+
+      final coverRemoteExpr = poiColumns.contains('remote_cover_image_url')
+          ? 'remote_cover_image_url'
+          : 'NULL';
+
+      final whereClause = hasPoiIsDeleted ? 'WHERE COALESCE(is_deleted, 0) = 0' : '';
+
+      final updatedAtExpr = poiColumns.contains('last_modified_at')
+          ? 'CASE WHEN last_modified_at IS NOT NULL THEN (last_modified_at * 1000) ELSE created_at END'
+          : 'created_at';
+
       await db.customStatement('''
         INSERT OR IGNORE INTO places (
           place_key, name, lat, lng, description, address, business_hours,
@@ -153,12 +178,12 @@ class MigrationV9ToV10 {
         )
         SELECT
           id, name, lat, lng, description, address, business_hours,
-          contact_info, NULL, NULL, local_cover_image_path, remote_cover_image_url,
+          contact_info, NULL, NULL, $coverLocalExpr, $coverRemoteExpr,
           CASE WHEN id LIKE 'anitabi:%' THEN 'Anitabi' ELSE NULL END, NULL, NULL,
           'saved', (created_at / 1000),
-          CASE WHEN last_modified_at IS NOT NULL THEN (last_modified_at * 1000) ELSE created_at END
+          $updatedAtExpr
         FROM pois
-        WHERE COALESCE(is_deleted, 0) = 0;
+        $whereClause;
       ''');
     }
 
@@ -171,7 +196,7 @@ class MigrationV9ToV10 {
         FROM pois p
         JOIN rois r ON p.roi_id = r.id
         JOIN labels l ON l.kind = 'region' AND l.name = r.name
-        WHERE COALESCE(p.is_deleted, 0) = 0;
+        $poiWhereClause;
       ''');
     }
 
@@ -187,7 +212,7 @@ class MigrationV9ToV10 {
           OR (a.bangumi_id IS NULL AND l.name = a.name)
         )
         JOIN pois p ON pa.poi_id = p.id
-        WHERE COALESCE(p.is_deleted, 0) = 0;
+        $poiWhereClause;
       ''');
     }
 
@@ -200,14 +225,23 @@ class MigrationV9ToV10 {
         JOIN tags t ON pt.tag_id = t.id
         JOIN labels l ON l.kind = 'tag' AND l.name = t.name
         JOIN pois p ON pt.poi_id = p.id
-        WHERE COALESCE(p.is_deleted, 0) = 0;
+        $poiWhereClause;
       ''');
     }
 
     // 6. Migrate ReferenceImages -> v10_reference_images (only for active places)
     if (hasRefImages) {
+      final refColumns = (await db.customSelect(
+        "PRAGMA table_info(reference_images)",
+      ).get()).map((r) => r.read<String>('name')).toSet();
+
+      final localCol = refColumns.contains('local_path')
+          ? 'local_path'
+          : (refColumns.contains('local_uri') ? 'local_uri AS local_path' : 'NULL AS local_path');
+      final remoteCol = refColumns.contains('remote_url') ? 'remote_url' : 'NULL AS remote_url';
+
       final legacyRefImages = await db.customSelect(
-        'SELECT id, poi_id, local_path, remote_url, metadata, created_at FROM reference_images WHERE poi_id IN (SELECT place_key FROM places);',
+        'SELECT id, poi_id, $localCol, $remoteCol, metadata, created_at FROM reference_images WHERE poi_id IN (SELECT place_key FROM places);',
       ).get();
 
       for (final row in legacyRefImages) {
@@ -233,8 +267,20 @@ class MigrationV9ToV10 {
 
     // 7. Migrate MediaAssets (only for active places)
     if (hasMediaAssets) {
+      final mediaColumns = (await db.customSelect(
+        "PRAGMA table_info(media_assets)",
+      ).get()).map((r) => r.read<String>('name')).toSet();
+
+      final localCol = mediaColumns.contains('local_path')
+          ? 'local_path'
+          : (mediaColumns.contains('local_uri') ? 'local_uri AS local_path' : 'NULL AS local_path');
+      final remoteCol = mediaColumns.contains('remote_url') ? 'remote_url' : 'NULL AS remote_url';
+      final refImgCol = mediaColumns.contains('reference_image_id')
+          ? 'reference_image_id'
+          : 'NULL AS reference_image_id';
+
       final legacyMedia = await db.customSelect(
-        'SELECT id, poi_id, type, local_path, remote_url, metadata, reference_image_id, created_at FROM media_assets WHERE poi_id IN (SELECT place_key FROM places);',
+        'SELECT id, poi_id, type, $localCol, $remoteCol, metadata, $refImgCol, created_at FROM media_assets WHERE poi_id IN (SELECT place_key FROM places);',
       ).get();
 
       for (final row in legacyMedia) {

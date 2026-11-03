@@ -7,14 +7,14 @@ Built with Flutter (Dart). SQLite via Drift for local storage. Riverpod for stat
 ## Architecture
 - **Mobile App (Flutter)**: Primary execution environment. Offline-first, GPS, camera, AR.
 - **PC Web (Next.js/React)**: Deep planning environment (future phase).
-- **Sync Model**: two-way Firestore sync for shared trips (`lib/features/sync/`): personal library (`places`, `labels`, `photos`) remains private on device; shared trips (`tripsV2`) with day blocks, stops, and schedule items sync across group members with Stage 4 RBAC and invites.
+- **Sync Model**: two-way Firestore sync for shared trips (`lib/features/sync/`): personal library (`places`, `labels`, `photos`) remains private on device; shared trips (`tripsV2`) with day blocks, stops, and schedule items sync across group members (Stage 4 RBAC rules and backend services in place; UI share sheet and join flow in progress).
 - **Data model**: unified `places` library and `trips` planner (schemaVersion 13).
 
 ## Core Modules
 1. **Library (`places`, `labels`, `photos`)**: Personal library of pilgrimage spots, anime & region labels, user photos and comparison frames.
 2. **Trip Planner (`trips`, `trip_days`, `stops`, `schedule_items`)**: Multi-day trip itineraries, day blocks, sequenced stops, and schedule items.
 3. **Anime Camera**: shoot against an anime reference, then a photo editor (filters, rotate, crop) with a Compose/cutout flow. Android opens the phone's own camera app with the reference in a small draggable floating window (`ReferenceOverlay.kt`, `SYSTEM_ALERT_WINDOW`); iOS uses the in-app camera (`camera_screen.dart`); desktop/web have none. Entry point: `openAnimeCamera`. Why: `docs/anime-camera-decision.md`
-4. **Anime & Tag**: first-class entities linked to places and stops; anime can be imported from Bangumi + Anitabi.
+4. **Labels**: Anime, tag, and region labels (`labels` table with kind `anime`/`tag`/`region`) linked to places and stops via `place_labels` and `stop_labels`; anime can be imported from Bangumi + Anitabi.
 5. **VLM Pipeline**: planned, not implemented — Gemini API for parsing screenshots into POI data via share extension.
 
 ## Database Schema (SQLite via Drift, schemaVersion 13)

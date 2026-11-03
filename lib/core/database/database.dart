@@ -64,6 +64,9 @@ class AppDatabase extends _$AppDatabase {
               ON labels(bangumi_id)
               WHERE bangumi_id IS NOT NULL;
             ''');
+
+            // Migrate legacy data to v10 tables (runs once for any upgrade from < 10).
+            await MigrationV9ToV10(this).migrateData();
           }
           if (from < 11 && from >= 10) {
             await m.addColumn(stops, stops.area);
@@ -72,7 +75,8 @@ class AppDatabase extends _$AppDatabase {
             await m.addColumn(stops, stops.note);
           }
           if (from < 13) {
-            await MigrationV9ToV10(this).migrateData();
+            // Drop legacy tables. For from >= 10 (dev phones), do not re-run migrateData(),
+            // preventing overwriting edited/merged places, photos, and deleted labels.
             await MigrationV9ToV10(this).dropLegacyTables();
           }
         },
