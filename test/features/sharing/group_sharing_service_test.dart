@@ -1,3 +1,4 @@
+import 'package:cloud_firestore/cloud_firestore.dart' show Timestamp;
 import 'package:drift/drift.dart' hide isNull, isNotNull;
 import 'package:drift/native.dart';
 import 'package:flutter_test/flutter_test.dart';
@@ -341,6 +342,56 @@ void main() {
       expect(localTrip.sharing, equals('private'));
       expect(localTrip.ownerId, equals('user_bob'));
       expect(localTrip.syncStatus, equals(0));
+    });
+  });
+
+  group('GroupSharingService - Invites list', () {
+    Map<String, dynamic> inviteDoc(
+      String token, {
+      String tripId = 'trip_1',
+      String createdBy = currentUserId,
+      bool revoked = false,
+      Duration expiresIn = const Duration(days: 3),
+      DateTime? createdAt,
+    }) =>
+        {
+          'token': token,
+          'shortCode': 'ABC234',
+          'tripId': tripId,
+          'role': 'editor',
+          'createdBy': createdBy,
+          'inviterName': 'Alice',
+          'tripTitle': 'Kyoto Trip',
+          'stopCount': 0,
+          'createdAt': Timestamp.fromDate(createdAt ?? DateTime(2026, 11, 1)),
+          'expiresAt': Timestamp.fromDate(DateTime.now().add(expiresIn)),
+          'isRevoked': revoked,
+        };
+
+    test("watchTripInvites lists the trip's usable invites this user made, newest first", () async {
+      fakeFirestore.invites
+        ..['old'] = inviteDoc('old', createdAt: DateTime(2026, 11, 1))
+        ..['new'] = inviteDoc('new', createdAt: DateTime(2026, 11, 2))
+        ..['stopped'] = inviteDoc('stopped', revoked: true)
+        ..['expired'] = inviteDoc('expired', expiresIn: const Duration(days: -1))
+        ..['other_trip'] = inviteDoc('other_trip', tripId: 'trip_2')
+        ..['someone_elses'] = inviteDoc('someone_elses', createdBy: 'user_bob');
+
+      final invites = await sharingService.watchTripInvites('trip_1').first;
+
+      expect(invites.map((i) => i.token), ['new', 'old']);
+    });
+
+    test('a new invite stops a little short of 7 days, so a fast phone clock is still allowed', () async {
+      await db.into(db.trips).insert(
+            TripsCompanion.insert(id: 'trip_1', title: 'Kyoto Trip', ownerId: currentUserId),
+          );
+
+      final invite = await sharingService.createInvite(tripId: 'trip_1', role: TripMemberRole.viewer);
+
+      final limit = DateTime.now().add(const Duration(days: 7));
+      expect(invite.expiresAt.isBefore(limit), isTrue);
+      expect(invite.expiresAt.isAfter(limit.subtract(const Duration(hours: 1))), isTrue);
     });
   });
 

@@ -27,7 +27,16 @@ class _TripListScreenState extends ConsumerState<TripListScreen> {
     final summaries = ref.watch(tripSummariesProvider);
 
     return Scaffold(
-      appBar: AppBar(title: const Text('My Trips')),
+      appBar: AppBar(
+        title: const Text('My Trips'),
+        actions: [
+          IconButton(
+            tooltip: 'Join a trip',
+            icon: const Icon(Icons.group_add_outlined),
+            onPressed: () => context.push('/join'),
+          ),
+        ],
+      ),
       body: summaries.when(
         loading: () => const Center(child: CircularProgressIndicator()),
         error: (e, _) => Center(
@@ -156,8 +165,7 @@ class _SectionHeader extends StatelessWidget {
   }
 }
 
-/// A filter with nothing in it. Sharing comes with stage 4, so for now the
-/// shared one only says where shared trips will show up.
+/// A filter with nothing in it. The shared one offers to join a trip.
 class _EmptyFilter extends StatelessWidget {
   final TripFilter filter;
 
@@ -170,7 +178,7 @@ class _EmptyFilter extends StatelessWidget {
       TripFilter.shared => (
           Icons.group_outlined,
           'No shared trips yet',
-          'Trips you share with friends, or join from an invite, show up here. Sharing comes in a later version.',
+          'Trips you share with friends, or join from an invite, show up here.',
         ),
       _ => (
           Icons.lock_outline,
@@ -197,6 +205,14 @@ class _EmptyFilter extends StatelessWidget {
               textAlign: TextAlign.center,
               style: theme.textTheme.bodyMedium?.copyWith(color: theme.colorScheme.onSurfaceVariant),
             ),
+            if (filter == TripFilter.shared) ...[
+              const SizedBox(height: 20),
+              OutlinedButton.icon(
+                onPressed: () => context.push('/join'),
+                icon: const Icon(Icons.group_add_outlined),
+                label: const Text('Join a trip'),
+              ),
+            ],
           ],
         ),
       ),
@@ -232,6 +248,12 @@ class _EmptyTrips extends StatelessWidget {
               onPressed: onCreate,
               icon: const Icon(Icons.add),
               label: const Text('New trip'),
+            ),
+            const SizedBox(height: 8),
+            TextButton.icon(
+              onPressed: () => context.push('/join'),
+              icon: const Icon(Icons.group_add_outlined),
+              label: const Text('Join a trip with an invite'),
             ),
           ],
         ),

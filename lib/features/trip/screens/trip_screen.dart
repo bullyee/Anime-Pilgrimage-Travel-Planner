@@ -6,6 +6,9 @@ import '../../../core/database/database.dart';
 import '../../../core/utils/app_result.dart';
 import '../../../shared/theme/app_theme.dart';
 import '../../planner/widgets/day_planner.dart';
+import '../../sharing/models/trip_member.dart';
+import '../../sharing/providers/group_sharing_providers.dart';
+import '../../sharing/widgets/invite_sheet.dart';
 import '../controllers/trips_controller.dart';
 import '../providers/trip_providers.dart';
 import '../widgets/trip_card.dart';
@@ -78,6 +81,7 @@ class _TripScreenState extends ConsumerState<TripScreen> with SingleTickerProvid
     );
     final tab = TripTab.values[_tabs.index];
     final hasStops = ref.watch(tripStopsProvider(trip.id)).valueOrNull?.isNotEmpty ?? false;
+    final role = ref.watch(myTripRoleProvider(trip.id));
 
     return Scaffold(
       appBar: AppBar(
@@ -105,6 +109,12 @@ class _TripScreenState extends ConsumerState<TripScreen> with SingleTickerProvid
                     icon: const Icon(Icons.edit_outlined),
                     onPressed: () => setState(() => _editing = true),
                   ),
+          if (role == TripMemberRole.owner || role == TripMemberRole.editor)
+            IconButton(
+              tooltip: 'Invite people',
+              icon: const Icon(Icons.person_add_alt_1_outlined),
+              onPressed: () => showInviteSheet(context, trip),
+            ),
           PopupMenuButton<String>(
             onSelected: (value) {
               if (value == 'edit') _editTrip(context, trip);
@@ -158,7 +168,7 @@ class _TripScreenState extends ConsumerState<TripScreen> with SingleTickerProvid
             ],
           ),
           TripStopsTab(tripId: trip.id),
-          const TripMembersTab(),
+          TripMembersTab(trip: trip),
         ],
       ),
       floatingActionButton: tab == TripTab.stops && hasStops

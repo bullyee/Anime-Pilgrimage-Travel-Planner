@@ -50,6 +50,75 @@ class _FakeCollectionReference implements CollectionReference<Map<String, dynami
     return _FakeQuerySnapshot(docs);
   }
 
+  /// Only `isEqualTo` filters, which is all the sharing code uses.
+  @override
+  Query<Map<String, dynamic>> where(
+    Object field, {
+    Object? isEqualTo,
+    Object? isNotEqualTo,
+    Object? isLessThan,
+    Object? isLessThanOrEqualTo,
+    Object? isGreaterThan,
+    Object? isGreaterThanOrEqualTo,
+    Object? arrayContains,
+    Iterable<Object?>? arrayContainsAny,
+    Iterable<Object?>? whereIn,
+    Iterable<Object?>? whereNotIn,
+    bool? isNull,
+  }) {
+    return _FakeQuery(_db, _path, {field.toString(): isEqualTo});
+  }
+
+  @override
+  dynamic noSuchMethod(Invocation invocation) => super.noSuchMethod(invocation);
+}
+
+/// A query on the invites with equality filters, as `watchTripInvites` makes.
+class _FakeQuery implements Query<Map<String, dynamic>> {
+  final FakeSharingFirestore _db;
+  final String _path;
+  final Map<String, Object?> _equals;
+
+  _FakeQuery(this._db, this._path, this._equals);
+
+  @override
+  Query<Map<String, dynamic>> where(
+    Object field, {
+    Object? isEqualTo,
+    Object? isNotEqualTo,
+    Object? isLessThan,
+    Object? isLessThanOrEqualTo,
+    Object? isGreaterThan,
+    Object? isGreaterThanOrEqualTo,
+    Object? arrayContains,
+    Iterable<Object?>? arrayContainsAny,
+    Iterable<Object?>? whereIn,
+    Iterable<Object?>? whereNotIn,
+    bool? isNull,
+  }) {
+    return _FakeQuery(_db, _path, {..._equals, field.toString(): isEqualTo});
+  }
+
+  @override
+  Stream<QuerySnapshot<Map<String, dynamic>>> snapshots({
+    bool includeMetadataChanges = false,
+    ListenSource source = ListenSource.defaultSource,
+  }) {
+    final docs = <QueryDocumentSnapshot<Map<String, dynamic>>>[];
+    if (_path == 'invites') {
+      for (final entry in _db.invites.entries) {
+        if (_equals.entries.every((filter) => entry.value[filter.key] == filter.value)) {
+          docs.add(_FakeQueryDocumentSnapshot(
+            _FakeDocumentReference(_db, 'invites/${entry.key}'),
+            entry.key,
+            entry.value,
+          ));
+        }
+      }
+    }
+    return Stream.value(_FakeQuerySnapshot(docs));
+  }
+
   @override
   dynamic noSuchMethod(Invocation invocation) => super.noSuchMethod(invocation);
 }

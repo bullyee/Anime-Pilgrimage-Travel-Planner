@@ -286,10 +286,11 @@ service cloud.firestore {
     }
 
     match /invites/{token} {
-      // Single-doc lookup by token is public so the web landing page and preview card can read it;
-      // collection-wide listing is blocked so tokens cannot be enumerated.
+      // Single-doc lookup by token is public so the web landing page and preview card can read it.
+      // Listing is limited to the invites you made (the Members tab lists them), so nobody can
+      // enumerate other people's tokens.
       allow get: if true;
-      allow list: if false;
+      allow list: if isAuthenticated() && resource.data.createdBy == request.auth.uid;
 
       // Only Owner or Editor of the trip can create an editor/viewer invite,
       // with expiry strictly capped at 7 days from now.

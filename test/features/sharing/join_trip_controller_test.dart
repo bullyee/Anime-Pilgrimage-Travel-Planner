@@ -4,10 +4,21 @@ import 'package:drift/native.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:trip_planner/core/database/database.dart';
 import 'package:trip_planner/features/sharing/controllers/join_trip_controller.dart';
+import 'package:trip_planner/features/sharing/models/trip_invite.dart';
 import 'package:trip_planner/features/sharing/models/trip_member.dart';
 import 'package:trip_planner/features/sharing/services/group_sharing_service.dart';
 
 import 'fake_sharing_firestore.dart';
+
+/// Firestore's answer when the phone can't reach the server.
+class _OfflineSharingService extends GroupSharingService {
+  _OfflineSharingService(AppDatabase db)
+      : super(firestore: FakeSharingFirestore(), db: db, currentUserId: 'user_bob');
+
+  @override
+  Future<TripInvite?> getInvitePreview(String tokenOrCode) async =>
+      throw FirebaseException(plugin: 'cloud_firestore', code: 'unavailable');
+}
 
 void main() {
   late AppDatabase db;
@@ -83,6 +94,7 @@ void main() {
 
       expect(controller.state.invite, isNull);
       expect(controller.state.errorMessage, contains('Invite not found'));
+      expect(controller.state.problem, JoinTripProblem.notFound);
     });
 
     test('fetchPreview flags expired invite', () async {
@@ -114,6 +126,7 @@ void main() {
 
       expect(controller.state.invite, isNotNull);
       expect(controller.state.errorMessage, contains('expired'));
+      expect(controller.state.problem, JoinTripProblem.expired);
     });
 
     test('fetchPreview flags revoked invite', () async {
@@ -144,6 +157,7 @@ void main() {
 
       expect(controller.state.invite, isNotNull);
       expect(controller.state.errorMessage, contains('revoked'));
+      expect(controller.state.problem, JoinTripProblem.stopped);
     });
 
     test('joinTrip successfully adds member to trip in Firestore and Drift', () async {
@@ -195,6 +209,26 @@ void main() {
       expect(controller.state.code, isEmpty);
       expect(controller.state.invite, isNull);
       expect(controller.state.isJoined, isFalse);
+    });
+
+    test('a lookup that cannot reach the server says the phone is offline', () async {
+      final offline = JoinTripController(sharingService: _OfflineSharingService(db));
+
+      await offline.updateCode('K7MQ2P');
+
+      expect(offline.state.isLoading, isFalse);
+      expect(offline.state.invite, isNull);
+      expect(offline.state.problem, JoinTripProblem.offline);
+      offline.dispose();
+    });
+
+    test('a new code clears the last problem', () async {
+      await controller.updateCode('NOPE23');
+      expect(controller.state.problem, JoinTripProblem.notFound);
+
+      await controller.updateCode('NOPE2');
+
+      expect(controller.state.problem, isNull);
     });
   });
 }

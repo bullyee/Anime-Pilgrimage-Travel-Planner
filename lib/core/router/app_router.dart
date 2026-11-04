@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
 // Add this
 import 'package:go_router/go_router.dart';
 import 'package:riverpod_annotation/riverpod_annotation.dart';
@@ -13,6 +14,8 @@ import '../../features/library/screens/anitabi_import_screen.dart';
 import '../../features/library/screens/labels_screen.dart';
 import '../../features/library/screens/library_screen.dart';
 import '../../features/library/screens/place_screen.dart';
+import '../../features/sharing/invite_links.dart';
+import '../../features/sharing/screens/join_trip_screen.dart';
 import '../../features/trip/screens/library_picker_screen.dart';
 import '../../features/trip/screens/new_spot_screen.dart';
 import '../../features/trip/screens/stop_screen.dart';
@@ -21,14 +24,23 @@ import '../../features/trip/screens/trip_screen.dart';
 
 part 'app_router.g.dart';
 
+/// Where the app opens after the next sign-in, when a screen asks for it.
+/// Signing in rebuilds the router, which would otherwise start over at home.
+final signInReturnProvider = StateProvider<String?>((ref) => null);
+
 /// Wrap the existing router in a Provider to react to Auth state changes.
 @Riverpod(keepAlive: true)
 GoRouter router(RouterRef ref) {
   // Watch the auth state from our previously created provider.
   ref.watch(authStateChangesProvider);
+  final returnTo = ref.read(signInReturnProvider);
+  if (returnTo != null) {
+    // Only once: a later rebuild, such as signing out, starts at home.
+    Future.microtask(() => ref.read(signInReturnProvider.notifier).state = null);
+  }
 
   return GoRouter(
-    initialLocation: '/',
+    initialLocation: returnTo ?? '/',
     
     // AUTH REDIRECT LOGIC
     redirect: (context, state) {
@@ -103,6 +115,19 @@ GoRouter router(RouterRef ref) {
         builder: (context, state) => StopScreen(
           tripId: state.pathParameters['tripId']!,
           stopId: state.pathParameters['stopId']!,
+        ),
+      ),
+      GoRoute(
+        // Joining a trip: the code screen, or an invite link's preview
+        // (`/join?token=…`, or `?code=` from the web page's button).
+        path: '/join',
+        builder: (context, state) => JoinTripScreen(invite: inviteFromQuery(state.uri.queryParameters)),
+      ),
+      GoRoute(
+        // `/join/K7MQ2P`, which the web page understands too.
+        path: '/join/:invite',
+        builder: (context, state) => JoinTripScreen(
+          invite: inviteFromQuery({'token': state.pathParameters['invite']!, 'code': state.pathParameters['invite']!}),
         ),
       ),
       GoRoute(
