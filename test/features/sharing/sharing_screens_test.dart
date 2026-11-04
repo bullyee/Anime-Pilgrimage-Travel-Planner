@@ -64,6 +64,9 @@ class _FakeSharing extends GroupSharingService {
   TripInvite? preview;
   Object? previewError;
 
+  /// Who owned the trip when its invite was made.
+  String? ownerAtCreate;
+
   @override
   Future<TripInvite> createInvite({
     required String tripId,
@@ -73,6 +76,7 @@ class _FakeSharing extends GroupSharingService {
     List<String>? emailAllowlist,
   }) async {
     calls.add('create ${role.name} as $inviterName');
+    ownerAtCreate = (await (db.select(db.trips)..where((t) => t.id.equals(tripId))).getSingleOrNull())?.ownerId;
     return _invite(role: role);
   }
 
@@ -205,6 +209,20 @@ void main() {
       await tester.pumpAndSettle();
       expect(sharing.calls, contains('stop $_token'));
       expect(find.text('Invite to Uji day trip'), findsNothing);
+      await done(tester);
+    });
+
+    testWidgets('a trip made before signing in becomes yours before its first invite', (tester) async {
+      final trip = await addTrip(ownerId: guestUserId);
+      await pump(tester, membersRouter(trip));
+
+      await tester.tap(find.text('Invite people'));
+      await tester.pumpAndSettle();
+      await tester.tap(find.text('Create invite'));
+      await tester.pumpAndSettle();
+
+      expect(sharing.calls, anyElement(startsWith('create ')));
+      expect(sharing.ownerAtCreate, 'u1');
       await done(tester);
     });
 
