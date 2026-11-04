@@ -139,22 +139,43 @@ class DriftTripRepository implements TripRepository {
   // ==========================================================================
 
   @override
-  Future<Trip?> getTrip(String tripId) {
-    return (_db.select(_db.trips)..where((tbl) => tbl.id.equals(tripId))).getSingleOrNull();
+  Future<Trip?> getTrip(String tripId) async {
+    final trip = await (_db.select(_db.trips)..where((tbl) => tbl.id.equals(tripId))).getSingleOrNull();
+    if (trip == null || trip.deletedAt != null) return null;
+    if (_currentUserId == 'guest_local_user' && trip.ownerId != 'guest_local_user') {
+      return null;
+    }
+    return trip;
   }
 
   @override
   Stream<Trip?> watchTrip(String tripId) {
-    return (_db.select(_db.trips)..where((tbl) => tbl.id.equals(tripId))).watchSingleOrNull();
+    return (_db.select(_db.trips)..where((tbl) => tbl.id.equals(tripId))).watchSingleOrNull().map((trip) {
+      if (trip == null || trip.deletedAt != null) return null;
+      if (_currentUserId == 'guest_local_user' && trip.ownerId != 'guest_local_user') {
+        return null;
+      }
+      return trip;
+    });
   }
 
   @override
   Future<List<Trip>> getTrips() {
+    if (_currentUserId == 'guest_local_user') {
+      return (_db.select(_db.trips)
+            ..where((tbl) => tbl.deletedAt.isNull() & tbl.ownerId.equals('guest_local_user')))
+          .get();
+    }
     return (_db.select(_db.trips)..where((tbl) => tbl.deletedAt.isNull())).get();
   }
 
   @override
   Stream<List<Trip>> watchTrips() {
+    if (_currentUserId == 'guest_local_user') {
+      return (_db.select(_db.trips)
+            ..where((tbl) => tbl.deletedAt.isNull() & tbl.ownerId.equals('guest_local_user')))
+          .watch();
+    }
     return (_db.select(_db.trips)..where((tbl) => tbl.deletedAt.isNull())).watch();
   }
 

@@ -478,6 +478,7 @@ class _CameraScreenState extends ConsumerState<CameraScreen>
                   child: Image.file(
                     camState.referenceImage!,
                     fit: BoxFit.contain,
+                    cacheWidth: 1080,
                   ),
                 ),
               ),
@@ -827,7 +828,7 @@ class _ReferenceButton extends StatelessWidget {
         clipBehavior: Clip.antiAlias,
         child: referenceImage == null
             ? Icon(emptyIcon, color: Colors.white, size: 28)
-            : Image.file(referenceImage!, fit: BoxFit.cover),
+            : Image.file(referenceImage!, fit: BoxFit.cover, cacheWidth: 200),
       ),
     );
   }

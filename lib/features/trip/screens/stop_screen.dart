@@ -23,6 +23,7 @@ import '../../planner/widgets/day_card.dart' show dayName, dayWithDate;
 import '../../planner/widgets/planner_sheets.dart' show pickStartTime;
 import '../controllers/trip_stops_controller.dart';
 import '../providers/trip_providers.dart';
+import '../../auth/providers/auth_provider.dart';
 
 /// Where a stop sits in the plan: its day and its item there.
 typedef StopSlot = ({PlannerDay day, PlannerItem item});
@@ -105,7 +106,16 @@ class _StopScreenState extends ConsumerState<StopScreen> {
     }
   }
 
-  void _edit(Stop stop, Place? place) => setState(() {
+  void _edit(Stop stop, Place? place) {
+    final currentUid = ref.read(currentUserIdProvider);
+    final trip = ref.read(tripDetailProvider(_tripId)).valueOrNull;
+    if (trip != null && trip.sharing == 'group' && currentUid == 'guest_local_user') {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Please sign in to edit a shared trip.')),
+      );
+      return;
+    }
+    setState(() {
         _nameError = null;
         _draft = EditDraft(
           PlaceFacts(
@@ -120,6 +130,7 @@ class _StopScreenState extends ConsumerState<StopScreen> {
           notes: {'trip': stop.note, if (place != null) 'mine': place.privateNote},
         );
       });
+  }
 
   void _leaveEdit() => setState(() {
         _draft?.dispose();
@@ -173,6 +184,14 @@ class _StopScreenState extends ConsumerState<StopScreen> {
     }
     final theme = Theme.of(context);
     final trip = ref.watch(tripDetailProvider(_tripId)).valueOrNull;
+    if (trip == null) {
+      return Scaffold(
+        appBar: AppBar(),
+        body: const Center(
+          child: Text('This trip is not available.'),
+        ),
+      );
+    }
     final view = ref.watch(plannerViewProvider(_tripId)).valueOrNull;
     final slot = view == null ? null : findStopSlot(view, stop.id);
     // Stops someone else added may be of a place that isn't in this library.
@@ -367,6 +386,14 @@ class _StopScreenState extends ConsumerState<StopScreen> {
   /// Marks the stop visited for everyone in the trip, and adds a visit to the
   /// user's own history. Taking it back also takes back today's visit.
   Future<void> _setVisited(Stop stop, StopSlot slot, bool visited) async {
+    final currentUid = ref.read(currentUserIdProvider);
+    final trip = ref.read(tripDetailProvider(_tripId)).valueOrNull;
+    if (trip != null && trip.sharing == 'group' && currentUid == 'guest_local_user') {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Please sign in to make changes to a shared trip.')),
+      );
+      return;
+    }
     final result = await _planner.setVisited(slot.item.item.id, visited);
     if (result is Failure || ref.read(placeDetailProvider(stop.placeKey)).valueOrNull == null) {
       _report(result, visited ? 'Marked visited for the trip.' : 'No longer marked visited.');
