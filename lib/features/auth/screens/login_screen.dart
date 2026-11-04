@@ -1,3 +1,4 @@
+import 'dart:async' show TimeoutException;
 import 'dart:io' show Platform;
 import 'package:flutter/foundation.dart' show kIsWeb;
 import 'package:flutter/material.dart';
@@ -13,9 +14,13 @@ class LoginScreen extends ConsumerStatefulWidget {
 
 class _LoginScreenState extends ConsumerState<LoginScreen> {
   bool _isLoading = false;
+  bool _isCancelling = false;
 
   Future<void> _handleGoogleSignIn() async {
-    setState(() => _isLoading = true);
+    setState(() {
+      _isLoading = true;
+      _isCancelling = false;
+    });
 
     try {
       // The logic layer will throw an exception if anything goes wrong.
@@ -26,11 +31,17 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
       // Our app_router.dart is listening to authStateChangesProvider and
       // will automatically redirect the user to '/' instantly.
     } catch (e) {
+      if (e is AuthCancelledException) {
+        // User cancelled sign-in intentionally; do not show error snackbar
+        return;
+      }
       // Catch the thrown error and display it cleanly on the UI
       if (mounted) {
         final message = e is AuthConfigurationException
             ? e.message
-            : 'Sign-in failed: ${e.toString()}';
+            : e is TimeoutException
+                ? 'Sign-in timed out. Please try again.'
+                : 'Sign-in failed: ${e.toString()}';
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
             content: Text(message),
@@ -41,7 +52,28 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
       }
     } finally {
       if (mounted) {
-        setState(() => _isLoading = false);
+        setState(() {
+          _isLoading = false;
+          _isCancelling = false;
+        });
+      }
+    }
+  }
+
+  Future<void> _handleCancelSignIn() async {
+    if (_isCancelling) return;
+    setState(() => _isCancelling = true);
+
+    try {
+      await ref.read(authControllerProvider.notifier).cancelSignIn();
+    } catch (_) {
+      // Ignore cancellation errors
+    } finally {
+      if (mounted) {
+        setState(() {
+          _isCancelling = false;
+          _isLoading = false;
+        });
       }
     }
   }
@@ -71,7 +103,6 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
                     Container(
                       padding: const EdgeInsets.all(24),
                       decoration: BoxDecoration(
-                        // Replaced deprecated withOpacity with withValues
                         color: Colors.white.withValues(alpha: 0.15),
                         shape: BoxShape.circle,
                       ),
@@ -97,7 +128,6 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
                       textAlign: TextAlign.center,
                       style: TextStyle(
                         fontSize: 16,
-                        // Replaced deprecated withOpacity with withValues
                         color: Colors.white.withValues(alpha: 0.8),
                         letterSpacing: 0.5,
                       ),
@@ -129,6 +159,7 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
                               )
                             : const Row(
                                 mainAxisAlignment: MainAxisAlignment.center,
+                                mainAxisSize: MainAxisSize.min,
                                 children: [
                                   Icon(
                                     Icons.g_mobiledata,
@@ -136,18 +167,66 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
                                     color: Colors.blue,
                                   ),
                                   SizedBox(width: 8),
-                                  Text(
-                                    'Sign in with Google',
-                                    style: TextStyle(
-                                      fontSize: 16,
-                                      fontWeight: FontWeight.w600,
+                                  Flexible(
+                                    child: Text(
+                                      'Sign in with Google',
+                                      overflow: TextOverflow.ellipsis,
+                                      style: TextStyle(
+                                        fontSize: 16,
+                                        fontWeight: FontWeight.w600,
+                                      ),
                                     ),
                                   ),
                                 ],
                               ),
                       ),
                     ),
-                    if (!kIsWeb &&
+                    if (_isLoading) ...[
+                      const SizedBox(height: 16),
+                      Text(
+                        !kIsWeb &&
+                                (Platform.isWindows ||
+                                    Platform.isMacOS ||
+                                    Platform.isLinux)
+                            ? 'Waiting for sign-in in browser...'
+                            : 'Signing in...',
+                        textAlign: TextAlign.center,
+                        style: TextStyle(
+                          color: Colors.white.withValues(alpha: 0.9),
+                          fontSize: 14,
+                        ),
+                      ),
+                      const SizedBox(height: 8),
+                      TextButton.icon(
+                        onPressed: _isCancelling ? null : _handleCancelSignIn,
+                        icon: _isCancelling
+                            ? const SizedBox(
+                                width: 14,
+                                height: 14,
+                                child: CircularProgressIndicator(
+                                  strokeWidth: 2,
+                                  valueColor: AlwaysStoppedAnimation<Color>(
+                                    Colors.white70,
+                                  ),
+                                ),
+                              )
+                            : const Icon(
+                                Icons.close,
+                                size: 16,
+                                color: Colors.white,
+                              ),
+                        label: Text(
+                          _isCancelling ? 'Cancelling...' : 'Cancel sign-in',
+                          style: const TextStyle(
+                            color: Colors.white,
+                            fontSize: 14,
+                            decoration: TextDecoration.underline,
+                          ),
+                        ),
+                      ),
+                    ],
+                    if (!_isLoading &&
+                        !kIsWeb &&
                         (Platform.isWindows ||
                             Platform.isMacOS ||
                             Platform.isLinux) &&
