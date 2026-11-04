@@ -88,11 +88,12 @@ void main() {
       // Give event loop time to set up prompt callback
       await pumpEventQueue();
 
+      final expectation = expectLater(signInFuture, throwsA(isA<AuthCancelledException>()));
+
       // Cancel the sign-in
       await controller.cancelSignIn();
 
-      // Expect signInWithGoogle to cleanly throw AuthCancelledException
-      await expectLater(signInFuture, throwsA(isA<AuthCancelledException>()));
+      await expectation;
 
       // Verify server received the cancel request with correct state and error
       expect(receivedError, 'cancelled_by_user');
