@@ -787,6 +787,69 @@ void main() {
       // Personal photos are never uploaded or referenced in cloud trip
       expect(fakeFirestore.trips['trip_private']!.containsKey('photos'), isFalse);
     });
+
+    test('re-joining a shared group trip reconnects a leftover private local copy and resumes subcollection sync', () async {
+      syncEngine.startSync();
+
+      final t1 = DateTime(2026, 11, 1, 10, 0);
+      final t2 = DateTime(2026, 11, 2, 12, 0);
+
+      // 1. User previously had this trip converted to private after leaving/unsharing
+      await db.into(db.trips).insert(
+            TripsCompanion.insert(
+              id: 'trip_rejoin_test',
+              title: 'Old Private Leftover',
+              ownerId: currentUserId,
+              sharing: const Value('private'),
+              updatedAt: Value(t1),
+              syncStatus: const Value(0),
+            ),
+          );
+
+      // Verify it starts as private
+      var localTrip = await (db.select(db.trips)..where((t) => t.id.equals('trip_rejoin_test'))).getSingle();
+      expect(localTrip.sharing, equals('private'));
+
+      // 2. User re-joins via invite: server emits group trip with currentUserId in members list
+      fakeFirestore.emitUserTrips([
+        {
+          'id': 'trip_rejoin_test',
+          'title': 'Bob Shared Trip Rejoined',
+          'ownerId': 'user_bob',
+          'sharing': 'group',
+          'dayCount': 2,
+          'members': ['user_bob', currentUserId],
+          'updatedAt': t2,
+        }
+      ], isFromCache: false);
+
+      // Allow async chain to process trip and attach subcollection watchers
+      await Future.delayed(const Duration(milliseconds: 100));
+
+      // 3. Server also emits new subcollection days for the rejoined trip
+      fakeFirestore.emitDays('trip_rejoin_test', [
+        {
+          'id': 'day_rejoined_1',
+          'tripId': 'trip_rejoin_test',
+          'sortKey': 'a0',
+          'date': '2026-11-05',
+          'updatedAt': t2,
+        }
+      ]);
+
+      await Future.delayed(const Duration(milliseconds: 150));
+
+      // 4. Assert: Local trip must now be reconnected to group and owned by user_bob
+      localTrip = await (db.select(db.trips)..where((t) => t.id.equals('trip_rejoin_test'))).getSingle();
+      expect(localTrip.sharing, equals('group'));
+      expect(localTrip.ownerId, equals('user_bob'));
+      expect(localTrip.title, equals('Bob Shared Trip Rejoined'));
+
+      // 5. Assert: Subcollection sync was resumed and the day was applied
+      final localDays = await (db.select(db.tripDays)..where((d) => d.tripId.equals('trip_rejoin_test'))).get();
+      expect(localDays.length, equals(1));
+      expect(localDays.first.id, equals('day_rejoined_1'));
+    });
   });
 
   // The downstream trips listener serializes snapshots through a Future chain.

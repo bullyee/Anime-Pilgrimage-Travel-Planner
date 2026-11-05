@@ -531,8 +531,17 @@ class SyncEngineServiceV2 {
 
     final localTrip = await (localDb.select(localDb.trips)..where((t) => t.id.equals(tripId))).getSingleOrNull();
 
-    // If local trip is already private and not owned by remoteOwner, it's a private collaborator copy.
-    if (localTrip != null && localTrip.sharing == 'private' && remoteOwnerId != currentUserId) {
+    // Re-joining check: if the local trip is marked private (e.g. from previously leaving or unsharing),
+    // but the incoming remote snapshot confirms it is a shared group trip and this user is an active member,
+    // reconnect the local trip to 'group' sharing so syncing resumes.
+    final remoteMembers = (remoteData['members'] as List?)?.cast<String>() ?? const [];
+    final isRejoining = localTrip != null &&
+        localTrip.sharing == 'private' &&
+        remoteOwnerId != currentUserId &&
+        remoteSharing == 'group' &&
+        (remoteMembers.contains(currentUserId) || remoteMembers.isEmpty);
+
+    if (!isRejoining && localTrip != null && localTrip.sharing == 'private' && remoteOwnerId != currentUserId) {
       _cancelSubcollectionWatchers(tripId);
       return false;
     }
@@ -578,12 +587,10 @@ class SyncEngineServiceV2 {
     await localDb.transaction(() async {
       final current = await (localDb.select(localDb.trips)..where((t) => t.id.equals(tripId))).getSingleOrNull();
       if (current != null) {
-        if (remoteUpdatedAt != null && !remoteUpdatedAt.isAfter(current.updatedAt)) {
+        if (!isRejoining && remoteUpdatedAt != null && !remoteUpdatedAt.isAfter(current.updatedAt)) {
           return;
         }
-        await (localDb.update(localDb.trips)
-              ..where((t) => t.id.equals(tripId) & t.updatedAt.isSmallerThanValue((remoteUpdatedAt ?? DateTime.now()).millisecondsSinceEpoch)))
-            .write(tripCompanion);
+        await (localDb.update(localDb.trips)..where((t) => t.id.equals(tripId))).write(tripCompanion);
       } else {
         await localDb.into(localDb.trips).insert(tripCompanion, mode: InsertMode.insertOrIgnore);
       }
