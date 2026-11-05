@@ -41,6 +41,12 @@ class GroupSharingService {
     final now = DateTime.now();
     var trip = await (_db.select(_db.trips)..where((t) => t.id.equals(tripId))).getSingleOrNull();
 
+    // Read the server's copy first. Offline, this fails at once, before the
+    // trip is marked shared, where the batches below would wait for a
+    // connection instead.
+    final tripRef = _firestore.collection('tripsV2').doc(tripId);
+    final tripSnap = await tripRef.get(const GetOptions(source: Source.server));
+
     // If the trip is still private locally, promote it to 'group' and mark its rows dirty
     if (trip != null && trip.sharing != 'group') {
       await _db.transaction(() async {
@@ -65,8 +71,6 @@ class GroupSharingService {
     // Ensure the cloud trip document and owner member record exist before creating the invite
     // so Firestore security rules (`isTripEditorOrOwner(tripId)`) authorize invite creation.
     if (trip != null && trip.ownerId == currentUserId) {
-      final tripRef = _firestore.collection('tripsV2').doc(tripId);
-      final tripSnap = await tripRef.get();
       final initBatch = _firestore.batch();
       if (!tripSnap.exists) {
         initBatch.set(tripRef, {
@@ -106,7 +110,9 @@ class GroupSharingService {
 
     final token = const Uuid().v4();
     final shortCode = generateShortCode();
-    final expiresAt = now.add(const Duration(days: 7));
+    // The rules allow at most 7 days from the server's clock, so a phone
+    // whose clock runs a little fast would be refused at exactly 7 days.
+    final expiresAt = now.add(const Duration(days: 7)).subtract(const Duration(minutes: 5));
     final normalizedEmailAllowlist = emailAllowlist?.map((e) => e.trim().toLowerCase()).where((e) => e.isNotEmpty).toList() ?? const [];
 
     final invite = TripInvite(
@@ -159,15 +165,18 @@ class GroupSharingService {
   /// Resolve token or short code to an invite preview.
   Future<TripInvite?> getInvitePreview(String tokenOrCode) async {
     String token = tokenOrCode.trim();
+    // From the server, never the cache: a stopped invite mustn't look valid,
+    // and offline the lookup fails at once.
+    const fromServer = GetOptions(source: Source.server);
 
     // If it's a 6-character short code, resolve it
     if (token.length == 6 && !token.contains('-')) {
-      final codeDoc = await _firestore.collection('invite_codes').doc(token.toUpperCase()).get();
+      final codeDoc = await _firestore.collection('invite_codes').doc(token.toUpperCase()).get(fromServer);
       if (!codeDoc.exists) return null;
       token = codeDoc.data()?['token'] as String? ?? token;
     }
 
-    final inviteDoc = await _firestore.collection('invites').doc(token).get();
+    final inviteDoc = await _firestore.collection('invites').doc(token).get(fromServer);
     if (!inviteDoc.exists) return null;
 
     final data = inviteDoc.data()!;
@@ -414,6 +423,24 @@ class GroupSharingService {
         updatedBy: Value(currentUserId),
       ),
     );
+  }
+
+  /// Stream of the invites this user made for a trip that can still be used,
+  /// newest first. The rules only let people list their own invites.
+  Stream<List<TripInvite>> watchTripInvites(String tripId) {
+    return _firestore
+        .collection('invites')
+        .where('tripId', isEqualTo: tripId)
+        .where('createdBy', isEqualTo: currentUserId)
+        .snapshots()
+        .map((snapshot) => snapshot.docs
+            .map((doc) => TripInvite.fromMap({
+                  ...doc.data(),
+                  'token': doc.data()['token'] as String? ?? doc.id,
+                }))
+            .where((invite) => invite.isValid)
+            .toList()
+          ..sort((a, b) => b.createdAt.compareTo(a.createdAt)));
   }
 
   /// Revoke an invite so it can no longer be used.

@@ -637,6 +637,32 @@ def main():
     }
     code, _ = api_request('POST', 'invite_codes?documentId=VALID1', valid_code_data, user_id='alice')
     assert_status("PR #102: Creator can create invite_code with own createdBy (200)", 200, code)
+    # 46. invites query: the Members tab lists the invites you made for a trip
+    def run_invite_query(trip_id=None, created_by=None, user_id=None):
+        filters = [
+            {'fieldFilter': {'field': {'fieldPath': field}, 'op': 'EQUAL', 'value': {'stringValue': value}}}
+            for field, value in (('tripId', trip_id), ('createdBy', created_by)) if value is not None
+        ]
+        q = {'structuredQuery': {'from': [{'collectionId': 'invites'}]}}
+        if len(filters) == 1:
+            q['structuredQuery']['where'] = filters[0]
+        elif filters:
+            q['structuredQuery']['where'] = {'compositeFilter': {'op': 'AND', 'filters': filters}}
+        return api_request('POST', ':runQuery', q, user_id=user_id)
+
+    code, resp = run_invite_query('trip_v2_1', 'alice', user_id='alice')
+    assert_status("invites query: Alice listing her own invites for a trip succeeds (200)", 200, code, resp=resp)
+    found = [r['document']['name'].rsplit('/', 1)[-1] for r in resp if 'document' in r] if code == 200 else []
+    assert_status("invites query: Alice's list includes her invite", True, invite_token in found, resp=resp)
+
+    code, resp = run_invite_query('trip_v2_1', 'alice', user_id='charlie')
+    assert_status("invites query: Listing someone else's invites is denied (403)", 403, code, resp=resp)
+
+    code, resp = run_invite_query('trip_v2_1', None, user_id='alice')
+    assert_status("invites query: Listing a trip's invites without the createdBy filter is denied (403)", 403, code, resp=resp)
+
+    code, resp = run_invite_query(None, 'alice', user_id=None)
+    assert_status("invites query: Unauthenticated listing is denied (403)", 403, code, resp=resp)
 
     print(f"\nALL {tests_passed}/{tests_total} FIRESTORE RULES TESTS PASSED!")
 

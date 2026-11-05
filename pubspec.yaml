@@ -73,6 +73,8 @@ dependencies:
   gal: ^2.3.2
   fractional_indexing_dart: ^1.0.7
   crypto: ^3.0.6
+  qr_flutter: 4.1.0
+  share_plus: 11.0.0
 
 dev_dependencies:
   flutter_test:

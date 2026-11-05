@@ -43,7 +43,7 @@ class TripCard extends StatelessWidget {
           padding: const EdgeInsets.all(12),
           child: Row(
             children: [
-              _DateBadge(date: summary.firstDate, status: summary.status),
+              TripDateBadge(date: summary.firstDate, status: summary.status),
               const SizedBox(width: 14),
               Expanded(
                 child: Column(
@@ -95,11 +95,11 @@ class TripCard extends StatelessWidget {
 
 /// The trip's first date as a small calendar leaf, with the year when it
 /// isn't this year, or a suitcase when the trip has no dates yet.
-class _DateBadge extends StatelessWidget {
+class TripDateBadge extends StatelessWidget {
   final DateTime? date;
   final TripStatus status;
 
-  const _DateBadge({required this.date, required this.status});
+  const TripDateBadge({super.key, required this.date, required this.status});
 
   @override
   Widget build(BuildContext context) {

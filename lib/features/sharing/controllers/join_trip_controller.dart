@@ -1,9 +1,13 @@
+import 'package:cloud_firestore/cloud_firestore.dart' show FirebaseException;
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../models/trip_invite.dart';
 import '../models/trip_member.dart';
 import '../providers/group_sharing_providers.dart';
 import '../services/group_sharing_service.dart';
+
+/// Why an invite can't be used, or couldn't be looked up or joined.
+enum JoinTripProblem { notFound, expired, stopped, offline, failed }
 
 class JoinTripState {
   final String code;
@@ -13,6 +17,7 @@ class JoinTripState {
   final bool isJoined;
   final String? joinedTripId;
   final String? errorMessage;
+  final JoinTripProblem? problem;
 
   const JoinTripState({
     this.code = '',
@@ -22,6 +27,7 @@ class JoinTripState {
     this.isJoined = false,
     this.joinedTripId,
     this.errorMessage,
+    this.problem,
   });
 
   JoinTripState copyWith({
@@ -33,6 +39,7 @@ class JoinTripState {
     bool? isJoined,
     String? joinedTripId,
     String? errorMessage,
+    JoinTripProblem? problem,
     bool clearError = false,
   }) {
     return JoinTripState(
@@ -43,6 +50,7 @@ class JoinTripState {
       isJoined: isJoined ?? this.isJoined,
       joinedTripId: joinedTripId ?? this.joinedTripId,
       errorMessage: clearError ? null : (errorMessage ?? this.errorMessage),
+      problem: clearError ? null : (problem ?? this.problem),
     );
   }
 }
@@ -91,12 +99,14 @@ class JoinTripController extends StateNotifier<JoinTripState> {
           isLoading: false,
           clearInvite: true,
           errorMessage: 'Invite not found or invalid code.',
+          problem: JoinTripProblem.notFound,
         );
       } else if (!invite.isValid) {
         state = state.copyWith(
           isLoading: false,
           invite: invite,
           errorMessage: invite.isRevoked ? 'This invite has been revoked.' : 'This invite has expired.',
+          problem: invite.isRevoked ? JoinTripProblem.stopped : JoinTripProblem.expired,
         );
       } else {
         state = state.copyWith(
@@ -111,6 +121,7 @@ class JoinTripController extends StateNotifier<JoinTripState> {
         isLoading: false,
         clearInvite: true,
         errorMessage: 'Failed to load invite: ${e.toString()}',
+        problem: _problemOf(e),
       );
     }
   }
@@ -147,13 +158,27 @@ class JoinTripController extends StateNotifier<JoinTripState> {
       return member;
     } catch (e) {
       if (!mounted) return null;
+      var problem = _problemOf(e);
+      if (problem == JoinTripProblem.failed) {
+        // It may have been stopped, or run out, since the preview.
+        final fresh = await _sharingService.getInvitePreview(tokenOrCode).catchError((_) => null);
+        if (!mounted) return null;
+        if (fresh != null && !fresh.isValid) {
+          problem = fresh.isRevoked ? JoinTripProblem.stopped : JoinTripProblem.expired;
+        }
+      }
       state = state.copyWith(
         isJoining: false,
         errorMessage: 'Failed to join trip: ${e.toString()}',
+        problem: problem,
       );
       return null;
     }
   }
+
+  /// Firestore reports `unavailable` when it can't reach the server.
+  static JoinTripProblem _problemOf(Object error) =>
+      error is FirebaseException && error.code == 'unavailable' ? JoinTripProblem.offline : JoinTripProblem.failed;
 
   /// Reset all state back to initial.
   void reset() {
