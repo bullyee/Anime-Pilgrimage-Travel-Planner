@@ -119,6 +119,7 @@ class _AnitabiImportScreenState extends ConsumerState<AnitabiImportScreen> {
                 child: Image.network(
                   url,
                   fit: BoxFit.cover,
+                  cacheWidth: 1080,
                   headers: const {'User-Agent': AnitabiApiService.userAgent},
                   errorBuilder: (_, error, _) {
                     _onImageError(error);

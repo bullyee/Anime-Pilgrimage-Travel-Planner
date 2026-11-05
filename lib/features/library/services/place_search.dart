@@ -70,9 +70,16 @@ class PlaceSearch {
 
   final http.Client _client;
   final DateTime Function() _now;
+  final Map<String, List<FoundPlace>> _cache = {};
   DateTime? _last;
 
   Future<List<FoundPlace>> search(String query, {String language = 'ja,en'}) async {
+    final cacheKey = '$query:$language'.toLowerCase().trim();
+    if (_cache.containsKey(cacheKey)) {
+      final cached = _cache.remove(cacheKey)!;
+      _cache[cacheKey] = cached;
+      return cached;
+    }
     final last = _last;
     if (last != null) {
       final wait = _gap - _now().difference(last);
@@ -91,7 +98,7 @@ class PlaceSearch {
     }
     final results = jsonDecode(utf8.decode(response.bodyBytes));
     if (results is! List) return const [];
-    return [
+    final places = [
       for (final r in results)
         if (r is Map)
           if (_valid('${r['lat']}', '${r['lon']}') case final at?)
@@ -101,6 +108,9 @@ class PlaceSearch {
             at: at,
           ),
     ];
+    if (_cache.length >= 100) _cache.remove(_cache.keys.first);
+    _cache[cacheKey] = places;
+    return places;
   }
 
   /// Follows a short Google Maps link through its redirects and reads the

@@ -90,7 +90,7 @@ class SyncEngineServiceV2 {
 
     // 1. Upstream dirty Trips watcher (monitors any dirty trips owned by user, including unshared ones)
     final tripsQuery = localDb.select(localDb.trips)
-      ..where((t) => t.syncStatus.equals(1));
+      ..where((t) => t.syncStatus.equals(1) & (t.ownerId.equals(currentUserId) | t.sharing.equals('group')));
     _tripWatcherSub = tripsQuery.watch().listen((dirtyTrips) {
       if (_isStopped || dirtyTrips.isEmpty) return;
       for (final t in dirtyTrips) {
@@ -98,6 +98,8 @@ class SyncEngineServiceV2 {
         _updateStatus(t.id, TripSyncStatus.pending);
       }
       _scheduleDebouncedPush();
+    }, onError: (error, stack) {
+      debugPrint('[SyncEngineV2] Error watching dirty trips: $error\n$stack');
     });
 
     // 2. Upstream dirty TripDays watcher
@@ -114,6 +116,8 @@ class SyncEngineServiceV2 {
         _updateStatus(day.tripId, TripSyncStatus.pending);
       }
       _scheduleDebouncedPush();
+    }, onError: (error, stack) {
+      debugPrint('[SyncEngineV2] Error watching dirty days: $error\n$stack');
     });
 
     // 3. Upstream dirty Stops watcher
@@ -130,6 +134,8 @@ class SyncEngineServiceV2 {
         _updateStatus(stop.tripId, TripSyncStatus.pending);
       }
       _scheduleDebouncedPush();
+    }, onError: (error, stack) {
+      debugPrint('[SyncEngineV2] Error watching dirty stops: $error\n$stack');
     });
 
     // 4. Upstream dirty ScheduleItems watcher
@@ -146,6 +152,8 @@ class SyncEngineServiceV2 {
         _updateStatus(item.tripId, TripSyncStatus.pending);
       }
       _scheduleDebouncedPush();
+    }, onError: (error, stack) {
+      debugPrint('[SyncEngineV2] Error watching dirty schedule items: $error\n$stack');
     });
 
     // 5. Downstream watchUserTrips listener (serialized)
@@ -604,6 +612,11 @@ class SyncEngineServiceV2 {
           }
         }
       });
+    }, onError: (error, stack) {
+      debugPrint('[SyncEngineV2] Error in watchTripDays for $tripId: $error');
+      if (_isPermanentError(error)) {
+        _subcollectionSubs.remove('$tripId:days')?.cancel();
+      }
     });
 
     // Stops watcher
@@ -621,6 +634,11 @@ class SyncEngineServiceV2 {
           }
         }
       });
+    }, onError: (error, stack) {
+      debugPrint('[SyncEngineV2] Error in watchTripStops for $tripId: $error');
+      if (_isPermanentError(error)) {
+        _subcollectionSubs.remove('$tripId:stops')?.cancel();
+      }
     });
 
     // Schedule items watcher
@@ -638,6 +656,11 @@ class SyncEngineServiceV2 {
           }
         }
       });
+    }, onError: (error, stack) {
+      debugPrint('[SyncEngineV2] Error in watchTripScheduleItems for $tripId: $error');
+      if (_isPermanentError(error)) {
+        _subcollectionSubs.remove('$tripId:items')?.cancel();
+      }
     });
   }
 

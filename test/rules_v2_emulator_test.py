@@ -5,21 +5,22 @@ import base64
 import sys
 import time
 
-def create_jwt(user_id, email=None):
+def create_jwt(user_id, email=None, sign_in_provider=None):
     header = base64.urlsafe_b64encode(b'{"alg":"none","typ":"JWT"}').decode('utf-8').rstrip('=')
     email_field = f',"email":"{email}"' if email else ''
+    provider_field = f',"firebase":{{"sign_in_provider":"{sign_in_provider}"}}' if sign_in_provider else ''
     payload = base64.urlsafe_b64encode(
-        f'{{"sub":"{user_id}","user_id":"{user_id}","aud":"trip-planner-2775c","iss":"https://securetoken.google.com/trip-planner-2775c"{email_field}}}'.encode('utf-8')
+        f'{{"sub":"{user_id}","user_id":"{user_id}","aud":"trip-planner-2775c","iss":"https://securetoken.google.com/trip-planner-2775c"{email_field}{provider_field}}}'.encode('utf-8')
     ).decode('utf-8').rstrip('=')
     return f"{header}.{payload}."
 
 BASE_URL = 'http://127.0.0.1:8080/v1/projects/trip-planner-2775c/databases/(default)/documents'
 
-def api_request(method, path, data=None, user_id=None, email=None):
+def api_request(method, path, data=None, user_id=None, email=None, sign_in_provider=None):
     url = f"{BASE_URL}{path}" if path.startswith(':') else f"{BASE_URL}/{path}"
     headers = {'Content-Type': 'application/json'}
     if user_id:
-        headers['Authorization'] = f"Bearer {create_jwt(user_id, email=email)}"
+        headers['Authorization'] = f"Bearer {create_jwt(user_id, email=email, sign_in_provider=sign_in_provider)}"
     
     body = json.dumps(data).encode('utf-8') if data else None
     req = urllib.request.Request(url, data=body, headers=headers, method=method)
@@ -537,6 +538,105 @@ def main():
     # unconstrained query (all trips without members filter) -> 403
     code, resp = run_trip_query(None, user_id='alice')
     assert_status("tripsV2 query: Unconstrained query without members filter denied (403)", 403, code, resp=resp)
+
+    # ==========================================
+    # 45. Security Hardening (PR #102) Checks
+    # ==========================================
+    # (a) Anonymous token checks
+    code, _ = api_request('POST', 'tripsV2?documentId=anon_trip', {
+        'fields': {
+            'id': {'stringValue': 'anon_trip'},
+            'ownerId': {'stringValue': 'anon_user'},
+            'members': {'arrayValue': {'values': [{'stringValue': 'anon_user'}]}},
+        }
+    }, user_id='anon_user', sign_in_provider='anonymous')
+    assert_status("PR #102: Anonymous user denied creating tripV2 (403)", 403, code)
+
+    code, _ = api_request('GET', 'tripsV2/trip_g1', user_id='anon_user', sign_in_provider='anonymous')
+    assert_status("PR #102: Anonymous user denied reading tripV2 (403)", 403, code)
+
+    code, _ = api_request('GET', 'trips/missing_legacy_trip_xyz', user_id='alice')
+    assert_status("PR #102: Missing legacy trip document lookup returns 403 (no 404 probing)", 403, code)
+
+    # (b) Bounds checks: tripTitle 300 vs 301
+    future_time = time.strftime('%Y-%m-%dT%H:%M:%SZ', time.gmtime(time.time() + 3600 * 24 * 3))
+    valid_invite_300 = {
+        'fields': {
+            'token': {'stringValue': 'token_title_300'},
+            'tripId': {'stringValue': 'trip_g1'},
+            'role': {'stringValue': 'editor'},
+            'createdBy': {'stringValue': 'alice'},
+            'expiresAt': {'timestampValue': future_time},
+            'tripTitle': {'stringValue': 'A' * 300},
+        }
+    }
+    code, _ = api_request('POST', 'invites?documentId=token_title_300', valid_invite_300, user_id='alice')
+    assert_status("PR #102: Invite with tripTitle of 300 chars succeeds (200)", 200, code)
+
+    invalid_invite_301 = {
+        'fields': {
+            'token': {'stringValue': 'token_title_301'},
+            'tripId': {'stringValue': 'trip_g1'},
+            'role': {'stringValue': 'editor'},
+            'createdBy': {'stringValue': 'alice'},
+            'expiresAt': {'timestampValue': future_time},
+            'tripTitle': {'stringValue': 'A' * 301},
+        }
+    }
+    code, _ = api_request('POST', 'invites?documentId=token_title_301', invalid_invite_301, user_id='alice')
+    assert_status("PR #102: Invite with tripTitle of 301 chars denied (403)", 403, code)
+
+    # (c) Bounds checks: emailAllowlist 100 vs 101
+    valid_allowlist_100 = {
+        'fields': {
+            'token': {'stringValue': 'token_allowlist_100'},
+            'tripId': {'stringValue': 'trip_g1'},
+            'role': {'stringValue': 'editor'},
+            'createdBy': {'stringValue': 'alice'},
+            'expiresAt': {'timestampValue': future_time},
+            'emailAllowlist': {'arrayValue': {'values': [{'stringValue': f'user{i}@test.com'} for i in range(100)]}},
+        }
+    }
+    code, _ = api_request('POST', 'invites?documentId=token_allowlist_100', valid_allowlist_100, user_id='alice')
+    assert_status("PR #102: Invite with emailAllowlist of 100 items succeeds (200)", 200, code)
+
+    invalid_allowlist_101 = {
+        'fields': {
+            'token': {'stringValue': 'token_allowlist_101'},
+            'tripId': {'stringValue': 'trip_g1'},
+            'role': {'stringValue': 'editor'},
+            'createdBy': {'stringValue': 'alice'},
+            'expiresAt': {'timestampValue': future_time},
+            'emailAllowlist': {'arrayValue': {'values': [{'stringValue': f'user{i}@test.com'} for i in range(101)]}},
+        }
+    }
+    code, _ = api_request('POST', 'invites?documentId=token_allowlist_101', invalid_allowlist_101, user_id='alice')
+    assert_status("PR #102: Invite with emailAllowlist of 101 items denied (403)", 403, code)
+
+    # (d) Spoofed short code createdBy
+    spoofed_code_data = {
+        'fields': {
+            'code': {'stringValue': 'SPOOF1'},
+            'token': {'stringValue': 'token_title_300'},
+            'tripId': {'stringValue': 'trip_g1'},
+            'createdBy': {'stringValue': 'alice'},
+            'expiresAt': {'timestampValue': future_time},
+        }
+    }
+    code, _ = api_request('POST', 'invite_codes?documentId=SPOOF1', spoofed_code_data, user_id='attacker_bob')
+    assert_status("PR #102: Attacker cannot create invite_code with spoofed createdBy (403)", 403, code)
+
+    valid_code_data = {
+        'fields': {
+            'code': {'stringValue': 'VALID1'},
+            'token': {'stringValue': 'token_title_300'},
+            'tripId': {'stringValue': 'trip_g1'},
+            'createdBy': {'stringValue': 'alice'},
+            'expiresAt': {'timestampValue': future_time},
+        }
+    }
+    code, _ = api_request('POST', 'invite_codes?documentId=VALID1', valid_code_data, user_id='alice')
+    assert_status("PR #102: Creator can create invite_code with own createdBy (200)", 200, code)
 
     print(f"\nALL {tests_passed}/{tests_total} FIRESTORE RULES TESTS PASSED!")
 

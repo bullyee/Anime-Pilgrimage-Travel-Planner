@@ -18,7 +18,10 @@ service cloud.firestore {
     // 2. Helpers
     // ==========================================
     function isAuthenticated() {
-      return request.auth != null;
+      return request.auth != null
+        && (!('firebase' in request.auth.token)
+            || !('sign_in_provider' in request.auth.token.firebase)
+            || request.auth.token.firebase.sign_in_provider != 'anonymous');
     }
 
     // Legacy helper for v0.1.x trips
@@ -34,7 +37,7 @@ service cloud.firestore {
     // 3. Dual-Track: Shared Trips (v0.1.x Legacy - Read Only)
     // ==========================================
     match /trips/{tripId} {
-      allow read: if isAuthenticated() && (resource == null || isTripMember(tripId));
+      allow read: if isAuthenticated() && isTripMember(tripId);
       allow create, update, delete: if false;
 
       match /timeChunks/{chunkId} {
@@ -274,6 +277,14 @@ service cloud.firestore {
     // ==========================================
     // 5. Group Sharing Invites & Short Codes (Stage 4)
     // ==========================================
+    function isInviteSafe() {
+      let data = request.resource.data;
+      return (!('tripTitle' in data) || (data.tripTitle is string && data.tripTitle.size() <= 300))
+        && (!('inviterName' in data) || data.inviterName == null || (data.inviterName is string && data.inviterName.size() <= 200))
+        && (!('inviterAvatarUrl' in data) || data.inviterAvatarUrl == null || (data.inviterAvatarUrl is string && data.inviterAvatarUrl.size() <= 1000))
+        && (!('emailAllowlist' in data) || data.emailAllowlist == null || (data.emailAllowlist is list && data.emailAllowlist.size() <= 100));
+    }
+
     match /invites/{token} {
       // Single-doc lookup by token is public so the web landing page and preview card can read it;
       // collection-wide listing is blocked so tokens cannot be enumerated.
@@ -287,7 +298,8 @@ service cloud.firestore {
         && request.resource.data.role in ['editor', 'viewer']
         && request.resource.data.expiresAt > request.time
         && request.resource.data.expiresAt <= request.time + duration.value(7, 'd')
-        && isTripEditorOrOwner(request.resource.data.tripId);
+        && isTripEditorOrOwner(request.resource.data.tripId)
+        && isInviteSafe();
 
       // Creator or Trip Owner can revoke or update expiration without mutating core invite fields,
       // with expiry strictly capped at 7 days from now.
@@ -299,7 +311,8 @@ service cloud.firestore {
         && (
           resource.data.createdBy == request.auth.uid ||
           isTripOwner(resource.data.tripId)
-        );
+        )
+        && isInviteSafe();
 
       allow delete: if isAuthenticated() && (
         resource.data.createdBy == request.auth.uid ||
@@ -332,6 +345,7 @@ service cloud.firestore {
       allow create: if isAuthenticated()
         && request.resource.data.token is string
         && shortCode.size() == 6
+        && (!('createdBy' in request.resource.data) || request.resource.data.createdBy == request.auth.uid)
         && canCreateInviteCode(request.resource.data.token);
 
       allow update: if false;

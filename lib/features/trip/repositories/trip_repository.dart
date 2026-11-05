@@ -139,13 +139,18 @@ class DriftTripRepository implements TripRepository {
   // ==========================================================================
 
   @override
-  Future<Trip?> getTrip(String tripId) {
-    return (_db.select(_db.trips)..where((tbl) => tbl.id.equals(tripId))).getSingleOrNull();
+  Future<Trip?> getTrip(String tripId) async {
+    final trip = await (_db.select(_db.trips)..where((tbl) => tbl.id.equals(tripId))).getSingleOrNull();
+    if (trip == null || trip.deletedAt != null) return null;
+    return trip;
   }
 
   @override
   Stream<Trip?> watchTrip(String tripId) {
-    return (_db.select(_db.trips)..where((tbl) => tbl.id.equals(tripId))).watchSingleOrNull();
+    return (_db.select(_db.trips)..where((tbl) => tbl.id.equals(tripId))).watchSingleOrNull().map((trip) {
+      if (trip == null || trip.deletedAt != null) return null;
+      return trip;
+    });
   }
 
   @override
