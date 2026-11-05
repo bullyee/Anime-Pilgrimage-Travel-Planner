@@ -5,6 +5,7 @@ import 'package:riverpod_annotation/riverpod_annotation.dart';
 import '../../../core/providers/database_provider.dart';
 import '../../auth/providers/auth_provider.dart';
 import '../services/firestore_sync_v2_service.dart';
+import '../services/personal_backup_service.dart';
 import '../services/sync_engine_service_v2.dart';
 
 part 'sync_v2_providers.g.dart';
@@ -57,3 +58,22 @@ Stream<TripSyncStatus> tripSyncStatus(Ref ref, String tripId) {
     controller.onCancel = sub.cancel;
   }).distinct();
 }
+
+/// Provides the [PersonalBackupService] for private cloud backup and restoration of personal library.
+final personalBackupServiceProvider = Provider<PersonalBackupService>((ref) {
+  final db = ref.watch(databaseProvider);
+  return PersonalBackupService(
+    db: db,
+    firestore: FirebaseFirestore.instance,
+  );
+});
+
+/// Streams latest backup metadata for the currently signed-in user.
+final personalBackupMetadataProvider = StreamProvider.autoDispose<BackupSummary?>((ref) {
+  final user = ref.watch(authStateChangesProvider).valueOrNull;
+  if (user == null) {
+    return Stream.value(null);
+  }
+  final service = ref.watch(personalBackupServiceProvider);
+  return service.watchBackupMetadata(user.uid);
+});
