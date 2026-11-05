@@ -16,6 +16,11 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
   bool _isLoading = false;
   bool _isCancelling = false;
 
+  /// Only desktop signs in through a browser the user can walk away from, so
+  /// only there does a cancel button have anything to stop.
+  bool get _isDesktop =>
+      !kIsWeb && (Platform.isWindows || Platform.isMacOS || Platform.isLinux);
+
   Future<void> _handleGoogleSignIn() async {
     setState(() {
       _isLoading = true;
@@ -184,10 +189,7 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
                     if (_isLoading) ...[
                       const SizedBox(height: 16),
                       Text(
-                        !kIsWeb &&
-                                (Platform.isWindows ||
-                                    Platform.isMacOS ||
-                                    Platform.isLinux)
+                        _isDesktop
                             ? 'Waiting for sign-in in browser...'
                             : 'Signing in...',
                         textAlign: TextAlign.center,
@@ -196,41 +198,38 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
                           fontSize: 14,
                         ),
                       ),
-                      const SizedBox(height: 8),
-                      TextButton.icon(
-                        onPressed: _isCancelling ? null : _handleCancelSignIn,
-                        icon: _isCancelling
-                            ? const SizedBox(
-                                width: 14,
-                                height: 14,
-                                child: CircularProgressIndicator(
-                                  strokeWidth: 2,
-                                  valueColor: AlwaysStoppedAnimation<Color>(
-                                    Colors.white70,
+                      if (_isDesktop) ...[
+                        const SizedBox(height: 8),
+                        TextButton.icon(
+                          onPressed: _isCancelling ? null : _handleCancelSignIn,
+                          icon: _isCancelling
+                              ? const SizedBox(
+                                  width: 14,
+                                  height: 14,
+                                  child: CircularProgressIndicator(
+                                    strokeWidth: 2,
+                                    valueColor: AlwaysStoppedAnimation<Color>(
+                                      Colors.white70,
+                                    ),
                                   ),
+                                )
+                              : const Icon(
+                                  Icons.close,
+                                  size: 16,
+                                  color: Colors.white,
                                 ),
-                              )
-                            : const Icon(
-                                Icons.close,
-                                size: 16,
-                                color: Colors.white,
-                              ),
-                        label: Text(
-                          _isCancelling ? 'Cancelling...' : 'Cancel sign-in',
-                          style: const TextStyle(
-                            color: Colors.white,
-                            fontSize: 14,
-                            decoration: TextDecoration.underline,
+                          label: Text(
+                            _isCancelling ? 'Cancelling...' : 'Cancel sign-in',
+                            style: const TextStyle(
+                              color: Colors.white,
+                              fontSize: 14,
+                              decoration: TextDecoration.underline,
+                            ),
                           ),
                         ),
-                      ),
+                      ],
                     ],
-                    if (!_isLoading &&
-                        !kIsWeb &&
-                        (Platform.isWindows ||
-                            Platform.isMacOS ||
-                            Platform.isLinux) &&
-                        !isDesktopAuthAvailable) ...[
+                    if (!_isLoading && _isDesktop && !isDesktopAuthAvailable) ...[
                       const SizedBox(height: 16),
                       Text(
                         'Desktop cloud sync is in preview. You can use all planning and mapping features offline without signing in.',

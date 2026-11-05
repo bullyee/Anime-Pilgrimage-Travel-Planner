@@ -234,7 +234,7 @@ class _FakeAuthController extends AuthController {
 
   @override
   Future<void> signInWithGoogle({
-    Duration desktopTimeout = const Duration(minutes: 2),
+    Duration desktopTimeout = const Duration(minutes: 5),
     DesktopAuthConsentRunner consentRunner = obtainAccessCredentialsViaUserConsent,
     String? testDesktopClientId,
     String? testDesktopClientSecret,

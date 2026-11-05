@@ -98,7 +98,7 @@ class AuthController extends Notifier<AsyncValue<User?>> {
 
   /// Handles the Google Sign-In flow across all platforms.
   Future<void> signInWithGoogle({
-    Duration desktopTimeout = const Duration(minutes: 2),
+    Duration desktopTimeout = const Duration(minutes: 5),
     DesktopAuthConsentRunner consentRunner = obtainAccessCredentialsViaUserConsent,
     String? testDesktopClientId,
     String? testDesktopClientSecret,
