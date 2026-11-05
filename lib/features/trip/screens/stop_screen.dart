@@ -183,12 +183,15 @@ class _StopScreenState extends ConsumerState<StopScreen> {
       );
     }
     final theme = Theme.of(context);
-    final trip = ref.watch(tripDetailProvider(_tripId)).valueOrNull;
+    final tripAsync = ref.watch(tripDetailProvider(_tripId));
+    final trip = tripAsync.valueOrNull;
     if (trip == null) {
       return Scaffold(
         appBar: AppBar(),
-        body: const Center(
-          child: Text('This trip is not available.'),
+        body: Center(
+          child: tripAsync.isLoading
+              ? const CircularProgressIndicator()
+              : const Text('This trip is not available.'),
         ),
       );
     }

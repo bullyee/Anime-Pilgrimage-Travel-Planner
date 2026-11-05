@@ -76,7 +76,9 @@ class PlaceSearch {
   Future<List<FoundPlace>> search(String query, {String language = 'ja,en'}) async {
     final cacheKey = '$query:$language'.toLowerCase().trim();
     if (_cache.containsKey(cacheKey)) {
-      return _cache[cacheKey]!;
+      final cached = _cache.remove(cacheKey)!;
+      _cache[cacheKey] = cached;
+      return cached;
     }
     final last = _last;
     if (last != null) {
