@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'dart:io' show Platform;
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter/foundation.dart';
@@ -19,6 +20,26 @@ class AuthConfigurationException implements Exception {
   @override
   String toString() => message;
 }
+
+/// Thrown when sign-in was cancelled by the user.
+class AuthCancelledException implements Exception {
+  final String message;
+  const AuthCancelledException([this.message = 'Sign-in was cancelled.']);
+
+  @override
+  String toString() => message;
+}
+
+/// Runner function signature for obtaining consent credentials on desktop.
+typedef DesktopAuthConsentRunner = Future<AccessCredentials> Function(
+  ClientId clientId,
+  List<String> scopes,
+  http.Client client,
+  PromptUserForConsent userPrompt,
+);
+
+/// Browser launcher function signature for desktop authentication.
+typedef BrowserLauncher = Future<void> Function(Uri uri);
 
 /// Checks whether desktop OAuth credentials are configured at compile-time.
 bool get isDesktopAuthAvailable =>
@@ -60,21 +81,37 @@ final authControllerProvider = NotifierProvider<AuthController, AsyncValue<User?
 });
 
 class AuthController extends Notifier<AsyncValue<User?>> {
+  Future<void> Function()? _cancelDesktopSignIn;
+
   @override
   AsyncValue<User?> build() {
     return ref.watch(authStateChangesProvider);
   }
 
-  /// Handles the Google Sign-In flow across all platforms.
-  Future<void> signInWithGoogle() async {
-    final firebaseAuth = ref.read(firebaseAuthProvider);
+  /// Cancels an in-progress sign-in operation if supported (e.g. desktop loopback server).
+  Future<void> cancelSignIn() async {
+    final cancel = _cancelDesktopSignIn;
+    if (cancel != null) {
+      await cancel();
+    }
+  }
 
+  /// Handles the Google Sign-In flow across all platforms.
+  Future<void> signInWithGoogle({
+    Duration desktopTimeout = const Duration(minutes: 5),
+    DesktopAuthConsentRunner consentRunner = obtainAccessCredentialsViaUserConsent,
+    String? testDesktopClientId,
+    String? testDesktopClientSecret,
+    BrowserLauncher? testBrowserLauncher,
+  }) async {
     // 1. Check if we are running on Desktop (Windows, macOS, Linux)
     if (!kIsWeb && (Platform.isWindows || Platform.isMacOS || Platform.isLinux)) {
       
-      // Fetch credentials injected during compile-time
-      const desktopClientId = String.fromEnvironment('DESKTOP_CLIENT_ID');
-      const desktopClientSecret = String.fromEnvironment('DESKTOP_CLIENT_SECRET');
+      // Fetch credentials injected during compile-time or passed for testing
+      final desktopClientId = testDesktopClientId ??
+          const String.fromEnvironment('DESKTOP_CLIENT_ID');
+      final desktopClientSecret = testDesktopClientSecret ??
+          const String.fromEnvironment('DESKTOP_CLIENT_SECRET');
       
       // Safety check to ensure credentials are provided
       if (desktopClientId.isEmpty || desktopClientSecret.isEmpty) {
@@ -89,28 +126,110 @@ class AuthController extends Notifier<AsyncValue<User?>> {
       // Use the securely injected credentials
       final clientId = ClientId(desktopClientId, desktopClientSecret);
 
+      var isCancelled = false;
+      Uri? cancelUri;
+
+      _cancelDesktopSignIn = () async {
+        isCancelled = true;
+        if (cancelUri != null) {
+          try {
+            await http.get(cancelUri!).timeout(const Duration(seconds: 2));
+          } catch (_) {}
+        }
+      };
+
       try {
-        final AccessCredentials credentials = await obtainAccessCredentialsViaUserConsent(
+        final authFuture = consentRunner(
           clientId,
           scopes,
           httpClient,
           (String url) async {
             final uri = Uri.parse(url);
-            if (await canLaunchUrl(uri)) {
-              await launchUrl(uri);
-            } else {
-              throw Exception('Could not launch browser for login.');
+            final redirectUri = uri.queryParameters['redirect_uri'];
+            final state = uri.queryParameters['state'];
+
+            if (redirectUri != null) {
+              cancelUri = Uri.parse(redirectUri).replace(
+                queryParameters: {
+                  'state': ?state,
+                  'error': 'cancelled_by_user',
+                },
+              );
+            }
+
+            if (isCancelled) {
+              if (cancelUri != null) {
+                try {
+                  await http.get(cancelUri!).timeout(const Duration(seconds: 2));
+                } catch (_) {}
+              }
+              return;
+            }
+
+            try {
+              if (testBrowserLauncher != null) {
+                await testBrowserLauncher(uri);
+              } else if (await canLaunchUrl(uri)) {
+                await launchUrl(uri);
+              } else {
+                throw Exception('Could not launch browser for login.');
+              }
+            } catch (e) {
+              if (cancelUri != null) {
+                try {
+                  await http.get(cancelUri!).timeout(const Duration(seconds: 2));
+                } catch (_) {}
+              }
+              rethrow;
             }
           },
         );
+
+        // Prevent unhandled asynchronous errors if timeout triggers
+        authFuture.ignore();
+
+        final AccessCredentials credentials = await authFuture.timeout(
+          desktopTimeout,
+          onTimeout: () {
+            if (cancelUri != null) {
+              final timeoutUri = cancelUri!.replace(
+                queryParameters: {
+                  ...cancelUri!.queryParameters,
+                  'error': 'timeout',
+                },
+              );
+              http.get(timeoutUri).catchError((_) => http.Response('', 500));
+            }
+            throw TimeoutException('Google Sign-In timed out. Please try again.');
+          },
+        );
+
+        if (isCancelled) {
+          throw const AuthCancelledException();
+        }
 
         final credential = GoogleAuthProvider.credential(
           idToken: credentials.idToken,
           accessToken: credentials.accessToken.data,
         );
 
+        final firebaseAuth = ref.read(firebaseAuthProvider);
         await firebaseAuth.signInWithCredential(credential);
+      } on UserConsentException catch (e) {
+        if (isCancelled || e.message.contains('cancelled_by_user')) {
+          throw const AuthCancelledException();
+        }
+        if (e.message.contains('timeout')) {
+          throw TimeoutException('Google Sign-In timed out. Please try again.');
+        }
+        throw Exception('Google Sign-In was not completed: ${e.message}');
+      } catch (e) {
+        if (isCancelled) {
+          throw const AuthCancelledException();
+        }
+        rethrow;
       } finally {
+        _cancelDesktopSignIn = null;
         httpClient.close();
       }
 
@@ -118,6 +237,7 @@ class AuthController extends Notifier<AsyncValue<User?>> {
     // 2. Standard flow for Mobile (Android/iOS) and Web
     else {
       try {
+        final firebaseAuth = ref.read(firebaseAuthProvider);
         // ==========================================
         // PLATFORM FORK: The Ultimate Solution
         // ==========================================
