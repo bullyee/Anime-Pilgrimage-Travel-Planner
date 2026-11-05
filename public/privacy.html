@@ -1,0 +1,106 @@
+<!DOCTYPE html>
+<html lang="zh-TW">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>隱私權政策 - Trip Planner</title>
+  <style>
+    :root {
+      --primary: #4F46E5;
+      --bg: #F8FAFC;
+      --card: #FFFFFF;
+      --text: #0F172A;
+      --subtext: #475569;
+      --border: #E2E8F0;
+    }
+    body {
+      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
+      background-color: var(--bg);
+      color: var(--text);
+      line-height: 1.6;
+      padding: 32px 16px;
+      margin: 0;
+    }
+    .container {
+      max-width: 720px;
+      margin: 0 auto;
+      background: var(--card);
+      padding: 40px 32px;
+      border-radius: 16px;
+      border: 1px solid var(--border);
+      box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.05);
+    }
+    h1 {
+      font-size: 28px;
+      color: var(--primary);
+      margin-bottom: 8px;
+    }
+    .last-updated {
+      font-size: 14px;
+      color: var(--subtext);
+      margin-bottom: 24px;
+    }
+    h2 {
+      font-size: 18px;
+      margin-top: 24px;
+      margin-bottom: 12px;
+      border-bottom: 1px solid var(--border);
+      padding-bottom: 6px;
+    }
+    p, li {
+      color: var(--subtext);
+      font-size: 15px;
+      margin-bottom: 12px;
+    }
+    ul {
+      padding-left: 20px;
+    }
+    a {
+      color: var(--primary);
+      text-decoration: none;
+    }
+    a:hover {
+      text-decoration: underline;
+    }
+  </style>
+</head>
+<body>
+  <div class="container">
+    <h1>Trip Planner 隱私權政策</h1>
+    <div class="last-updated">最後更新日期：2026 年 11 月 4 日</div>
+
+    <p>歡迎使用 Trip Planner（以下簡稱「本應用程式」）。我們非常重視您的個人隱私與資料安全，本隱私權政策旨在說明我們如何收集、使用、儲存及保護您的資訊。</p>
+
+    <h2>一、我們收集的資訊</h2>
+    <ul>
+      <li><strong>Google 帳戶基本資料</strong>：當您選擇透過 Google 登入時，我們僅讀取您的基本公開檔案（名稱、電子郵件地址及個人頭像），用於識別您的使用者身分並在群組協作行程中顯示成員資訊。</li>
+      <li><strong>行程與景點資料</strong>：您建立或規劃的聖地巡禮景點、每日時程、個人標籤及拍照編輯紀錄。</li>
+      <li><strong>相機與檔案權限</strong>：本應用程式之相機疊圖與照片編輯功能僅於本機端執行，未經您的明確分享操作，個人照片絕不會自動上傳至雲端。</li>
+    </ul>
+
+    <h2>二、資訊之儲存與使用方式</h2>
+    <ul>
+      <li><strong>本地優先（Local-First）</strong>：您的私人收藏庫、景點備註及巡禮照片預設儲存於您的本機裝置 SQLite 資料庫中。</li>
+      <li><strong>雲端雙向同步</strong>：僅當您明確開啟「群組分享行程」或透過邀請碼加入共用行程時，該行程之景點排程資料方會透過 Google Firebase 進行傳輸與多裝置同步。</li>
+      <li><strong>絕不出售資料</strong>：我們絕不會將您的個人資訊販售、出租或轉讓給任何第三方廣告商。</li>
+    </ul>
+
+    <h2>三、第三方服務提供商</h2>
+    <p>本應用程式使用受信任的第三方服務以維持基本營運：</p>
+    <ul>
+      <li><strong>Google Firebase</strong>：用於使用者驗證（Authentication）與行程雲端資料庫（Firestore）。</li>
+      <li><strong>Bangumi 與 Anitabi</strong>：提供公開的動畫資料與聖地座標資訊檢索。</li>
+      <li><strong>OpenStreetMap</strong>：搜尋地點時，您輸入的文字會傳送至 OpenStreetMap 的 Nominatim 服務以查詢座標；地圖畫面的圖磚亦由 OpenStreetMap 提供。</li>
+      <li><strong>Google 地圖</strong>：當您貼上 Google 地圖短網址時，本應用程式會開啟該網址以讀取其中的座標。</li>
+      <li><strong>GitHub</strong>：首次使用去背功能時，會從 GitHub 下載去背模型檔，此請求不包含您的個人資料。</li>
+    </ul>
+
+    <h2>四、資料刪除與權利行使</h2>
+    <p>您隨時可於應用程式內刪除行程資料或登出帳號。如欲請求徹底刪除您在雲端的帳戶相關資料，請透過下方聯絡信箱與我們聯繫，我們將於收到請求後儘速處理。</p>
+
+    <h2>五、聯絡我們</h2>
+    <p>若您對本隱私權政策有任何疑問或建議，歡迎透過以下電子郵件聯絡開發團隊：<br>
+    <strong>電子郵件：</strong><a href="mailto:trip.planner.app.tw@gmail.com">trip.planner.app.tw@gmail.com</a></p>
+  </div>
+</body>
+</html>
