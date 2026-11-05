@@ -109,31 +109,34 @@ service cloud.firestore {
       );
     }
 
-    function isTripV2Safe() {
+    // id, when present, must equal the document path ID: the sync engine keys
+    // local writes on it, so a mismatch would let one trip's editor overwrite
+    // another trip on every member's device.
+    function isTripV2Safe(docId) {
       let data = request.resource.data;
-      return (!('id' in data) || (data.id is string && data.id.size() <= 100))
+      return (!('id' in data) || data.id == docId)
         && (!('title' in data) || (data.title is string && data.title.size() <= 300))
         && (!('dayCount' in data) || (data.dayCount is number && data.dayCount >= 0));
     }
 
-    function isDayBlockSafe() {
+    function isDayBlockSafe(docId) {
       let data = request.resource.data;
-      return (!('id' in data) || (data.id is string && data.id.size() <= 100))
+      return (!('id' in data) || data.id == docId)
         && (!('sortKey' in data) || (data.sortKey is string && data.sortKey.size() <= 100));
     }
 
-    function isStopSafe() {
+    function isStopSafe(docId) {
       let data = request.resource.data;
-      return (!('id' in data) || (data.id is string && data.id.size() <= 100))
+      return (!('id' in data) || data.id == docId)
         && (!('name' in data) || (data.name is string && data.name.size() <= 300))
         && (!('placeKey' in data) || (data.placeKey is string && data.placeKey.size() <= 200))
         && (!('area' in data) || data.area == null || (data.area is string && data.area.size() <= 100))
         && (!('note' in data) || data.note == null || (data.note is string && data.note.size() <= 2000));
     }
 
-    function isScheduleItemSafe() {
+    function isScheduleItemSafe(docId) {
       let data = request.resource.data;
-      return (!('id' in data) || (data.id is string && data.id.size() <= 100))
+      return (!('id' in data) || data.id == docId)
         && (!('sortKey' in data) || (data.sortKey is string && data.sortKey.size() <= 100))
         && (!('stayMinutes' in data) || (data.stayMinutes is number && data.stayMinutes >= 0))
         && (!('transitMinutes' in data) || (data.transitMinutes is number && data.transitMinutes >= 0));
@@ -190,7 +193,7 @@ service cloud.firestore {
       allow create: if isAuthenticated()
         && request.resource.data.ownerId == request.auth.uid
         && request.resource.data.members == [request.auth.uid]
-        && isTripV2Safe();
+        && isTripV2Safe(tripId);
 
       // Only owner or editors can update trip metadata (viewers are read-only),
       // and only the owner can change ownerId, sharing, or remove members.
@@ -202,7 +205,7 @@ service cloud.firestore {
           && (!('sharing' in request.resource.data) || request.resource.data.sharing == resource.data.sharing || isTripOwner(tripId))
           && (!('members' in request.resource.data) || !('members' in resource.data) || isTripOwner(tripId) || request.resource.data.members.toSet().hasAll(resource.data.members))
           && isLwwValid()
-          && isTripV2Safe()) ||
+          && isTripV2Safe(tripId)) ||
         isSelfMemberArraySync(tripId)
       );
 
@@ -249,7 +252,7 @@ service cloud.firestore {
           && isTripMemberV2(tripId)
           && isTripEditorOrOwner(tripId)
           && isLwwValid()
-          && isDayBlockSafe();
+          && isDayBlockSafe(dayId);
         allow delete: if false;
       }
 
@@ -259,7 +262,7 @@ service cloud.firestore {
           && isTripMemberV2(tripId)
           && isTripEditorOrOwner(tripId)
           && isLwwValid()
-          && isStopSafe();
+          && isStopSafe(stopId);
         allow delete: if false;
       }
 
@@ -269,7 +272,7 @@ service cloud.firestore {
           && isTripMemberV2(tripId)
           && isTripEditorOrOwner(tripId)
           && isLwwValid()
-          && isScheduleItemSafe();
+          && isScheduleItemSafe(itemId);
         allow delete: if false;
       }
     }

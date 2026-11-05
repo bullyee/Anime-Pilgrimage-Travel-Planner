@@ -664,6 +664,84 @@ def main():
     code, resp = run_invite_query(None, 'alice', user_id=None)
     assert_status("invites query: Unauthenticated listing is denied (403)", 403, code, resp=resp)
 
+    # =========================================================================
+    # DOCUMENT ID INTEGRITY: data.id must equal the document path ID
+    # The sync engine keys local writes on data.id, so a mismatched id would
+    # let one trip's editor overwrite another trip on every member's device.
+    # =========================================================================
+    print("\n--- Testing document id integrity ---")
+
+    def trip_doc(doc_id_field, owner='alice', title='ID Integrity Trip'):
+        fields = {
+            'title': {'stringValue': title},
+            'ownerId': {'stringValue': owner},
+            'sharing': {'stringValue': 'group'},
+            'members': {'arrayValue': {'values': [{'stringValue': owner}]}},
+            'dayCount': {'integerValue': '1'},
+            'updatedAt': {'integerValue': '1000'},
+        }
+        if doc_id_field is not None:
+            fields['id'] = {'stringValue': doc_id_field}
+        return {'fields': fields}
+
+    # 47. Create with a spoofed id (points at another trip) is denied
+    code, resp = api_request('POST', 'tripsV2?documentId=trip_idspoof', trip_doc('trip_v2_1'), user_id='mallory')
+    assert_status("id integrity: trip create with id != path is denied (403)", 403, code, resp=resp)
+
+    # 48. Create with a matching id succeeds (legit clients unaffected)
+    code, resp = api_request('POST', 'tripsV2?documentId=trip_idok', trip_doc('trip_idok', owner='mallory'), user_id='mallory')
+    assert_status("id integrity: trip create with id == path succeeds (200)", 200, code, resp=resp)
+    owner_member = {'fields': {
+        'userId': {'stringValue': 'mallory'}, 'tripId': {'stringValue': 'trip_idok'},
+        'role': {'stringValue': 'owner'}, 'displayName': {'stringValue': 'Mallory'},
+    }}
+    code, resp = api_request('POST', 'tripsV2/trip_idok/members?documentId=mallory', owner_member, user_id='mallory')
+    assert_status("id integrity: owner adds self as member (200)", 200, code, resp=resp)
+
+    # 49. Create without an id field is still allowed (backward compatible)
+    code, resp = api_request('POST', 'tripsV2?documentId=trip_noid', trip_doc(None, owner='mallory'), user_id='mallory')
+    assert_status("id integrity: trip create without id field succeeds (200)", 200, code, resp=resp)
+
+    # 50. Even the owner cannot rewrite id to point at another trip
+    code, resp = api_request('PATCH', 'tripsV2/trip_idok?updateMask.fieldPaths=id',
+                             {'fields': {'id': {'stringValue': 'trip_v2_1'}}}, user_id='mallory')
+    assert_status("id integrity: trip update re-pointing id is denied (403)", 403, code, resp=resp)
+
+    # 51. Non-string id is denied
+    code, resp = api_request('PATCH', 'tripsV2/trip_idok?updateMask.fieldPaths=id',
+                             {'fields': {'id': {'integerValue': '123'}}}, user_id='mallory')
+    assert_status("id integrity: trip update with non-string id is denied (403)", 403, code, resp=resp)
+
+    # 52. Ordinary metadata update still works
+    code, resp = api_request('PATCH', 'tripsV2/trip_idok?updateMask.fieldPaths=title&updateMask.fieldPaths=updatedAt',
+                             {'fields': {'title': {'stringValue': 'Renamed'}, 'updatedAt': {'integerValue': '2000'}}}, user_id='mallory')
+    assert_status("id integrity: legit trip update succeeds (200)", 200, code, resp=resp)
+
+    # 53-58. Subcollections: spoofed id denied, matching id allowed
+    sub_cases = [
+        ('days', {'sortKey': {'stringValue': 'a0'}}),
+        ('stops', {'placeKey': {'stringValue': 'anitabi:1'}, 'name': {'stringValue': 'S'}, 'addedBy': {'stringValue': 'mallory'}}),
+        ('schedule_items', {'stopId': {'stringValue': 's'}, 'dayId': {'stringValue': 'd'}, 'sortKey': {'stringValue': 'a0'}}),
+    ]
+    for coll, extra in sub_cases:
+        base = {'tripId': {'stringValue': 'trip_idok'}, 'updatedAt': {'integerValue': '1000'}, **extra}
+        spoof = {'fields': {**base, 'id': {'stringValue': f'{coll}_victim'}}}
+        code, resp = api_request('POST', f'tripsV2/trip_idok/{coll}?documentId={coll}_mine', spoof, user_id='mallory')
+        assert_status(f"id integrity: {coll} create with id != path is denied (403)", 403, code, resp=resp)
+        ok = {'fields': {**base, 'id': {'stringValue': f'{coll}_mine'}}}
+        code, resp = api_request('POST', f'tripsV2/trip_idok/{coll}?documentId={coll}_mine', ok, user_id='mallory')
+        assert_status(f"id integrity: {coll} create with id == path succeeds (200)", 200, code, resp=resp)
+
+    # 59. Unicode / emoji ids: equality is exact, so a look-alike is still denied
+    code, resp = api_request('POST', 'tripsV2/trip_idok/stops?documentId=%E6%97%85', 
+                             {'fields': {'id': {'stringValue': '旅 '}, 'tripId': {'stringValue': 'trip_idok'},
+                                         'name': {'stringValue': 'x'}, 'updatedAt': {'integerValue': '1000'}}}, user_id='mallory')
+    assert_status("id integrity: id with trailing space vs path is denied (403)", 403, code, resp=resp)
+    code, resp = api_request('POST', 'tripsV2/trip_idok/stops?documentId=%E6%97%85',
+                             {'fields': {'id': {'stringValue': '旅'}, 'tripId': {'stringValue': 'trip_idok'},
+                                         'name': {'stringValue': 'x'}, 'updatedAt': {'integerValue': '1000'}}}, user_id='mallory')
+    assert_status("id integrity: unicode id equal to path succeeds (200)", 200, code, resp=resp)
+
     print(f"\nALL {tests_passed}/{tests_total} FIRESTORE RULES TESTS PASSED!")
 
 if __name__ == '__main__':

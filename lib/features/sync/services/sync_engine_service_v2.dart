@@ -164,7 +164,8 @@ class SyncEngineServiceV2 {
           if (_isStopped) return;
 
           final remoteTrips = snapshot.trips;
-          final currentTripIds = remoteTrips.map((t) => t['id'] as String?).whereType<String>().toSet();
+          // Never cast blindly: a single malformed doc must not throw and stall the chain.
+          final currentTripIds = remoteTrips.map((t) => t['id']).whereType<String>().where((id) => id.isNotEmpty).toSet();
 
           // Only server snapshots can confirm a removal. Local cache misses must never trigger conversions.
           // Furthermore, only trips that were previously part of this account's server snapshots are converted,
@@ -189,8 +190,9 @@ class SyncEngineServiceV2 {
           }
 
           for (final remoteTrip in remoteTrips) {
-            final tripId = remoteTrip['id'] as String?;
-            if (tripId == null || tripId.isEmpty) continue;
+            final rawId = remoteTrip['id'];
+            if (rawId is! String || rawId.isEmpty) continue;
+            final tripId = rawId;
 
             try {
               final keepWatching = await _applyRemoteTrip(remoteTrip);
@@ -201,6 +203,10 @@ class SyncEngineServiceV2 {
               debugPrint('[SyncEngineV2] Error applying remote trip $tripId: $e\n$stack');
             }
           }
+        }).catchError((Object e, StackTrace stack) {
+          // Keep the serialized chain alive: an errored Future here would make
+          // every later snapshot's .then() a no-op until the app restarts.
+          debugPrint('[SyncEngineV2] Error processing user trips snapshot: $e\n$stack');
         });
       },
       onError: (error, stack) {
@@ -514,8 +520,9 @@ class SyncEngineServiceV2 {
   /// Returns `true` if downstream subcollection listeners should remain active,
   /// or `false` if the trip was tombstoned/privatized.
   Future<bool> _applyRemoteTrip(Map<String, dynamic> remoteData) async {
-    final tripId = remoteData['id'] as String?;
-    if (tripId == null || tripId.isEmpty) return false;
+    final rawId = remoteData['id'];
+    if (rawId is! String || rawId.isEmpty) return false;
+    final tripId = rawId;
 
     final remoteUpdatedAt = _parseTimestamp(remoteData['updatedAt']);
     final deletedAt = _parseTimestamp(remoteData['deletedAt']);
@@ -611,6 +618,8 @@ class SyncEngineServiceV2 {
             debugPrint('[SyncEngineV2] Error applying remote day: $e\n$stack');
           }
         }
+      }).catchError((Object e, StackTrace stack) {
+        debugPrint('[SyncEngineV2] Error in days chain for $tripId: $e\n$stack');
       });
     }, onError: (error, stack) {
       debugPrint('[SyncEngineV2] Error in watchTripDays for $tripId: $error');
@@ -633,6 +642,8 @@ class SyncEngineServiceV2 {
             debugPrint('[SyncEngineV2] Error applying remote stop: $e\n$stack');
           }
         }
+      }).catchError((Object e, StackTrace stack) {
+        debugPrint('[SyncEngineV2] Error in stops chain for $tripId: $e\n$stack');
       });
     }, onError: (error, stack) {
       debugPrint('[SyncEngineV2] Error in watchTripStops for $tripId: $error');
@@ -655,6 +666,8 @@ class SyncEngineServiceV2 {
             debugPrint('[SyncEngineV2] Error applying remote schedule item: $e\n$stack');
           }
         }
+      }).catchError((Object e, StackTrace stack) {
+        debugPrint('[SyncEngineV2] Error in items chain for $tripId: $e\n$stack');
       });
     }, onError: (error, stack) {
       debugPrint('[SyncEngineV2] Error in watchTripScheduleItems for $tripId: $error');
