@@ -9,7 +9,11 @@ import 'package:trip_planner/features/sync/services/sync_engine_service_v2.dart'
 import 'package:trip_planner/features/trip/repositories/trip_repository.dart';
 
 /// A shared Firestore simulation that broadcasts cloud updates to both Alice and Bob.
-class SharedCollaborativeCloud implements FirestoreSyncV2Service {
+// Extends [Fake] so that members added to [FirestoreSyncV2Service] by other
+// PRs (e.g. #103's activity/photo methods) don't break compilation here; any
+// unimplemented member that the engine actually calls still fails loudly with
+// UnimplementedError instead of silently returning null.
+class SharedCollaborativeCloud extends Fake implements FirestoreSyncV2Service {
   final Map<String, Map<String, dynamic>> trips = {};
   final Map<String, Map<String, Map<String, dynamic>>> tripDays = {};
   final Map<String, Map<String, Map<String, dynamic>>> tripStops = {};
