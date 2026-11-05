@@ -4,6 +4,7 @@ import 'package:intl/intl.dart';
 import '../../../core/utils/schedule_logic.dart';
 import '../../../shared/theme/app_theme.dart';
 import '../models/trip_summary.dart';
+import 'trip_sync_icon.dart';
 
 /// "Apr 29 – May 4", or "No dates yet". The year is added when the trip
 /// isn't in the current year.
@@ -23,8 +24,9 @@ String tripDateLine({
 }
 
 /// A trip in the list: its first date and its title, plus a line when it's
-/// shared. The section it's listed under says whether it's under way,
-/// coming up or over, so the card doesn't repeat that.
+/// shared, and a cloud while a shared trip isn't in sync. The section it's
+/// listed under says whether it's under way, coming up or over, so the card
+/// doesn't repeat that.
 class TripCard extends StatelessWidget {
   final TripSummary summary;
   final VoidCallback onTap;
@@ -50,11 +52,20 @@ class TripCard extends StatelessWidget {
                   crossAxisAlignment: CrossAxisAlignment.start,
                   mainAxisSize: MainAxisSize.min,
                   children: [
-                    Text(
-                      summary.trip.title,
-                      style: theme.textTheme.titleMedium?.copyWith(fontWeight: FontWeight.w700),
-                      maxLines: 2,
-                      overflow: TextOverflow.ellipsis,
+                    Row(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Expanded(
+                          child: Text(
+                            summary.trip.title,
+                            style: theme.textTheme.titleMedium?.copyWith(fontWeight: FontWeight.w700),
+                            maxLines: 2,
+                            overflow: TextOverflow.ellipsis,
+                          ),
+                        ),
+                        if (shared)
+                          TripSyncIcon(tripId: summary.trip.id, padding: const EdgeInsets.only(left: 8, top: 2)),
+                      ],
                     ),
                     // Who it's shared with comes with the member list
                     // (stage 4); until then the line just says it's shared.

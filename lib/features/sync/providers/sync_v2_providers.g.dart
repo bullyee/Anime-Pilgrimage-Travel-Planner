@@ -43,7 +43,7 @@ final syncEngineServiceV2Provider = Provider<SyncEngineServiceV2?>.internal(
 @Deprecated('Will be removed in 3.0. Use Ref instead')
 // ignore: unused_element
 typedef SyncEngineServiceV2Ref = ProviderRef<SyncEngineServiceV2?>;
-String _$tripSyncStatusHash() => r'a300d1af98c512ba6c126ffa13702e9faeccbbc6';
+String _$tripSyncStatusHash() => r'7b6099e0f0c4958b6aafd437a41ebcaaf47a1233';
 
 /// Copied from Dart SDK
 class _SystemHash {
@@ -66,22 +66,26 @@ class _SystemHash {
   }
 }
 
-/// Stream of sync status for a specific trip (synced, pending, or offline).
+/// Stream of sync status for a specific trip (synced, pending, offline or
+/// error), starting with its current one.
 ///
 /// Copied from [tripSyncStatus].
 @ProviderFor(tripSyncStatus)
 const tripSyncStatusProvider = TripSyncStatusFamily();
 
-/// Stream of sync status for a specific trip (synced, pending, or offline).
+/// Stream of sync status for a specific trip (synced, pending, offline or
+/// error), starting with its current one.
 ///
 /// Copied from [tripSyncStatus].
 class TripSyncStatusFamily extends Family<AsyncValue<TripSyncStatus>> {
-  /// Stream of sync status for a specific trip (synced, pending, or offline).
+  /// Stream of sync status for a specific trip (synced, pending, offline or
+  /// error), starting with its current one.
   ///
   /// Copied from [tripSyncStatus].
   const TripSyncStatusFamily();
 
-  /// Stream of sync status for a specific trip (synced, pending, or offline).
+  /// Stream of sync status for a specific trip (synced, pending, offline or
+  /// error), starting with its current one.
   ///
   /// Copied from [tripSyncStatus].
   TripSyncStatusProvider call(String tripId) {
@@ -110,11 +114,13 @@ class TripSyncStatusFamily extends Family<AsyncValue<TripSyncStatus>> {
   String? get name => r'tripSyncStatusProvider';
 }
 
-/// Stream of sync status for a specific trip (synced, pending, or offline).
+/// Stream of sync status for a specific trip (synced, pending, offline or
+/// error), starting with its current one.
 ///
 /// Copied from [tripSyncStatus].
 class TripSyncStatusProvider extends AutoDisposeStreamProvider<TripSyncStatus> {
-  /// Stream of sync status for a specific trip (synced, pending, or offline).
+  /// Stream of sync status for a specific trip (synced, pending, offline or
+  /// error), starting with its current one.
   ///
   /// Copied from [tripSyncStatus].
   TripSyncStatusProvider(String tripId)

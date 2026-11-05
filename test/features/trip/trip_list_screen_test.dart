@@ -7,6 +7,7 @@ import 'package:go_router/go_router.dart';
 import 'package:trip_planner/core/database/database.dart';
 import 'package:trip_planner/core/providers/database_provider.dart';
 import 'package:trip_planner/features/auth/providers/auth_provider.dart';
+import 'package:trip_planner/features/sync/providers/sync_v2_providers.dart';
 import 'package:trip_planner/features/trip/repositories/trip_repository.dart';
 import 'package:trip_planner/features/trip/screens/trip_list_screen.dart';
 
@@ -31,6 +32,7 @@ void main() {
       overrides: [
         databaseProvider.overrideWithValue(db),
         currentUserIdProvider.overrideWithValue('u1'),
+        syncEngineServiceV2Provider.overrideWithValue(null),
       ],
       child: MaterialApp.router(routerConfig: router),
     ));

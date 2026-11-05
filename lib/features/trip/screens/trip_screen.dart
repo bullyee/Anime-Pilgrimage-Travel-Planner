@@ -13,6 +13,7 @@ import '../controllers/trips_controller.dart';
 import '../providers/trip_providers.dart';
 import '../widgets/trip_card.dart';
 import '../widgets/trip_form_sheet.dart';
+import '../widgets/trip_sync_icon.dart';
 import 'trip_members_tab.dart';
 import 'trip_overview_tab.dart';
 import 'trip_stops_tab.dart';
@@ -90,7 +91,13 @@ class _TripScreenState extends ConsumerState<TripScreen> with SingleTickerProvid
           crossAxisAlignment: CrossAxisAlignment.start,
           mainAxisSize: MainAxisSize.min,
           children: [
-            Text(trip.title, maxLines: 1, overflow: TextOverflow.ellipsis),
+            Row(
+              children: [
+                Flexible(child: Text(trip.title, maxLines: 1, overflow: TextOverflow.ellipsis)),
+                if (trip.sharing == 'group')
+                  TripSyncIcon(tripId: trip.id, padding: const EdgeInsets.only(left: 6)),
+              ],
+            ),
             Text(subtitle, style: theme.textTheme.bodySmall?.copyWith(color: theme.colorScheme.onSurfaceVariant)),
           ],
         ),
