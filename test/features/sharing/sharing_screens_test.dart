@@ -18,6 +18,7 @@ import 'package:trip_planner/features/sharing/screens/join_trip_screen.dart';
 import 'package:trip_planner/features/sharing/services/group_sharing_service.dart';
 import 'package:trip_planner/features/trip/screens/trip_members_tab.dart';
 import 'package:trip_planner/features/trip/screens/trip_screen.dart';
+import 'package:trip_planner/features/trip/widgets/trip_card.dart';
 
 import 'fake_sharing_firestore.dart';
 
@@ -101,6 +102,9 @@ class _FakeSharing extends GroupSharingService {
 
   @override
   Future<void> unshareTrip(String tripId) async => calls.add('unshare $tripId');
+
+  @override
+  Future<void> leaveTrip(String tripId) async => calls.add('leave $tripId');
 
   @override
   Future<TripInvite?> getInvitePreview(String tokenOrCode) async {
@@ -288,9 +292,35 @@ void main() {
       await tester.tap(find.widgetWithText(OutlinedButton, 'Stop sharing'));
       await tester.pumpAndSettle();
       expect(find.text('Stop sharing Uji day trip?'), findsOneWidget);
+      expect(find.text('Leave trip'), findsNothing, reason: 'the owner stops sharing instead');
       await tester.tap(find.widgetWithText(FilledButton, 'Stop sharing'));
       await tester.pumpAndSettle();
       expect(sharing.calls, containsAllInOrder(['stop $_token', 'unshare t1']));
+      await done(tester);
+    });
+
+    testWidgets('a member who is not the owner can leave, after saying so', (tester) async {
+      final trip = await addTrip(ownerId: 'aki', sharingMode: 'group');
+      sharing.members = [
+        _member('aki', 'Aki', TripMemberRole.owner),
+        _member('u1', 'Bea', TripMemberRole.editor, minutes: 1),
+      ];
+      await pump(tester, membersRouter(trip));
+
+      expect(find.text('Stop sharing'), findsNothing);
+      await tester.tap(find.widgetWithText(OutlinedButton, 'Leave trip'));
+      await tester.pumpAndSettle();
+      expect(find.text('Leave Uji day trip?'), findsOneWidget);
+      await tester.tap(find.text('Cancel'));
+      await tester.pumpAndSettle();
+      expect(sharing.calls, isNot(contains('leave t1')));
+
+      await tester.tap(find.widgetWithText(OutlinedButton, 'Leave trip'));
+      await tester.pumpAndSettle();
+      await tester.tap(find.widgetWithText(FilledButton, 'Leave'));
+      await tester.pumpAndSettle();
+      expect(sharing.calls, contains('leave t1'));
+      expect(find.text('You left Uji day trip. Your copy is still here.'), findsOneWidget);
       await done(tester);
     });
 
@@ -326,6 +356,110 @@ void main() {
 
     expect(find.text('Invite to Uji day trip'), findsOneWidget);
     await done(tester);
+  });
+
+  group('Trip page by role', () {
+    GoRouter tripRouter() => GoRouter(initialLocation: '/trips/t1', routes: [
+          GoRoute(path: '/trips/:tripId', builder: (_, s) => TripScreen(tripId: s.pathParameters['tripId']!)),
+        ]);
+
+    Future<List<String>> menuItems(WidgetTester tester) async {
+      await tester.tap(find.byType(PopupMenuButton<String>));
+      await tester.pumpAndSettle();
+      final items = tester
+          .widgetList<PopupMenuItem<String>>(find.byWidgetPredicate((w) => w is PopupMenuItem<String>))
+          .map((i) => i.value!)
+          .toList();
+      await tester.tapAt(const Offset(4, 4));
+      await tester.pumpAndSettle();
+      return items;
+    }
+
+    testWidgets('a viewer can look but not change the trip, and can leave it', (tester) async {
+      await addTrip(ownerId: 'aki', sharingMode: 'group');
+      sharing.members = [
+        _member('aki', 'Aki', TripMemberRole.owner),
+        _member('u1', 'Bea', TripMemberRole.viewer, minutes: 1),
+      ];
+      await pump(tester, tripRouter());
+
+      expect(find.textContaining('View only'), findsOneWidget);
+      expect(find.byTooltip('Invite people'), findsNothing);
+      expect(await menuItems(tester), ['leave']);
+
+      await tester.tap(find.text('Plan'));
+      await tester.pumpAndSettle();
+      expect(find.byTooltip('Edit the plan'), findsNothing);
+
+      await tester.tap(find.text('Stops'));
+      await tester.pumpAndSettle();
+      expect(find.text('Add stops'), findsNothing);
+      expect(find.textContaining('once someone who can edit the trip adds them'), findsOneWidget);
+      await done(tester);
+    });
+
+    testWidgets('an editor can change the trip and leave it, but not delete it for everyone', (tester) async {
+      await addTrip(ownerId: 'aki', sharingMode: 'group');
+      sharing.members = [
+        _member('aki', 'Aki', TripMemberRole.owner),
+        _member('u1', 'Bea', TripMemberRole.editor, minutes: 1),
+      ];
+      await pump(tester, tripRouter());
+
+      expect(find.textContaining('View only'), findsNothing);
+      expect(await menuItems(tester), ['edit', 'leave']);
+      await tester.tap(find.text('Plan'));
+      await tester.pumpAndSettle();
+      expect(find.byTooltip('Edit the plan'), findsOneWidget);
+      await done(tester);
+    });
+
+    testWidgets('the owner can edit and delete the trip', (tester) async {
+      await addTrip();
+      await pump(tester, tripRouter());
+
+      expect(await menuItems(tester), ['edit', 'delete']);
+      await done(tester);
+    });
+  });
+
+  group('Members on trip cards', () {
+    test('the line names up to two others, then counts them', () {
+      expect(membersLine([]), 'Only you so far');
+      expect(membersLine(['Aki']), 'You and Aki');
+      expect(membersLine(['Aki', 'Ren']), 'You, Aki and Ren');
+      expect(membersLine(['Aki', 'Ren', 'Sora']), 'You and 3 others');
+    });
+
+    testWidgets("a shared trip's card shows the others, the owner first", (tester) async {
+      await addTrip(sharingMode: 'group');
+      sharing.members = [
+        _member('ren', 'Ren', TripMemberRole.viewer, minutes: 2),
+        _member('aki', 'Aki', TripMemberRole.owner),
+        _member('u1', 'Bea', TripMemberRole.editor, minutes: 1),
+      ];
+      await pump(
+        tester,
+        GoRouter(routes: [GoRoute(path: '/', builder: (_, _) => const Scaffold(body: TripMembersLine(tripId: 't1')))]),
+      );
+
+      expect(find.text('You, Aki and Ren'), findsOneWidget);
+      expect(find.text('A'), findsOneWidget);
+      expect(find.text('R'), findsOneWidget);
+      expect(find.text('B'), findsNothing, reason: 'your own face is left out');
+      await done(tester);
+    });
+
+    testWidgets('without your own member record yet, it just says shared', (tester) async {
+      await addTrip(sharingMode: 'group');
+      await pump(
+        tester,
+        GoRouter(routes: [GoRoute(path: '/', builder: (_, _) => const Scaffold(body: TripMembersLine(tripId: 't1')))]),
+      );
+
+      expect(find.text('Shared'), findsOneWidget);
+      await done(tester);
+    });
   });
 
   group('Join screen', () {

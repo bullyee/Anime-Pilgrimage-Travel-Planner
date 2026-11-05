@@ -61,3 +61,12 @@ final myTripRoleProvider = Provider.autoDispose.family<TripMemberRole?, String>(
   final mine = members?.where((m) => m.userId == me).firstOrNull;
   return mine?.role ?? (trip.ownerId == me ? TripMemberRole.owner : null);
 });
+
+/// Whether the current user may change the trip's shared parts: its plan,
+/// stops, trip notes and facts. Only a viewer may not. The rules refuse a
+/// viewer's writes, so an edit would stay on their phone and never sync;
+/// the screens hide the ways to make one instead. Their own note, visits and
+/// photos are theirs, so those stay editable.
+final canEditTripProvider = Provider.autoDispose.family<bool, String>((ref, tripId) {
+  return ref.watch(myTripRoleProvider(tripId)) != TripMemberRole.viewer;
+});

@@ -223,6 +223,20 @@ class _Shared extends ConsumerWidget {
                 style: theme.textTheme.bodySmall?.copyWith(color: theme.colorScheme.onSurfaceVariant),
                 textAlign: TextAlign.center,
               ),
+            ] else if (role != null) ...[
+              const SizedBox(height: 24),
+              OutlinedButton.icon(
+                onPressed: () => leaveTrip(context, ref, trip),
+                icon: const Icon(Icons.logout),
+                label: const Text('Leave trip'),
+                style: OutlinedButton.styleFrom(foregroundColor: p.vermilion, side: BorderSide(color: p.vermilion)),
+              ),
+              const SizedBox(height: 8),
+              Text(
+                _leaveNote,
+                style: theme.textTheme.bodySmall?.copyWith(color: theme.colorScheme.onSurfaceVariant),
+                textAlign: TextAlign.center,
+              ),
             ],
           ],
         ),
@@ -248,6 +262,23 @@ class _Shared extends ConsumerWidget {
       await service.unshareTrip(trip.id);
     });
   }
+}
+
+const _leaveNote = 'You keep your own copy of the trip, as it is when you leave. It just stops syncing.';
+
+/// Takes the user out of a trip someone else owns, after asking. Their copy
+/// stays on the phone as a private trip, so the page stays open on it.
+Future<void> leaveTrip(BuildContext context, WidgetRef ref, Trip trip) async {
+  final ok = await _confirm(
+    context,
+    title: 'Leave ${trip.title}?',
+    text: '$_leaveNote To join again, you need a new invite.',
+    action: 'Leave',
+  );
+  if (!ok || !context.mounted) return;
+  final messenger = ScaffoldMessenger.of(context);
+  final left = await _run(context, 'leave the trip', () => ref.read(groupSharingServiceProvider).leaveTrip(trip.id));
+  if (left) messenger.showSnackBar(SnackBar(content: Text('You left ${trip.title}. Your copy is still here.')));
 }
 
 /// "Aki and Ren keep their own copy of the trip, as it is then. It just stops
@@ -278,7 +309,7 @@ class _MemberTile extends ConsumerWidget {
     final name = member.displayName;
     return ListTile(
       contentPadding: EdgeInsets.zero,
-      leading: MemberAvatar(name: name),
+      leading: MemberAvatar(name: name, avatarUrl: member.avatarUrl),
       title: Text(isMe ? 'You' : name),
       subtitle: Text(roleLabel(member.role)),
       trailing: canChange && !isMe && member.role != TripMemberRole.owner
@@ -406,12 +437,14 @@ Future<bool> _confirm(
 }
 
 /// Runs a sharing change, and says so when it fails. The members and
-/// invites lists update by themselves.
-Future<void> _run(BuildContext context, String doing, Future<void> Function() change) async {
+/// invites lists update by themselves. Returns whether it went through.
+Future<bool> _run(BuildContext context, String doing, Future<void> Function() change) async {
   final messenger = ScaffoldMessenger.of(context);
   try {
     await change().timeout(sharingTimeout);
+    return true;
   } catch (e) {
     messenger.showSnackBar(SnackBar(content: Text(sharingErrorText(e, doing))));
+    return false;
   }
 }

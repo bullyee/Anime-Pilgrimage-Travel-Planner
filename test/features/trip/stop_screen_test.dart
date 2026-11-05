@@ -11,6 +11,8 @@ import 'package:trip_planner/features/auth/providers/auth_provider.dart';
 import 'package:trip_planner/features/library/controllers/place_controller.dart' show PlaceFacts;
 import 'package:trip_planner/features/library/repositories/place_repository.dart';
 import 'package:trip_planner/features/library/widgets/place_page_parts.dart';
+import 'package:trip_planner/features/sharing/models/trip_member.dart';
+import 'package:trip_planner/features/sharing/providers/group_sharing_providers.dart';
 import 'package:trip_planner/features/trip/controllers/trip_stops_controller.dart';
 import 'package:trip_planner/features/trip/repositories/trip_repository.dart';
 import 'package:trip_planner/features/trip/screens/stop_screen.dart';
@@ -114,7 +116,7 @@ void main() {
   });
 
   group('StopScreen', () {
-    Future<void> pump(WidgetTester tester, String location) async {
+    Future<void> pump(WidgetTester tester, String location, {List<Override> overrides = const []}) async {
       tester.view.physicalSize = const Size(1080, 2400);
       tester.view.devicePixelRatio = 3;
       addTearDown(tester.view.reset);
@@ -126,7 +128,7 @@ void main() {
         ),
       ]);
       await tester.pumpWidget(ProviderScope(
-        overrides: [databaseProvider.overrideWithValue(db), currentUserIdProvider.overrideWithValue('u1')],
+        overrides: [databaseProvider.overrideWithValue(db), currentUserIdProvider.overrideWithValue('u1'), ...overrides],
         child: MaterialApp.router(routerConfig: router),
       ));
       await tester.pumpAndSettle();
@@ -294,6 +296,38 @@ void main() {
 
       expect((await trips.getLabelsForStop(stop.id)).single.name, 'Uji');
       expect(await places.getLabelsForPlace('p1'), isEmpty);
+      await disposeApp(tester);
+    });
+
+    testWidgets("a viewer sees the trip's parts but can only change their own note", (tester) async {
+      final (trip, stop) = await uji();
+      await (db.update(db.trips)..where((t) => t.id.equals(trip.id)))
+          .write(const TripsCompanion(ownerId: Value('aki'), sharing: Value('group')));
+      TripMember member(String id, TripMemberRole role) =>
+          TripMember(userId: id, tripId: trip.id, role: role, displayName: id, joinedAt: DateTime(2026));
+      await pump(tester, '/trips/${trip.id}/stops/${stop.id}', overrides: [
+        tripMembersProvider(trip.id).overrideWith(
+            (ref) => Stream.value([member('aki', TripMemberRole.owner), member('u1', TripMemberRole.viewer)])),
+      ]);
+
+      expect(find.byTooltip('More'), findsNothing, reason: 'rename, move and remove change the trip');
+      expect(tester.widget<FilterChip>(find.widgetWithText(FilterChip, 'Mark visited')).onSelected, isNull);
+      expect(find.textContaining('Marking it visited'), findsNothing);
+
+      await tester.tap(find.byTooltip('Edit'));
+      await tester.pumpAndSettle();
+      expect(find.byKey(const Key('tripNoteField')), findsNothing);
+      expect(find.byKey(const Key('placeField_name')), findsNothing);
+      expect(find.text('Set a time'), findsNothing);
+      expect(find.widgetWithText(ActionChip, 'Label'), findsNothing);
+      await tester.scrollUntilVisible(find.byKey(const Key('placeNoteField')), 300, scrollable: find.byType(Scrollable).first);
+      await tester.enterText(find.byKey(const Key('placeNoteField')), 'Shoot from the east bank');
+      await tester.tap(find.text('Done'));
+      await tester.pumpAndSettle();
+
+      expect((await places.getPlace('p1'))!.privateNote, 'Shoot from the east bank');
+      final saved = (await trips.getStop(stop.id))!;
+      expect((saved.note, saved.name), (null, 'Uji Bridge'));
       await disposeApp(tester);
     });
 

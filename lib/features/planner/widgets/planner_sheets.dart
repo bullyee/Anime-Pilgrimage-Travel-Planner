@@ -6,6 +6,7 @@ import 'package:intl/intl.dart';
 import '../../../core/utils/app_result.dart';
 import '../../../core/utils/schedule_logic.dart';
 import '../../../shared/theme/app_theme.dart';
+import '../../sharing/providers/group_sharing_providers.dart';
 import '../controllers/day_planner_controller.dart';
 import '../models/planner_view.dart';
 import '../providers/planner_providers.dart';
@@ -70,6 +71,7 @@ class _StopSheet extends ConsumerWidget {
       return const Padding(padding: EdgeInsets.all(24), child: Text('This stop is no longer in the trip.'));
     }
     final controller = ref.read(dayPlannerControllerProvider.notifier);
+    final canEdit = ref.watch(canEditTripProvider(tripId));
 
     Widget fact(String label, Widget value) => Padding(
           padding: const EdgeInsets.symmetric(vertical: 6),
@@ -219,7 +221,7 @@ class _StopSheet extends ConsumerWidget {
                   icon: const Icon(Icons.open_in_full),
                   label: const Text('Open stop page'),
                 ),
-                if (item != null)
+                if (item != null && canEdit)
                   OutlinedButton.icon(
                     onPressed: () => controller.setVisited(item.item.id, !item.done),
                     icon: Icon(item.done ? Icons.check_circle : Icons.radio_button_unchecked),

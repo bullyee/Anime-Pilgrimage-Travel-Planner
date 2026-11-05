@@ -83,6 +83,16 @@ class _TripScreenState extends ConsumerState<TripScreen> with SingleTickerProvid
     final tab = TripTab.values[_tabs.index];
     final hasStops = ref.watch(tripStopsProvider(trip.id)).valueOrNull?.isNotEmpty ?? false;
     final role = ref.watch(myTripRoleProvider(trip.id));
+    final canEdit = ref.watch(canEditTripProvider(trip.id));
+    // A viewer's role can change while they're on the page.
+    final editing = _editing && canEdit;
+    final shared = trip.sharing == 'group';
+    final menu = [
+      if (canEdit) const PopupMenuItem(value: 'edit', child: Text('Edit name and dates')),
+      if (role == TripMemberRole.owner) const PopupMenuItem(value: 'delete', child: Text('Delete trip')),
+      if (shared && role != null && role != TripMemberRole.owner)
+        const PopupMenuItem(value: 'leave', child: Text('Leave trip')),
+    ];
 
     return Scaffold(
       appBar: AppBar(
@@ -94,11 +104,14 @@ class _TripScreenState extends ConsumerState<TripScreen> with SingleTickerProvid
             Row(
               children: [
                 Flexible(child: Text(trip.title, maxLines: 1, overflow: TextOverflow.ellipsis)),
-                if (trip.sharing == 'group')
+                if (shared)
                   TripSyncIcon(tripId: trip.id, padding: const EdgeInsets.only(left: 6)),
               ],
             ),
-            Text(subtitle, style: theme.textTheme.bodySmall?.copyWith(color: theme.colorScheme.onSurfaceVariant)),
+            Text(
+              canEdit ? subtitle : '$subtitle · View only',
+              style: theme.textTheme.bodySmall?.copyWith(color: theme.colorScheme.onSurfaceVariant),
+            ),
           ],
         ),
         actions: [
@@ -108,8 +121,8 @@ class _TripScreenState extends ConsumerState<TripScreen> with SingleTickerProvid
               icon: Icon(_grid ? Icons.view_carousel_outlined : Icons.grid_view),
               onPressed: () => setState(() => _grid = !_grid),
             ),
-          if (tab == TripTab.plan)
-            _editing
+          if (tab == TripTab.plan && canEdit)
+            editing
                 ? TextButton(onPressed: () => setState(() => _editing = false), child: const Text('Done'))
                 : IconButton(
                     tooltip: 'Edit the plan',
@@ -122,16 +135,15 @@ class _TripScreenState extends ConsumerState<TripScreen> with SingleTickerProvid
               icon: const Icon(Icons.person_add_alt_1_outlined),
               onPressed: () => showInviteSheet(context, trip),
             ),
-          PopupMenuButton<String>(
-            onSelected: (value) {
-              if (value == 'edit') _editTrip(context, trip);
-              if (value == 'delete') _deleteTrip(context, trip);
-            },
-            itemBuilder: (_) => const [
-              PopupMenuItem(value: 'edit', child: Text('Edit name and dates')),
-              PopupMenuItem(value: 'delete', child: Text('Delete trip')),
-            ],
-          ),
+          if (menu.isNotEmpty)
+            PopupMenuButton<String>(
+              onSelected: (value) {
+                if (value == 'edit') _editTrip(context, trip);
+                if (value == 'delete') _deleteTrip(context, trip);
+                if (value == 'leave') leaveTrip(context, ref, trip);
+              },
+              itemBuilder: (_) => menu,
+            ),
         ],
         bottom: TabBar(
           controller: _tabs,
@@ -146,7 +158,7 @@ class _TripScreenState extends ConsumerState<TripScreen> with SingleTickerProvid
           TripOverviewTab(trip: trip, onShowPlan: () => _showTab(TripTab.plan)),
           Column(
             children: [
-              if (_editing)
+              if (editing)
                 Container(
                   width: double.infinity,
                   color: theme.trip.teaSoft,
@@ -168,7 +180,7 @@ class _TripScreenState extends ConsumerState<TripScreen> with SingleTickerProvid
                 child: DayPlanner(
                   tripId: trip.id,
                   grid: _grid,
-                  editing: _editing,
+                  editing: editing,
                   onGridChanged: (grid) => setState(() => _grid = grid),
                 ),
               ),
@@ -178,7 +190,7 @@ class _TripScreenState extends ConsumerState<TripScreen> with SingleTickerProvid
           TripMembersTab(trip: trip),
         ],
       ),
-      floatingActionButton: tab == TripTab.stops && hasStops
+      floatingActionButton: tab == TripTab.stops && hasStops && canEdit
           ? FloatingActionButton.extended(
               onPressed: () => openAddStopsSheet(context, trip.id),
               icon: const Icon(Icons.add),
