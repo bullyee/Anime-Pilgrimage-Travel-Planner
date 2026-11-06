@@ -1,4 +1,4 @@
-import 'package:cloud_firestore/cloud_firestore.dart' show Timestamp;
+import 'package:cloud_firestore/cloud_firestore.dart' show FirebaseException, Timestamp;
 import 'package:drift/drift.dart' hide isNull, isNotNull;
 import 'package:drift/native.dart';
 import 'package:flutter_test/flutter_test.dart';
@@ -392,6 +392,31 @@ void main() {
       final limit = DateTime.now().add(const Duration(days: 7));
       expect(invite.expiresAt.isBefore(limit), isTrue);
       expect(invite.expiresAt.isAfter(limit.subtract(const Duration(hours: 1))), isTrue);
+    });
+
+    test('the first invite creates the cloud trip and its owner before the trip is marked shared', () async {
+      await db.into(db.trips).insert(
+            TripsCompanion.insert(id: 'trip_1', title: 'Kyoto Trip', ownerId: currentUserId),
+          );
+      // The Members tab listens to the members once the trip is marked shared,
+      // and the rules refuse that until the cloud trip exists.
+      fakeFirestore.commitError = FirebaseException(plugin: 'cloud_firestore', code: 'permission-denied');
+
+      await expectLater(
+        sharingService.createInvite(tripId: 'trip_1', role: TripMemberRole.viewer),
+        throwsA(isA<FirebaseException>()),
+      );
+      final unshared = await (db.select(db.trips)..where((t) => t.id.equals('trip_1'))).getSingle();
+      expect(unshared.sharing, 'private');
+
+      fakeFirestore.commitError = null;
+      await sharingService.createInvite(tripId: 'trip_1', role: TripMemberRole.viewer);
+
+      final shared = await (db.select(db.trips)..where((t) => t.id.equals('trip_1'))).getSingle();
+      expect(shared.sharing, 'group');
+      expect(fakeFirestore.tripsV2['trip_1']?['ownerId'], currentUserId);
+      expect(fakeFirestore.tripsV2['trip_1']?['updatedAt'], Timestamp.fromDate(shared.updatedAt));
+      expect(fakeFirestore.members['trip_1']?[currentUserId]?['role'], 'owner');
     });
   });
 
