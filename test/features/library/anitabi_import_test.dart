@@ -83,8 +83,12 @@ void main() {
       );
       await summary.frames;
 
-      expect((summary.added, summary.alreadySaved, summary.withoutLocation, summary.framesPending), (1, 1, 1, 1));
-      expect(downloads, ['https://image.anitabi.cn/1.jpg'], reason: 'frames only for places that are new');
+      expect((summary.added, summary.alreadySaved, summary.withoutLocation, summary.framesPending), (1, 1, 1, 2));
+      expect(
+        downloads..sort(),
+        ['https://image.anitabi.cn/1.jpg', 'https://image.anitabi.cn/2.jpg'],
+        reason: 'the place already saved has no frame, so it gets one too',
+      );
 
       final fresh = (await places.getPlace('anitabi:new'))!;
       expect(fresh.visibility, 'saved');
@@ -103,6 +107,41 @@ void main() {
       expect(frame.timestampS, 192);
       expect(frame.source, '©Kyoto Animation');
       expect(frame.animeLabelId, anime.id);
+    });
+
+    test('importing again fetches only the frames that are missing, such as after the app closed mid-download', () async {
+      final spots = [
+        _spot('1', '宇治橋', image: 'https://image.anitabi.cn/1.jpg'),
+        _spot('2', '朝霧橋', image: 'https://image.anitabi.cn/2.jpg'),
+      ];
+      // The first import's downloads stop after one frame, as when the app closes.
+      final first = await AnitabiImport.importSpots(
+        places: places,
+        bangumiId: '115908',
+        animeName: '響け！ユーフォニアム',
+        spots: spots,
+        download: (url) async => url.endsWith('1.jpg') ? '/frames/1.jpg' : null,
+      );
+      await first.frames;
+      expect(await places.getReferenceImagesForPlace('anitabi:2'), isEmpty);
+
+      final downloads = <String>[];
+      final again = await AnitabiImport.importSpots(
+        places: places,
+        bangumiId: '115908',
+        animeName: '響け！ユーフォニアム',
+        spots: spots,
+        download: (url) async {
+          downloads.add(url);
+          return '/frames/again.jpg';
+        },
+      );
+      await again.frames;
+
+      expect((again.added, again.alreadySaved, again.framesPending), (0, 2, 1));
+      expect(downloads, ['https://image.anitabi.cn/2.jpg']);
+      expect((await places.getReferenceImagesForPlace('anitabi:1')).single.localPath, '/frames/1.jpg');
+      expect((await places.getReferenceImagesForPlace('anitabi:2')).single.localPath, '/frames/again.jpg');
     });
   });
 

@@ -240,7 +240,8 @@ class _AnitabiImportScreenState extends ConsumerState<AnitabiImportScreen> {
           'Imported ${summary.added} new ${summary.added == 1 ? 'spot' : 'spots'}.',
           if (summary.alreadySaved > 0) '${summary.alreadySaved} were already in your library.',
           if (trip != null) 'Added $addedToTrip to ${trip.trip.title}.',
-          if (summary.framesPending > 0) 'Their anime frames are downloading.',
+          if (summary.framesPending > 0)
+            '${summary.framesPending} anime ${summary.framesPending == 1 ? 'frame is' : 'frames are'} downloading.',
         ].join(' ')),
         duration: const Duration(seconds: 6),
       ));

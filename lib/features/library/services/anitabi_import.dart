@@ -96,6 +96,10 @@ class AnitabiImportSummary {
   final int added;
   final int alreadySaved;
   final int withoutLocation;
+
+  /// Frames being downloaded: for new places, and for places already saved
+  /// that have no frame, such as when the app closed during an earlier
+  /// import's downloads.
   final int framesPending;
 
   /// Completes once every frame download has finished or failed.
@@ -111,12 +115,12 @@ class AnitabiImportSummary {
 }
 
 /// Imports Anitabi spots into the library: each picked spot becomes a saved
-/// place (`anitabi:<id>`) with the work's anime label, and new places get
-/// their frame downloaded as a reference image.
+/// place (`anitabi:<id>`) with the work's anime label, and each place without
+/// a frame gets its frame downloaded as a reference image.
 ///
 /// The rules in CLAUDE.md apply: only Anitabi's static data and image hosts
 /// are used, every request sends [AnitabiApiService.userAgent], a refusal is
-/// never retried, and frames are fetched only for places that are new.
+/// never retried, and a frame is fetched only for a place that has none.
 class AnitabiImport {
   static const _concurrency = 5;
 
@@ -143,8 +147,12 @@ class AnitabiImport {
   /// Saves [spots] to the library under the anime [animeName] ([bangumiId]).
   /// Spots without a location are left out. Places already in the library
   /// keep their own facts and only get the anime label (and are saved again
-  /// if they were trip-only). [download] fetches a frame to a local file; the
-  /// default uses Anitabi's image host and mirror.
+  /// if they were trip-only), plus their frame when they have none: frames
+  /// download in the background, so the app closing stops an import's
+  /// downloads, and importing again fetches the rest. A place with any frame,
+  /// such as one migrated from v0.1.x, isn't fetched again. [download]
+  /// fetches a frame to a local file; the default uses Anitabi's image host
+  /// and mirror.
   static Future<AnitabiImportSummary> importSpots({
     required PlaceRepository places,
     required String bangumiId,
@@ -156,7 +164,7 @@ class AnitabiImport {
     var added = 0;
     var alreadySaved = 0;
     var withoutLocation = 0;
-    final fresh = <AnitabiSpot>[];
+    final framesToFetch = <AnitabiSpot>[];
     for (final spot in spots) {
       if (!spot.hasLocation) {
         withoutLocation++;
@@ -175,20 +183,23 @@ class AnitabiImport {
           visibility: const Value('saved'),
         ));
         added++;
-        if (spot.imageUrl != null) fresh.add(spot);
+        if (spot.imageUrl != null) framesToFetch.add(spot);
       } else {
         alreadySaved++;
         if (existing.visibility != 'saved') await places.setPlaceVisibility(spot.placeKey, 'saved');
+        if (spot.imageUrl != null && (await places.getReferenceImagesForPlace(spot.placeKey)).isEmpty) {
+          framesToFetch.add(spot);
+        }
       }
       await places.attachLabelToPlace(spot.placeKey, label.id);
     }
 
-    final frames = _downloadFrames(places: places, spots: fresh, animeLabelId: label.id, download: download);
+    final frames = _downloadFrames(places: places, spots: framesToFetch, animeLabelId: label.id, download: download);
     return AnitabiImportSummary(
       added: added,
       alreadySaved: alreadySaved,
       withoutLocation: withoutLocation,
-      framesPending: fresh.length,
+      framesPending: framesToFetch.length,
       frames: frames,
     );
   }
