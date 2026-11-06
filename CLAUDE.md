@@ -7,8 +7,9 @@ Built with Flutter (Dart). SQLite via Drift for local storage. Riverpod for stat
 ## Architecture
 - **Mobile App (Flutter)**: Primary execution environment. Offline-first, GPS, camera, AR.
 - **PC Web (Next.js/React)**: Deep planning environment (future phase).
-- **Sync Model**: two-way Firestore sync for shared trips (`lib/features/sync/`): personal library (`places`, `labels`, `photos`) remains private on device; shared trips (`tripsV2`) with day blocks, stops, and schedule items sync across group members (Stage 4 RBAC rules and backend services in place; UI share sheet and join flow in progress).
-- **Data model**: unified `places` library and `trips` planner (schemaVersion 13).
+- **Sync Model**: two-way Firestore sync for shared trips (`lib/features/sync/`): personal library (`places`, `labels`, `photos`) remains private on device; shared trips (`tripsV2`) with day blocks, stops, and schedule items sync across group members. People join a trip through an invite link, QR code or 6-letter code (`lib/features/sharing/`); the owner, editor and viewer roles are enforced in `firestore.rules`.
+- **Data model**: unified `places` library and `trips` planner (schemaVersion 13), specified in `docs/data-model.md`, with sharing in `docs/trip-sharing.md`.
+- **MVP plan**: `docs/mvp-plan.md` has the stages, who owns what, the working rules and what's left. Read it before starting MVP work.
 
 ## Core Modules
 1. **Library (`places`, `labels`, `photos`)**: Personal library of pilgrimage spots, anime & region labels, user photos and comparison frames.
