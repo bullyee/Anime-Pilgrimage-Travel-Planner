@@ -65,7 +65,7 @@ The **home screen** has five cards:
 4. Every spot starts ticked. Tap **None** and tick the ones you want, or keep **All** or **With frames**.
 5. Tap **Import N spots**, then **Save to the library**, or **Save, and add them to a trip**.
 
-Each spot arrives with its coordinates, its frame (with the episode and time), and a label for the anime. Spot names stay in their original language, mostly Japanese, which matches the signs on site; rename a place if you like.
+Each spot arrives with its coordinates, its frame (with the episode and time), and a label for the anime. Spot names stay as Anitabi's contributors wrote them, often in Japanese or Simplified Chinese; rename a place if you like.
 
 The frames download after you save. If you close the app before they finish, import the same anime again: it fetches only the frames it missed.
 
