@@ -2,6 +2,73 @@
 
 Notable changes to Trip Planner. Builds are published as Android pre-releases on [GitHub Releases](https://github.com/bullyee/trip_planner/releases). Versions follow [Semantic Versioning](https://semver.org); before 1.0, minor versions may change behavior.
 
+## [0.2.0] - 2026-11-06
+
+A new app on a new data model ([#72](https://github.com/bullyee/trip_planner/issues/72)): a library of places you keep, trips planned day by day, and trips you can now share with friends. Every screen is new.
+
+### Upgrading from v0.1.x
+Your data moves over the first time you open this version ([#81](https://github.com/bullyee/trip_planner/pull/81), [#95](https://github.com/bullyee/trip_planner/issues/95)):
+- **Places (POIs) become library places**, with their notes, reference images, photos and visits. Deleted places are left out.
+- **Regions, anime and tags become labels** on those places. Two with the same name become one.
+- **Not carried over:** the Trip Calendar's schedule, and regions as trips. Make a trip in **My Trips** and add your places to it.
+- **Cloud sync of v0.1.x regions stops.** Their copies in the cloud can still be read, but nothing writes to them any more; shared trips use a new place in the cloud.
+
+### Added
+- **Library** ([#88](https://github.com/bullyee/trip_planner/pull/88)), first on the home screen: your saved places as a list or on a map, with search and filters by anime, tag and region.
+  - Hold a place to pick several, then label them, add them to a trip, merge them or remove them.
+  - Adding a place warns when it looks like one you saved already, and offers to use that one.
+  - Find a spot on the map by name (OpenStreetMap), by pasting a Google Maps link, or by typing coordinates.
+  - **Labels** has its own screen to create, rename, merge and delete anime, tag and region labels.
+- **Place pages** ([#88](https://github.com/bullyee/trip_planner/pull/88), [#94](https://github.com/bullyee/trip_planner/pull/94)) lead with the anime frames, with **Take photo**, **Float frame** and **Directions**. Below: labels, your visits, the spot's facts, the trips it's in, **My note** and **My photos** (grouped by trip). The pencil turns the page into a form.
+- **Import from Anitabi** ([#88](https://github.com/bullyee/trip_planner/pull/88)): search an anime, see each spot with its frame, tick the ones you want, and save them to your library, and to a trip if you like. The frames download after you save; if the app closes before they finish, importing the same anime again fetches the ones it missed ([#109](https://github.com/bullyee/trip_planner/pull/109)).
+- **My Trips** ([#87](https://github.com/bullyee/trip_planner/pull/87), [#92](https://github.com/bullyee/trip_planner/pull/92)): trips under Ongoing, Coming up, No dates yet and Finished, filtered by All, Shared or Private. A trip opens in four tabs: Overview, Plan, Stops and Members.
+- **The day planner** ([#87](https://github.com/bullyee/trip_planner/pull/87), [#88](https://github.com/bullyee/trip_planner/pull/88), [#94](https://github.com/bullyee/trip_planner/pull/94)): one day at a time, or every day in a grid. In edit mode:
+  - drag stops within a day or to another one, or back to the backlog;
+  - swap days, add and remove them, and keep backup days for rain;
+  - pin a day to a date;
+  - set a stop's start time, its stay and the travel to the next stop. Times past midnight read 25:30 and so on;
+  - name a day, such as "Uji" or "Rainy day".
+- **Stop pages** ([#94](https://github.com/bullyee/trip_planner/pull/94)): a stop's plan, a **trip note** everyone in the trip sees, and the trip's own copy of the facts. Your own note, visits and photos come from your library place. **Mark visited** marks it for the trip and adds a visit to your history.
+- **Share a trip** ([#83](https://github.com/bullyee/trip_planner/pull/83), [#100](https://github.com/bullyee/trip_planner/pull/100)), signed in with Google:
+  - **Invite** from a trip's person-plus button or Members tab, as **Edit** or **View only**. You get a link, a QR code and a 6-letter code, valid for 7 days.
+  - **Join** by opening the link, scanning the code with your phone's camera, or entering it under **Join a trip** in My Trips. You see the trip and who invited you before you join.
+  - **The Members tab** shows who's in the trip. The owner can make someone view only, make them the owner, remove them, stop an invite, or stop sharing.
+  - **Everyone's changes sync** both ways: days, stops, times, trip notes and facts. Your library, your notes and your photos stay on your phone.
+  - **Leave trip** for members who aren't the owner ([#107](https://github.com/bullyee/trip_planner/pull/107)). Whoever leaves, is removed, or sees the owner stop sharing keeps their own copy of the trip, which just stops syncing. Only the owner can delete a shared trip.
+  - **View only** members see the trip but can't change it; their own note and photos still work ([#107](https://github.com/bullyee/trip_planner/pull/107)).
+  - **Shared trip cards** show the others' avatars and "You and Aki" or "You and 3 others" ([#107](https://github.com/bullyee/trip_planner/pull/107)).
+  - **A small cloud** next to a shared trip's name means it isn't in sync yet, you're offline, or a change was refused ([#101](https://github.com/bullyee/trip_planner/pull/101)). Tap it to see which.
+- **Photos are filed by trip** ([#91](https://github.com/bullyee/trip_planner/pull/91)): the camera and the editor save to a library place, and a photo goes under the trip you were on that day.
+- **On desktop, sign-in can be cancelled** and gives up after 5 minutes ([#99](https://github.com/bullyee/trip_planner/pull/99)), instead of waiting forever after the browser is closed.
+- **A web page for invites** at `trip-planner-2775c.web.app` ([#83](https://github.com/bullyee/trip_planner/pull/83), [#98](https://github.com/bullyee/trip_planner/pull/98)): it previews the trip, opens the app, and links to the download. The site also has the privacy policy and terms of service.
+
+### Changed
+- **The home screen** leads with Library and My Trips. The Anime Camera, Floating Reference and Edit Photo stay.
+- **The camera and the editor pick from your library** ([#91](https://github.com/bullyee/trip_planner/pull/91)): a place, then one of its frames. Places on today's trip come first.
+- **New colors**: tea green, with wisteria for people and vermilion for pins ([#87](https://github.com/bullyee/trip_planner/pull/87)).
+
+### Removed
+- View POIs, the POI map, regions and the Trip Calendar ([#96](https://github.com/bullyee/trip_planner/pull/96), [#97](https://github.com/bullyee/trip_planner/pull/97)). The Library, My Trips and the day planner replace them.
+- The v0.1.x cloud sync of regions ([#97](https://github.com/bullyee/trip_planner/pull/97)).
+
+### Fixed
+- **A file name with `%` in it no longer breaks the photo editor** ([#84](https://github.com/bullyee/trip_planner/issues/84)).
+- **Leaving the Compose cutout mid-cutout no longer releases its model while it's still in use** ([#84](https://github.com/bullyee/trip_planner/issues/84)).
+
+### Known issues
+- **Rejoining a trip you left doesn't sync yet.** Joining again works, but your old copy stays private and the trip's changes don't reach it.
+- **Links in some in-app browsers** (LINE, Discord) may not open the app. Copy the 6-letter code from the page and enter it under **Join a trip**.
+- **Searching an anime in Traditional Chinese or English finds little.** The search uses Bangumi, which knows Japanese and Simplified Chinese titles; search with one of those.
+- **Spot names are in their original language**, mostly Japanese, as on Anitabi. Rename a place if you like.
+- **Your library lives only on your phone.** Shared trips are in the cloud, but your places, notes and photos aren't backed up anywhere.
+
+### Developer
+- Database schema v13 ([#81](https://github.com/bullyee/trip_planner/pull/81), [#93](https://github.com/bullyee/trip_planner/pull/93), [#97](https://github.com/bullyee/trip_planner/pull/97)): `places`, `labels`, `place_labels`, `photos`, `place_visits`, `v10_reference_images`, `trips`, `trip_days`, `stops`, `stop_labels` and `schedule_items`. The v9 tables are dropped after their data is copied.
+- Sync v2 ([#82](https://github.com/bullyee/trip_planner/pull/82), [#93](https://github.com/bullyee/trip_planner/pull/93), [#102](https://github.com/bullyee/trip_planner/pull/102), [#106](https://github.com/bullyee/trip_planner/pull/106)): `tripsV2/{tripId}` with `days`, `stops`, `schedule_items`, `members` and `invites`, last-write-wins on `updated_at`, with `deleted_at` tombstones. The rules enforce the owner, editor and viewer roles, refuse anonymous sign-ins, cap invite fields, and require a document's `id` to match its path. `trips/` is read-only.
+- `test/rules_v2_emulator_test.py` runs the rules on the Firestore emulator in CI ([#93](https://github.com/bullyee/trip_planner/pull/93)), and multi-user sync tests run two engines on one fake cloud ([#105](https://github.com/bullyee/trip_planner/pull/105)).
+- Firebase Hosting serves `public/`: the invite page, `assetlinks.json` for Android App Links on `/join`, the privacy policy and the terms ([#83](https://github.com/bullyee/trip_planner/pull/83), [#98](https://github.com/bullyee/trip_planner/pull/98)).
+- `release.yml`'s signer check reads apksigner's output with a looser pattern ([#97](https://github.com/bullyee/trip_planner/pull/97)).
+
 ## [0.1.3] - 2026-11-01
 
 The last release on the current data model. The next one, v0.2.0, moves places, trips and schedules to a new model ([#72](https://github.com/bullyee/trip_planner/issues/72)); until then this version only gets bug fixes.
@@ -116,6 +183,7 @@ First Android demo build.
 ### Known issues
 - Photo re-edit overwrites the source (#17), camera crash on background/resume (#16), wrong trailing days in the calendar (#20), leaked dialog controllers (#19).
 
+[0.2.0]: https://github.com/bullyee/trip_planner/compare/v0.1.3...v0.2.0
 [0.1.3]: https://github.com/bullyee/trip_planner/compare/v0.1.2...v0.1.3
 [0.1.2]: https://github.com/bullyee/trip_planner/compare/v0.1.1...v0.1.2
 [0.1.1]: https://github.com/bullyee/trip_planner/compare/v0.1.0...v0.1.1
