@@ -221,6 +221,8 @@ Stage 0 ──► 1a ──┬──► 1b (migration) ──┐
 
 ## After the MVP
 
+The versions after the MVP, and the launch, are planned in `docs/roadmap.md`. The items below are the notes it draws on.
+
 - Phases 2–4 of `docs/trip-sharing.md`: the safety net, photos, templates. ck's #103 has the backend for all three (the trash, activity log, unread badge, photo upload and templates), with no screens yet. It touches `firestore.rules` and adds `storage.rules`.
 - Personal layer backup: ck's #104 has the service, with no screen yet. It sends the personal library to Firestore, which the privacy policy (#98) says stays on the device, so it needs an opt-in and a policy update.
 - **Different versions of a place** (agreed 2026-11-06). A place has up to three versions: Anitabi's, the one in my library, and each trip's stop, which is the trip's own copy. They may differ and stay different: nothing changes another version by itself, and a difference is only pointed out, never asked about in the middle of something. Each case uses the same comparison: one at a time, only the fields that differ (name, location as "moved 120 m", description, source link), with "Use theirs", "Keep mine", "Use theirs for all" and "Keep mine for all".
