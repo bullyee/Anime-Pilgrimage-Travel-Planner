@@ -2,13 +2,15 @@ import 'package:flutter/material.dart';
 
 import '../../../shared/theme/app_theme.dart';
 
-/// A person in a trip, as the first letter of their name in a soft circle.
-/// Photos come with avatars on the trip cards, in a later round.
+/// A person in a trip: their Google photo when there is one, over the first
+/// letter of their name in a soft circle. The letter shows while the photo
+/// loads, and stays when it can't load, such as offline.
 class MemberAvatar extends StatelessWidget {
   final String name;
+  final String? avatarUrl;
   final double radius;
 
-  const MemberAvatar({super.key, required this.name, this.radius = 22});
+  const MemberAvatar({super.key, required this.name, this.avatarUrl, this.radius = 22});
 
   @override
   Widget build(BuildContext context) {
@@ -21,9 +23,23 @@ class MemberAvatar extends StatelessWidget {
       1 => (p.wisteriaSoft, p.wisteria),
       _ => (p.vermilionSoft, p.vermilion),
     };
+    final url = avatarUrl?.trim();
+    // Decoded at the size it's shown: the URL is whatever the member saved,
+    // so it may point at a large image, and cards show several avatars.
+    final size = (radius * 2 * MediaQuery.devicePixelRatioOf(context)).ceil();
+    final photo = url == null || url.isEmpty ? null : ResizeImage(
+            NetworkImage(url),
+            width: size,
+            height: size,
+            policy: ResizeImagePolicy.fit,
+          );
     return CircleAvatar(
       radius: radius,
       backgroundColor: background,
+      foregroundImage: photo,
+      // Without a handler a failed load is reported as an error; the letter
+      // underneath is the fallback.
+      onForegroundImageError: photo == null ? null : (_, _) {},
       child: Text(
         letter,
         style: TextStyle(color: foreground, fontWeight: FontWeight.w700, fontSize: radius * 0.8),

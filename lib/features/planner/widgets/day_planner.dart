@@ -8,6 +8,7 @@ import '../../../core/utils/app_result.dart';
 import '../../../core/utils/schedule_logic.dart';
 import '../../../shared/theme/app_theme.dart';
 import '../../../shared/widgets/name_dialog.dart';
+import '../../sharing/providers/group_sharing_providers.dart';
 import '../controllers/day_planner_controller.dart';
 import '../models/planner_view.dart';
 import '../providers/planner_providers.dart';
@@ -17,7 +18,8 @@ import 'planner_grid.dart';
 import 'planner_sheets.dart';
 
 /// The Plan tab: one day at a time in a carousel, or all days in a grid.
-/// Nothing changes unless [editing] is on, except marking stops visited.
+/// Nothing changes unless [editing] is on, except marking stops visited,
+/// which a viewer can't do either.
 class DayPlanner extends ConsumerStatefulWidget {
   final String tripId;
   final bool grid;
@@ -312,7 +314,9 @@ class _DayPlannerState extends ConsumerState<DayPlanner> {
     final actions = DayCardActions(
       onDrop: _dropOnDay,
       onOpenStop: (item) => showPlannerStopSheet(context, tripId: widget.tripId, stopId: item.stop.id, editing: widget.editing),
-      onToggleVisited: (item) async => _report(await _controller.setVisited(item.item.id, !item.done)),
+      onToggleVisited: ref.watch(canEditTripProvider(widget.tripId))
+          ? (item) async => _report(await _controller.setVisited(item.item.id, !item.done))
+          : null,
       onPin: (day) => showPinSheet(context, ref, view, day),
       onAddFromBacklog: (day) => showAddFromBacklogSheet(context, tripId: widget.tripId, day: day),
       onMoveToBackup: (day) async =>

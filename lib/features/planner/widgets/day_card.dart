@@ -12,7 +12,8 @@ import 'planner_drag.dart';
 class DayCardActions {
   final void Function(PlannerDrag drag, DropSlot slot) onDrop;
   final void Function(PlannerItem item) onOpenStop;
-  final void Function(PlannerItem item) onToggleVisited;
+  /// Null when the user can only view the trip.
+  final void Function(PlannerItem item)? onToggleVisited;
   final void Function(PlannerDay day) onPin;
   final void Function(PlannerDay day) onAddFromBacklog;
   final void Function(PlannerDay day) onMoveToBackup;
@@ -26,7 +27,7 @@ class DayCardActions {
   const DayCardActions({
     required this.onDrop,
     required this.onOpenStop,
-    required this.onToggleVisited,
+    this.onToggleVisited,
     required this.onPin,
     required this.onAddFromBacklog,
     required this.onMoveToBackup,
@@ -206,7 +207,10 @@ class _DayCardState extends State<DayCard> {
           dimmed: it.item.id == draggedId,
           drag: widget.drag,
           onTap: () => widget.actions.onOpenStop(it),
-          onToggleVisited: () => widget.actions.onToggleVisited(it),
+          onToggleVisited: switch (widget.actions.onToggleVisited) {
+            final toggle? => () => toggle(it),
+            null => null,
+          },
         ),
       ));
     }
@@ -373,7 +377,10 @@ class StopRow extends StatelessWidget {
   final bool dimmed;
   final PlannerDragState drag;
   final VoidCallback onTap;
-  final VoidCallback onToggleVisited;
+
+  /// Null when the user can only view the trip: the circle then only shows
+  /// whether the stop was visited.
+  final VoidCallback? onToggleVisited;
 
   const StopRow({
     super.key,

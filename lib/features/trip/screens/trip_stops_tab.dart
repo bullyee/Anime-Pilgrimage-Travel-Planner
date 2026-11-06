@@ -5,6 +5,7 @@ import 'package:go_router/go_router.dart';
 import '../../../core/utils/schedule_logic.dart';
 import '../../../shared/theme/app_theme.dart';
 import '../../library/widgets/spot_thumb.dart';
+import '../../sharing/providers/group_sharing_providers.dart';
 import '../providers/trip_stop_providers.dart';
 
 /// Offers the two ways to add stops: from the library, or a new spot.
@@ -71,7 +72,10 @@ class _TripStopsTabState extends ConsumerState<TripStopsTab> {
       loading: () => const Center(child: CircularProgressIndicator()),
       error: (e, _) => Center(child: Text("Couldn't load the stops: $e")),
       data: (entries) {
-        if (entries.isEmpty) return _EmptyStops(onAdd: () => openAddStopsSheet(context, widget.tripId));
+        if (entries.isEmpty) {
+          final canEdit = ref.watch(canEditTripProvider(widget.tripId));
+          return _EmptyStops(onAdd: canEdit ? () => openAddStopsSheet(context, widget.tripId) : null);
+        }
         final q = _query.trim().toLowerCase();
         final matching = q.isEmpty
             ? entries
@@ -192,7 +196,8 @@ class _StopTile extends StatelessWidget {
 }
 
 class _EmptyStops extends StatelessWidget {
-  final VoidCallback onAdd;
+  /// Null for a viewer, who can't add stops.
+  final VoidCallback? onAdd;
 
   const _EmptyStops({required this.onAdd});
 
@@ -210,12 +215,16 @@ class _EmptyStops extends StatelessWidget {
             Text('No stops yet', style: theme.textTheme.titleLarge),
             const SizedBox(height: 8),
             Text(
-              'Add places from your library, or pick a new spot on the map. You can arrange them by day afterwards.',
+              onAdd == null
+                  ? 'Stops show up here once someone who can edit the trip adds them.'
+                  : 'Add places from your library, or pick a new spot on the map. You can arrange them by day afterwards.',
               textAlign: TextAlign.center,
               style: theme.textTheme.bodyMedium?.copyWith(color: theme.colorScheme.onSurfaceVariant),
             ),
-            const SizedBox(height: 20),
-            FilledButton.icon(onPressed: onAdd, icon: const Icon(Icons.add), label: const Text('Add stops')),
+            if (onAdd != null) ...[
+              const SizedBox(height: 20),
+              FilledButton.icon(onPressed: onAdd, icon: const Icon(Icons.add), label: const Text('Add stops')),
+            ],
           ],
         ),
       ),

@@ -71,6 +71,13 @@ void main() {
             ),
           );
 
+      // The place is in the guest's library, so the stop page still offers
+      // Edit for their own note; someone else's shared trip with no known
+      // role offers nothing else to edit.
+      await db.into(db.places).insert(
+            PlacesCompanion.insert(placeKey: 'place_uji_bridge', name: 'Uji Bridge', lat: 34.8935, lng: 135.8075),
+          );
+
       // Pump StopScreen with unauthenticated (guest) user
       await tester.pumpWidget(
         ProviderScope(

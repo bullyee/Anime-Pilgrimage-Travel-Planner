@@ -21,6 +21,7 @@ import '../../planner/models/planner_view.dart';
 import '../../planner/providers/planner_providers.dart';
 import '../../planner/widgets/day_card.dart' show dayName, dayWithDate;
 import '../../planner/widgets/planner_sheets.dart' show pickStartTime;
+import '../../sharing/providers/group_sharing_providers.dart';
 import '../controllers/trip_stops_controller.dart';
 import '../providers/trip_providers.dart';
 import '../../auth/providers/auth_provider.dart';
@@ -207,6 +208,9 @@ class _StopScreenState extends ConsumerState<StopScreen> {
     final current = frames.isEmpty ? null : frames[_frame];
     final where = slot == null ? 'Not on a day yet' : dayName(slot.day);
     final draft = _draft;
+    // A viewer's edit mode only reaches their own note.
+    final canEdit = ref.watch(canEditTripProvider(_tripId));
+    final tripDraft = canEdit ? draft : null;
     final facts = stopFacts(stop);
     final tripNote = stop.note?.trim() ?? '';
     final myNote = place?.privateNote?.trim() ?? '';
@@ -233,8 +237,9 @@ class _StopScreenState extends ConsumerState<StopScreen> {
             ],
           ),
           actions: [
-            EditModeButton(editing: draft != null, onEdit: () => _edit(stop, place), onDone: () => _done(stop)),
-            if (draft == null)
+            if (canEdit || place != null || draft != null)
+              EditModeButton(editing: draft != null, onEdit: () => _edit(stop, place), onDone: () => _done(stop)),
+            if (draft == null && canEdit)
               PopupMenuButton<String>(
                 tooltip: 'More',
                 onSelected: (action) => _onMenu(action, stop, view, slot),
@@ -271,24 +276,24 @@ class _StopScreenState extends ConsumerState<StopScreen> {
                     last: (icon: Icons.view_timeline_outlined, label: 'In the plan', onTap: () => context.push('/trips/$_tripId?tab=plan')),
                   ),
                   const SizedBox(height: 16),
-                  _StopTitle(stop: stop, draft: draft, nameError: _nameError),
+                  _StopTitle(stop: stop, draft: tripDraft, nameError: _nameError),
                   const SizedBox(height: 14),
                   ...spaced([
                     _PlanCard(
                       slot: slot,
                       loading: view == null,
-                      editing: draft != null,
-                      onVisited: (visited) => _setVisited(stop, slot!, visited),
+                      editing: tripDraft != null,
+                      onVisited: canEdit ? (visited) => _setVisited(stop, slot!, visited) : null,
                       onStartTime: () => _pickStart(slot!),
                       onClearStart: () => _planner.setFixedTime(slot!.item.item.id, null),
                       onStay: (m) => _planner.setStay(slot!.item.item.id, m),
                       onTransit: (m) => _planner.setTransit(slot!.item.item.id, m),
-                      onAddToDay: () => _pickDay(stop, view!, null),
+                      onAddToDay: canEdit ? () => _pickDay(stop, view!, null) : null,
                     ),
-                    if (draft != null)
+                    if (tripDraft != null)
                       NoteField(
                         title: 'Trip note',
-                        controller: draft.notes['trip']!,
+                        controller: tripDraft.notes['trip']!,
                         hint: 'A note for everyone in the trip: where to meet, who has the tickets',
                         scope: SectionScope.trip,
                         fieldKey: const Key('tripNoteField'),
@@ -296,10 +301,10 @@ class _StopScreenState extends ConsumerState<StopScreen> {
                       )
                     else if (tripNote.isNotEmpty)
                       NoteView(title: 'Trip note', note: tripNote, scope: SectionScope.trip),
-                    if (draft != null)
+                    if (tripDraft != null)
                       FactsFields(
                         title: 'About this spot',
-                        draft: draft,
+                        draft: tripDraft,
                         scope: SectionScope.trip,
                         footer: 'This trip has its own copy of the facts. Edits change it for everyone in the trip, not your library.',
                       )
@@ -561,17 +566,18 @@ class _StopTitle extends ConsumerWidget {
 
 /// The stop's plan, shared with the trip: its day, when it starts, how long
 /// it lasts and the travel on, and whether it was visited. Times are changed
-/// in edit mode; marking it visited works any time.
+/// in edit mode; marking it visited works any time, except for a viewer,
+/// who gets null [onVisited] and [onAddToDay].
 class _PlanCard extends StatelessWidget {
   final StopSlot? slot;
   final bool loading;
   final bool editing;
-  final ValueChanged<bool> onVisited;
+  final ValueChanged<bool>? onVisited;
   final VoidCallback onStartTime;
   final VoidCallback onClearStart;
   final ValueChanged<int> onStay;
   final ValueChanged<int> onTransit;
-  final VoidCallback onAddToDay;
+  final VoidCallback? onAddToDay;
 
   const _PlanCard({
     required this.slot,
@@ -600,7 +606,7 @@ class _PlanCard extends StatelessWidget {
             : Row(
                 children: [
                   Expanded(child: Text('Not on a day yet. It waits in the backlog.', style: theme.textTheme.bodyMedium)),
-                  FilledButton.tonal(onPressed: onAddToDay, child: const Text('Add to a day')),
+                  if (onAddToDay != null) FilledButton.tonal(onPressed: onAddToDay, child: const Text('Add to a day')),
                 ],
               ),
       );
@@ -702,8 +708,8 @@ class _PlanCard extends StatelessWidget {
             ),
           const SizedBox(height: 6),
           Text(
-            '${formatTimelineMinutes(item.startMinutes)}–${formatTimelineMinutes(item.endMinutes)}. '
-            'Marking it visited shows for everyone in the trip, and also adds a visit to your own history.',
+            '${formatTimelineMinutes(item.startMinutes)}–${formatTimelineMinutes(item.endMinutes)}.'
+            '${onVisited == null ? '' : ' Marking it visited shows for everyone in the trip, and also adds a visit to your own history.'}',
             style: muted,
           ),
         ],
