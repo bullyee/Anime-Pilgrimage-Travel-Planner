@@ -29,10 +29,12 @@ What other people see is what brings new users, so this is the growth version.
 
 - **Public trip templates** (#103 phase 4): a finished trip becomes a public route, such as "Uji in one day, Hibike! Euphonium". It needs a **web page on Firebase Hosting** that anyone can open without the app, with a button to copy it into the app. This page is the main thing people would share in posts.
 - Template attribution: who made it, and the Anitabi credit (CC BY-NC-SA) for its spots and frames.
-- **Traditional Chinese and Japanese UI.** The app is English only today (no `flutter_localizations`), while the people who go on pilgrimages are mostly reading Chinese or Japanese. Without this, promotion in those communities works against us.
 - Opt-in trip photos (#103 phase 3): photos uploaded to a shared trip, which needs `storage.rules`.
 
 ## Launch track (not code, starts now)
+
+### Before the store
+- [ ] **Several languages: Traditional Chinese, Japanese and English.** The app is English only today (no `flutter_localizations`), while the people who go on pilgrimages mostly read Chinese or Japanese, so this comes before the store, not after. The screens are stable since v0.2.0, so the strings can move into ARB files (`flutter gen-l10n`) any time, one feature folder per PR. The store listing, the invite and template web pages, and `privacy.html` need the same languages. Anime and spot names stay as Anitabi has them.
 
 ### Google Play
 - [ ] **Change `applicationId`** from `com.example.trip_planner`. Play refuses `com.example`, and it can't change after the first upload. Change the map's `userAgentPackageName` with it (#24).
