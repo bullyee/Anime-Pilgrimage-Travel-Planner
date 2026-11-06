@@ -9,6 +9,16 @@ class UserTripsSnapshot {
   const UserTripsSnapshot({required this.trips, this.isFromCache = false});
 }
 
+/// Returns [data] with its `id` set to the Firestore document ID [docId].
+///
+/// The sync engine keys every local write on `data['id']`. That field is
+/// client-written, so it must never be trusted: an editor of one trip could
+/// otherwise set it to another trip's ID and make every member's engine
+/// overwrite (or delete, or re-own) that other trip locally. The document
+/// path is the only identity Firestore itself guarantees.
+Map<String, dynamic> withDocumentId(String docId, Map<String, dynamic> data) =>
+    {...data, 'id': docId};
+
 /// Service responsible for communicating with Firestore under the new `/tripsV2/{tripId}` collection.
 class FirestoreSyncV2Service {
   final FirebaseFirestore _db;
@@ -201,7 +211,7 @@ class FirestoreSyncV2Service {
         .snapshots(includeMetadataChanges: true)
         .where((snapshot) => !snapshot.metadata.hasPendingWrites)
         .map((snapshot) => UserTripsSnapshot(
-              trips: snapshot.docs.map((doc) => doc.data()).toList(),
+              trips: snapshot.docs.map((doc) => withDocumentId(doc.id, doc.data())).toList(),
               isFromCache: snapshot.metadata.isFromCache,
             ));
   }
@@ -212,7 +222,10 @@ class FirestoreSyncV2Service {
         .collection('tripsV2')
         .doc(tripId)
         .snapshots()
-        .map((snapshot) => snapshot.data());
+        .map((snapshot) {
+          final data = snapshot.data();
+          return data == null ? null : withDocumentId(snapshot.id, data);
+        });
   }
 
   /// Watch day blocks of a specific trip.
@@ -223,7 +236,7 @@ class FirestoreSyncV2Service {
         .collection('days')
         .snapshots(includeMetadataChanges: true)
         .where((snapshot) => !snapshot.metadata.hasPendingWrites)
-        .map((snapshot) => snapshot.docs.map((doc) => doc.data()).toList());
+        .map((snapshot) => snapshot.docs.map((doc) => withDocumentId(doc.id, doc.data())).toList());
   }
 
   /// Watch stops of a specific trip.
@@ -234,7 +247,7 @@ class FirestoreSyncV2Service {
         .collection('stops')
         .snapshots(includeMetadataChanges: true)
         .where((snapshot) => !snapshot.metadata.hasPendingWrites)
-        .map((snapshot) => snapshot.docs.map((doc) => doc.data()).toList());
+        .map((snapshot) => snapshot.docs.map((doc) => withDocumentId(doc.id, doc.data())).toList());
   }
 
   /// Watch schedule items of a specific trip.
@@ -245,6 +258,6 @@ class FirestoreSyncV2Service {
         .collection('schedule_items')
         .snapshots(includeMetadataChanges: true)
         .where((snapshot) => !snapshot.metadata.hasPendingWrites)
-        .map((snapshot) => snapshot.docs.map((doc) => doc.data()).toList());
+        .map((snapshot) => snapshot.docs.map((doc) => withDocumentId(doc.id, doc.data())).toList());
   }
 }

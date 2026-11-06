@@ -788,4 +788,71 @@ void main() {
       expect(fakeFirestore.trips['trip_private']!.containsKey('photos'), isFalse);
     });
   });
+
+  // The downstream trips listener serializes snapshots through a Future chain.
+  // A single exception escaping one link would leave the chain errored, and
+  // every later `.then` would be skipped: downstream sync dies silently until
+  // the app restarts. These tests feed malformed remote docs to make sure one
+  // bad document can never stop later snapshots from being applied.
+  group('SyncEngineServiceV2 - Downstream chain resilience', () {
+    Future<Trip?> pollTrip(String id) async {
+      for (var i = 0; i < 40; i++) {
+        final t = await (db.select(db.trips)..where((t) => t.id.equals(id))).getSingleOrNull();
+        if (t != null) return t;
+        await Future.delayed(const Duration(milliseconds: 25));
+      }
+      return null;
+    }
+
+    Map<String, dynamic> validTrip(String id) => {
+          'id': id,
+          'title': 'Valid $id',
+          'ownerId': 'user_bob',
+          'sharing': 'group',
+          'dayCount': 1,
+          'updatedAt': DateTime(2026, 11, 1, 10),
+        };
+
+    test('a snapshot with a non-string trip id does not stop later snapshots', () async {
+      syncEngine.startSync();
+
+      // Malformed doc: `id` is an int, not a String.
+      fakeFirestore.emitUserTrips([
+        {'id': 123, 'title': 'Corrupt', 'ownerId': 'user_bob', 'sharing': 'group'},
+      ]);
+      await Future.delayed(const Duration(milliseconds: 50));
+
+      fakeFirestore.emitUserTrips([validTrip('trip_after_corrupt')]);
+
+      expect(await pollTrip('trip_after_corrupt'), isNotNull,
+          reason: 'downstream chain must survive a malformed snapshot');
+    });
+
+    test('a malformed doc does not block valid docs in the same snapshot', () async {
+      syncEngine.startSync();
+
+      fakeFirestore.emitUserTrips([
+        {'id': 456, 'title': 'Corrupt', 'ownerId': 'user_bob', 'sharing': 'group'},
+        validTrip('trip_same_snapshot'),
+      ]);
+
+      expect(await pollTrip('trip_same_snapshot'), isNotNull);
+    });
+
+    test('docs with a missing or empty id are skipped and later snapshots still apply', () async {
+      syncEngine.startSync();
+
+      fakeFirestore.emitUserTrips([
+        {'title': 'No id at all', 'ownerId': 'user_bob', 'sharing': 'group'},
+        {'id': '', 'title': 'Empty id', 'ownerId': 'user_bob', 'sharing': 'group'},
+      ]);
+      await Future.delayed(const Duration(milliseconds: 50));
+
+      fakeFirestore.emitUserTrips([validTrip('trip_after_missing_id')]);
+      expect(await pollTrip('trip_after_missing_id'), isNotNull);
+
+      final all = await db.select(db.trips).get();
+      expect(all.map((t) => t.id), isNot(contains('')));
+    });
+  });
 }
