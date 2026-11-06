@@ -40,8 +40,21 @@ jobs:
             exit 1
           fi
 
+      - name: Install SQLite
+        run: sudo apt-get update -q && sudo apt-get install -y -q libsqlite3-dev
+
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '17'
+
       # The app is signed with Gradle's debug signing config, which reads
-      # ~/.android/debug.keystore. Restore the same keystore every release used.
+      # debug.keystore from the Android preferences folder. Restore the same
+      # keystore every release used, and pin the folder with ANDROID_USER_HOME:
+      # without it, AGP 8.11 prefers $XDG_CONFIG_HOME/.android (set on GitHub's
+      # Ubuntu runners), never finds the restored file, and generates a new key.
+      # Check the certificate here so a wrong secret fails in seconds, not after
+      # the build.
       - name: Install signing keystore
         env:
           KEYSTORE_B64: ${{ secrets.ANDROID_DEBUG_KEYSTORE_B64 }}
@@ -50,16 +63,17 @@ jobs:
             echo "::error::Secret ANDROID_DEBUG_KEYSTORE_B64 is not set"
             exit 1
           fi
-          mkdir -p ~/.android
-          echo "$KEYSTORE_B64" | base64 -d > ~/.android/debug.keystore
-
-      - name: Install SQLite
-        run: sudo apt-get update -q && sudo apt-get install -y -q libsqlite3-dev
-
-      - uses: actions/setup-java@v4
-        with:
-          distribution: temurin
-          java-version: '17'
+          ANDROID_USER_HOME="$HOME/.android"
+          echo "ANDROID_USER_HOME=$ANDROID_USER_HOME" >> "$GITHUB_ENV"
+          mkdir -p "$ANDROID_USER_HOME"
+          echo "$KEYSTORE_B64" | base64 -d > "$ANDROID_USER_HOME/debug.keystore"
+          cert=$(keytool -list -keystore "$ANDROID_USER_HOME/debug.keystore" \
+                   -storepass android -alias androiddebugkey \
+                 | sed -nE 's/.*\(SHA-?256\): *//p' | tr -d ':' | tr 'A-F' 'a-f')
+          if [ "$cert" != "$EXPECTED_CERT_SHA256" ]; then
+            echo "::error::Secret ANDROID_DEBUG_KEYSTORE_B64 holds a key with certificate '$cert', expected $EXPECTED_CERT_SHA256"
+            exit 1
+          fi
 
       - uses: subosito/flutter-action@v2
         with:
