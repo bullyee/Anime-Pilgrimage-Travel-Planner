@@ -1,9 +1,12 @@
 import 'dart:collection';
+import 'dart:convert';
 import 'dart:io';
 
 import 'package:drift/drift.dart' show Value;
 import 'package:flutter/foundation.dart';
 import 'package:http/http.dart' as http;
+import 'package:path/path.dart' as p;
+import 'package:path_provider/path_provider.dart';
 
 import '../../../core/database/database.dart';
 import '../../poi/services/anitabi_api_service.dart';
@@ -97,9 +100,8 @@ class AnitabiImportSummary {
   final int alreadySaved;
   final int withoutLocation;
 
-  /// Frames being downloaded: for new places, and for places already saved
-  /// that have no frame, such as when the app closed during an earlier
-  /// import's downloads.
+  /// Frames being downloaded: for new places, and for places whose frame an
+  /// earlier import queued but never finished, because the app closed.
   final int framesPending;
 
   /// Completes once every frame download has finished or failed.
@@ -114,15 +116,87 @@ class AnitabiImportSummary {
   });
 }
 
+/// The places whose frame an import queued and whose download hasn't
+/// finished yet, kept in a file so it outlasts the app closing. A download
+/// that finishes, whether the frame arrived or not, takes its place off. So
+/// only a download the app's closing cut short is tried again; a refused or
+/// failed one isn't, and neither is a frame the user deleted.
+///
+/// Keeping the list is best effort: when the file can't be read or written,
+/// the list lives in memory, and the import itself is unaffected.
+class PendingFrames {
+  final Future<File> Function() _file;
+  Set<String>? _keys;
+  Future<void> _writing = Future.value();
+
+  PendingFrames({Future<File> Function()? file}) : _file = file ?? _defaultFile;
+
+  /// Kept in memory only, for tests.
+  PendingFrames.inMemory() : _file = _noFile;
+
+  static Future<File> _defaultFile() async =>
+      File(p.join((await getApplicationSupportDirectory()).path, 'anitabi_pending_frames.json'));
+
+  static Future<File> _noFile() => Future.error(UnsupportedError('kept in memory'));
+
+  Future<Set<String>> _load() async {
+    final loaded = _keys;
+    if (loaded != null) return loaded;
+    var keys = <String>{};
+    try {
+      final file = await _file();
+      if (await file.exists()) keys = {...(jsonDecode(await file.readAsString()) as List).whereType<String>()};
+    } catch (e) {
+      debugPrint('[AnitabiImport] Pending frames not read: $e');
+    }
+    return _keys ??= keys;
+  }
+
+  Future<bool> contains(String placeKey) async => (await _load()).contains(placeKey);
+
+  Future<void> addAll(Iterable<String> placeKeys) async {
+    (await _load()).addAll(placeKeys);
+    await _save();
+  }
+
+  Future<void> remove(String placeKey) async {
+    if ((await _load()).remove(placeKey)) await _save();
+  }
+
+  Future<void> _save() {
+    final snapshot = [...?_keys];
+    return _writing = _writing.then((_) async {
+      try {
+        await (await _file()).writeAsString(jsonEncode(snapshot), flush: true);
+      } catch (e) {
+        debugPrint('[AnitabiImport] Pending frames not saved: $e');
+      }
+    });
+  }
+}
+
 /// Imports Anitabi spots into the library: each picked spot becomes a saved
-/// place (`anitabi:<id>`) with the work's anime label, and each place without
-/// a frame gets its frame downloaded as a reference image.
+/// place (`anitabi:<id>`) with the work's anime label, and new places get
+/// their frame downloaded as a reference image.
 ///
 /// The rules in CLAUDE.md apply: only Anitabi's static data and image hosts
 /// are used, every request sends [AnitabiApiService.userAgent], a refusal is
-/// never retried, and a frame is fetched only for a place that has none.
+/// never retried, and frames are fetched for new places, plus those whose
+/// download the app's closing cut short ([PendingFrames]).
 class AnitabiImport {
   static const _concurrency = 5;
+
+  /// The pending downloads this app keeps across launches. Widget tests,
+  /// which can't wait for file access, swap in [PendingFrames.inMemory].
+  static PendingFrames pendingFrames = PendingFrames();
+
+  /// Places whose frame is downloading in this run of the app, so an import
+  /// started before an earlier one finishes doesn't fetch the same frame.
+  static final _downloading = <String>{};
+
+  /// Forgets the downloads in progress, as the app closing does.
+  @visibleForTesting
+  static void forgetDownloadsInProgress() => _downloading.clear();
 
   /// Loads [bangumiId]'s spots from Anitabi's static data, which is cached
   /// on the device. Throws [AnitabiUnavailableException] when Anitabi can't
@@ -147,19 +221,19 @@ class AnitabiImport {
   /// Saves [spots] to the library under the anime [animeName] ([bangumiId]).
   /// Spots without a location are left out. Places already in the library
   /// keep their own facts and only get the anime label (and are saved again
-  /// if they were trip-only), plus their frame when they have none: frames
-  /// download in the background, so the app closing stops an import's
-  /// downloads, and importing again fetches the rest. A place with any frame,
-  /// such as one migrated from v0.1.x, isn't fetched again. [download]
-  /// fetches a frame to a local file; the default uses Anitabi's image host
-  /// and mirror.
+  /// if they were trip-only). Frames download in the background, so the app
+  /// closing stops them; importing again fetches the ones it cut short, and
+  /// only those. [download] fetches a frame to a local file; the default uses
+  /// Anitabi's image host and mirror. [pending] defaults to [pendingFrames].
   static Future<AnitabiImportSummary> importSpots({
     required PlaceRepository places,
     required String bangumiId,
     required String animeName,
     required List<AnitabiSpot> spots,
     Future<String?> Function(String url)? download,
+    PendingFrames? pending,
   }) async {
+    final owed = pending ?? pendingFrames;
     final label = await places.getOrCreateLabel(kind: 'anime', name: animeName, bangumiId: bangumiId);
     var added = 0;
     var alreadySaved = 0;
@@ -187,14 +261,29 @@ class AnitabiImport {
       } else {
         alreadySaved++;
         if (existing.visibility != 'saved') await places.setPlaceVisibility(spot.placeKey, 'saved');
-        if (spot.imageUrl != null && (await places.getReferenceImagesForPlace(spot.placeKey)).isEmpty) {
-          framesToFetch.add(spot);
+        if (spot.imageUrl != null && !_downloading.contains(spot.placeKey) && await owed.contains(spot.placeKey)) {
+          // The app closed while it downloaded, unless the frame was stored
+          // just before that.
+          final frames = await places.getReferenceImagesForPlace(spot.placeKey);
+          if (frames.any((f) => f.remoteUrl == spot.imageUrl)) {
+            await owed.remove(spot.placeKey);
+          } else {
+            framesToFetch.add(spot);
+          }
         }
       }
       await places.attachLabelToPlace(spot.placeKey, label.id);
     }
 
-    final frames = _downloadFrames(places: places, spots: framesToFetch, animeLabelId: label.id, download: download);
+    _downloading.addAll(framesToFetch.map((s) => s.placeKey));
+    await owed.addAll(framesToFetch.map((s) => s.placeKey));
+    final frames = _downloadFrames(
+      places: places,
+      spots: framesToFetch,
+      animeLabelId: label.id,
+      download: download,
+      pending: owed,
+    );
     return AnitabiImportSummary(
       added: added,
       alreadySaved: alreadySaved,
@@ -208,6 +297,7 @@ class AnitabiImport {
     required PlaceRepository places,
     required List<AnitabiSpot> spots,
     required String animeLabelId,
+    required PendingFrames pending,
     Future<String?> Function(String url)? download,
   }) async {
     if (spots.isEmpty) return;
@@ -234,6 +324,10 @@ class AnitabiImport {
         } catch (e) {
           // One frame that fails to arrive leaves its place without one.
           debugPrint('[AnitabiImport] Frame for ${spot.placeKey} failed: $e');
+        } finally {
+          // Finished, arrived or not: a refused frame isn't asked for again.
+          _downloading.remove(spot.placeKey);
+          await pending.remove(spot.placeKey);
         }
       }
     }
