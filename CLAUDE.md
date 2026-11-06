@@ -18,7 +18,7 @@ Built with Flutter (Dart). SQLite via Drift for local storage. Riverpod for stat
 5. **VLM Pipeline**: planned, not implemented — Gemini API for parsing screenshots into POI data via share extension.
 
 ## Database Schema (SQLite via Drift, schemaVersion 13)
-Source of truth: `lib/core/database/tables_v10.dart`; migrations live in `lib/core/database/database.dart`.
+Source of truth: `lib/core/database/tables_v10.dart`; migrations live in `lib/core/database/database.dart`, and the one-time copy from the v9 model (v0.1.x) in `lib/core/database/migrations/migration_v9_to_v10.dart`.
 - `places`: personal pilgrimage spot library (anitabi imports & custom user spots)
 - `labels`: unified tags, regions, and animes
 - `place_labels`: many-to-many junction between places and labels
@@ -37,7 +37,7 @@ Source of truth: `lib/core/database/tables_v10.dart`; migrations live in `lib/co
 - Local DB: Drift (SQLite)
 - AI Integration: Gemini API (VLM) — planned
 - On-device ML: ONNX Runtime (isnet-anime cutout; model fetched at runtime, ~176 MB), ML Kit subject segmentation
-- Cloud: Firebase Auth (Google Sign-In), Firestore, Storage
+- Cloud: Firebase Auth (Google Sign-In), Firestore (`firestore.rules`), Hosting (`public/`: the invite page, App Links for `/join`, privacy policy, terms). `firebase_storage` is a dependency but unused so far.
 - Camera: the phone's camera app via `image_picker` + a native floating reference window (Android); Flutter camera package (iOS)
 - Navigation: Go Router
 
@@ -54,6 +54,7 @@ Source of truth: `lib/core/database/tables_v10.dart`; migrations live in `lib/co
   - Always send `AnitabiApiService.userAgent`, never retry on 403/429, and keep downloads rare. The data is CC BY-NC-SA 4.0, so keep the `origin`/`originURL` attribution.
 
 ## Workflows
-- Tests: `flutter test` (unit tests under `test/`). CI (`.github/workflows/ci.yml`) runs them on every PR and on `master`.
+- Tests: `flutter test` (unit tests under `test/`), and the Firestore rules on the emulator: `firebase emulators:exec "python test/rules_v2_emulator_test.py" --only firestore --project trip-planner-2775c` (needs Java 21, e.g. Android Studio's `jbr`, as `JAVA_HOME`). CI (`.github/workflows/ci.yml`) runs both on every PR and on `master`.
+- Firebase deploys: from `master` only, and only what changed (`firebase deploy --only firestore:rules`, `--only hosting`).
 - Run and drive the app on Android: `.claude/skills/run-app/SKILL.md`.
 - Releases: `.claude/skills/release/SKILL.md` (Antigravity reaches it through `.agents/skills/release/`). GitHub pre-releases tagged `vX.Y.Z` with an APK; the `pubspec.yaml` version matches the tag; history in `CHANGELOG.md`. Pushing the tag runs `.github/workflows/release.yml`, which builds and signs the APK (keystore from the `ANDROID_DEBUG_KEYSTORE_B64` secret) and attaches it to a draft pre-release.
