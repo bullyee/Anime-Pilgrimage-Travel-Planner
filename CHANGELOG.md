@@ -59,7 +59,7 @@ Your data moves over the first time you open this version ([#81](https://github.
 - **Rejoining a trip you left doesn't sync yet.** Joining again works, but your old copy stays private and the trip's changes don't reach it.
 - **Links in some in-app browsers** (LINE, Discord) may not open the app. Copy the 6-letter code from the page and enter it under **Join a trip**.
 - **Searching an anime in Traditional Chinese or English finds little.** The search uses Bangumi, which knows Japanese and Simplified Chinese titles; search with one of those.
-- **Spot names are in their original language**, mostly Japanese, as on Anitabi. Rename a place if you like.
+- **Spot names are as Anitabi's contributors wrote them**, often in Japanese or Simplified Chinese. Rename a place if you like.
 - **Your library lives only on your phone.** Shared trips are in the cloud, but your places, notes and photos aren't backed up anywhere.
 
 ### Developer
