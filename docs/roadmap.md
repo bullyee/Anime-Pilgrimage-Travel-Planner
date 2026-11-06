@@ -6,25 +6,42 @@ The hard part from here isn't the code: it's getting the app into stores and in 
 
 ## v0.2.0: the MVP (now)
 
-- [ ] Merge #105, #106, #107, #108 (first invite's Members tab error), #109 (frames missing after the app closes mid-import).
+- [x] Merge #105, #106, #107, #108 (first invite's Members tab error), #109 (frames missing after the app closes mid-import).
 - [ ] Deploy #106's `firestore.rules` from `master` (Console or `firebase deploy --only firestore:rules`).
-- [ ] The rejoin fix, #110 (ck). Agreed on 2026-11-06: the shared trip comes down clean from the cloud, and a leftover private copy with changes made while away stays as a separate private trip with a new id ("Kyoto (your copy)"), so nothing is pushed into everyone's trip and nothing is lost. A copy without changes just reconnects. If it doesn't fit v0.2.0, v0.2.0 ships with the known issue already in its CHANGELOG.
-- [ ] Release: `release/v0.2.0` from `master` with the docs already prepared, then the tag.
+- [x] The rejoin fix, #110 (ck), moves to after the release; v0.2.0 ships with the known issue in its CHANGELOG. Agreed on 2026-11-06: the shared trip comes down clean from the cloud, and a leftover private copy with changes made while away stays as a separate private trip with a new id ("Kyoto (your copy)"), so nothing is pushed into everyone's trip and nothing is lost. A copy without changes just reconnects.
+- [ ] Release: PR #111 "Release v0.2.0", then the tag.
 
-## v0.3.0: planning together, smoother
+## What the app is for
+
+The moment that matters is standing at the spot and getting the shot. Planning, sharing and importing exist so that, on the day, the right frame is in your hand. So the next version is about that moment, and planning together comes after it.
+
+## v0.3.0: pilgrimage mode
 
 Two tracks in parallel. They meet only where a screen needs a backend call.
 
 **Screens (bullyee)**
-- Different versions of a place: compare Anitabi with the library, the library with a trip's stop, and a joined trip with the library ("Save all to my library", which also gives joined stops a My note). Design in `docs/mvp-plan.md`, "After the MVP".
-- Screens for ck's safety net below: the trash, the activity list, unread badges on trip cards.
-- **A map for the day of the pilgrimage.** The day's stops on a map with your own location, so the nearest one is easy to see. Tapping one opens a small card with its frame, name, **Take photo** (the anime camera with that frame) and **Mark visited**; after the photo you're back on the map. On a trip day, the trip opens straight to this map. Everything it needs exists: the library's map (flutter_map), the location from the new spot screen, and the stop page's Take photo; it's one screen, no new data. Map tiles stay online-only (see Offline maps under Later).
+- **Two modes for a trip: Plan and Pilgrimage.** Plan is today's trip screen (days, stops, times, members). Pilgrimage is for the day itself: the day's stops, the map, the camera, and nothing to edit. A switch in the trip's top bar; on one of the trip's dates the trip opens in Pilgrimage, otherwise in Plan.
+- **The day's map is Pilgrimage's main screen.** The day's stops on a map with your own location, visited ones marked. Tapping one opens a small card with its frame, name, **Take photo** and **Mark visited**. Everything it needs exists: the library's map (flutter_map), the location from the new spot screen, and the stop page's Take photo; no new data. Map tiles stay online-only (see Offline maps under Later); the list of stops and the camera work without a connection, since the frames are on the device.
+- **Shoot here.** One button that uses GPS to find where you are: the stops within about 150 m, nearest first. With one stop the camera opens with its frame; with several close together, as in Uji, a row of their frames to pick from. GPS is off by tens of metres in town, so it suggests and never decides alone.
+- **From a stop to the camera in one tap,** with its frame already in the floating window. When a spot has more than one frame, switch frames without leaving the camera.
+- **Several shots, then pick.** The Android camera returns one photo per opening, so after each shot a small sheet asks **Another** or **Done**; Another reopens the camera with the same frame. Done shows the shots next to the frame, you keep the ones you want, and the rest are deleted. (Reading the shots back from the gallery instead would need `READ_MEDIA_IMAGES`, which Play restricts.)
+- **No editing on the spot.** In Pilgrimage the kept photo is saved as shot, attached to the stop and its place, the stop is marked visited, and you're back on the map. Editing, compose and cutout wait for later: photos not yet edited get a mark on the stop and in the trip's photos, to edit at home.
 
 **Backend and sync (ck)**
-- #103's phase 2, split into PRs: the trash (restore deleted stops and days), the activity log, the unread badge. Rules changes come with emulator tests, as now.
-- Rejoining a trip after leaving it, as a follow-up if it doesn't make v0.2.0 (#110): see v0.2.0. Later, once the comparison screens exist, rejoining could ask "You changed 3 things while away; bring them into the shared trip?" instead of keeping a separate copy.
+- #110, rejoining a trip after leaving it (see v0.2.0). Later, once the comparison screens exist, rejoining could ask "You changed 3 things while away; bring them into the shared trip?" instead of keeping a separate copy.
+- #103's phase 2, split into PRs: the trash (restore deleted stops and days), the activity log, the unread badge. Rules changes come with emulator tests, as now. Their screens come in v0.4.0.
+- Marking a stop visited and attaching photos while offline in a shared trip must sync cleanly once back online: the day of a pilgrimage is where connections drop.
 
-## v0.4.0: sharing outward
+## v0.4.0: planning together, smoother
+
+**Screens (bullyee)**
+- Different versions of a place: compare Anitabi with the library, the library with a trip's stop, and a joined trip with the library ("Save all to my library", which also gives joined stops a My note). Design in `docs/mvp-plan.md`, "After the MVP".
+- Screens for ck's safety net: the trash, the activity list, unread badges on trip cards.
+
+**Backend and sync (ck)**
+- Whatever those screens need beyond phase 2.
+
+## v0.5.0: sharing outward
 
 What other people see is what brings new users, so this is the growth version.
 
@@ -37,7 +54,7 @@ What other people see is what brings new users, so this is the growth version.
 ### Before the store
 - [ ] **Simplify the screens first.** The app has grown a lot of entry points, and every string will need translating, so tidy up before the languages:
   - Home's five cards: Anime Camera, Floating Reference and Edit Photo are all the camera, and could be one.
-  - A trip opens to its plan before the trip and to the day's map during it (see v0.3.0).
+  - A trip has two modes, Plan and Pilgrimage (see v0.3.0), so neither screen has to hold everything.
   - Comparing versions of a place stays a hint where it's relevant, with no new tab or entry.
   - Use the closed test below as a usability test too: ask the testers where they got stuck.
 - [ ] **Several languages: Traditional Chinese, Japanese and English.** The app is English only today (no `flutter_localizations`), while the people who go on pilgrimages mostly read Chinese or Japanese, so this comes before the store, not after. The screens are stable since v0.2.0, so the strings can move into ARB files (`flutter gen-l10n`) any time, one feature folder per PR. The store listing, the invite and template web pages, and `privacy.html` need the same languages. Anime and spot names are data, not UI strings: see the next two items.
