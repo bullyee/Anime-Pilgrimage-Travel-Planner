@@ -1,3 +1,6 @@
+import 'dart:async';
+import 'dart:io';
+
 import 'package:drift/drift.dart' hide isNull, isNotNull;
 import 'package:drift/native.dart';
 import 'package:flutter/material.dart';
@@ -104,6 +107,66 @@ void main() {
       expect(frame.source, '©Kyoto Animation');
       expect(frame.animeLabelId, anime.id);
     });
+
+    test('importing again fetches the frames whose download the app closing cut short, and only those', () async {
+      final pending = PendingFrames.inMemory();
+      final spots = [
+        _spot('1', '宇治橋', image: 'https://image.anitabi.cn/1.jpg'),
+        _spot('2', '朝霧橋', image: 'https://image.anitabi.cn/2.jpg'),
+        _spot('3', '大吉山', image: 'https://image.anitabi.cn/3.jpg'),
+      ];
+      // 1 arrives, 2 is refused, and 3 is still downloading when the app closes.
+      final first = await AnitabiImport.importSpots(
+        places: places,
+        bangumiId: '115908',
+        animeName: '響け！ユーフォニアム',
+        spots: spots,
+        pending: pending,
+        download: (url) async {
+          if (url.endsWith('1.jpg')) return '/frames/1.jpg';
+          if (url.endsWith('2.jpg')) return null;
+          return Completer<String?>().future;
+        },
+      );
+      await pumpEventQueue();
+      AnitabiImport.forgetDownloadsInProgress();
+      expect(first.framesPending, 3);
+
+      final downloads = <String>[];
+      final again = await AnitabiImport.importSpots(
+        places: places,
+        bangumiId: '115908',
+        animeName: '響け！ユーフォニアム',
+        spots: spots,
+        pending: pending,
+        download: (url) async {
+          downloads.add(url);
+          return '/frames/again.jpg';
+        },
+      );
+      await again.frames;
+
+      expect((again.added, again.alreadySaved, again.framesPending), (0, 3, 1));
+      expect(downloads, ['https://image.anitabi.cn/3.jpg'], reason: 'a refused frame is not asked for again');
+      expect((await places.getReferenceImagesForPlace('anitabi:1')).single.localPath, '/frames/1.jpg');
+      expect(await places.getReferenceImagesForPlace('anitabi:2'), isEmpty);
+      expect((await places.getReferenceImagesForPlace('anitabi:3')).single.localPath, '/frames/again.jpg');
+      expect(await pending.contains('anitabi:3'), isFalse);
+    });
+
+    test('the list of cut-short downloads outlasts the app closing', () async {
+      final dir = await Directory.systemTemp.createTemp('pending_frames');
+      addTearDown(() => dir.delete(recursive: true));
+      Future<File> file() async => File('${dir.path}/pending.json');
+
+      await PendingFrames(file: file).addAll(['anitabi:1', 'anitabi:2']);
+      final before = PendingFrames(file: file);
+      await before.remove('anitabi:1');
+
+      final after = PendingFrames(file: file);
+      expect(await after.contains('anitabi:1'), isFalse);
+      expect(await after.contains('anitabi:2'), isTrue);
+    });
   });
 
   testWidgets('find the anime, tick the spots and import them into the library', (tester) async {
@@ -112,6 +175,7 @@ void main() {
     addTearDown(tester.view.reset);
     final db = AppDatabase.forTesting(NativeDatabase.memory());
     addTearDown(db.close);
+    AnitabiImport.pendingFrames = PendingFrames.inMemory();
     final router = GoRouter(initialLocation: '/start', routes: [
       GoRoute(
         path: '/start',
