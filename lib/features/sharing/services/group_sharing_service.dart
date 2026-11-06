@@ -38,7 +38,10 @@ class GroupSharingService {
       throw ArgumentError('Cannot create an invite with the owner role.');
     }
 
-    final now = DateTime.now();
+    // Whole milliseconds, as the local database keeps them: the cloud trip gets
+    // the same updatedAt as the local one, so the sync engine's later push of
+    // it isn't older than the cloud's and refused.
+    final now = DateTime.fromMillisecondsSinceEpoch(DateTime.now().millisecondsSinceEpoch);
     var trip = await (_db.select(_db.trips)..where((t) => t.id.equals(tripId))).getSingleOrNull();
 
     // Read the server's copy first. Offline, this fails at once, before the
@@ -47,29 +50,12 @@ class GroupSharingService {
     final tripRef = _firestore.collection('tripsV2').doc(tripId);
     final tripSnap = await tripRef.get(const GetOptions(source: Source.server));
 
-    // If the trip is still private locally, promote it to 'group' and mark its rows dirty
-    if (trip != null && trip.sharing != 'group') {
-      await _db.transaction(() async {
-        await (_db.update(_db.trips)..where((t) => t.id.equals(tripId))).write(
-          TripsCompanion(
-            sharing: const Value('group'),
-            syncStatus: const Value(1),
-            updatedAt: Value(now),
-            updatedBy: Value(currentUserId),
-          ),
-        );
-        await (_db.update(_db.tripDays)..where((d) => d.tripId.equals(tripId)))
-            .write(const TripDaysCompanion(syncStatus: Value(1)));
-        await (_db.update(_db.stops)..where((s) => s.tripId.equals(tripId)))
-            .write(const StopsCompanion(syncStatus: Value(1)));
-        await (_db.update(_db.scheduleItems)..where((i) => i.tripId.equals(tripId)))
-            .write(const ScheduleItemsCompanion(syncStatus: Value(1)));
-      });
-      trip = await (_db.select(_db.trips)..where((t) => t.id.equals(tripId))).getSingleOrNull();
-    }
-
     // Ensure the cloud trip document and owner member record exist before creating the invite
     // so Firestore security rules (`isTripEditorOrOwner(tripId)`) authorize invite creation.
+    // This comes before the trip is marked shared here: the Members tab starts listening to the
+    // members as soon as it is, the rules refuse that listen until the cloud trip exists, and a
+    // refused listen doesn't retry, so the tab would show the error until the app restarts.
+    final promoting = trip != null && trip.sharing != 'group';
     if (trip != null && trip.ownerId == currentUserId) {
       final initBatch = _firestore.batch();
       if (!tripSnap.exists) {
@@ -83,8 +69,8 @@ class GroupSharingService {
           'dayCount': trip.dayCount,
           'members': [currentUserId],
           'createdAt': Timestamp.fromDate(trip.createdAt),
-          'updatedAt': Timestamp.fromDate(trip.updatedAt),
-          'updatedBy': trip.updatedBy ?? currentUserId,
+          'updatedAt': Timestamp.fromDate(promoting ? now : trip.updatedAt),
+          'updatedBy': promoting ? currentUserId : (trip.updatedBy ?? currentUserId),
           'deletedAt': null,
         });
       }
@@ -102,6 +88,27 @@ class GroupSharingService {
         SetOptions(merge: true),
       );
       await initBatch.commit();
+    }
+
+    // If the trip is still private locally, promote it to 'group' and mark its rows dirty
+    if (promoting) {
+      await _db.transaction(() async {
+        await (_db.update(_db.trips)..where((t) => t.id.equals(tripId))).write(
+          TripsCompanion(
+            sharing: const Value('group'),
+            syncStatus: const Value(1),
+            updatedAt: Value(now),
+            updatedBy: Value(currentUserId),
+          ),
+        );
+        await (_db.update(_db.tripDays)..where((d) => d.tripId.equals(tripId)))
+            .write(const TripDaysCompanion(syncStatus: Value(1)));
+        await (_db.update(_db.stops)..where((s) => s.tripId.equals(tripId)))
+            .write(const StopsCompanion(syncStatus: Value(1)));
+        await (_db.update(_db.scheduleItems)..where((i) => i.tripId.equals(tripId)))
+            .write(const ScheduleItemsCompanion(syncStatus: Value(1)));
+      });
+      trip = await (_db.select(_db.trips)..where((t) => t.id.equals(tripId))).getSingleOrNull();
     }
 
     final activeStops = await (_db.select(_db.stops)

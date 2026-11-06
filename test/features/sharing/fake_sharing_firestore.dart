@@ -8,13 +8,17 @@ class FakeSharingFirestore implements FirebaseFirestore {
   final Map<String, Map<String, Map<String, dynamic>>> members = {};
   final Map<String, Map<String, dynamic>> tripsV2 = {};
 
+  /// When set, every batch commit throws this and writes nothing, like a
+  /// batch the rules refuse.
+  Object? commitError;
+
   @override
   CollectionReference<Map<String, dynamic>> collection(String collectionPath) {
     return _FakeCollectionReference(this, collectionPath);
   }
 
   @override
-  WriteBatch batch() => _FakeSharingWriteBatch();
+  WriteBatch batch() => _FakeSharingWriteBatch(this);
 
   @override
   dynamic noSuchMethod(Invocation invocation) => super.noSuchMethod(invocation);
@@ -265,7 +269,10 @@ class _FakeDocumentSnapshot implements DocumentSnapshot<Map<String, dynamic>> {
 }
 
 class _FakeSharingWriteBatch implements WriteBatch {
+  final FakeSharingFirestore _db;
   final List<Future<void> Function()> _ops = [];
+
+  _FakeSharingWriteBatch(this._db);
 
   @override
   void set<T>(DocumentReference<T> document, T data, [SetOptions? options]) {
@@ -284,6 +291,8 @@ class _FakeSharingWriteBatch implements WriteBatch {
 
   @override
   Future<void> commit() async {
+    final error = _db.commitError;
+    if (error != null) throw error;
     for (final op in _ops) {
       await op();
     }
