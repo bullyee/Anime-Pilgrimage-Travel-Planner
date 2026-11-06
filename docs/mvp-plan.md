@@ -223,7 +223,11 @@ Stage 0 ──► 1a ──┬──► 1b (migration) ──┐
 
 - Phases 2–4 of `docs/trip-sharing.md`: the safety net, photos, templates. ck's #103 has the backend for all three (the trash, activity log, unread badge, photo upload and templates), with no screens yet. It touches `firestore.rules` and adds `storage.rules`.
 - Personal layer backup: ck's #104 has the service, with no screen yet. It sends the personal library to Firestore, which the privacy policy (#98) says stays on the device, so it needs an opt-in and a policy update.
-- "Save updates to my place", template attribution, closed-day warnings, trip cover, split tracks within a day.
+- **Different versions of a place** (agreed 2026-11-06). A place has up to three versions: Anitabi's, the one in my library, and each trip's stop, which is the trip's own copy. They may differ and stay different: nothing changes another version by itself, and a difference is only pointed out, never asked about in the middle of something. Each case uses the same comparison: one at a time, only the fields that differ (name, location as "moved 120 m", description, source link), with "Use theirs", "Keep mine", "Use theirs for all" and "Keep mine for all".
+  - **Anitabi → my library:** the import keeps my version as it does now, and its result says "5 spots differ from Anitabi · Review". A place's page shows "Anitabi has different details · Compare".
+  - **My library → a trip's stop:** the stop page shows "Your library has different details · Compare", and only the owner and editors can update the stop, since that syncs to every member. The Stops tab can review them all.
+  - **A trip → my library, on joining:** after joining, "5 places in this trip differ from your library · Review", plus "Save all to my library" for the trip's places I don't have. Today a stop whose place isn't in my library has no My note (the stop page shows it only when the place exists), so saving them also fixes that.
+- Template attribution, closed-day warnings, trip cover, split tracks within a day.
 - Areas in the day planner: grouping stops by area by hand. Postponed on 2026-11-02, so `stops.area` stays unused until then.
 
 ## Existing issues
