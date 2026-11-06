@@ -109,7 +109,7 @@ class _TripScreenState extends ConsumerState<TripScreen> with SingleTickerProvid
               ],
             ),
             Text(
-              canEdit ? subtitle : '$subtitle · View only',
+              role == TripMemberRole.viewer ? '$subtitle · View only' : subtitle,
               style: theme.textTheme.bodySmall?.copyWith(color: theme.colorScheme.onSurfaceVariant),
             ),
           ],

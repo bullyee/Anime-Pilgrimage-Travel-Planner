@@ -414,6 +414,24 @@ void main() {
       await done(tester);
     });
 
+    testWidgets("while your role is unknown, someone else's shared trip can't be changed", (tester) async {
+      // Your own member record hasn't come down yet (or couldn't load), so a
+      // viewer can't be told from an editor: no edit controls until it does.
+      await addTrip(ownerId: 'aki', sharingMode: 'group');
+      sharing.members = [_member('aki', 'Aki', TripMemberRole.owner)];
+      await pump(tester, tripRouter());
+
+      expect(find.textContaining('View only'), findsNothing, reason: "it isn't known to be view only either");
+      expect(find.byType(PopupMenuButton<String>), findsNothing);
+      await tester.tap(find.text('Plan'));
+      await tester.pumpAndSettle();
+      expect(find.byTooltip('Edit the plan'), findsNothing);
+      await tester.tap(find.text('Stops'));
+      await tester.pumpAndSettle();
+      expect(find.text('Add stops'), findsNothing);
+      await done(tester);
+    });
+
     testWidgets('the owner can edit and delete the trip', (tester) async {
       await addTrip();
       await pump(tester, tripRouter());

@@ -24,7 +24,15 @@ class MemberAvatar extends StatelessWidget {
       _ => (p.vermilionSoft, p.vermilion),
     };
     final url = avatarUrl?.trim();
-    final photo = url == null || url.isEmpty ? null : NetworkImage(url);
+    // Decoded at the size it's shown: the URL is whatever the member saved,
+    // so it may point at a large image, and cards show several avatars.
+    final size = (radius * 2 * MediaQuery.devicePixelRatioOf(context)).ceil();
+    final photo = url == null || url.isEmpty ? null : ResizeImage(
+            NetworkImage(url),
+            width: size,
+            height: size,
+            policy: ResizeImagePolicy.fit,
+          );
     return CircleAvatar(
       radius: radius,
       backgroundColor: background,
