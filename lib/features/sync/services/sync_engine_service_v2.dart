@@ -1003,22 +1003,7 @@ class SyncEngineServiceV2 {
 
     final remoteUpdatedAt = _parseTimestamp(data['updatedAt']);
     final deletedAt = _parseTimestamp(data['deletedAt']);
-
-    final companion = ScheduleItemsCompanion(
-      id: Value(itemId),
-      tripId: Value(tripId),
-      stopId: Value(stopId),
-      dayId: Value(dayId),
-      sortKey: Value(data['sortKey'] as String? ?? 'a0'),
-      stayMinutes: Value((data['stayMinutes'] as num?)?.toInt() ?? 60),
-      transitMinutes: Value((data['transitMinutes'] as num?)?.toInt() ?? 0),
-      fixedTime: Value((data['fixedTime'] as num?)?.toInt()),
-      status: Value(data['status'] as String? ?? 'planned'),
-      updatedAt: Value(remoteUpdatedAt ?? DateTime.now()),
-      updatedBy: Value(data['updatedBy'] as String?),
-      deletedAt: Value(deletedAt),
-      syncStatus: const Value(0),
-    );
+    final remoteStatus = data['status'] as String? ?? 'planned';
 
     await localDb.transaction(() async {
       final currentTrip = await (localDb.select(localDb.trips)..where((t) => t.id.equals(tripId))).getSingleOrNull();
@@ -1031,10 +1016,61 @@ class SyncEngineServiceV2 {
         if (remoteUpdatedAt != null && !remoteUpdatedAt.isAfter(localItem.updatedAt)) {
           return;
         }
+
+        // If local user marked this item done while offline (syncStatus == 1),
+        // preserve 'done' over remote 'planned', and keep syncStatus == 1 so the
+        // check-in pushes upstream once online.
+        final preserveLocalVisited = localItem.syncStatus == 1 &&
+            localItem.status == 'done' &&
+            remoteStatus == 'planned';
+
+        final effectiveStatus = preserveLocalVisited ? 'done' : remoteStatus;
+        final effectiveSyncStatus = preserveLocalVisited ? 1 : 0;
+        final effectiveUpdatedAt = preserveLocalVisited
+            ? DateTime.now()
+            : (remoteUpdatedAt ?? DateTime.now());
+        final effectiveUpdatedBy = preserveLocalVisited ? currentUserId : data['updatedBy'] as String?;
+
+        final companion = ScheduleItemsCompanion(
+          id: Value(itemId),
+          tripId: Value(tripId),
+          stopId: Value(stopId),
+          dayId: Value(dayId),
+          sortKey: Value(data['sortKey'] as String? ?? 'a0'),
+          stayMinutes: Value((data['stayMinutes'] as num?)?.toInt() ?? 60),
+          transitMinutes: Value((data['transitMinutes'] as num?)?.toInt() ?? 0),
+          fixedTime: Value((data['fixedTime'] as num?)?.toInt()),
+          status: Value(effectiveStatus),
+          updatedAt: Value(effectiveUpdatedAt),
+          updatedBy: Value(effectiveUpdatedBy),
+          deletedAt: Value(deletedAt),
+          syncStatus: Value(effectiveSyncStatus),
+        );
+
         await (localDb.update(localDb.scheduleItems)
-              ..where((i) => i.id.equals(itemId) & i.tripId.equals(tripId) & i.updatedAt.isSmallerThanValue((remoteUpdatedAt ?? DateTime.now()).millisecondsSinceEpoch)))
+              ..where((i) => i.id.equals(itemId) & i.tripId.equals(tripId)))
             .write(companion);
+
+        if (preserveLocalVisited) {
+          _pendingTripIdsToPush.add(tripId);
+          _scheduleDebouncedPush();
+        }
       } else {
+        final companion = ScheduleItemsCompanion(
+          id: Value(itemId),
+          tripId: Value(tripId),
+          stopId: Value(stopId),
+          dayId: Value(dayId),
+          sortKey: Value(data['sortKey'] as String? ?? 'a0'),
+          stayMinutes: Value((data['stayMinutes'] as num?)?.toInt() ?? 60),
+          transitMinutes: Value((data['transitMinutes'] as num?)?.toInt() ?? 0),
+          fixedTime: Value((data['fixedTime'] as num?)?.toInt()),
+          status: Value(remoteStatus),
+          updatedAt: Value(remoteUpdatedAt ?? DateTime.now()),
+          updatedBy: Value(data['updatedBy'] as String?),
+          deletedAt: Value(deletedAt),
+          syncStatus: const Value(0),
+        );
         await localDb.into(localDb.scheduleItems).insert(companion, mode: InsertMode.insertOrIgnore);
       }
     });
