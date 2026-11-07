@@ -6,8 +6,9 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:trip_planner/core/database/database.dart';
 import 'package:trip_planner/features/sync/services/firestore_sync_v2_service.dart';
 import 'package:trip_planner/features/sync/services/sync_engine_service_v2.dart';
+import 'package:trip_planner/features/trip/models/trip_activity.dart';
 
-class FakeFirestoreSyncV2Service implements FirestoreSyncV2Service {
+class FakeFirestoreSyncV2Service extends Fake implements FirestoreSyncV2Service {
   final Map<String, Map<String, dynamic>> trips = {};
   final Map<String, Map<String, Map<String, dynamic>>> tripDays = {};
   final Map<String, Map<String, Map<String, dynamic>>> tripStops = {};
@@ -210,6 +211,29 @@ class FakeFirestoreSyncV2Service implements FirestoreSyncV2Service {
   @override
   Stream<List<Map<String, dynamic>>> watchTripScheduleItems(String tripId) {
     return itemsControllers
+        .putIfAbsent(tripId, () => StreamController.broadcast())
+        .stream;
+  }
+
+  final Map<String, List<TripActivity>> tripActivities = {};
+  final Map<String, StreamController<List<TripActivity>>> activityControllers = {};
+
+  @override
+  void buildActivityBatchOperation(WriteBatch batch, TripActivity activity) {
+    if (batch is _FakeV2WriteBatch) {
+      batch.addOp(() => recordActivity(activity));
+    }
+  }
+
+  @override
+  Future<void> recordActivity(TripActivity activity) async {
+    tripActivities.putIfAbsent(activity.tripId, () => []).add(activity);
+    activityControllers[activity.tripId]?.add(List.unmodifiable(tripActivities[activity.tripId]!));
+  }
+
+  @override
+  Stream<List<TripActivity>> watchTripActivity(String tripId, {int limit = 50}) {
+    return activityControllers
         .putIfAbsent(tripId, () => StreamController.broadcast())
         .stream;
   }

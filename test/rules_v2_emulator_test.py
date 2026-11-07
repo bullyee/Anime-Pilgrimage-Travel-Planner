@@ -742,6 +742,74 @@ def main():
                                          'name': {'stringValue': 'x'}, 'updatedAt': {'integerValue': '1000'}}}, user_id='mallory')
     assert_status("id integrity: unicode id equal to path succeeds (200)", 200, code, resp=resp)
 
+    # ==========================================
+    # Phase 2 Safety Net: Activity Log Rules Checks
+    # ==========================================
+    print("\n--- Testing Phase 2 Activity Log Rules ---")
+    valid_activity_data = {
+        'fields': {
+            'id': {'stringValue': 'act_test_1'},
+            'tripId': {'stringValue': 'trip_g1'},
+            'actorId': {'stringValue': 'alice'},
+            'action': {'stringValue': 'add_stop'},
+            'entityType': {'stringValue': 'stop'},
+            'entityId': {'stringValue': 'stop_uji'},
+            'summary': {'stringValue': 'Alice added Uji Bridge'},
+            'expireAt': {'timestampValue': future_time},
+        }
+    }
+    # 60. Alice (owner of trip_g1) can create activity
+    code, _ = api_request('POST', 'tripsV2/trip_g1/activity?documentId=act_test_1', valid_activity_data, user_id='alice')
+    assert_status("Phase 2: Trip owner Alice can create activity log entry (200)", 200, code)
+
+    # 61. Alice can read activity
+    code, _ = api_request('GET', 'tripsV2/trip_g1/activity/act_test_1', user_id='alice')
+    assert_status("Phase 2: Trip member can read activity log entry (200)", 200, code)
+
+    # 62. Attacker spoofing actorId: Eve (non-member) tries to write activity
+    code, _ = api_request('POST', 'tripsV2/trip_g1/activity?documentId=act_spoof', valid_activity_data, user_id='eve')
+    assert_status("Phase 2: Non-member Eve cannot create activity (403)", 403, code)
+
+    # 63. Bob cannot create activity with actorId alice (actorId spoofing)
+    spoofed_act = {
+        'fields': {
+            'id': {'stringValue': 'act_spoof2'},
+            'tripId': {'stringValue': 'trip_g1'},
+            'actorId': {'stringValue': 'alice'},
+            'action': {'stringValue': 'add_stop'},
+            'entityType': {'stringValue': 'stop'},
+            'entityId': {'stringValue': 'stop_uji'},
+            'summary': {'stringValue': 'Alice added Uji Bridge'},
+            'expireAt': {'timestampValue': future_time},
+        }
+    }
+    code, _ = api_request('POST', 'tripsV2/trip_g1/activity?documentId=act_spoof2', spoofed_act, user_id='bob')
+    assert_status("Phase 2: Attacker cannot create activity spoofing another actorId (403)", 403, code)
+
+    # 64. Id mismatch: documentId != id
+    mismatched_id_act = {
+        'fields': {
+            'id': {'stringValue': 'act_victim'},
+            'tripId': {'stringValue': 'trip_g1'},
+            'actorId': {'stringValue': 'alice'},
+            'action': {'stringValue': 'add_stop'},
+            'entityType': {'stringValue': 'stop'},
+            'entityId': {'stringValue': 'stop_uji'},
+            'summary': {'stringValue': 'Alice added Uji Bridge'},
+            'expireAt': {'timestampValue': future_time},
+        }
+    }
+    code, _ = api_request('POST', 'tripsV2/trip_g1/activity?documentId=act_mine', mismatched_id_act, user_id='alice')
+    assert_status("Phase 2: Activity create with id != path is denied (403)", 403, code)
+
+    # 65. Activity update is denied (append-only)
+    code, _ = api_request('PATCH', 'tripsV2/trip_g1/activity/act_test_1', valid_activity_data, user_id='alice')
+    assert_status("Phase 2: Updating activity log is denied (append-only) (403)", 403, code)
+
+    # 66. Activity delete is denied (append-only)
+    code, _ = api_request('DELETE', 'tripsV2/trip_g1/activity/act_test_1', user_id='alice')
+    assert_status("Phase 2: Deleting activity log is denied (append-only) (403)", 403, code)
+
     print(f"\nALL {tests_passed}/{tests_total} FIRESTORE RULES TESTS PASSED!")
 
 if __name__ == '__main__':
