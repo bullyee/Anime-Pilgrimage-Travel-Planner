@@ -38,6 +38,12 @@ final tripStopsProvider = StreamProvider.autoDispose.family<List<Stop>, String>(
   return repo.watchStopsForTrip(tripId);
 });
 
+/// Streams trash stops for a given [tripId] (deleted within 30 days).
+final tripTrashStopsProvider = StreamProvider.autoDispose.family<List<Stop>, String>((ref, tripId) {
+  final repo = ref.watch(tripRepositoryProvider);
+  return repo.watchTrashStops(tripId);
+});
+
 /// Streams all schedule items for a given [tripId].
 final scheduleItemsForTripProvider = StreamProvider.autoDispose.family<List<ScheduleItem>, String>((ref, tripId) {
   final repo = ref.watch(tripRepositoryProvider);

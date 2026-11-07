@@ -106,6 +106,16 @@ abstract class TripRepository {
   });
   Future<void> deleteScheduleItem(String itemId);
   Future<void> deleteScheduleItems(List<String> itemIds);
+
+  // Trash & Recovery (Phase 2)
+  Future<List<Stop>> getTrashStops(String tripId, {Duration window = const Duration(days: 30)});
+  Stream<List<Stop>> watchTrashStops(String tripId, {Duration window = const Duration(days: 30)});
+  Future<List<TripDay>> getTrashDays(String tripId, {Duration window = const Duration(days: 30)});
+  Future<List<Trip>> getTrashTrips({Duration window = const Duration(days: 30)});
+  Future<void> restoreStop(String stopId);
+  Future<void> restoreDayBlock(String dayId);
+  Future<void> restoreTrip(String tripId);
+  Future<int> purgeExpiredTrash({Duration retention = const Duration(days: 30)});
 }
 
 /// Drift implementation of [TripRepository].
@@ -1028,6 +1038,148 @@ class DriftTripRepository implements TripRepository {
         ),
       );
     });
+  }
+
+  // ==========================================================================
+  // Trash & Recovery (Phase 2)
+  // ==========================================================================
+
+  @override
+  Future<List<Stop>> getTrashStops(String tripId, {Duration window = const Duration(days: 30)}) {
+    final cutoff = DateTime.now().subtract(window);
+    return (_db.select(_db.stops)
+          ..where((tbl) => tbl.tripId.equals(tripId) & tbl.deletedAt.isNotNull() & tbl.deletedAt.isBiggerOrEqualValue(cutoff.millisecondsSinceEpoch))
+          ..orderBy([(tbl) => OrderingTerm.desc(tbl.deletedAt)]))
+        .get();
+  }
+
+  @override
+  Stream<List<Stop>> watchTrashStops(String tripId, {Duration window = const Duration(days: 30)}) {
+    final cutoff = DateTime.now().subtract(window);
+    return (_db.select(_db.stops)
+          ..where((tbl) => tbl.tripId.equals(tripId) & tbl.deletedAt.isNotNull() & tbl.deletedAt.isBiggerOrEqualValue(cutoff.millisecondsSinceEpoch))
+          ..orderBy([(tbl) => OrderingTerm.desc(tbl.deletedAt)]))
+        .watch();
+  }
+
+  @override
+  Future<List<TripDay>> getTrashDays(String tripId, {Duration window = const Duration(days: 30)}) {
+    final cutoff = DateTime.now().subtract(window);
+    return (_db.select(_db.tripDays)
+          ..where((tbl) => tbl.tripId.equals(tripId) & tbl.deletedAt.isNotNull() & tbl.deletedAt.isBiggerOrEqualValue(cutoff.millisecondsSinceEpoch))
+          ..orderBy([(tbl) => OrderingTerm.desc(tbl.deletedAt)]))
+        .get();
+  }
+
+  @override
+  Future<List<Trip>> getTrashTrips({Duration window = const Duration(days: 30)}) {
+    final cutoff = DateTime.now().subtract(window);
+    final query = _db.select(_db.trips)
+      ..where((tbl) => tbl.deletedAt.isNotNull() & tbl.deletedAt.isBiggerOrEqualValue(cutoff.millisecondsSinceEpoch))
+      ..orderBy([(tbl) => OrderingTerm.desc(tbl.deletedAt)]);
+    if (_currentUserId == 'guest_local_user') {
+      query.where((tbl) => tbl.ownerId.equals('guest_local_user'));
+    }
+    return query.get();
+  }
+
+  @override
+  Future<void> restoreStop(String stopId) async {
+    final now = _now();
+    await _db.transaction(() async {
+      final stop = await (_db.select(_db.stops)..where((tbl) => tbl.id.equals(stopId))).getSingleOrNull();
+      if (stop == null) return;
+      await (_db.update(_db.stops)..where((tbl) => tbl.id.equals(stopId) & tbl.tripId.equals(stop.tripId))).write(
+        StopsCompanion(
+          deletedAt: const Value(null),
+          updatedAt: Value(now),
+          updatedBy: Value(_currentUserId),
+          syncStatus: const Value(1),
+        ),
+      );
+    });
+  }
+
+  @override
+  Future<void> restoreDayBlock(String dayId) async {
+    final now = _now();
+    await _db.transaction(() async {
+      final day = await (_db.select(_db.tripDays)..where((tbl) => tbl.id.equals(dayId))).getSingleOrNull();
+      if (day == null) return;
+      await (_db.update(_db.tripDays)..where((tbl) => tbl.id.equals(dayId) & tbl.tripId.equals(day.tripId))).write(
+        TripDaysCompanion(
+          deletedAt: const Value(null),
+          updatedAt: Value(now),
+          updatedBy: Value(_currentUserId),
+          syncStatus: const Value(1),
+        ),
+      );
+    });
+  }
+
+  @override
+  Future<void> restoreTrip(String tripId) async {
+    final now = _now();
+    await _db.transaction(() async {
+      final trip = await (_db.select(_db.trips)..where((tbl) => tbl.id.equals(tripId))).getSingleOrNull();
+      if (trip == null) return;
+      final deletedAt = trip.deletedAt;
+      await (_db.update(_db.trips)..where((tbl) => tbl.id.equals(tripId))).write(
+        TripsCompanion(
+          deletedAt: const Value(null),
+          updatedAt: Value(now),
+          updatedBy: Value(_currentUserId),
+          syncStatus: const Value(1),
+        ),
+      );
+      if (deletedAt != null) {
+        await (_db.update(_db.tripDays)
+              ..where((tbl) => tbl.tripId.equals(tripId) & tbl.deletedAt.equals(deletedAt.millisecondsSinceEpoch)))
+            .write(TripDaysCompanion(
+          deletedAt: const Value(null),
+          updatedAt: Value(now),
+          updatedBy: Value(_currentUserId),
+          syncStatus: const Value(1),
+        ));
+        await (_db.update(_db.stops)
+              ..where((tbl) => tbl.tripId.equals(tripId) & tbl.deletedAt.equals(deletedAt.millisecondsSinceEpoch)))
+            .write(StopsCompanion(
+          deletedAt: const Value(null),
+          updatedAt: Value(now),
+          updatedBy: Value(_currentUserId),
+          syncStatus: const Value(1),
+        ));
+        await (_db.update(_db.scheduleItems)
+              ..where((tbl) => tbl.tripId.equals(tripId) & tbl.deletedAt.equals(deletedAt.millisecondsSinceEpoch)))
+            .write(ScheduleItemsCompanion(
+          deletedAt: const Value(null),
+          updatedAt: Value(now),
+          updatedBy: Value(_currentUserId),
+          syncStatus: const Value(1),
+        ));
+      }
+    });
+  }
+
+  @override
+  Future<int> purgeExpiredTrash({Duration retention = const Duration(days: 30)}) async {
+    final cutoff = DateTime.now().subtract(retention);
+    var count = 0;
+    await _db.transaction(() async {
+      count += await (_db.delete(_db.scheduleItems)
+            ..where((tbl) => tbl.deletedAt.isNotNull() & tbl.deletedAt.isSmallerThanValue(cutoff.millisecondsSinceEpoch)))
+          .go();
+      count += await (_db.delete(_db.stops)
+            ..where((tbl) => tbl.deletedAt.isNotNull() & tbl.deletedAt.isSmallerThanValue(cutoff.millisecondsSinceEpoch)))
+          .go();
+      count += await (_db.delete(_db.tripDays)
+            ..where((tbl) => tbl.deletedAt.isNotNull() & tbl.deletedAt.isSmallerThanValue(cutoff.millisecondsSinceEpoch)))
+          .go();
+      count += await (_db.delete(_db.trips)
+            ..where((tbl) => tbl.deletedAt.isNotNull() & tbl.deletedAt.isSmallerThanValue(cutoff.millisecondsSinceEpoch)))
+          .go();
+    });
+    return count;
   }
 }
 
