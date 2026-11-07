@@ -11,6 +11,7 @@ import 'shared/theme/app_theme.dart';
 // Added for custom error monitoring
 import 'core/utils/app_logger.dart';
 import 'core/providers/app_provider_observer.dart';
+import 'core/services/analytics_service.dart';
 
 
 void main() async {
@@ -43,6 +44,8 @@ void main() async {
     await Firebase.initializeApp(
       options: DefaultFirebaseOptions.currentPlatform,
     );
+    // Log app open for analytics (no-op on desktop or if Firebase is offline)
+    AnalyticsService().logAppOpen();
   } catch (e, st) {
     AppLogger.error(
       'Firebase initialization failed — running in local-only mode',
