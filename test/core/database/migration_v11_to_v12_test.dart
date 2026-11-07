@@ -8,11 +8,11 @@ import 'package:trip_planner/core/database/database.dart';
 
 void main() {
   group('Schema v11 to v12 migration tests', () {
-    test('fresh database starts at schema version 13 with note column in stops', () async {
+    test('fresh database starts at latest schema version with note column in stops', () async {
       final db = AppDatabase.forTesting(NativeDatabase.memory());
       addTearDown(db.close);
 
-      expect(db.schemaVersion, equals(13));
+      expect(db.schemaVersion, equals(14));
 
       final now = DateTime.now();
       await db.into(db.trips).insert(
@@ -92,7 +92,7 @@ void main() {
       final db2 = AppDatabase.forTesting(NativeDatabase(dbFile));
       addTearDown(db2.close);
 
-      expect(db2.schemaVersion, equals(13));
+      expect(db2.schemaVersion, equals(14));
 
       final stop = await (db2.select(db2.stops)..where((s) => s.id.equals('stop_1'))).getSingle();
       expect(stop.name, equals('Kyoto Tower'));

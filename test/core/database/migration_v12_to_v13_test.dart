@@ -140,7 +140,7 @@ void main() {
       final db = AppDatabase.forTesting(NativeDatabase.memory());
       addTearDown(db.close);
 
-      expect(db.schemaVersion, equals(13));
+      expect(db.schemaVersion, equals(14));
 
       final rows = await db.customSelect("SELECT name FROM sqlite_master WHERE type='table';").get();
       final tableNames = rows.map((r) => r.read<String>('name')).toSet();
@@ -315,7 +315,7 @@ void main() {
       final db = AppDatabase.forTesting(NativeDatabase(dbFile));
       addTearDown(db.close);
 
-      expect(db.schemaVersion, equals(13));
+      expect(db.schemaVersion, equals(14));
 
       // 3. Verify all 9 legacy tables are dropped
       final tableRows = await db.customSelect("SELECT name FROM sqlite_master WHERE type='table';").get();
@@ -374,7 +374,7 @@ void main() {
       final db = AppDatabase.forTesting(NativeDatabase(dbFile));
       addTearDown(db.close);
 
-      expect(db.schemaVersion, equals(13));
+      expect(db.schemaVersion, equals(14));
 
       // 3. Verify all 11 v10 tables exist and all 9 legacy tables are dropped
       final tableRows = await db.customSelect("SELECT name FROM sqlite_master WHERE type='table';").get();

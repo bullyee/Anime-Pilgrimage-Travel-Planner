@@ -24,7 +24,7 @@ class AppDatabase extends _$AppDatabase {
   AppDatabase.forTesting(super.executor);
 
   @override
-  int get schemaVersion => 13;
+  int get schemaVersion => 14;
 
   @override
   MigrationStrategy get migration => MigrationStrategy(
@@ -78,6 +78,14 @@ class AppDatabase extends _$AppDatabase {
             // Drop legacy tables. For from >= 10 (dev phones), do not re-run migrateData(),
             // preventing overwriting edited/merged places, photos, and deleted labels.
             await MigrationV9ToV10(this).dropLegacyTables();
+          }
+          if (from < 14) {
+            if (!await _hasColumn('places', 'chinese_name')) {
+              await m.addColumn(places, places.chineseName);
+            }
+            if (!await _hasColumn('photos', 'keep_as_is')) {
+              await m.addColumn(photos, photos.keepAsIs);
+            }
           }
         },
         beforeOpen: (details) async {

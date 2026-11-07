@@ -31,6 +31,10 @@ class Places extends Table {
   TextColumn get placeKey => text()();
 
   TextColumn get name => text()();
+
+  /// Optional Chinese name for the spot when the original name is in Japanese or other scripts.
+  TextColumn get chineseName => text().nullable()();
+
   RealColumn get lat => real()();
   RealColumn get lng => real()();
 
@@ -104,6 +108,9 @@ class Photos extends Table {
 
   /// Whether the user opted in to publish this photo to the shared trip.
   BoolColumn get isShared => boolean().withDefault(const Constant(false))();
+
+  /// Whether the user marked this photo to keep as-is (skipping edit/cutout).
+  BoolColumn get keepAsIs => boolean().withDefault(const Constant(false))();
 
   DateTimeColumn get takenAt => dateTime().nullable()();
   DateTimeColumn get createdAt => dateTime().clientDefault(() => DateTime.now())();

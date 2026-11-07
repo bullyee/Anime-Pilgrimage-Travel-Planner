@@ -253,6 +253,6 @@ void main() {
     final stop = await (db.select(db.stops)..where((s) => s.id.equals('s1'))).getSingle();
     expect(stop.area, 'Uji');
     expect(stop.note, 'Watch sunset');
-    expect(db.schemaVersion, 13);
+    expect(db.schemaVersion, 14);
   });
 }
