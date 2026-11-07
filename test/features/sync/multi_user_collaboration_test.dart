@@ -87,6 +87,10 @@ class SharedCollaborativeCloud extends Fake implements FirestoreSyncV2Service {
     final b = batch as _SharedCloudWriteBatch;
     b.addOp(() {
       final existing = trips[trip.id] ?? {};
+      final existingUpdatedAt = existing['updatedAt'] as DateTime?;
+      if (existingUpdatedAt != null && !trip.updatedAt.isAfter(existingUpdatedAt)) {
+        return;
+      }
       final members = existing['members'] ?? [trip.ownerId];
       trips[trip.id] = {
         'id': trip.id,
@@ -108,6 +112,13 @@ class SharedCollaborativeCloud extends Fake implements FirestoreSyncV2Service {
   void buildDayBatchOperations(WriteBatch batch, TripDay day) {
     final b = batch as _SharedCloudWriteBatch;
     b.addOp(() {
+      final existing = tripDays[day.tripId]?[day.id];
+      if (existing != null) {
+        final existingUpdatedAt = existing['updatedAt'] as DateTime?;
+        if (existingUpdatedAt != null && !day.updatedAt.isAfter(existingUpdatedAt)) {
+          return;
+        }
+      }
       tripDays.putIfAbsent(day.tripId, () => {})[day.id] = {
         'id': day.id,
         'tripId': day.tripId,
@@ -130,6 +141,13 @@ class SharedCollaborativeCloud extends Fake implements FirestoreSyncV2Service {
   }) {
     final b = batch as _SharedCloudWriteBatch;
     b.addOp(() {
+      final existing = tripStops[stop.tripId]?[stop.id];
+      if (existing != null) {
+        final existingUpdatedAt = existing['updatedAt'] as DateTime?;
+        if (existingUpdatedAt != null && !stop.updatedAt.isAfter(existingUpdatedAt)) {
+          return;
+        }
+      }
       tripStops.putIfAbsent(stop.tripId, () => {})[stop.id] = {
         'id': stop.id,
         'tripId': stop.tripId,
@@ -160,6 +178,13 @@ class SharedCollaborativeCloud extends Fake implements FirestoreSyncV2Service {
   void buildScheduleItemBatchOperations(WriteBatch batch, ScheduleItem item) {
     final b = batch as _SharedCloudWriteBatch;
     b.addOp(() {
+      final existing = tripScheduleItems[item.tripId]?[item.id];
+      if (existing != null) {
+        final existingUpdatedAt = existing['updatedAt'] as DateTime?;
+        if (existingUpdatedAt != null && !item.updatedAt.isAfter(existingUpdatedAt)) {
+          return;
+        }
+      }
       tripScheduleItems.putIfAbsent(item.tripId, () => {})[item.id] = {
         'id': item.id,
         'tripId': item.tripId,
@@ -741,20 +766,20 @@ void main() {
     // 4. Alice gets back to station WiFi and reconnects!
     aliceSync.startSync();
     cloud.broadcastAll();
-    await Future.delayed(const Duration(milliseconds: 500));
 
-    // 5. Assert: Alice's visited status ('done') MUST NOT be lost!
-    aliceItem = await (aliceDb.select(aliceDb.scheduleItems)..where((i) => i.id.equals(itemId))).getSingle();
-    expect(aliceItem.status, equals('done'), reason: "Alice's offline visit status must survive remote transit edits");
-    expect(aliceItem.transitMinutes, equals(20), reason: "Bob's newer transitMinutes edit must be merged into Alice");
+    // 5. Assert: Alice's visited status ('done') MUST NOT be lost, and Bob's transit edit is merged!
+    await waitForCondition(() async {
+      aliceItem = await (aliceDb.select(aliceDb.scheduleItems)..where((i) => i.id.equals(itemId))).getSingle();
+      return aliceItem.status == 'done' && aliceItem.transitMinutes == 20;
+    });
 
     // 6. Assert: Alice pushes 'done' to cloud and Bob receives it
     await waitForCondition(() => cloud.tripScheduleItems[tripId]?[itemId]?['status'] == 'done');
     cloud.broadcastAll();
-    await Future.delayed(const Duration(milliseconds: 300));
 
-    bobItem = await (bobDb.select(bobDb.scheduleItems)..where((i) => i.id.equals(itemId))).getSingle();
-    expect(bobItem.status, equals('done'), reason: "Alice's offline visit status must propagate to Bob");
-    expect(bobItem.transitMinutes, equals(20));
+    await waitForCondition(() async {
+      bobItem = await (bobDb.select(bobDb.scheduleItems)..where((i) => i.id.equals(itemId))).getSingle();
+      return bobItem.status == 'done' && bobItem.transitMinutes == 20;
+    });
   });
 }
