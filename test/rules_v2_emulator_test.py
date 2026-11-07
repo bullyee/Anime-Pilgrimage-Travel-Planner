@@ -742,6 +742,31 @@ def main():
                                          'name': {'stringValue': 'x'}, 'updatedAt': {'integerValue': '1000'}}}, user_id='mallory')
     assert_status("id integrity: unicode id equal to path succeeds (200)", 200, code, resp=resp)
 
+    # ==========================================
+    # Phase 2 Safety Net: 30-Day Trash expireAt TTL Tests
+    # ==========================================
+    future_time = '2026-12-05T12:00:00Z'
+
+    # Valid expireAt timestamp on trip
+    code, resp = api_request('PATCH', 'tripsV2/trip_idok?updateMask.fieldPaths=expireAt',
+                             {'fields': {'expireAt': {'timestampValue': future_time}}}, user_id='mallory')
+    assert_status("trash TTL: valid expireAt timestamp on trip succeeds (200)", 200, code, resp=resp)
+
+    # Invalid non-timestamp expireAt on trip is denied
+    code, resp = api_request('PATCH', 'tripsV2/trip_idok?updateMask.fieldPaths=expireAt',
+                             {'fields': {'expireAt': {'stringValue': 'not_a_timestamp'}}}, user_id='mallory')
+    assert_status("trash TTL: non-timestamp expireAt on trip is denied (403)", 403, code, resp=resp)
+
+    # Valid expireAt timestamp on stop
+    code, resp = api_request('PATCH', 'tripsV2/trip_idok/stops/stops_mine?updateMask.fieldPaths=expireAt',
+                             {'fields': {'expireAt': {'timestampValue': future_time}}}, user_id='mallory')
+    assert_status("trash TTL: valid expireAt timestamp on stop succeeds (200)", 200, code, resp=resp)
+
+    # Invalid non-timestamp expireAt on stop is denied
+    code, resp = api_request('PATCH', 'tripsV2/trip_idok/stops/stops_mine?updateMask.fieldPaths=expireAt',
+                             {'fields': {'expireAt': {'stringValue': 'invalid_string'}}}, user_id='mallory')
+    assert_status("trash TTL: non-timestamp expireAt on stop is denied (403)", 403, code, resp=resp)
+
     print(f"\nALL {tests_passed}/{tests_total} FIRESTORE RULES TESTS PASSED!")
 
 if __name__ == '__main__':

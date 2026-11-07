@@ -78,6 +78,9 @@ class FirestoreSyncV2Service {
         'updatedAt': Timestamp.fromDate(trip.updatedAt),
         'updatedBy': trip.updatedBy,
         'deletedAt': trip.deletedAt != null ? Timestamp.fromDate(trip.deletedAt!) : null,
+        'expireAt': trip.deletedAt != null
+            ? Timestamp.fromDate(trip.deletedAt!.add(const Duration(days: 30)))
+            : FieldValue.delete(),
       },
       SetOptions(merge: true),
     );
@@ -101,6 +104,9 @@ class FirestoreSyncV2Service {
         'updatedAt': Timestamp.fromDate(day.updatedAt),
         'updatedBy': day.updatedBy,
         'deletedAt': day.deletedAt != null ? Timestamp.fromDate(day.deletedAt!) : null,
+        'expireAt': day.deletedAt != null
+            ? Timestamp.fromDate(day.deletedAt!.add(const Duration(days: 30)))
+            : FieldValue.delete(),
       },
       SetOptions(merge: true),
     );
@@ -141,6 +147,9 @@ class FirestoreSyncV2Service {
       'updatedAt': Timestamp.fromDate(stop.updatedAt),
       'updatedBy': stop.updatedBy,
       'deletedAt': stop.deletedAt != null ? Timestamp.fromDate(stop.deletedAt!) : null,
+      'expireAt': stop.deletedAt != null
+          ? Timestamp.fromDate(stop.deletedAt!.add(const Duration(days: 30)))
+          : FieldValue.delete(),
     };
 
     if (labels != null) {
@@ -198,6 +207,9 @@ class FirestoreSyncV2Service {
         'updatedAt': Timestamp.fromDate(item.updatedAt),
         'updatedBy': item.updatedBy,
         'deletedAt': item.deletedAt != null ? Timestamp.fromDate(item.deletedAt!) : null,
+        'expireAt': item.deletedAt != null
+            ? Timestamp.fromDate(item.deletedAt!.add(const Duration(days: 30)))
+            : FieldValue.delete(),
       },
       SetOptions(merge: true),
     );
