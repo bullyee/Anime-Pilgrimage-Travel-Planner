@@ -132,8 +132,9 @@ class LibraryBackupService {
   /// Places & Labels -> PlaceLabels -> PlaceVisits -> Photos & ReferenceImages.
   Future<LibraryImportSummary> importLibraryArchive(
     AppDatabase db,
-    File zipFile,
-  ) async {
+    File zipFile, {
+    Directory? baseStorageDir,
+  }) async {
     final bytes = await zipFile.readAsBytes();
     final archive = ZipDecoder().decodeBytes(bytes);
 
@@ -161,7 +162,7 @@ class LibraryBackupService {
     final payloadStr = utf8.decode(payloadFile.content as List<int>);
     final payloadJson = jsonDecode(payloadStr) as Map<String, dynamic>;
 
-    final docsDir = await _getDocsDir();
+    final docsDir = baseStorageDir ?? await _getDocsDir();
     final targetPhotosDir = Directory(p.join(docsDir.path, 'app_photos'));
     final targetFramesDir = Directory(p.join(docsDir.path, 'app_frames'));
     await targetPhotosDir.create(recursive: true);
@@ -195,7 +196,11 @@ class LibraryBackupService {
       // 1. Places (Parent)
       final rawPlaces = (payloadJson['places'] as List?) ?? const [];
       for (final raw in rawPlaces) {
-        final place = Place.fromJson(raw as Map<String, dynamic>);
+        final map = Map<String, dynamic>.from(raw as Map);
+        map['visibility'] ??= 'saved';
+        map['createdAt'] ??= DateTime.now().toIso8601String();
+        map['updatedAt'] ??= DateTime.now().toIso8601String();
+        final place = Place.fromJson(map);
         await db.into(db.places).insertOnConflictUpdate(place.toCompanion(true));
         placesCount++;
       }
@@ -203,7 +208,9 @@ class LibraryBackupService {
       // 2. Labels (Parent)
       final rawLabels = (payloadJson['labels'] as List?) ?? const [];
       for (final raw in rawLabels) {
-        final label = Label.fromJson(raw as Map<String, dynamic>);
+        final map = Map<String, dynamic>.from(raw as Map);
+        map['createdAt'] ??= DateTime.now().toIso8601String();
+        final label = Label.fromJson(map);
         await db.into(db.labels).insertOnConflictUpdate(label.toCompanion(true));
         labelsCount++;
       }
@@ -219,7 +226,9 @@ class LibraryBackupService {
       // 4. PlaceVisits (Child)
       final rawVisits = (payloadJson['visits'] as List?) ?? const [];
       for (final raw in rawVisits) {
-        final visit = PlaceVisit.fromJson(raw as Map<String, dynamic>);
+        final map = Map<String, dynamic>.from(raw as Map);
+        map['createdAt'] ??= DateTime.now().toIso8601String();
+        final visit = PlaceVisit.fromJson(map);
         await db.into(db.placeVisits).insertOnConflictUpdate(visit.toCompanion(true));
         visitsCount++;
       }
@@ -227,7 +236,12 @@ class LibraryBackupService {
       // 5. Photos (Child)
       final rawPhotos = (payloadJson['photos'] as List?) ?? const [];
       for (final raw in rawPhotos) {
-        final photo = Photo.fromJson(raw as Map<String, dynamic>);
+        final map = Map<String, dynamic>.from(raw as Map);
+        map['kind'] ??= 'original';
+        map['isShared'] ??= false;
+        map['keepAsIs'] ??= false;
+        map['createdAt'] ??= DateTime.now().toIso8601String();
+        final photo = Photo.fromJson(map);
         final filename = p.basename(photo.localPath);
         final restoredLocalPath = photoPathMap[filename] ?? photo.localPath;
 
@@ -239,7 +253,9 @@ class LibraryBackupService {
       // 6. Reference Images (Child)
       final rawRefImages = (payloadJson['referenceImages'] as List?) ?? const [];
       for (final raw in rawRefImages) {
-        final ref = NewReferenceImage.fromJson(raw as Map<String, dynamic>);
+        final map = Map<String, dynamic>.from(raw as Map);
+        map['createdAt'] ??= DateTime.now().toIso8601String();
+        final ref = NewReferenceImage.fromJson(map);
         String? restoredLocalPath;
         if (ref.localPath != null) {
           final filename = p.basename(ref.localPath!);
