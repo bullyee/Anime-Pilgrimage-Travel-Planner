@@ -1,6 +1,6 @@
 # Roadmap
 
-Status: draft for bullyee and ck, 2026-11-06. What comes after the MVP (`docs/mvp-plan.md`), by version. Each version runs two code tracks side by side, since the screens (bullyee) and the backend and sync (ck) are mostly separate, plus a launch track that isn't code.
+Status: draft for bullyee and ck, 2026-11-06, updated 2026-11-07. What comes after the MVP (`docs/mvp-plan.md`), by version. Each version runs two code tracks side by side, since the screens (bullyee) and the backend and sync (ck) are mostly separate, plus a launch track that isn't code.
 
 The hard part from here isn't the code: it's getting the app into stores and in front of people. So the launch track starts now, alongside v0.3.0, not after it.
 
@@ -9,7 +9,8 @@ The hard part from here isn't the code: it's getting the app into stores and in 
 - [x] Merge #105, #106, #107, #108 (first invite's Members tab error), #109 (frames missing after the app closes mid-import).
 - [ ] Deploy #106's `firestore.rules` from `master` (Console or `firebase deploy --only firestore:rules`).
 - [x] The rejoin fix, #110 (ck), moves to after the release; v0.2.0 ships with the known issue in its CHANGELOG. Agreed on 2026-11-06: the shared trip comes down clean from the cloud, and a leftover private copy with changes made while away stays as a separate private trip with a new id ("Kyoto (your copy)"), so nothing is pushed into everyone's trip and nothing is lost. A copy without changes just reconnects.
-- [ ] Release: PR #111 "Release v0.2.0", then the tag.
+- [x] Release: PR #111 "Release v0.2.0", then the tag. The workflow couldn't sign with the release key until #112 (AGP read `$XDG_CONFIG_HOME/.android` on the runner), so the tag was moved onto #112 and the workflow built the draft pre-release.
+- [x] Publish the draft (2026-11-07).
 
 ## What the app is for
 
@@ -19,18 +20,26 @@ The moment that matters is standing at the spot and getting the shot. Planning, 
 
 Two tracks in parallel. They meet only where a screen needs a backend call.
 
-**Screens (bullyee)**
-- **Two modes for a trip: Plan and Pilgrimage.** Plan is today's trip screen (days, stops, times, members). Pilgrimage is for the day itself: the day's stops, the map, the camera, and nothing to edit. A switch in the trip's top bar; on one of the trip's dates the trip opens in Pilgrimage, otherwise in Plan.
-- **The day's map is Pilgrimage's main screen.** The day's stops on a map with your own location, visited ones marked. Tapping one opens a small card with its frame, name, **Take photo** and **Mark visited**. Everything it needs exists: the library's map (flutter_map), the location from the new spot screen, and the stop page's Take photo; no new data. Map tiles stay online-only (see Offline maps under Later); the list of stops and the camera work without a connection, since the frames are on the device.
-- **Shoot here.** One button that uses GPS to find where you are: the stops within about 150 m, nearest first. With one stop the camera opens with its frame; with several close together, as in Uji, a row of their frames to pick from. GPS is off by tens of metres in town, so it suggests and never decides alone.
+**Who it's for.** Some people plan every stop and enjoy seeing the day go to plan; others walk around and shoot whatever turns up. Both go on pilgrimages, often in the same group trip (one person plans, the rest wander), and the same person can be both: a planner at home, a wanderer on the street. So the app doesn't ask which kind you are. Shooting works without a plan, the plan shows progress for those who want it, and a detour still lands in the plan, so the plan stays true.
+
+**Screens (bullyee), in two steps**
+
+*Step 1: the shooting core.* It goes into today's app behind the existing camera entries, so it can be tried on a real outing before the home screen changes. It is the same in every home-screen version on the design canvas.
+- **Shoot here.** One button that uses GPS to find where you are: the places within about 150 m, nearest first, from your library, so it works **without a trip**; when a trip has today's date, its stops for today come first. With one place the camera opens with its frame; with several close together, as in Uji, a row of their frames to pick from. GPS is off by tens of metres in town, so it suggests and never decides alone.
 - **From a stop to the camera in one tap,** with its frame already in the floating window. When a spot has more than one frame, switch frames without leaving the camera.
-- **Several shots, then pick.** The Android camera returns one photo per opening, so after each shot a small sheet asks **Another** or **Done**; Another reopens the camera with the same frame. Done shows the shots next to the frame, you keep the ones you want, and the rest are deleted. (Reading the shots back from the gallery instead would need `READ_MEDIA_IMAGES`, which Play restricts.)
-- **No editing on the spot.** In Pilgrimage the kept photo is saved as shot, attached to the stop and its place, the stop is marked visited, and you're back on the map. Editing, compose and cutout wait for later: photos not yet edited get a mark on the stop and in the trip's photos, to edit at home.
+- **Several shots, then pick.** The Android camera returns one photo per opening, so after each shot the camera opens again with the same frame still in the floating window; pressing back in the camera ends the series. Then the shots appear next to the frame, you keep the ones you want, and the rest are deleted. Each extra shot costs the camera app's own confirm tap and about a second to reopen. If that turns out too slow on the day, the fallback is the camera app's normal mode (`INTENT_ACTION_STILL_IMAGE_CAMERA`: as many shots as you like, burst included) and, back in the app, picking the new shots with the system Photo Picker, which needs no `READ_MEDIA_IMAGES`; the cost is copies left in the phone's gallery.
+- **No editing on the spot.** The kept photo is saved as shot, attached to its place (and to the stop, in a trip), the place is marked visited, and you're back where you were. Editing, compose and cutout wait for later: a **Photos to edit** list holds the photos not yet edited, to edit at home. It replaces Home's Edit Photo card.
+- **Shots off the plan.** A shot at a place that isn't in today's plan, while a trip has today's date, adds the place to that day and marks it visited.
+
+*Step 2: Home and the trip's two modes, after a real outing with step 1.* The design canvas has four versions of Home (A: a card for today's trip; B: the whole app switches between Plan and Pilgrimage; C: start and end a pilgrimage, with a banner while it runs; D: camera first, a "Here" screen). The current lean is C, with a Shoot button on Home that works without a trip. Decide after trying step 1, then:
+- **Two modes for a trip: Plan and Pilgrimage.** Plan is today's trip screen (days, stops, times, members). Pilgrimage is for the day itself: the day's stops, the map, the camera, and nothing to edit. How you switch between them depends on the Home version chosen.
+- **The day's map is Pilgrimage's main screen.** The day's stops on a map with your own location, visited ones marked, and how many are left. Tapping one opens a small card with its frame, name, **Take photo** and **Mark visited**. Everything it needs exists: the library's map (flutter_map), the location from the new spot screen, and the stop page's Take photo; no new data. Map tiles stay online-only (see Offline maps under Later); the list of stops and the camera work without a connection, since the frames are on the device.
+- Home's camera cards (Anime Camera, Floating Reference) become one Shoot entry.
 
 **Backend and sync (ck)**
 - #110, rejoining a trip after leaving it (see v0.2.0). Later, once the comparison screens exist, rejoining could ask "You changed 3 things while away; bring them into the shared trip?" instead of keeping a separate copy.
-- #103's phase 2, split into PRs: the trash (restore deleted stops and days), the activity log, the unread badge. Rules changes come with emulator tests, as now. Their screens come in v0.4.0.
-- Marking a stop visited and attaching photos while offline in a shared trip must sync cleanly once back online: the day of a pilgrimage is where connections drop.
+- #103's phase 2, split into PRs: the trash (#103: restore deleted stops, days and trips), the activity log (#115), the unread badge. Rules changes come with emulator tests, as now. Their screens come in v0.4.0. The trash and the log set `expireAt` for Firestore to delete them after 30 days, which needs a TTL policy on that field in the Firebase Console.
+- Marking a stop visited while offline in a shared trip must sync cleanly once back online: the day of a pilgrimage is where connections drop (#114). Photos stay on the device, so they don't sync here (trip photos are v0.5.0).
 
 ## v0.4.0: planning together, smoother
 
@@ -93,3 +102,4 @@ What other people see is what brings new users, so this is the growth version.
 - Who owns the launch track? Play account owner, store listing, the closed test's testers.
 - Personal or organization Play account? An organization account skips the closed-test rule but needs a D-U-N-S number.
 - Is a name change due before the store? "trip_planner" is generic and hard to search for.
+- Usage analytics (#113, Firebase Analytics): on by default with a switch in Settings to turn it off, or off until people opt in? Either way the privacy policy and Play's Data safety form must list it.
