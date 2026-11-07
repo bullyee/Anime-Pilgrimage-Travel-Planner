@@ -539,7 +539,21 @@ class SyncEngineServiceV2 {
         localTrip.sharing == 'private' &&
         remoteOwnerId != currentUserId &&
         remoteSharing == 'group' &&
-        (remoteMembers.contains(currentUserId) || remoteMembers.isEmpty);
+        remoteMembers.contains(currentUserId);
+
+    if (isRejoining) {
+      final dirtyDays = await (localDb.select(localDb.tripDays)..where((d) => d.tripId.equals(tripId) & d.syncStatus.equals(1))).get();
+      final dirtyStops = await (localDb.select(localDb.stops)..where((s) => s.tripId.equals(tripId) & s.syncStatus.equals(1))).get();
+      final dirtyItems = await (localDb.select(localDb.scheduleItems)..where((i) => i.tripId.equals(tripId) & i.syncStatus.equals(1))).get();
+      final hasDirtyChanges = localTrip.syncStatus == 1 ||
+          dirtyDays.isNotEmpty ||
+          dirtyStops.isNotEmpty ||
+          dirtyItems.isNotEmpty;
+
+      if (hasDirtyChanges) {
+        await _forkPrivateTrip(tripId, localTrip);
+      }
+    }
 
     if (!isRejoining && localTrip != null && localTrip.sharing == 'private' && remoteOwnerId != currentUserId) {
       _cancelSubcollectionWatchers(tripId);
@@ -1050,5 +1064,168 @@ class SyncEngineServiceV2 {
           .write(const ScheduleItemsCompanion(deletedAt: Value(null), syncStatus: Value(0)));
     });
     _updateStatus(tripId, TripSyncStatus.synced);
+  }
+
+  /// Forks a leftover private copy into a new independent private trip when the user
+  /// re-joins the shared group trip, preserving all edits made while away with zero data loss.
+  Future<String> _forkPrivateTrip(String tripId, Trip localTrip) async {
+    final forkedTripId = 'trip_${const Uuid().v4()}';
+    final forkedTitle = '${localTrip.title} (your copy)';
+    final now = DateTime.now();
+
+    await localDb.transaction(() async {
+      final days = await (localDb.select(localDb.tripDays)..where((d) => d.tripId.equals(tripId))).get();
+      final stops = await (localDb.select(localDb.stops)..where((s) => s.tripId.equals(tripId))).get();
+      final items = await (localDb.select(localDb.scheduleItems)..where((i) => i.tripId.equals(tripId))).get();
+
+      final stopIds = stops.map((s) => s.id).toList();
+      final stopLabels = stopIds.isEmpty
+          ? <StopLabel>[]
+          : await (localDb.select(localDb.stopLabels)..where((sl) => sl.stopId.isIn(stopIds))).get();
+      final refImages = stopIds.isEmpty
+          ? <NewReferenceImage>[]
+          : await (localDb.select(localDb.newReferenceImages)..where((r) => r.stopId.isIn(stopIds))).get();
+
+      // 1. Create the forked private trip
+      await localDb.into(localDb.trips).insert(
+        TripsCompanion(
+          id: Value(forkedTripId),
+          title: Value(forkedTitle),
+          description: Value(localTrip.description),
+          ownerId: Value(currentUserId),
+          sharing: const Value('private'),
+          startDate: Value(localTrip.startDate),
+          dayCount: Value(localTrip.dayCount),
+          createdAt: Value(localTrip.createdAt),
+          updatedAt: Value(now),
+          updatedBy: Value(currentUserId),
+          syncStatus: const Value(0),
+        ),
+      );
+
+      // 2. Clone days
+      final dayIdMap = <String, String>{};
+      for (final day in days) {
+        final newDayId = const Uuid().v4();
+        dayIdMap[day.id] = newDayId;
+        await localDb.into(localDb.tripDays).insert(
+          TripDaysCompanion(
+            id: Value(newDayId),
+            tripId: Value(forkedTripId),
+            sortKey: Value(day.sortKey),
+            title: Value(day.title),
+            pinnedDate: Value(day.pinnedDate),
+            updatedAt: Value(day.updatedAt),
+            updatedBy: Value(day.updatedBy),
+            deletedAt: Value(day.deletedAt),
+            syncStatus: const Value(0),
+          ),
+        );
+      }
+
+      // 3. Clone stops
+      final stopIdMap = <String, String>{};
+      for (final stop in stops) {
+        final newStopId = const Uuid().v4();
+        stopIdMap[stop.id] = newStopId;
+        await localDb.into(localDb.stops).insert(
+          StopsCompanion(
+            id: Value(newStopId),
+            tripId: Value(forkedTripId),
+            placeKey: Value(stop.placeKey),
+            name: Value(stop.name),
+            lat: Value(stop.lat),
+            lng: Value(stop.lng),
+            description: Value(stop.description),
+            address: Value(stop.address),
+            businessHours: Value(stop.businessHours),
+            contactInfo: Value(stop.contactInfo),
+            accessTips: Value(stop.accessTips),
+            links: Value(stop.links),
+            coverLocalPath: Value(stop.coverLocalPath),
+            coverRemoteUrl: Value(stop.coverRemoteUrl),
+            source: Value(stop.source),
+            sourceUrl: Value(stop.sourceUrl),
+            area: Value(stop.area),
+            note: Value(stop.note),
+            addedBy: Value(stop.addedBy),
+            createdAt: Value(stop.createdAt),
+            updatedAt: Value(stop.updatedAt),
+            updatedBy: Value(stop.updatedBy),
+            deletedAt: Value(stop.deletedAt),
+            syncStatus: const Value(0),
+          ),
+        );
+      }
+
+      // 4. Clone stop labels
+      for (final sl in stopLabels) {
+        final newStopId = stopIdMap[sl.stopId];
+        if (newStopId != null) {
+          await localDb.into(localDb.stopLabels).insert(
+            StopLabelsCompanion(
+              stopId: Value(newStopId),
+              labelId: Value(sl.labelId),
+            ),
+            mode: InsertMode.insertOrIgnore,
+          );
+        }
+      }
+
+      // 5. Clone reference images for stops
+      for (final img in refImages) {
+        final newStopId = stopIdMap[img.stopId];
+        if (newStopId != null) {
+          await localDb.into(localDb.newReferenceImages).insert(
+            NewReferenceImagesCompanion(
+              id: Value(const Uuid().v4()),
+              placeKey: Value(img.placeKey),
+              stopId: Value(newStopId),
+              localPath: Value(img.localPath),
+              remoteUrl: Value(img.remoteUrl),
+              animeLabelId: Value(img.animeLabelId),
+              episode: Value(img.episode),
+              timestampS: Value(img.timestampS),
+              source: Value(img.source),
+              sourceUrl: Value(img.sourceUrl),
+              createdAt: Value(img.createdAt),
+            ),
+          );
+        }
+      }
+
+      // 6. Clone schedule items
+      for (final item in items) {
+        final newDayId = dayIdMap[item.dayId];
+        final newStopId = stopIdMap[item.stopId];
+        if (newDayId != null && newStopId != null) {
+          await localDb.into(localDb.scheduleItems).insert(
+            ScheduleItemsCompanion(
+              id: Value(const Uuid().v4()),
+              tripId: Value(forkedTripId),
+              stopId: Value(newStopId),
+              dayId: Value(newDayId),
+              sortKey: Value(item.sortKey),
+              stayMinutes: Value(item.stayMinutes),
+              transitMinutes: Value(item.transitMinutes),
+              fixedTime: Value(item.fixedTime),
+              status: Value(item.status),
+              updatedAt: Value(item.updatedAt),
+              updatedBy: Value(item.updatedBy),
+              deletedAt: Value(item.deletedAt),
+              syncStatus: const Value(0),
+            ),
+          );
+        }
+      }
+
+      // 7. Clean up the old private rows for tripId so the cloud trip can download fresh
+      if (stopIds.isNotEmpty) {
+        await (localDb.delete(localDb.newReferenceImages)..where((r) => r.stopId.isIn(stopIds))).go();
+      }
+      await (localDb.delete(localDb.trips)..where((t) => t.id.equals(tripId))).go();
+    });
+
+    return forkedTripId;
   }
 }

@@ -850,6 +850,117 @@ void main() {
       expect(localDays.length, equals(1));
       expect(localDays.first.id, equals('day_rejoined_1'));
     });
+
+    test('re-joining a shared group trip forks the leftover private copy if it has dirty changes made while away', () async {
+      syncEngine.startSync();
+
+      final t1 = DateTime(2026, 11, 1, 10, 0);
+      final t2 = DateTime(2026, 11, 2, 12, 0);
+
+      // 1. User previously had this trip converted to private after leaving
+      await db.into(db.trips).insert(
+            TripsCompanion.insert(
+              id: 'trip_fork_test',
+              title: 'Kyoto Journey',
+              ownerId: currentUserId,
+              sharing: const Value('private'),
+              updatedAt: Value(t1),
+              syncStatus: const Value(0),
+            ),
+          );
+
+      // User modified a stop while away (dirty: syncStatus = 1)
+      await db.into(db.stops).insert(
+            StopsCompanion.insert(
+              id: 'stop_modified_away',
+              tripId: 'trip_fork_test',
+              placeKey: 'anitabi:uji_bridge',
+              name: 'Uji Bridge',
+              lat: 34.89,
+              lng: 135.80,
+              note: const Value('My private note written while away'),
+              addedBy: currentUserId,
+              updatedAt: Value(t1),
+              syncStatus: const Value(1),
+            ),
+          );
+
+      // User also added a new spot while away (dirty: syncStatus = 1)
+      await db.into(db.stops).insert(
+            StopsCompanion.insert(
+              id: 'stop_added_away',
+              tripId: 'trip_fork_test',
+              placeKey: 'anitabi:byodoin',
+              name: 'Byodoin Temple',
+              lat: 34.88,
+              lng: 135.81,
+              note: const Value('Extra spot I wanted to visit'),
+              addedBy: currentUserId,
+              updatedAt: Value(t1),
+              syncStatus: const Value(1),
+            ),
+          );
+
+      // 2. User re-joins via invite: server emits group trip owned by Bob
+      fakeFirestore.emitUserTrips([
+        {
+          'id': 'trip_fork_test',
+          'title': 'Kyoto Journey Shared',
+          'ownerId': 'user_bob',
+          'sharing': 'group',
+          'dayCount': 1,
+          'members': ['user_bob', currentUserId],
+          'updatedAt': t2,
+        }
+      ], isFromCache: false);
+
+      // Allow async chain to process trip, fork the dirty copy, and attach subcollection watchers
+      await Future.delayed(const Duration(milliseconds: 150));
+
+      // Server emits Bob's cloud stops for the shared trip
+      fakeFirestore.emitStops('trip_fork_test', [
+        {
+          'id': 'stop_shared_1',
+          'tripId': 'trip_fork_test',
+          'placeKey': 'anitabi:uji_bridge',
+          'name': 'Uji Bridge (Official)',
+          'lat': 34.89,
+          'lng': 135.80,
+          'note': 'Official group note from Bob',
+          'addedBy': 'user_bob',
+          'updatedAt': t2,
+        }
+      ]);
+
+      await Future.delayed(const Duration(milliseconds: 250));
+
+      // 3. Assert: The shared group trip exists with clean cloud state
+      final sharedTrip = await (db.select(db.trips)..where((t) => t.id.equals('trip_fork_test'))).getSingle();
+      expect(sharedTrip.sharing, equals('group'));
+      expect(sharedTrip.ownerId, equals('user_bob'));
+      expect(sharedTrip.title, equals('Kyoto Journey Shared'));
+
+      // The shared trip has only the cloud's stops; local dirty edits were NOT pushed or mixed into it
+      final sharedStops = await (db.select(db.stops)..where((s) => s.tripId.equals('trip_fork_test'))).get();
+      expect(sharedStops.length, equals(1));
+      expect(sharedStops.first.id, equals('stop_shared_1'));
+      expect(sharedStops.first.note, equals('Official group note from Bob'));
+
+      // 4. Assert: The user's private copy was forked into a separate private trip with zero data loss
+      final allTrips = await db.select(db.trips).get();
+      final forkedTrip = allTrips.firstWhere((t) => t.id != 'trip_fork_test');
+      expect(forkedTrip.title, equals('Kyoto Journey (your copy)'));
+      expect(forkedTrip.sharing, equals('private'));
+      expect(forkedTrip.ownerId, equals(currentUserId));
+
+      // The forked trip contains both of the user's private stops
+      final forkedStops = await (db.select(db.stops)..where((s) => s.tripId.equals(forkedTrip.id))).get();
+      expect(forkedStops.length, equals(2));
+      final modifiedStop = forkedStops.firstWhere((s) => s.placeKey == 'anitabi:uji_bridge');
+      expect(modifiedStop.note, equals('My private note written while away'));
+      final addedStop = forkedStops.firstWhere((s) => s.placeKey == 'anitabi:byodoin');
+      expect(addedStop.name, equals('Byodoin Temple'));
+    });
   });
 
   // The downstream trips listener serializes snapshots through a Future chain.
