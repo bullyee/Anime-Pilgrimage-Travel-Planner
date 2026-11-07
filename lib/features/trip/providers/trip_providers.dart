@@ -4,6 +4,8 @@ import '../../../core/providers/database_provider.dart';
 import '../../../core/utils/schedule_logic.dart';
 import '../../auth/providers/auth_provider.dart';
 import '../../library/providers/place_providers.dart';
+import '../../sync/providers/sync_v2_providers.dart';
+import '../models/trip_activity.dart';
 import '../repositories/trip_repository.dart';
 
 /// Provides the [TripRepository] instance backed by Drift.
@@ -36,6 +38,12 @@ final tripDaysProvider = StreamProvider.autoDispose.family<List<TripDay>, String
 final tripStopsProvider = StreamProvider.autoDispose.family<List<Stop>, String>((ref, tripId) {
   final repo = ref.watch(tripRepositoryProvider);
   return repo.watchStopsForTrip(tripId);
+});
+
+/// Streams recent activity audit logs for a given [tripId].
+final tripActivityProvider = StreamProvider.autoDispose.family<List<TripActivity>, String>((ref, tripId) {
+  final syncService = ref.watch(firestoreSyncV2ServiceProvider);
+  return syncService.watchTripActivity(tripId);
 });
 
 /// Streams all schedule items for a given [tripId].
