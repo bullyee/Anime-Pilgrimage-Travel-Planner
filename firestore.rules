@@ -116,13 +116,15 @@ service cloud.firestore {
       let data = request.resource.data;
       return (!('id' in data) || data.id == docId)
         && (!('title' in data) || (data.title is string && data.title.size() <= 300))
-        && (!('dayCount' in data) || (data.dayCount is number && data.dayCount >= 0));
+        && (!('dayCount' in data) || (data.dayCount is number && data.dayCount >= 0))
+        && (!('expireAt' in data) || data.expireAt == null || data.expireAt is timestamp);
     }
 
     function isDayBlockSafe(docId) {
       let data = request.resource.data;
       return (!('id' in data) || data.id == docId)
-        && (!('sortKey' in data) || (data.sortKey is string && data.sortKey.size() <= 100));
+        && (!('sortKey' in data) || (data.sortKey is string && data.sortKey.size() <= 100))
+        && (!('expireAt' in data) || data.expireAt == null || data.expireAt is timestamp);
     }
 
     function isStopSafe(docId) {
@@ -131,7 +133,8 @@ service cloud.firestore {
         && (!('name' in data) || (data.name is string && data.name.size() <= 300))
         && (!('placeKey' in data) || (data.placeKey is string && data.placeKey.size() <= 200))
         && (!('area' in data) || data.area == null || (data.area is string && data.area.size() <= 100))
-        && (!('note' in data) || data.note == null || (data.note is string && data.note.size() <= 2000));
+        && (!('note' in data) || data.note == null || (data.note is string && data.note.size() <= 2000))
+        && (!('expireAt' in data) || data.expireAt == null || data.expireAt is timestamp);
     }
 
     function isScheduleItemSafe(docId) {
@@ -139,7 +142,8 @@ service cloud.firestore {
       return (!('id' in data) || data.id == docId)
         && (!('sortKey' in data) || (data.sortKey is string && data.sortKey.size() <= 100))
         && (!('stayMinutes' in data) || (data.stayMinutes is number && data.stayMinutes >= 0))
-        && (!('transitMinutes' in data) || (data.transitMinutes is number && data.transitMinutes >= 0));
+        && (!('transitMinutes' in data) || (data.transitMinutes is number && data.transitMinutes >= 0))
+        && (!('expireAt' in data) || data.expireAt == null || data.expireAt is timestamp);
     }
 
     function isCreatorStillActive(tripId, creatorUid) {

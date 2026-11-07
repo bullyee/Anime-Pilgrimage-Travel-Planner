@@ -87,6 +87,11 @@ class FakeFirestoreSyncV2Service implements FirestoreSyncV2Service {
       trips[trip.id]!['updatedAt'] = trip.updatedAt;
       trips[trip.id]!['updatedBy'] = trip.updatedBy;
       trips[trip.id]!['deletedAt'] = trip.deletedAt;
+      if (trip.deletedAt != null) {
+        trips[trip.id]!['expireAt'] = trip.deletedAt!.add(const Duration(days: 30));
+      } else {
+        trips[trip.id]!.remove('expireAt');
+      }
     });
   }
 
@@ -94,7 +99,7 @@ class FakeFirestoreSyncV2Service implements FirestoreSyncV2Service {
   void buildDayBatchOperations(WriteBatch batch, TripDay day) {
     final fakeBatch = batch as _FakeV2WriteBatch;
     fakeBatch.addOp(() {
-      tripDays.putIfAbsent(day.tripId, () => {})[day.id] = {
+      final map = tripDays.putIfAbsent(day.tripId, () => {})[day.id] = {
         'id': day.id,
         'tripId': day.tripId,
         'sortKey': day.sortKey,
@@ -104,6 +109,11 @@ class FakeFirestoreSyncV2Service implements FirestoreSyncV2Service {
         'updatedBy': day.updatedBy,
         'deletedAt': day.deletedAt,
       };
+      if (day.deletedAt != null) {
+        map['expireAt'] = day.deletedAt!.add(const Duration(days: 30));
+      } else {
+        map.remove('expireAt');
+      }
     });
   }
 
@@ -116,7 +126,7 @@ class FakeFirestoreSyncV2Service implements FirestoreSyncV2Service {
   }) {
     final fakeBatch = batch as _FakeV2WriteBatch;
     fakeBatch.addOp(() {
-      tripStops.putIfAbsent(stop.tripId, () => {})[stop.id] = {
+      final map = tripStops.putIfAbsent(stop.tripId, () => {})[stop.id] = {
         'id': stop.id,
         'tripId': stop.tripId,
         'placeKey': stop.placeKey,
@@ -159,6 +169,11 @@ class FakeFirestoreSyncV2Service implements FirestoreSyncV2Service {
                 })
             .toList(),
       };
+      if (stop.deletedAt != null) {
+        map['expireAt'] = stop.deletedAt!.add(const Duration(days: 30));
+      } else {
+        map.remove('expireAt');
+      }
     });
   }
 
@@ -166,7 +181,7 @@ class FakeFirestoreSyncV2Service implements FirestoreSyncV2Service {
   void buildScheduleItemBatchOperations(WriteBatch batch, ScheduleItem item) {
     final fakeBatch = batch as _FakeV2WriteBatch;
     fakeBatch.addOp(() {
-      tripScheduleItems.putIfAbsent(item.tripId, () => {})[item.id] = {
+      final map = tripScheduleItems.putIfAbsent(item.tripId, () => {})[item.id] = {
         'id': item.id,
         'tripId': item.tripId,
         'stopId': item.stopId,
@@ -180,6 +195,11 @@ class FakeFirestoreSyncV2Service implements FirestoreSyncV2Service {
         'updatedBy': item.updatedBy,
         'deletedAt': item.deletedAt,
       };
+      if (item.deletedAt != null) {
+        map['expireAt'] = item.deletedAt!.add(const Duration(days: 30));
+      } else {
+        map.remove('expireAt');
+      }
     });
   }
 
@@ -446,6 +466,66 @@ void main() {
       final localTrip = await (db.select(db.trips)..where((t) => t.id.equals('trip_offline'))).getSingle();
       expect(localTrip.syncStatus, 1); // Still dirty
       expect(syncEngine.getTripSyncStatus('trip_offline'), TripSyncStatus.offline);
+    });
+
+    test('upstream push sets expireAt on soft-deleted entity and clears it on restore', () async {
+      syncEngine.startSync();
+      final now = DateTime(2026, 11, 2, 10, 0);
+
+      // Create a shared trip
+      await db.into(db.trips).insert(
+            TripsCompanion.insert(
+              id: 'trip_trash',
+              title: 'Trash Sync Trip',
+              ownerId: currentUserId,
+              sharing: const Value('group'),
+              syncStatus: const Value(1),
+            ),
+          );
+
+      // Soft-delete a stop (syncStatus = 1)
+      await db.into(db.stops).insert(
+            StopsCompanion.insert(
+              id: 'stop_trash_1',
+              tripId: 'trip_trash',
+              placeKey: 'custom:stop_trash_1',
+              name: 'Deleted Stop',
+              lat: 35.0,
+              lng: 135.0,
+              addedBy: currentUserId,
+              deletedAt: Value(now),
+              syncStatus: const Value(1),
+            ),
+          );
+
+      // Wait for push
+      for (var i = 0; i < 30; i++) {
+        if (fakeFirestore.tripStops['trip_trash']?['stop_trash_1'] != null) break;
+        await Future.delayed(const Duration(milliseconds: 50));
+      }
+
+      final stopInCloud = fakeFirestore.tripStops['trip_trash']?['stop_trash_1'];
+      expect(stopInCloud, isNotNull);
+      expect(stopInCloud!['deletedAt'], equals(now));
+      expect(stopInCloud['expireAt'], equals(now.add(const Duration(days: 30))));
+
+      // Restore stop (deletedAt = null, syncStatus = 1)
+      await (db.update(db.stops)..where((s) => s.id.equals('stop_trash_1'))).write(
+        const StopsCompanion(
+          deletedAt: Value(null),
+          syncStatus: Value(1),
+        ),
+      );
+
+      // Wait for push
+      for (var i = 0; i < 30; i++) {
+        if (fakeFirestore.tripStops['trip_trash']?['stop_trash_1']?['deletedAt'] == null) break;
+        await Future.delayed(const Duration(milliseconds: 50));
+      }
+
+      final restoredStopInCloud = fakeFirestore.tripStops['trip_trash']?['stop_trash_1'];
+      expect(restoredStopInCloud!['deletedAt'], isNull);
+      expect(restoredStopInCloud['expireAt'], isNull);
     });
   });
 
