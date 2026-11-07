@@ -142,6 +142,30 @@ service cloud.firestore {
         && (!('transitMinutes' in data) || (data.transitMinutes is number && data.transitMinutes >= 0));
     }
 
+    function isTripPhotoSafe(docId, tripId) {
+      let data = request.resource.data;
+      return (!('id' in data) || data.id == docId)
+        && (!('tripId' in data) || data.tripId == tripId)
+        && (!('storagePath' in data) || (data.storagePath is string && data.storagePath.size() <= 500))
+        && (!('url' in data) || (data.url is string && data.url.size() <= 1000))
+        && (!('caption' in data) || data.caption == null || (data.caption is string && data.caption.size() <= 500))
+        && (!('uploadedBy' in data) || (data.uploadedBy is string && data.uploadedBy == request.auth.uid))
+        && (!('uploadedByName' in data) || data.uploadedByName == null || (data.uploadedByName is string && data.uploadedByName.size() <= 100))
+        && (!('expireAt' in data) || data.expireAt == null || data.expireAt is timestamp);
+    }
+
+    function isTripActivitySafe(docId, tripId) {
+      let data = request.resource.data;
+      return (!('id' in data) || data.id == docId)
+        && (!('tripId' in data) || data.tripId == tripId)
+        && (!('actorId' in data) || data.actorId == request.auth.uid)
+        && (!('action' in data) || (data.action is string && data.action.size() <= 50))
+        && (!('entityType' in data) || (data.entityType is string && data.entityType.size() <= 50))
+        && (!('entityId' in data) || (data.entityId is string && data.entityId.size() <= 100))
+        && (!('summary' in data) || (data.summary is string && data.summary.size() <= 300))
+        && (!('expireAt' in data) || data.expireAt is timestamp);
+    }
+
     function isCreatorStillActive(tripId, creatorUid) {
       let tripPath = /databases/$(database)/documents/tripsV2/$(tripId);
       let memberPath = /databases/$(database)/documents/tripsV2/$(tripId)/members/$(creatorUid);
@@ -274,6 +298,25 @@ service cloud.firestore {
           && isLwwValid()
           && isScheduleItemSafe(itemId);
         allow delete: if false;
+      }
+
+      match /trip_photos/{photoId} {
+        allow read: if isAuthenticated() && isTripMemberV2(tripId);
+        allow create, update: if isAuthenticated()
+          && isTripMemberV2(tripId)
+          && isTripEditorOrOwner(tripId)
+          && isLwwValid()
+          && isTripPhotoSafe(photoId, tripId);
+        allow delete: if false; // Soft-delete only with expireAt TTL
+      }
+
+      match /activity/{activityId} {
+        allow read: if isAuthenticated() && isTripMemberV2(tripId);
+        allow create: if isAuthenticated()
+          && isTripMemberV2(tripId)
+          && isTripEditorOrOwner(tripId)
+          && isTripActivitySafe(activityId, tripId);
+        allow update, delete: if false; // Append-only audit log
       }
     }
 

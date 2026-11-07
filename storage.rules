@@ -11,5 +11,50 @@ service firebase.storage {
     match /users/{userId}/{allPaths=**} {
       allow read, write: if request.auth != null && request.auth.uid == userId;
     }
+
+    // Helpers for Shared Trips V2
+    function isTripMember(tripId) {
+      let tripDoc = firestore.get(/databases/(default)/documents/tripsV2/$(tripId));
+      return tripDoc != null && (
+        request.auth.uid == tripDoc.data.ownerId ||
+        (
+          ('sharing' in tripDoc.data) && tripDoc.data.sharing == 'group' && (
+            (('members' in tripDoc.data) && request.auth.uid in tripDoc.data.members) ||
+            firestore.exists(/databases/(default)/documents/tripsV2/$(tripId)/members/$(request.auth.uid))
+          )
+        )
+      );
+    }
+
+    function isTripEditorOrOwner(tripId) {
+      let tripDoc = firestore.get(/databases/(default)/documents/tripsV2/$(tripId));
+      let memberDocPath = /databases/(default)/documents/tripsV2/$(tripId)/members/$(request.auth.uid);
+      return tripDoc != null && (
+        request.auth.uid == tripDoc.data.ownerId ||
+        (
+          ('sharing' in tripDoc.data) && tripDoc.data.sharing == 'group' &&
+          firestore.exists(memberDocPath) &&
+          firestore.get(memberDocPath).data.role in ['owner', 'editor']
+        )
+      );
+    }
+
+    // Shared Trip Photos: /tripsV2/{tripId}/trip_photos/{fileName}
+    match /tripsV2/{tripId}/trip_photos/{fileName} {
+      allow read: if request.auth != null && isTripMember(tripId);
+      allow write: if request.auth != null
+        && isTripEditorOrOwner(tripId)
+        && request.resource.size < 10 * 1024 * 1024
+        && request.resource.contentType.matches('image/.*');
+    }
+
+    // Shared Reference Images: /tripsV2/{tripId}/reference_images/{fileName}
+    match /tripsV2/{tripId}/reference_images/{fileName} {
+      allow read: if request.auth != null && isTripMember(tripId);
+      allow write: if request.auth != null
+        && isTripEditorOrOwner(tripId)
+        && request.resource.size < 10 * 1024 * 1024
+        && request.resource.contentType.matches('image/.*');
+    }
   }
 }
