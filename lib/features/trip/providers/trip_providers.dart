@@ -1,6 +1,7 @@
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../../../core/database/database.dart';
 import '../../../core/providers/database_provider.dart';
+import '../../../core/services/trip_view_state_service.dart';
 import '../../../core/utils/schedule_logic.dart';
 import '../../auth/providers/auth_provider.dart';
 import '../../library/providers/place_providers.dart';
@@ -149,5 +150,56 @@ final dayTimelineProvider = Provider.autoDispose.family<List<ComputedTimelineIte
   }).toList();
 
   return ScheduleLogicEngine.computeScheduleTimes(itemInfos);
+});
+
+/// Provides the singleton [TripViewStateService] for tracking in-app view timestamps and unread state.
+final tripViewStateServiceProvider = Provider<TripViewStateService>((ref) {
+  final service = TripViewStateService();
+  ref.onDispose(service.dispose);
+  return service;
+});
+
+/// Streams the latest update timestamp across this trip and its child entities
+/// made by collaborators other than the current user.
+final tripLatestCollaboratorUpdateProvider = StreamProvider.autoDispose.family<DateTime?, String>((ref, tripId) {
+  final repo = ref.watch(tripRepositoryProvider);
+  final currentUserId = ref.watch(currentUserIdProvider);
+  return repo.watchLatestCollaboratorUpdate(tripId, currentUserId);
+});
+
+/// Streams the last viewed timestamp for [tripId] and current user.
+final tripLastViewedAtProvider = StreamProvider.autoDispose.family<DateTime?, String>((ref, tripId) {
+  final viewService = ref.watch(tripViewStateServiceProvider);
+  final currentUserId = ref.watch(currentUserIdProvider);
+  return viewService.watchLastViewedAt(tripId, userId: currentUserId);
+});
+
+/// Provides whether [tripId] has unread updates made by collaborators.
+///
+/// Returns `false` for private trips or when the current user made the most recent change.
+/// Returns `true` when a collaborator's update is newer than the user's `lastViewedAt`
+/// (or when the trip has collaborator updates and has not yet been opened).
+final hasUnreadTripUpdatesProvider = Provider.autoDispose.family<bool, String>((ref, tripId) {
+  final trip = ref.watch(tripDetailProvider(tripId)).valueOrNull;
+  if (trip == null || trip.sharing != 'group') {
+    return false;
+  }
+
+  final latestUpdate = ref.watch(tripLatestCollaboratorUpdateProvider(tripId)).valueOrNull;
+  if (latestUpdate == null) {
+    return false;
+  }
+
+  final lastViewedAsync = ref.watch(tripLastViewedAtProvider(tripId));
+  if (lastViewedAsync.isLoading) {
+    return false; // Avoid unread flicker while local state file is loading
+  }
+
+  final lastViewed = lastViewedAsync.valueOrNull;
+  if (lastViewed == null) {
+    return true; // Unopened shared trip with collaborator changes
+  }
+
+  return latestUpdate.isAfter(lastViewed);
 });
 
