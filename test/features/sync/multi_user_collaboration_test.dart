@@ -87,6 +87,10 @@ class SharedCollaborativeCloud extends Fake implements FirestoreSyncV2Service {
     final b = batch as _SharedCloudWriteBatch;
     b.addOp(() {
       final existing = trips[trip.id] ?? {};
+      final existingUpdatedAt = existing['updatedAt'] as DateTime?;
+      if (existingUpdatedAt != null && !trip.updatedAt.isAfter(existingUpdatedAt)) {
+        return;
+      }
       final members = existing['members'] ?? [trip.ownerId];
       trips[trip.id] = {
         'id': trip.id,
@@ -108,6 +112,13 @@ class SharedCollaborativeCloud extends Fake implements FirestoreSyncV2Service {
   void buildDayBatchOperations(WriteBatch batch, TripDay day) {
     final b = batch as _SharedCloudWriteBatch;
     b.addOp(() {
+      final existing = tripDays[day.tripId]?[day.id];
+      if (existing != null) {
+        final existingUpdatedAt = existing['updatedAt'] as DateTime?;
+        if (existingUpdatedAt != null && !day.updatedAt.isAfter(existingUpdatedAt)) {
+          return;
+        }
+      }
       tripDays.putIfAbsent(day.tripId, () => {})[day.id] = {
         'id': day.id,
         'tripId': day.tripId,
@@ -130,6 +141,13 @@ class SharedCollaborativeCloud extends Fake implements FirestoreSyncV2Service {
   }) {
     final b = batch as _SharedCloudWriteBatch;
     b.addOp(() {
+      final existing = tripStops[stop.tripId]?[stop.id];
+      if (existing != null) {
+        final existingUpdatedAt = existing['updatedAt'] as DateTime?;
+        if (existingUpdatedAt != null && !stop.updatedAt.isAfter(existingUpdatedAt)) {
+          return;
+        }
+      }
       tripStops.putIfAbsent(stop.tripId, () => {})[stop.id] = {
         'id': stop.id,
         'tripId': stop.tripId,
@@ -160,6 +178,13 @@ class SharedCollaborativeCloud extends Fake implements FirestoreSyncV2Service {
   void buildScheduleItemBatchOperations(WriteBatch batch, ScheduleItem item) {
     final b = batch as _SharedCloudWriteBatch;
     b.addOp(() {
+      final existing = tripScheduleItems[item.tripId]?[item.id];
+      if (existing != null) {
+        final existingUpdatedAt = existing['updatedAt'] as DateTime?;
+        if (existingUpdatedAt != null && !item.updatedAt.isAfter(existingUpdatedAt)) {
+          return;
+        }
+      }
       tripScheduleItems.putIfAbsent(item.tripId, () => {})[item.id] = {
         'id': item.id,
         'tripId': item.tripId,
@@ -651,5 +676,110 @@ void main() {
     final bobStop = await (bobDb.select(bobDb.stops)..where((s) => s.id.equals(stopId))).getSingle();
     expect(bobStop.deletedAt, isNotNull);
     expect(bobStop.deletedAt, equals(tDelete));
+  });
+
+  test('Pilgrimage Offline Sync: Alice marks stop visited while offline -> reconnects -> visited status is preserved and synced', () async {
+    const tripId = 'collab_pilgrimage_1';
+    const stopId = 'stop_uji_shrine';
+    const itemId = 'item_uji_visit';
+    final t0 = DateTime(2026, 11, 7, 9, 0);
+
+    cloud.trips[tripId] = {
+      'id': tripId,
+      'title': 'Uji Pilgrimage Tour',
+      'ownerId': 'alice',
+      'sharing': 'group',
+      'dayCount': 1,
+      'members': ['alice', 'bob'],
+      'updatedAt': t0,
+    };
+    cloud.tripDays[tripId] = {
+      'day_1': {
+        'id': 'day_1',
+        'tripId': tripId,
+        'sortKey': 'a0',
+        'title': 'Day 1: Uji',
+        'updatedAt': t0,
+      }
+    };
+    cloud.tripStops[tripId] = {
+      stopId: {
+        'id': stopId,
+        'tripId': tripId,
+        'placeKey': 'anitabi:uji_shrine',
+        'name': 'Ujigami Shrine',
+        'lat': 34.89,
+        'lng': 135.81,
+        'addedBy': 'alice',
+        'updatedAt': t0,
+      }
+    };
+    cloud.tripScheduleItems[tripId] = {
+      itemId: {
+        'id': itemId,
+        'tripId': tripId,
+        'stopId': stopId,
+        'dayId': 'day_1',
+        'sortKey': 'a0',
+        'stayMinutes': 45,
+        'transitMinutes': 10,
+        'status': 'planned',
+        'updatedAt': t0,
+      }
+    };
+
+    aliceSync.startSync();
+    bobSync.startSync();
+    cloud.broadcastAll();
+    await Future.delayed(const Duration(milliseconds: 200));
+
+    // 1. Both Alice and Bob start with the item as 'planned'
+    var aliceItem = await (aliceDb.select(aliceDb.scheduleItems)..where((i) => i.id.equals(itemId))).getSingle();
+    var bobItem = await (bobDb.select(bobDb.scheduleItems)..where((i) => i.id.equals(itemId))).getSingle();
+    expect(aliceItem.status, equals('planned'));
+    expect(bobItem.status, equals('planned'));
+
+    // 2. Alice goes offline during the pilgrimage (stops sync)
+    aliceSync.stopSync();
+
+    // Alice visits the shrine and marks the stop visited ('done')
+    final tAliceVisit = DateTime(2026, 11, 7, 10, 0);
+    await (aliceDb.update(aliceDb.scheduleItems)..where((i) => i.id.equals(itemId))).write(
+      ScheduleItemsCompanion(
+        status: const Value('done'),
+        updatedAt: Value(tAliceVisit),
+        syncStatus: const Value(1),
+      ),
+    );
+
+    // 3. Meanwhile, Bob (online in town) updates the transit time from 10 to 20 minutes at 10:15
+    final tBobEdit = DateTime(2026, 11, 7, 10, 15);
+    await DriftTripRepository(bobDb).updateScheduleItem(ScheduleItemsCompanion(
+      id: const Value(itemId),
+      transitMinutes: const Value(20),
+      updatedAt: Value(tBobEdit),
+      syncStatus: const Value(1),
+    ));
+
+    await waitForCondition(() => cloud.tripScheduleItems[tripId]?[itemId]?['transitMinutes'] == 20);
+
+    // 4. Alice gets back to station WiFi and reconnects!
+    aliceSync.startSync();
+    cloud.broadcastAll();
+
+    // 5. Assert: Alice's visited status ('done') MUST NOT be lost, and Bob's transit edit is merged!
+    await waitForCondition(() async {
+      aliceItem = await (aliceDb.select(aliceDb.scheduleItems)..where((i) => i.id.equals(itemId))).getSingle();
+      return aliceItem.status == 'done' && aliceItem.transitMinutes == 20;
+    });
+
+    // 6. Assert: Alice pushes 'done' to cloud and Bob receives it
+    await waitForCondition(() => cloud.tripScheduleItems[tripId]?[itemId]?['status'] == 'done');
+    cloud.broadcastAll();
+
+    await waitForCondition(() async {
+      bobItem = await (bobDb.select(bobDb.scheduleItems)..where((i) => i.id.equals(itemId))).getSingle();
+      return bobItem.status == 'done' && bobItem.transitMinutes == 20;
+    });
   });
 }
