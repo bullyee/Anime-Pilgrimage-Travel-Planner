@@ -27,6 +27,9 @@ class AnitabiSpot {
   final String? note;
   final String? imageUrl;
 
+  /// Optional Chinese name for the spot when available in Anitabi static data.
+  final String? chineseName;
+
   /// Who the frame comes from, which the CC BY-NC-SA licence asks to keep.
   final String? origin;
   final String? originUrl;
@@ -34,6 +37,7 @@ class AnitabiSpot {
   const AnitabiSpot({
     required this.id,
     required this.name,
+    this.chineseName,
     this.lat,
     this.lng,
     this.episode,
@@ -71,9 +75,11 @@ class AnitabiSpot {
     double? coord(int i) => geo is List && geo.length > i ? double.tryParse('${geo[i]}') : null;
     String? text(Object? v) => v == null || '$v'.trim().isEmpty ? null : '$v'.trim();
     final image = text(json['image']);
+    final cn = text(json['cn']);
     return AnitabiSpot(
       id: id,
       name: name,
+      chineseName: cn,
       lat: coord(0),
       lng: coord(1),
       episode: text(json['ep']),
@@ -249,6 +255,7 @@ class AnitabiImport {
         await places.upsertPlace(PlacesCompanion.insert(
           placeKey: spot.placeKey,
           name: spot.name,
+          chineseName: Value(spot.chineseName),
           lat: spot.lat!,
           lng: spot.lng!,
           description: Value(spot.note),
@@ -261,6 +268,12 @@ class AnitabiImport {
       } else {
         alreadySaved++;
         if (existing.visibility != 'saved') await places.setPlaceVisibility(spot.placeKey, 'saved');
+        if (existing.chineseName == null && spot.chineseName != null) {
+          await places.updatePlace(PlacesCompanion(
+            placeKey: Value(spot.placeKey),
+            chineseName: Value(spot.chineseName),
+          ));
+        }
         if (spot.imageUrl != null && !_downloading.contains(spot.placeKey) && await owed.contains(spot.placeKey)) {
           // The app closed while it downloaded, unless the frame was stored
           // just before that.

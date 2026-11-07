@@ -1,4 +1,5 @@
 import '../../../core/database/database.dart';
+import '../../../core/utils/chinese_converter.dart';
 
 /// The label kinds, in the order the library shows them.
 const labelKinds = ['anime', 'tag', 'region'];
@@ -85,14 +86,24 @@ List<LibraryEntry> filterLibrary(List<LibraryEntry> entries, LibraryFilter filte
     if (kind != null) pickedByKind.putIfAbsent(kind, () => {}).add(id);
   }
   final q = filter.query.trim().toLowerCase();
+  final qSimplified = ChineseConverter.toSimplified(q);
+  final qTraditional = ChineseConverter.toTraditional(q);
+
+  bool matchesText(String? target) {
+    if (target == null || target.isEmpty) return false;
+    final lower = target.toLowerCase();
+    return lower.contains(q) || lower.contains(qSimplified) || lower.contains(qTraditional);
+  }
+
   return [
     for (final e in entries)
       if ((e.isSaved || filter.includeTripOnly) &&
           pickedByKind.values.every((picked) => e.labels.any((l) => picked.contains(l.id))) &&
           (q.isEmpty ||
-              e.place.name.toLowerCase().contains(q) ||
-              (e.place.address?.toLowerCase().contains(q) ?? false) ||
-              e.labels.any((l) => l.name.toLowerCase().contains(q))))
+              matchesText(e.place.name) ||
+              matchesText(e.place.chineseName) ||
+              matchesText(e.place.address) ||
+              e.labels.any((l) => matchesText(l.name))))
         e,
   ];
 }
