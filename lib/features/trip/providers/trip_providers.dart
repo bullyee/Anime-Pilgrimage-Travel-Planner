@@ -4,7 +4,11 @@ import '../../../core/providers/database_provider.dart';
 import '../../../core/utils/schedule_logic.dart';
 import '../../auth/providers/auth_provider.dart';
 import '../../library/providers/place_providers.dart';
+import '../../sync/providers/sync_v2_providers.dart';
+import '../models/trip_activity.dart';
+import '../models/trip_photo.dart';
 import '../repositories/trip_repository.dart';
+import '../services/trip_photo_upload_service.dart';
 
 /// Provides the [TripRepository] instance backed by Drift.
 final tripRepositoryProvider = Provider<TripRepository>((ref) {
@@ -149,5 +153,29 @@ final dayTimelineProvider = Provider.autoDispose.family<List<ComputedTimelineIte
   }).toList();
 
   return ScheduleLogicEngine.computeScheduleTimes(itemInfos);
+});
+
+/// Streams recent activity audit logs for a given [tripId].
+final tripActivityProvider = StreamProvider.autoDispose.family<List<TripActivity>, String>((ref, tripId) {
+  final syncService = ref.watch(firestoreSyncV2ServiceProvider);
+  return syncService.watchTripActivity(tripId);
+});
+
+/// Streams active shared photos for a given [tripId].
+final tripPhotosProvider = StreamProvider.autoDispose.family<List<TripPhoto>, String>((ref, tripId) {
+  final syncService = ref.watch(firestoreSyncV2ServiceProvider);
+  return syncService.watchTripPhotos(tripId);
+});
+
+/// Streams soft-deleted trash photos for a given [tripId].
+final tripTrashPhotosProvider = StreamProvider.autoDispose.family<List<TripPhoto>, String>((ref, tripId) {
+  final syncService = ref.watch(firestoreSyncV2ServiceProvider);
+  return syncService.watchTrashTripPhotos(tripId);
+});
+
+/// Provides the [TripPhotoUploadService] instance.
+final tripPhotoUploadServiceProvider = Provider<TripPhotoUploadService>((ref) {
+  final syncService = ref.watch(firestoreSyncV2ServiceProvider);
+  return TripPhotoUploadService(syncService: syncService);
 });
 

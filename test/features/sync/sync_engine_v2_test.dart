@@ -6,6 +6,8 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:trip_planner/core/database/database.dart';
 import 'package:trip_planner/features/sync/services/firestore_sync_v2_service.dart';
 import 'package:trip_planner/features/sync/services/sync_engine_service_v2.dart';
+import 'package:trip_planner/features/trip/models/trip_activity.dart';
+import 'package:trip_planner/features/trip/models/trip_photo.dart';
 
 class FakeFirestoreSyncV2Service implements FirestoreSyncV2Service {
   final Map<String, Map<String, dynamic>> trips = {};
@@ -213,6 +215,41 @@ class FakeFirestoreSyncV2Service implements FirestoreSyncV2Service {
         .putIfAbsent(tripId, () => StreamController.broadcast())
         .stream;
   }
+
+  @override
+  void buildTripPhotoBatchOperation(WriteBatch batch, TripPhoto photo) {}
+
+  @override
+  Future<void> recordTripPhoto(TripPhoto photo) async {}
+
+  @override
+  Future<void> softDeleteTripPhoto({
+    required String tripId,
+    required String photoId,
+    DateTime? deletedAt,
+  }) async {}
+
+  @override
+  Future<void> restoreTripPhoto({
+    required String tripId,
+    required String photoId,
+    DateTime? restoredAt,
+  }) async {}
+
+  @override
+  Stream<List<TripPhoto>> watchTripPhotos(String tripId) => const Stream.empty();
+
+  @override
+  Stream<List<TripPhoto>> watchTrashTripPhotos(String tripId) => const Stream.empty();
+
+  @override
+  void buildActivityBatchOperation(WriteBatch batch, TripActivity activity) {}
+
+  @override
+  Future<void> recordActivity(TripActivity activity) async {}
+
+  @override
+  Stream<List<TripActivity>> watchTripActivity(String tripId, {int limit = 50}) => const Stream.empty();
 }
 
 class _FakeV2WriteBatch implements WriteBatch {

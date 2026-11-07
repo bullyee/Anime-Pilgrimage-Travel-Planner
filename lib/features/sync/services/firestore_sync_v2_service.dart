@@ -1,5 +1,7 @@
 import 'package:cloud_firestore/cloud_firestore.dart';
 import '../../../../core/database/database.dart';
+import '../../trip/models/trip_activity.dart';
+import '../../trip/models/trip_photo.dart';
 
 /// A snapshot of user trips from [FirestoreSyncV2Service], carrying whether it originated from local cache.
 class UserTripsSnapshot {
@@ -259,5 +261,134 @@ class FirestoreSyncV2Service {
         .snapshots(includeMetadataChanges: true)
         .where((snapshot) => !snapshot.metadata.hasPendingWrites)
         .map((snapshot) => snapshot.docs.map((doc) => withDocumentId(doc.id, doc.data())).toList());
+  }
+
+  /// Build batch operation for a [TripPhoto].
+  void buildTripPhotoBatchOperation(WriteBatch batch, TripPhoto photo) {
+    final docRef = _db
+        .collection('tripsV2')
+        .doc(photo.tripId)
+        .collection('trip_photos')
+        .doc(photo.id);
+    batch.set(docRef, photo.toMap());
+  }
+
+  /// Record or update a shared pilgrimage photo in Firestore.
+  Future<void> recordTripPhoto(TripPhoto photo) async {
+    final docRef = _db
+        .collection('tripsV2')
+        .doc(photo.tripId)
+        .collection('trip_photos')
+        .doc(photo.id);
+    await docRef.set(photo.toMap());
+  }
+
+  /// Soft-deletes a shared photo with automatic 30-day cloud TTL.
+  Future<void> softDeleteTripPhoto({
+    required String tripId,
+    required String photoId,
+    DateTime? deletedAt,
+  }) async {
+    final now = deletedAt ?? DateTime.now();
+    final expireAt = now.add(const Duration(days: 30));
+    final docRef = _db
+        .collection('tripsV2')
+        .doc(tripId)
+        .collection('trip_photos')
+        .doc(photoId);
+
+    await docRef.update({
+      'deletedAt': Timestamp.fromDate(now),
+      'expireAt': Timestamp.fromDate(expireAt),
+      'updatedAt': Timestamp.fromDate(now),
+    });
+  }
+
+  /// Restores a soft-deleted shared photo, deleting the expireAt TTL field.
+  Future<void> restoreTripPhoto({
+    required String tripId,
+    required String photoId,
+    DateTime? restoredAt,
+  }) async {
+    final now = restoredAt ?? DateTime.now();
+    final docRef = _db
+        .collection('tripsV2')
+        .doc(tripId)
+        .collection('trip_photos')
+        .doc(photoId);
+
+    await docRef.update({
+      'deletedAt': null,
+      'expireAt': FieldValue.delete(),
+      'updatedAt': Timestamp.fromDate(now),
+    });
+  }
+
+  /// Watch active shared photos for a trip (excluding soft-deleted).
+  Stream<List<TripPhoto>> watchTripPhotos(String tripId) {
+    return _db
+        .collection('tripsV2')
+        .doc(tripId)
+        .collection('trip_photos')
+        .snapshots()
+        .map((snapshot) {
+      final list = snapshot.docs
+          .map((doc) => TripPhoto.fromMap(withDocumentId(doc.id, doc.data())))
+          .where((p) => p.deletedAt == null)
+          .toList();
+      list.sort((a, b) => b.createdAt.compareTo(a.createdAt));
+      return list;
+    });
+  }
+
+  /// Watch soft-deleted trash photos for a trip.
+  Stream<List<TripPhoto>> watchTrashTripPhotos(String tripId) {
+    return _db
+        .collection('tripsV2')
+        .doc(tripId)
+        .collection('trip_photos')
+        .snapshots()
+        .map((snapshot) {
+      final list = snapshot.docs
+          .map((doc) => TripPhoto.fromMap(withDocumentId(doc.id, doc.data())))
+          .where((p) => p.deletedAt != null)
+          .toList();
+      list.sort((a, b) => (b.deletedAt ?? b.createdAt).compareTo(a.deletedAt ?? a.createdAt));
+      return list;
+    });
+  }
+
+  /// Build batch operation for a [TripActivity].
+  void buildActivityBatchOperation(WriteBatch batch, TripActivity activity) {
+    final docRef = _db
+        .collection('tripsV2')
+        .doc(activity.tripId)
+        .collection('activity')
+        .doc(activity.id);
+    batch.set(docRef, activity.toMap());
+  }
+
+  /// Record an audit log entry for a trip.
+  Future<void> recordActivity(TripActivity activity) async {
+    final docRef = _db
+        .collection('tripsV2')
+        .doc(activity.tripId)
+        .collection('activity')
+        .doc(activity.id);
+    await docRef.set(activity.toMap());
+  }
+
+  /// Watch recent activity logs for a trip, newest first.
+  Stream<List<TripActivity>> watchTripActivity(String tripId, {int limit = 50}) {
+    return _db
+        .collection('tripsV2')
+        .doc(tripId)
+        .collection('activity')
+        .orderBy('createdAt', descending: true)
+        .limit(limit)
+        .snapshots()
+        .map((snapshot) => snapshot.docs
+            .map((doc) => TripActivity.fromMap(withDocumentId(doc.id, doc.data())))
+            .toList());
   }
 }
