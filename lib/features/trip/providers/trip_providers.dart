@@ -1,10 +1,13 @@
+import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../../../core/database/database.dart';
 import '../../../core/providers/database_provider.dart';
 import '../../../core/utils/schedule_logic.dart';
 import '../../auth/providers/auth_provider.dart';
 import '../../library/providers/place_providers.dart';
+import '../models/trip_template.dart';
 import '../repositories/trip_repository.dart';
+import '../services/trip_template_service.dart';
 
 /// Provides the [TripRepository] instance backed by Drift.
 final tripRepositoryProvider = Provider<TripRepository>((ref) {
@@ -149,5 +152,16 @@ final dayTimelineProvider = Provider.autoDispose.family<List<ComputedTimelineIte
   }).toList();
 
   return ScheduleLogicEngine.computeScheduleTimes(itemInfos);
+});
+
+/// Provides the [TripTemplateService] instance for exporting, publishing, and cloning templates.
+final tripTemplateServiceProvider = Provider<TripTemplateService>((ref) {
+  final db = ref.watch(databaseProvider);
+  final currentUserId = ref.watch(currentUserIdProvider);
+  return TripTemplateService(
+    db: db,
+    firestore: FirebaseFirestore.instance,
+    currentUserId: currentUserId,
+  );
 });
 

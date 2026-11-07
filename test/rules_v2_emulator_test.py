@@ -742,6 +742,60 @@ def main():
                                          'name': {'stringValue': 'x'}, 'updatedAt': {'integerValue': '1000'}}}, user_id='mallory')
     assert_status("id integrity: unicode id equal to path succeeds (200)", 200, code, resp=resp)
 
+    # ==========================================
+    # Phase 4 Public Trip Templates
+    # ==========================================
+    tpl_data = {
+        'fields': {
+            'id': {'stringValue': 'tpl_emu_1'},
+            'code': {'stringValue': 'EMU123'},
+            'title': {'stringValue': 'Akihabara Steins;Gate Tour'},
+            'dayCount': {'integerValue': '2'},
+            'stopCount': {'integerValue': '3'},
+        }
+    }
+    # 60. Authenticated Alice can create template (200)
+    code, resp = api_request('POST', 'templates?documentId=tpl_emu_1', tpl_data, user_id='alice')
+    assert_status("Phase 4: Authenticated user can create public trip template (200)", 200, code, resp=resp)
+
+    # 61. Unauthenticated visitor can read template (200)
+    code, resp = api_request('GET', 'templates/tpl_emu_1', user_id=None)
+    assert_status("Phase 4: Unauthenticated guest can read public template (200)", 200, code, resp=resp)
+
+    # 62. Unauthenticated visitor cannot create template (403)
+    code, resp = api_request('POST', 'templates?documentId=tpl_unauth', tpl_data, user_id=None)
+    assert_status("Phase 4: Unauthenticated guest cannot create template (403)", 403, code, resp=resp)
+
+    # 63. Template is immutable: Alice cannot update template (403)
+    code, resp = api_request('PATCH', 'templates/tpl_emu_1', tpl_data, user_id='alice')
+    assert_status("Phase 4: Public template snapshot is immutable no update (403)", 403, code, resp=resp)
+
+    # 64. Template is immutable: Alice cannot delete template (403)
+    code, resp = api_request('DELETE', 'templates/tpl_emu_1', user_id='alice')
+    assert_status("Phase 4: Public template snapshot cannot be deleted (403)", 403, code, resp=resp)
+
+    # 65. Authenticated Alice can create template code linking to valid template (200)
+    code_data = {
+        'fields': {
+            'code': {'stringValue': 'EMU123'},
+            'templateId': {'stringValue': 'tpl_emu_1'},
+        }
+    }
+    code, resp = api_request('POST', 'template_codes?documentId=EMU123', code_data, user_id='alice')
+    assert_status("Phase 4: Authenticated user can create template short code (200)", 200, code, resp=resp)
+
+    # 66. Unauthenticated guest can get template short code (200)
+    code, resp = api_request('GET', 'template_codes/EMU123', user_id=None)
+    assert_status("Phase 4: Unauthenticated guest can get template short code (200)", 200, code, resp=resp)
+
+    # 67. Cannot list template_codes (single-doc lookup only) (403)
+    code, resp = api_request('GET', 'template_codes', user_id=None)
+    assert_status("Phase 4: Cannot list template_codes (403)", 403, code, resp=resp)
+
+    # 68. Template code cannot be updated or deleted (403)
+    code, resp = api_request('DELETE', 'template_codes/EMU123', user_id='alice')
+    assert_status("Phase 4: Template code cannot be deleted (403)", 403, code, resp=resp)
+
     print(f"\nALL {tests_passed}/{tests_total} FIRESTORE RULES TESTS PASSED!")
 
 if __name__ == '__main__':
