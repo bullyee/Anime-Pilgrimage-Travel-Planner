@@ -158,5 +158,5 @@ Pre-1.0 with few users, so the migration keeps places and photos and drops sched
   - auto-scroll while dragging across blocks;
   - how backlog and backup blocks are presented.
 - Closed-day warnings when a block moves (business hours are free text today).
-- Moving the personal layer from guest mode to a signed-in account, and the later private cloud backup.
+- Moving the personal layer from guest mode to a signed-in account. The personal layer itself stays on the device: no private cloud backup; moving to a new phone goes through an exported file (`docs/roadmap.md`, 2026-11-08).
 - Trip cover image.

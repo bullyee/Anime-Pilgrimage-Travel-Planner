@@ -1,6 +1,6 @@
 # Roadmap
 
-Status: draft for bullyee and ck, 2026-11-06, updated 2026-11-07. What comes after the MVP (`docs/mvp-plan.md`), by version. Each version runs two code tracks side by side, since the screens (bullyee) and the backend and sync (ck) are mostly separate, plus a launch track that isn't code.
+Status: draft for bullyee and ck, 2026-11-06, updated 2026-11-08. What comes after the MVP (`docs/mvp-plan.md`), by version. Each version runs two code tracks side by side, since the screens (bullyee) and the backend and sync (ck) are mostly separate, plus a launch track that isn't code.
 
 The hard part from here isn't the code: it's getting the app into stores and in front of people. So the launch track starts now, alongside v0.3.0, not after it.
 
@@ -15,6 +15,8 @@ The hard part from here isn't the code: it's getting the app into stores and in 
 ## What the app is for
 
 The moment that matters is standing at the spot and getting the shot. Planning, sharing and importing exist so that, on the day, the right frame is in your hand. So the next version is about that moment, and planning together comes after it.
+
+**The app is local; signing in is only for trips.** The library (places, notes, visits, photos and frames) lives on the device and never goes to the cloud. A Google account is the identity for sharing trips (sharing, inviting, joining), not a login for the whole app, and everything else works without one. Only shared trips go to Firebase, plus, later, the photos someone chooses to upload to a shared trip and the templates they publish. Moving to a new phone or to the Play app goes through a file the user exports and imports (see Google Play below), not a cloud backup. Agreed on 2026-11-08, which is why #104's personal cloud backup isn't going in.
 
 ## v0.3.0: pilgrimage mode
 
@@ -40,6 +42,7 @@ Two tracks in parallel. They meet only where a screen needs a backend call.
 - #110, rejoining a trip after leaving it (see v0.2.0). Later, once the comparison screens exist, rejoining could ask "You changed 3 things while away; bring them into the shared trip?" instead of keeping a separate copy.
 - #103's phase 2, split into PRs: the trash (#103: restore deleted stops, days and trips), the activity log (#115), the unread badge. Rules changes come with emulator tests, as now. Their screens come in v0.4.0. The trash and the log set `expireAt` for Firestore to delete them after 30 days, which needs a TTL policy on that field in the Firebase Console.
 - Marking a stop visited while offline in a shared trip must sync cleanly once back online: the day of a pilgrimage is where connections drop (#114). Photos stay on the device, so they don't sync here (trip photos are v0.5.0).
+- Remove the unused `users/{userId}` paths from `firestore.rules` and `storage.rules` (left from the sign-in work in May; nothing writes there), so the rules say what the app does: only trips go to the cloud.
 
 ## v0.4.0: planning together, smoother
 
@@ -73,7 +76,7 @@ What other people see is what brings new users, so this is the growth version.
 ### Google Play
 - [ ] **Change `applicationId`** from `com.example.trip_planner`. Play refuses `com.example`, and it can't change after the first upload. Change the map's `userAgentPackageName` with it (#24).
 - [ ] **Release signing.** Today's APKs are signed with the debug key, which Play refuses. Use Play App Signing with a new upload key, kept outside the repo (both of us need a copy).
-- [ ] **Moving people from the GitHub APK.** A new ID and key make the Play app a separate app, and the library only lives on the device. Either a library export and import, or #104's backup (opt-in, with a privacy policy update), before asking anyone to switch.
+- [ ] **Moving people from the GitHub APK: export and import the library.** A new ID and key make the Play app a separate app, and the library only lives on the device. So before asking anyone to switch, the app exports the library, photos and frames included, into one file that the user saves or sends wherever they like (the system share sheet: the phone, Google Drive, a chat), and the new app imports it. It needs no account, no cloud and no change to the privacy policy, and the same file covers changing phones. This is #78 (closed until after the MVP), on the new model.
 - [ ] Play Console account (one-time fee). A new **personal** account must run a closed test with at least 12 testers for 14 days before it can publish (Google's help page has said 20; check the Console when we apply). The closed test is also our first group of real users, so recruit them from the communities below.
 - [ ] Store listing: Data safety form (Google sign-in, Firestore for shared trips, photos stay on the device), content rating, privacy policy URL (`public/privacy.html`, #98).
 - [ ] **Store screenshots without anime frames.** Frames belong to the studios; use our own photos and the app's screens with our own spots, so the listing isn't refused for IP.
@@ -102,4 +105,4 @@ What other people see is what brings new users, so this is the growth version.
 - Who owns the launch track? Play account owner, store listing, the closed test's testers.
 - Personal or organization Play account? An organization account skips the closed-test rule but needs a D-U-N-S number.
 - Is a name change due before the store? "trip_planner" is generic and hard to search for.
-- Usage analytics (#113, Firebase Analytics): on by default with a switch in Settings to turn it off, or off until people opt in? Either way the privacy policy and Play's Data safety form must list it.
+- Usage analytics (#113, Firebase Analytics): it reports how the whole app is used, not only shared trips, so it sits awkwardly with a local app. Off until people opt in from Settings, or not at all? Either way the privacy policy and Play's Data safety form must list it.
