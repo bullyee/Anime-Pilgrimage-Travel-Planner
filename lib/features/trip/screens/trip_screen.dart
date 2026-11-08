@@ -129,6 +129,11 @@ class _TripScreenState extends ConsumerState<TripScreen> with SingleTickerProvid
                     icon: const Icon(Icons.edit_outlined),
                     onPressed: () => setState(() => _editing = true),
                   ),
+          IconButton(
+            tooltip: 'Pilgrimage map',
+            icon: const Icon(Icons.map_outlined),
+            onPressed: () => context.push('/trips/${trip.id}/map'),
+          ),
           if (role == TripMemberRole.owner || role == TripMemberRole.editor)
             IconButton(
               tooltip: 'Invite people',
