@@ -1,12 +1,9 @@
-import 'dart:io';
-
 import 'package:drift/drift.dart' hide isNull, isNotNull;
 import 'package:drift/native.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:trip_planner/core/database/database.dart';
 import 'package:trip_planner/core/providers/database_provider.dart';
-import 'package:trip_planner/features/camera/models/shooting_core_models.dart';
 import 'package:trip_planner/features/camera/providers/shooting_core_providers.dart';
 import 'package:trip_planner/features/camera/services/pilgrimage_shooting_service.dart';
 import 'package:trip_planner/features/library/repositories/place_repository.dart';
@@ -166,15 +163,122 @@ void main() {
       expect(candidates.length, equals(2));
 
       // Spot A must be FIRST because it is on today's trip schedule, even though Spot B is closer!
-      expect(candidates[0].place.placeKey, equals('place_a'));
+      expect(candidates[0].placeKey, equals('place_a'));
       expect(candidates[0].isTodayStop, isTrue);
       expect(candidates[0].animeTitle, equals('Sound! Euphonium'));
       expect(candidates[0].referenceFrames.length, equals(1));
       expect(candidates[0].primaryFrame?.localPath, equals('/frames/eupho_ep1.jpg'));
 
       // Spot B is SECOND
-      expect(candidates[1].place.placeKey, equals('place_b'));
+      expect(candidates[1].placeKey, equals('place_b'));
       expect(candidates[1].isTodayStop, isFalse);
+    });
+
+    test('finds today stop straight from createTripOnlySpot (visibility = trip_only, no relinking) first', () async {
+      final now = DateTime(2026, 8, 15, 10, 0);
+
+      // A library place 30m away
+      await placeRepo.upsertPlace(PlacesCompanion.insert(
+        placeKey: 'place_saved_near',
+        name: 'Saved Library Place',
+        lat: 34.8911,
+        lng: 135.8082,
+      ));
+
+      final trip = await tripRepo.createTrip(
+        title: 'Trip Only Test',
+        ownerId: 'user_tester',
+        startDate: '2026-08-15',
+        dayCount: 1,
+      );
+      final days = await tripRepo.getDaysForTrip(trip.id);
+
+      // Create a trip-only spot (has visibility = 'trip_only') and schedule it straight away without manual relinking
+      final stopTripOnly = await tripRepo.createTripOnlySpot(
+        tripId: trip.id,
+        name: 'Trip Only Spot 6m away',
+        lat: 34.89105,
+        lng: 135.80805,
+        addedBy: 'user_tester',
+      );
+      await tripRepo.scheduleStop(tripId: trip.id, stopId: stopTripOnly.id, dayId: days.first.id);
+
+      final candidates = await service.findNearbyPlaces(
+        db,
+        lat: 34.8910,
+        lng: 135.8080,
+        maxDistanceMeters: 150.0,
+        now: now,
+      );
+
+      // Both should be found, and the trip-only stop must be FIRST because it is on today's trip!
+      expect(candidates.length, equals(2));
+      expect(candidates[0].name, equals('Trip Only Spot 6m away'));
+      expect(candidates[0].isTodayStop, isTrue);
+      expect(candidates[0].todayStop?.id, equals(stopTripOnly.id));
+      expect(candidates[0].place, isNotNull); // place row exists with visibility = 'trip_only'
+      expect(candidates[0].place?.visibility, equals('trip_only'));
+
+      expect(candidates[1].name, equals('Saved Library Place'));
+      expect(candidates[1].isTodayStop, isFalse);
+    });
+
+    test('finds today stop whose placeKey has no row in places and matches reference frame by stopId', () async {
+      final now = DateTime(2026, 8, 15, 10, 0);
+
+      final trip = await tripRepo.createTrip(
+        title: 'Remote Shared Trip',
+        ownerId: 'remote_owner',
+        startDate: '2026-08-15',
+        dayCount: 1,
+      );
+      final days = await tripRepo.getDaysForTrip(trip.id);
+
+      // Simulate a stop synced from remote where placeKey has NO row in local places table
+      const remoteStopId = 'stop_remote_123';
+      const remotePlaceKey = 'remote_spot_abc';
+      await db.into(db.stops).insert(StopsCompanion.insert(
+        id: remoteStopId,
+        tripId: trip.id,
+        placeKey: remotePlaceKey,
+        name: 'Remote Joined Stop',
+        lat: 34.8912,
+        lng: 135.8085,
+        addedBy: 'remote_owner',
+      ));
+
+      // Schedule the stop on today's day block
+      await tripRepo.scheduleStop(tripId: trip.id, stopId: remoteStopId, dayId: days.first.id);
+
+      // Attach a reference frame linked by stopId (typical for shared trip frames without local placeKey)
+      await db.into(db.newReferenceImages).insert(NewReferenceImagesCompanion.insert(
+        id: 'ref_stop_frame_1',
+        stopId: const Value(remoteStopId),
+        localPath: const Value('/frames/shared_frame.jpg'),
+      ));
+
+      // Verify no row exists in places table for remotePlaceKey
+      final placeInDb = await (db.select(db.places)..where((p) => p.placeKey.equals(remotePlaceKey))).getSingleOrNull();
+      expect(placeInDb, isNull);
+
+      final candidates = await service.findNearbyPlaces(
+        db,
+        lat: 34.8910,
+        lng: 135.8080,
+        maxDistanceMeters: 150.0,
+        now: now,
+      );
+
+      expect(candidates.length, equals(1));
+      final candidate = candidates.first;
+      expect(candidate.name, equals('Remote Joined Stop'));
+      expect(candidate.placeKey, equals(remotePlaceKey));
+      expect(candidate.place, isNull); // No row in places table!
+      expect(candidate.isTodayStop, isTrue);
+      expect(candidate.todayStop?.id, equals(remoteStopId));
+      expect(candidate.referenceFrames.length, equals(1));
+      expect(candidate.primaryFrame?.id, equals('ref_stop_frame_1'));
+      expect(candidate.primaryFrame?.localPath, equals('/frames/shared_frame.jpg'));
     });
   });
 
@@ -289,6 +393,47 @@ void main() {
       expect(result.stop, isNull);
       expect(result.scheduleItem, isNull);
     });
+
+    test('records shot at stop whose placeKey has no prior row in places table without FK violation', () async {
+      final now = DateTime(2026, 8, 15, 11, 0);
+
+      final trip = await tripRepo.createTrip(
+        title: 'Joined Trip',
+        ownerId: 'remote_owner',
+        startDate: '2026-08-15',
+        dayCount: 1,
+      );
+      final days = await tripRepo.getDaysForTrip(trip.id);
+
+      const remoteStopId = 'stop_remote_shot';
+      const remotePlaceKey = 'remote_spot_fk_test';
+      await db.into(db.stops).insert(StopsCompanion.insert(
+        id: remoteStopId,
+        tripId: trip.id,
+        placeKey: remotePlaceKey,
+        name: 'Remote Stop for Shot',
+        lat: 34.8910,
+        lng: 135.8080,
+        addedBy: 'remote_owner',
+      ));
+      await tripRepo.scheduleStop(tripId: trip.id, stopId: remoteStopId, dayId: days.first.id);
+
+      final result = await service.recordShot(
+        db,
+        sourceImagePath: '/dummy/camera/remote_shot.jpg',
+        placeKey: remotePlaceKey,
+        takenAt: now,
+      );
+
+      expect(result.photo.placeKey, equals(remotePlaceKey));
+      expect(result.scheduleItem?.status, equals('done'));
+
+      // Verify place row was safely created to maintain FK integrity
+      final place = await (db.select(db.places)..where((p) => p.placeKey.equals(remotePlaceKey))).getSingleOrNull();
+      expect(place, isNotNull);
+      expect(place?.visibility, equals('trip_only'));
+      expect(place?.name, equals('Remote Stop for Shot'));
+    });
   });
 
   group('PilgrimageShootingService - Photos to Edit Inbox', () {
@@ -370,7 +515,7 @@ void main() {
         nearbyShootingPlacesProvider(const NearbyPlacesQuery(lat: 34.8910, lng: 135.8080)).future,
       );
       expect(candidates.length, equals(1));
-      expect(candidates.first.place.name, equals('Provider Spot'));
+      expect(candidates.first.name, equals('Provider Spot'));
     });
   });
 }

@@ -5,7 +5,11 @@ import '../../../core/database/database.dart';
 /// A candidate pilgrimage place nearby the user's current GPS position (within ~150m).
 @immutable
 class NearbyShootingPlace {
-  final Place place;
+  final Place? place;
+  final String? _name;
+  final double? _lat;
+  final double? _lng;
+  final String? _placeKey;
   final double distanceMeters;
   final bool isTodayStop;
   final Stop? todayStop;
@@ -14,14 +18,26 @@ class NearbyShootingPlace {
   final String? animeTitle;
 
   const NearbyShootingPlace({
-    required this.place,
+    this.place,
+    String? name,
+    double? lat,
+    double? lng,
+    String? placeKey,
     required this.distanceMeters,
     this.isTodayStop = false,
     this.todayStop,
     this.todayScheduleItem,
     this.referenceFrames = const [],
     this.animeTitle,
-  });
+  })  : _name = name,
+        _lat = lat,
+        _lng = lng,
+        _placeKey = placeKey;
+
+  String get name => _name ?? place?.name ?? todayStop?.name ?? '';
+  double get lat => _lat ?? place?.lat ?? todayStop?.lat ?? 0.0;
+  double get lng => _lng ?? place?.lng ?? todayStop?.lng ?? 0.0;
+  String get placeKey => _placeKey ?? place?.placeKey ?? todayStop?.placeKey ?? '';
 
   /// Primary reference frame (first one available) for floating camera viewfinder.
   NewReferenceImage? get primaryFrame =>

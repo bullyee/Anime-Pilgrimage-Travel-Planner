@@ -108,10 +108,16 @@ class PilgrimageShootingService {
     return null;
   }
 
-  /// Finds library places within [maxDistanceMeters] (default 150m) of GPS coordinates.
+  /// Finds candidate pilgrimage places nearby the given GPS coordinates within [maxDistanceMeters] (default 150m).
   ///
-  /// Places belonging to today's active trip day are prioritized at the top of the list,
-  /// followed by nearest distance ascending.
+  /// Searches:
+  /// 1. Stops scheduled for today's active trip day (from [stops] directly, regardless of whether
+  ///    the place is 'trip_only' or belongs to a joined shared trip without a local library place row).
+  /// 2. Places in the user's library (`visibility == 'saved'`), excluding places already represented by today's stops.
+  ///
+  /// Loads reference frames matching either `placeKey` or `stopId`.
+  ///
+  /// Today's stops are always placed first in the list, then candidates are ordered by distance ascending.
   Future<List<NearbyShootingPlace>> findNearbyPlaces(
     AppDatabase db, {
     required double lat,
@@ -121,86 +127,163 @@ class PilgrimageShootingService {
   }) async {
     final todayTrip = await getTodayTrip(db, now: now);
 
-    // Map today's stops and items by placeKey
-    final todayStopsByPlaceKey = <String, Stop>{};
-    final todayItemsByPlaceKey = <String, ScheduleItem>{};
+    final candidateStops = <({Stop stop, ScheduleItem item, double distanceMeters})>[];
+    final qualifyingPlaceKeys = <String>{};
+    final qualifyingStopIds = <String>{};
+    final seenStopIds = <String>{};
+    final seenPlaceKeys = <String>{};
 
     if (todayTrip != null) {
       for (final item in todayTrip.scheduleItems) {
+        if (seenStopIds.contains(item.stopId)) continue;
         final stop = todayTrip.stopMap[item.stopId];
-        if (stop != null) {
-          todayStopsByPlaceKey[stop.placeKey] = stop;
-          todayItemsByPlaceKey[stop.placeKey] = item;
+        if (stop == null || stop.deletedAt != null) continue;
+
+        final dist = calculateDistanceMeters(lat, lng, stop.lat, stop.lng);
+        if (dist <= maxDistanceMeters) {
+          seenStopIds.add(stop.id);
+          candidateStops.add((
+            stop: stop,
+            item: item,
+            distanceMeters: dist,
+          ));
+          qualifyingStopIds.add(stop.id);
+          if (stop.placeKey.isNotEmpty) {
+            qualifyingPlaceKeys.add(stop.placeKey);
+            seenPlaceKeys.add(stop.placeKey);
+          }
         }
       }
     }
 
-    // Query library places
-    final allPlaces = await (db.select(db.places)
+    // Query library places (saved visibility only)
+    final savedPlaces = await (db.select(db.places)
           ..where((p) => p.visibility.equals('saved')))
         .get();
 
-    final candidatePlaces = <NearbyShootingPlace>[];
-    final qualifyingPlaceKeys = <String>[];
+    final candidatePlaces = <({Place place, double distanceMeters})>[];
+    for (final place in savedPlaces) {
+      if (seenPlaceKeys.contains(place.placeKey)) continue;
 
-    for (final place in allPlaces) {
-      final distance = calculateDistanceMeters(lat, lng, place.lat, place.lng);
-      if (distance <= maxDistanceMeters) {
-        qualifyingPlaceKeys.add(place.placeKey);
-        final isTodayStop = todayStopsByPlaceKey.containsKey(place.placeKey);
-
-        candidatePlaces.add(NearbyShootingPlace(
+      final dist = calculateDistanceMeters(lat, lng, place.lat, place.lng);
+      if (dist <= maxDistanceMeters) {
+        candidatePlaces.add((
           place: place,
-          distanceMeters: distance,
-          isTodayStop: isTodayStop,
-          todayStop: todayStopsByPlaceKey[place.placeKey],
-          todayScheduleItem: todayItemsByPlaceKey[place.placeKey],
+          distanceMeters: dist,
         ));
+        qualifyingPlaceKeys.add(place.placeKey);
       }
     }
 
-    if (candidatePlaces.isEmpty) {
+    if (candidateStops.isEmpty && candidatePlaces.isEmpty) {
       return const [];
     }
 
-    // Load reference frames for all qualifying places
+    // Load places for today's stops if they exist in the places table
+    final stopPlaceKeys = candidateStops
+        .map((c) => c.stop.placeKey)
+        .where((k) => k.isNotEmpty)
+        .toSet()
+        .toList();
+    final placesForStops = stopPlaceKeys.isNotEmpty
+        ? await (db.select(db.places)..where((p) => p.placeKey.isIn(stopPlaceKeys))).get()
+        : <Place>[];
+    final placeMapForStops = {for (final p in placesForStops) p.placeKey: p};
+
+    // Load reference frames by placeKey or stopId
     final refImages = await (db.select(db.newReferenceImages)
-          ..where((r) => r.placeKey.isIn(qualifyingPlaceKeys)))
+          ..where((r) {
+            final hasPlaceKeys = qualifyingPlaceKeys.isNotEmpty;
+            final hasStopIds = qualifyingStopIds.isNotEmpty;
+            if (hasPlaceKeys && hasStopIds) {
+              return (r.placeKey.isNotNull() & r.placeKey.isIn(qualifyingPlaceKeys)) |
+                     (r.stopId.isNotNull() & r.stopId.isIn(qualifyingStopIds));
+            } else if (hasPlaceKeys) {
+              return r.placeKey.isNotNull() & r.placeKey.isIn(qualifyingPlaceKeys);
+            } else if (hasStopIds) {
+              return r.stopId.isNotNull() & r.stopId.isIn(qualifyingStopIds);
+            }
+            return const Constant(false);
+          }))
         .get();
-    final refMap = <String, List<NewReferenceImage>>{};
+
+    final refMapByPlaceKey = <String, List<NewReferenceImage>>{};
+    final refMapByStopId = <String, List<NewReferenceImage>>{};
     for (final ref in refImages) {
-      if (ref.placeKey != null) {
-        refMap.putIfAbsent(ref.placeKey!, () => []).add(ref);
+      if (ref.placeKey != null && ref.placeKey!.isNotEmpty) {
+        refMapByPlaceKey.putIfAbsent(ref.placeKey!, () => []).add(ref);
+      }
+      if (ref.stopId != null && ref.stopId!.isNotEmpty) {
+        refMapByStopId.putIfAbsent(ref.stopId!, () => []).add(ref);
       }
     }
 
-    // Load anime labels
-    final animeLabels = await _loadPlaceAnimeLabels(db, qualifyingPlaceKeys);
+    // Load anime labels for all place keys
+    final animeLabels = await _loadPlaceAnimeLabels(db, qualifyingPlaceKeys.toList());
 
-    // Rebuild candidates with frames and anime info
-    final enrichedCandidates = candidatePlaces.map((c) {
-      final frames = refMap[c.place.placeKey] ?? const [];
-      final animeTitle = animeLabels[c.place.placeKey];
-      return NearbyShootingPlace(
-        place: c.place,
-        distanceMeters: c.distanceMeters,
-        isTodayStop: c.isTodayStop,
-        todayStop: c.todayStop,
-        todayScheduleItem: c.todayScheduleItem,
+    final results = <NearbyShootingPlace>[];
+
+    // Build today stops candidates
+    for (final candidate in candidateStops) {
+      final stop = candidate.stop;
+      final place = placeMapForStops[stop.placeKey];
+      final framesByStop = refMapByStopId[stop.id] ?? const [];
+      final framesByPlace = (stop.placeKey.isNotEmpty ? refMapByPlaceKey[stop.placeKey] : null) ?? const [];
+
+      // Combine frames, avoiding duplicates by id
+      final frameMap = <String, NewReferenceImage>{};
+      for (final f in framesByStop) {
+        frameMap[f.id] = f;
+      }
+      for (final f in framesByPlace) {
+        frameMap.putIfAbsent(f.id, () => f);
+      }
+
+      final animeTitle = stop.placeKey.isNotEmpty ? animeLabels[stop.placeKey] : null;
+
+      results.add(NearbyShootingPlace(
+        place: place,
+        name: stop.name,
+        lat: stop.lat,
+        lng: stop.lng,
+        placeKey: stop.placeKey,
+        distanceMeters: candidate.distanceMeters,
+        isTodayStop: true,
+        todayStop: stop,
+        todayScheduleItem: candidate.item,
+        referenceFrames: frameMap.values.toList(),
+        animeTitle: animeTitle,
+      ));
+    }
+
+    // Build library place candidates
+    for (final candidate in candidatePlaces) {
+      final place = candidate.place;
+      final frames = refMapByPlaceKey[place.placeKey] ?? const [];
+      final animeTitle = animeLabels[place.placeKey];
+
+      results.add(NearbyShootingPlace(
+        place: place,
+        name: place.name,
+        lat: place.lat,
+        lng: place.lng,
+        placeKey: place.placeKey,
+        distanceMeters: candidate.distanceMeters,
+        isTodayStop: false,
         referenceFrames: frames,
         animeTitle: animeTitle,
-      );
-    }).toList();
+      ));
+    }
 
-    // Sort: today's stops first, then nearest first
-    enrichedCandidates.sort((a, b) {
+    // Sort: today's stops first, then nearest distance ascending
+    results.sort((a, b) {
       if (a.isTodayStop != b.isTodayStop) {
         return a.isTodayStop ? -1 : 1;
       }
       return a.distanceMeters.compareTo(b.distanceMeters);
     });
 
-    return enrichedCandidates;
+    return results;
   }
 
   /// Records a shot taken in the field into local storage and database.
@@ -233,6 +316,20 @@ class PilgrimageShootingService {
       // 1. Resolve active trip for today
       final todayTrip = await getTodayTrip(db, now: effectiveTakenAt);
       final resolvedTripId = tripId ?? todayTrip?.trip.id;
+
+      // 1.5 Ensure place row exists in places table to satisfy foreign key constraints
+      final existingPlace = await (db.select(db.places)..where((p) => p.placeKey.equals(placeKey))).getSingleOrNull();
+      if (existingPlace == null) {
+        final matchingStop = todayTrip?.stops.where((s) => s.placeKey == placeKey).firstOrNull;
+        await db.into(db.places).insert(PlacesCompanion.insert(
+          placeKey: placeKey,
+          name: matchingStop?.name ?? 'Spot',
+          lat: matchingStop?.lat ?? 0.0,
+          lng: matchingStop?.lng ?? 0.0,
+          address: Value(matchingStop?.address),
+          visibility: const Value('trip_only'),
+        ));
+      }
 
       // 2. Insert Photo row
       final photoId = _uuid.v4();
@@ -351,7 +448,7 @@ class PilgrimageShootingService {
             id: newItemId,
             tripId: currentTripId,
             dayId: currentDayId,
-            stopId: activeStop!.id,
+            stopId: activeStop.id,
             sortKey: nextSortKey,
             status: const Value('done'),
             syncStatus: const Value(1),
