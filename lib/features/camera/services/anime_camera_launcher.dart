@@ -7,6 +7,8 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 import 'package:image_picker/image_picker.dart';
 
+import '../models/shot_series.dart';
+import '../screens/shot_series_screen.dart';
 import '../widgets/capture_sheets.dart';
 import 'camera_overlay.dart';
 import 'photo_edit_route.dart';
@@ -116,19 +118,32 @@ Future<void> editPhotoFromGallery(BuildContext context, WidgetRef ref) async {
 }
 
 /// Android may kill the app while the phone's camera is open; image_picker
-/// then hands the photo back on the next launch. Send it on to the editor —
-/// the reference and place it was taken for are gone by then, so it starts
-/// with no place. Call once when the home screen first shows.
-Future<void> recoverLostCapture(BuildContext context) async {
+/// then hands the photo back on the next launch. When a shot series was
+/// running, the photo joins it and the shots screen opens again, with the
+/// series' place and frame. Otherwise it goes on to the editor with no
+/// place. Call once when the home screen first shows.
+Future<void> recoverLostCapture(BuildContext context, {ShotSeriesStore? store}) async {
   if (kIsWeb || !Platform.isAndroid) return;
-  final LostDataResponse response;
+  LostDataResponse? response;
   try {
     response = await ImagePicker().retrieveLostData();
   } catch (_) {
-    return;
+    response = null;
   }
-  final file = response.file;
-  if (response.isEmpty || file == null || !context.mounted) return;
+  final file = response == null || response.isEmpty ? null : response.file;
+
+  final series = store ?? ShotSeriesStore();
+  var pending = await series.latest();
+  if (pending != null) {
+    if (file != null) pending = await series.addShot(pending, file.path);
+    if (pending.shots.isEmpty) {
+      await series.discard(pending.id);
+    } else {
+      if (context.mounted) context.push(ShotSeriesArgs(seriesId: pending.id).location);
+      return;
+    }
+  }
+  if (file == null || !context.mounted) return;
   openCaptureInEditor(context, photoPath: file.path);
 }
 
@@ -164,9 +179,9 @@ Future<void> _shootWithPhoneCamera(
 }
 
 /// Opens the Anime Camera for a place with its frame already chosen: a place
-/// page's "Take photo". The shot goes to the editor with the frame loaded,
-/// and is saved to [placeKey]'s photos, filed under [tripId] when given.
-/// Without a frame it just shoots.
+/// page's "Take photo". The shots the user keeps are saved to [placeKey]'s
+/// photos with the frame, filed under [tripId] when given. Without a frame
+/// it just shoots.
 Future<void> shootWithReference(
   BuildContext context,
   WidgetRef ref, {
@@ -185,55 +200,34 @@ Future<void> shootWithReference(
   await _shootWith(context, reference, placeKey: placeKey, tripId: tripId);
 }
 
+/// Shoots against [reference] on the shots screen: each shot comes back
+/// there under the reference, **Take more** adds another, and the user keeps
+/// the ones they want, saved as shot (see [ShotSeriesScreen]).
 Future<void> _shootWith(
   BuildContext context,
   _Reference? reference, {
   String? placeKey,
   String? tripId,
 }) async {
-  // Float the reference over the camera when allowed. Without the
-  // permission the user can still shoot; the reference then only shows up
-  // in the editor.
-  var overlayShown = false;
-  if (reference != null) {
-    if (await CameraOverlay.canDrawOverlays()) {
-      overlayShown = await CameraOverlay.show(reference.path);
-    } else {
-      if (!context.mounted) return;
-      final openSettings = await _askOverlayPermission(context);
-      if (openSettings == null) return;
-      if (openSettings) {
-        await CameraOverlay.requestPermission();
-        return;
-      }
+  // The shots screen floats the reference over the camera when allowed.
+  // Without the permission the user can still shoot; the reference then
+  // only shows next to the shots.
+  if (reference != null && !await CameraOverlay.canDrawOverlays()) {
+    if (!context.mounted) return;
+    final openSettings = await _askOverlayPermission(context);
+    if (openSettings == null) return;
+    if (openSettings) {
+      await CameraOverlay.requestPermission();
+      return;
     }
   }
-
-  XFile? shot;
-  try {
-    shot = await ImagePicker().pickImage(
-      source: ImageSource.camera,
-      preferredCameraDevice: CameraDevice.rear,
-    );
-  } on PlatformException catch (e) {
-    if (!context.mounted) return;
-    ScaffoldMessenger.of(context).showSnackBar(
-      SnackBar(content: Text('Camera unavailable: ${e.message ?? e.code}')),
-    );
-    return;
-  } finally {
-    if (overlayShown) await CameraOverlay.hide();
-  }
-  if (shot == null || !context.mounted) return;
-
-  openCaptureInEditor(
-    context,
-    photoPath: shot.path,
+  if (!context.mounted) return;
+  await context.push(ShotSeriesArgs(
     placeKey: placeKey ?? reference?.placeKey,
     tripId: tripId,
     referencePath: reference?.path,
     referenceImageId: reference?.imageId,
-  );
+  ).location);
 }
 
 /// Resolves a [_ReferenceSource.place] or [_ReferenceSource.gallery] pick to

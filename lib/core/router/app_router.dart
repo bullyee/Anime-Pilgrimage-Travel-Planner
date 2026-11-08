@@ -9,6 +9,7 @@ import 'package:trip_planner/features/auth/screens/login_screen.dart'; // Add th
 import '../../features/home/screens/home_screen.dart';
 import '../../features/poi/screens/photo_edit_screen.dart';
 import '../../features/camera/screens/camera_screen.dart';
+import '../../features/camera/screens/shot_series_screen.dart';
 import '../../features/camera/services/photo_edit_route.dart';
 import '../../features/library/screens/anitabi_import_screen.dart';
 import '../../features/library/screens/labels_screen.dart';
@@ -160,6 +161,11 @@ GoRouter router(RouterRef ref) {
         // The photo editor, for a place or for none yet: see PhotoEditArgs.
         path: '/photo-edit',
         builder: (context, state) => _photoEditScreen(state),
+      ),
+      GoRoute(
+        // Several shots against one frame, then keep the ones you want.
+        path: '/shots',
+        builder: (context, state) => ShotSeriesScreen(args: ShotSeriesArgs.fromQuery(state.uri.queryParameters)),
       ),
       GoRoute(
         path: '/camera',

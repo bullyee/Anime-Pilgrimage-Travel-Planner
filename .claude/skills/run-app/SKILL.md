@@ -51,7 +51,16 @@ flutter build apk --debug          # ~2.5 min cold; run_in_background
 - Use the APK route rather than `flutter run`: `flutter run` is an interactive hot-reload console, awkward to drive from a tool. Logs come from logcat instead.
 - `install -r` keeps app data (database, sign-in). For a clean slate: `"$ADB" shell pm clear $APP`.
 - Release build: `flutter build apk --release` → `build/app/outputs/flutter-apk/app-release.apk`. It is debug-signed, so it installs over a debug build as long as its versionCode is not lower.
-- A debug cold start shows the Flutter logo splash for ~10 s before the home screen.
+- **Low memory on the dev PC:** `android/gradle.properties` asks Gradle for an 8 GB heap, and Claude Code stops a background build when RAM runs low. Then build in the foreground with a capped heap and only the device's ABI (`android-arm64` for a phone, `android-x64` for Pixel_Test), about 2 min cold and 1 min warm, and stop Gradle afterwards. The APK lands in the same place:
+
+  ```bash
+  cd android && JAVA_HOME="/c/Program Files/Android/Android Studio1/jbr" ./gradlew --no-daemon \
+    "-Dorg.gradle.jvmargs=-Xmx2560m -XX:MaxMetaspaceSize=768m" -Pkotlin.compiler.execution.strategy=in-process \
+    -Ptarget-platform=android-arm64 assembleDebug
+  JAVA_HOME="/c/Program Files/Android/Android Studio1/jbr" ./gradlew --stop
+  ```
+- A phone is someone's own device with their data on it: install onto it only when its owner says so, always with `install -r` (never uninstall or `pm clear`), and pass `-s <serial>` to every `adb` call when the emulator is also attached.
+- A debug cold start shows the Flutter logo splash for ~10 s before the home screen. On a phone with 16 KB memory pages (Pixel 10a), a debug build also opens a system "16 KB" compatibility dialog at every cold start; tap OK (`確定` on a Chinese phone), not "Don't show again".
 - **Check that `adb install` printed `Success`** (don't pipe it through `tail -1`); a failed install leaves the old build running and silently invalidates the test. The debug APK is ~200 MB and Pixel_Test's 6 GB `/data` fills up — "Requested internal only, but not enough space" means run `"$ADB" shell pm trim-caches 64G`, and if `df -h /data` still shows < ~1 GB free, test with the ~93 MB release APK instead.
 
 ## 3. Look at the screen
@@ -97,7 +106,7 @@ Observed on Pixel_Test with a small database; positions move with content, so co
 | Import from Anitabi | Library → **Import from Anitabi** (app bar, or the empty library's button) → search a title → tick spots → save. Confirm the labels with `ui`; the Anitabi rules in CLAUDE.md apply |
 | New trip | My Trips → **New trip** → title field (540,745) → **Decide later** opens the date picker → **Create trip** |
 | A stop's page | My Trips → a trip → **Stops** tab → **Add stops** → *From my library* → tick places → **Add N stops**; tap a stop to open its page |
-| Anime Camera (Android) | Home **Anime Camera**, or a place or stop page's **Take photo** → place and frame sheets → the emulator's Camera app opens with the frame in a floating window → shutter (540,2238) → ✓ (539,2242) → photo editor |
+| Anime Camera (Android) | Home **Anime Camera**, or a place or stop page's **Take photo** → place and frame sheets (a place with one frame skips the second) → the camera app opens with the frame in a floating window → shutter (540,2238) → ✓ (539,2242) → the pick screen: `Shot i of n` (swipe, or tap a thumbnail), tap the shot to keep it (a single shot starts kept), **Keep N** saves, **Take more** opens the camera for another, ✕ discards. Backing out of the camera (`keyevent 4`) adds no shot. On a Pixel 10a's Pixel Camera, shutter and ✓ are both at (540,1799) |
 | Floating Reference (Android) | Home **Floating Reference**, or a place or stop page's **Float frame** → the window floats over every app until ✕ or a double-tap; no camera opens |
 
 ## Anime Camera on Android
@@ -110,7 +119,7 @@ Android shoots with the phone's own camera app (`image_picker`) and floats the r
 win() { "$ADB" shell dumpsys window windows | grep -cE "Window #[0-9]+ Window\{[0-9a-f]+ u0 $APP\}:"; }   # 1 = floating window up
 ```
 
-- `ui` only dumps the top app's window. The camera app and the floating window don't appear in it, so use `shot` for both.
+- The floating window never appears in a `ui` dump, so use `shot` for it. The emulator's Camera app doesn't either; a Pixel phone's Pixel Camera does, labelled in the phone's language (`拍照` shutter, `完成` done on a Chinese phone), so wait for the camera with `ui | grep -q 拍照`.
 - The floating window starts in a top corner. In portrait that's top-right; in landscape it's top-left, clear of the shutter. Read its position off a screenshot: in the v0.1.3 smoke test it sat at about (564–1046, 390–658) on Pixel_Test.
 - Tapping the window shows a −/+/✕ bar underneath, with ✕ around (967,716) in portrait.
   - The bar appears about 0.3 s after the tap, once the tap can't be a double-tap, and hides itself after 3 s. Take the screenshot right after the tap.
@@ -118,7 +127,9 @@ win() { "$ADB" shell dumpsys window windows | grep -cE "Window #[0-9]+ Window\{[
 - Drag the window with `input swipe`. After a rotation it must stay fully on screen.
 - The system photo picker opens full-screen or as a half sheet, so photo positions change. Tap a photo by the bounds of its `Photo taken on …` entry in `ui`, not by fixed coordinates; a tap outside the sheet cancels the pick.
 - `adb` can't fake a pinch, and two `input tap` calls arrive too far apart for a double-tap. Check resize and double-tap-to-close on a phone.
-- Backing out of the camera, or accepting a shot, must leave `win` at 0.
+- Accepting a shot or backing out of the camera must leave `win` at 0. **Take more** shows the window again, back in its starting corner.
+- A series lives in `files/shot_series/<id>/` (its shots and `series.json`, picks included) until **Keep** or ✕: `"$ADB" shell run-as $APP ls files/shot_series`. Kept shots are copied to `app_flutter/camera_photos/` with a `photos` row, and to the gallery's `Pictures/Trip Planner/`.
+- **Android killing the app mid-series:** `am kill` does nothing while the floating window is up, since the app counts as visible. On the camera's confirm screen, run `"$ADB" shell run-as $APP kill -9 $("$ADB" shell pidof $APP | tr -d '\r')` (the low-memory killer's signal), then tap ✓. The app should restart on the pick screen with the new shot added, the earlier picks kept, and the newest shot showing.
 - Leaving the camera for another app (`input keyevent 3` for Home) hides the window. `win` stays 1, because the window is only made invisible, so check with `shot`. Returning through Recents shows it again in the same place.
 - Reinstalling the app while the camera is open kills the app, and the window goes with it, so start the flow again.
 

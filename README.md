@@ -178,13 +178,15 @@ Sharing needs a Google sign-in, for you and for the friends you invite.
 
      The first time, Android asks you to allow Trip Planner to **display over other apps**. If you'd rather not, you can still shoot without the window.
    - **On iOS**, the frame floats over the in-app camera. Drag it, pinch to resize it, use the **opacity slider**, and switch **flash**, the **native or fill** framing, **zoom** or the **front camera** as needed.
-3. Take the shot. It opens in the photo editor with the frame attached.
+3. Take the shot.
+   - **On Android**, your shot then shows under the frame, so you can compare. **Take more** opens the camera again for another try. Tap the shots to keep, then **Keep**: a single shot is kept unless you untick it. They're saved as shot to the place's **My photos**, under the trip you were on that day, and to a **Trip Planner** album on your phone; the others are deleted. If Android closes Trip Planner while the camera is open, your shots come back the next time you open it.
+   - **On iOS**, the shot opens in the photo editor with the frame attached.
 
 > 💡 **Floating Reference** *(Android)*, on the home screen, or **Float frame** on a page, floats a frame over every app until you close it, so you can take as many shots as you like with any camera app.
 
 ## 6. Edit your photos
 
-The editor opens after every shot. To edit a photo you already have, tap **Edit Photo** on the home screen, or **Edit** on a photo in a place's page.
+To edit a photo, tap **Edit** on it in a place's page, or **Edit Photo** on the home screen for one from your gallery. On iOS the editor also opens after every shot.
 
 - **Tools** run along the bottom; swipe the strip to see them all:
   - **Reference**: add or swap the frame you're matching.
