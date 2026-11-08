@@ -53,7 +53,7 @@ String _inAppCameraLocation(String? placeKey, String? tripId) => Uri(path: '/cam
 /// Unlike [openAnimeCamera], the window stays up after the user leaves Trip
 /// Planner, so they can shoot as many photos as they like with any camera
 /// app and add the keeper on the place page later (Add photos). It stays
-/// until closed with ✕ or a double-tap. Android only.
+/// until closed with a double-tap. Android only.
 Future<void> floatReference(
   BuildContext context,
   WidgetRef ref, {
@@ -88,7 +88,7 @@ Future<void> floatReferenceImage(BuildContext context, String path) async {
       content: Text(
         shown
             ? 'The reference now floats over other apps. Switch to your '
-                  'camera and shoot; close it with ✕ or a double-tap.'
+                  'camera and shoot; double-tap it to close it.'
             : 'Could not show the reference.',
       ),
     ),
@@ -200,9 +200,9 @@ Future<void> shootWithReference(
   await _shootWith(context, reference, placeKey: placeKey, tripId: tripId);
 }
 
-/// Shoots against [reference] on the shots screen: each shot comes back
-/// there under the reference, **Take more** adds another, and the user keeps
-/// the ones they want, saved as shot (see [ShotSeriesScreen]).
+/// Shoots a series against [reference] on the shots screen: the camera
+/// reopens after every shot with the reference still floating, and the user
+/// then keeps the shots they want, saved as shot (see [ShotSeriesScreen]).
 Future<void> _shootWith(
   BuildContext context,
   _Reference? reference, {
@@ -275,9 +275,8 @@ Future<_ReferenceSource?> _askReferenceSource(
       'The reference floats over your camera in a small window you can drag '
           'and pinch. Tap it for opacity.',
     _SheetMode.floatOnly =>
-      'The reference floats over every app until you close it (✕ or '
-          'double-tap), so you can shoot as many photos as you like with your '
-          'own camera app.',
+      'The reference floats over every app until you double-tap it, so you '
+          'can shoot as many photos as you like with your own camera app.',
   };
   return showModalBottomSheet<_ReferenceSource>(
     context: context,

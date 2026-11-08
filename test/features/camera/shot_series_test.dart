@@ -278,7 +278,7 @@ void main() {
     tearDown(() => db.close());
 
     /// Opens the shots screen from a home page, with a camera that returns
-    /// one of [shots] per opening and then backs out.
+    /// [shots] one by one and then backs out.
     Future<void> open(WidgetTester tester, List<String> shots, {ShotSeriesArgs args = const ShotSeriesArgs()}) async {
       final queue = [...shots];
       final router = GoRouter(
@@ -309,34 +309,16 @@ void main() {
       await tester.pumpAndSettle();
     }
 
-    Future<void> takeMore(WidgetTester tester) async {
-      await tester.tap(find.text('Take more'));
-      await tester.pumpAndSettle();
-    }
-
-    testWidgets('each shot comes back under the frame, and Take more adds another', (tester) async {
+    testWidgets('the camera reopens after each shot until the user backs out, then they pick', (tester) async {
       await open(tester, ['a.jpg', 'b.jpg', 'c.jpg']);
 
-      expect(find.text('1 shot'), findsOneWidget, reason: 'the camera opens once, not again by itself');
-      await takeMore(tester);
-      await takeMore(tester);
       expect(find.text('3 shots · tap the ones to keep'), findsOneWidget);
       expect(store.series.values.single.shots.map((s) => s.path), ['a.jpg', 'b.jpg', 'c.jpg']);
+      // From several, nothing is kept until the user picks.
+      expect(tester.widget<FilledButton>(find.ancestor(of: find.text('Pick to keep'), matching: find.byWidgetPredicate((w) => w is FilledButton))).onPressed, isNull);
 
-      // Backing out of the camera adds nothing and stays here.
-      await takeMore(tester);
-      expect(find.text('3 shots · tap the ones to keep'), findsOneWidget);
-
-      // The first shot stays kept; the newest is showing, so swap the pick to it.
-      expect(find.text('Shot 3 of 3'), findsOneWidget);
+      // The last shot is showing; tap it to keep it.
       await tester.tap(find.text('Shot 3 of 3'));
-      await tester.pump();
-      expect(find.text('Keep 2'), findsOneWidget);
-      await tester.drag(find.byType(PageView), const Offset(800, 0));
-      await tester.pumpAndSettle();
-      await tester.drag(find.byType(PageView), const Offset(800, 0));
-      await tester.pumpAndSettle();
-      await tester.tap(find.text('Shot 1 of 3'));
       await tester.pump();
       expect(find.text('Keep 1'), findsOneWidget);
 
@@ -350,15 +332,13 @@ void main() {
 
     testWidgets('picks are saved as the user makes them', (tester) async {
       await open(tester, ['a.jpg', 'b.jpg']);
-      expect(store.series.values.single.kept, {'a.jpg'}, reason: 'a single shot starts kept');
-      await takeMore(tester);
 
       await tester.tap(find.text('Shot 2 of 2'));
       await tester.pump();
-      expect(store.series.values.single.kept, {'a.jpg', 'b.jpg'});
+      expect(store.series.values.single.kept, {'b.jpg'});
       await tester.tap(find.text('Shot 2 of 2'));
       await tester.pump();
-      expect(store.series.values.single.kept, {'a.jpg'});
+      expect(store.series.values.single.kept, isEmpty);
     });
 
     testWidgets('back after Android killed the app: the picks so far, on the newest shot', (tester) async {
@@ -395,7 +375,6 @@ void main() {
 
     testWidgets('discarding asks first, then deletes the shots', (tester) async {
       await open(tester, ['a.jpg', 'b.jpg']);
-      await takeMore(tester);
 
       await tester.tap(find.byTooltip('Discard'));
       await tester.pumpAndSettle();

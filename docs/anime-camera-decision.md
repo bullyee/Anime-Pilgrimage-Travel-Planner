@@ -51,21 +51,21 @@ A small window shows the reference on top of the phone's camera app. Only the wi
   - The Activity creates the window instead of a foreground service. That means no notification, and none of the foreground-service type and permissions that Android 14 requires (`FOREGROUND_SERVICE_SPECIAL_USE`, `POST_NOTIFICATIONS`).
   - On Android 11+ the window goes through its own `WindowContext`. An Activity's configuration stays in the orientation the app was last shown in, so a window added through it was boxed into a portrait-sized strip when the phone was turned to landscape.
   - Capture goes through `image_picker`. If Android kills the app while the camera is open, `retrieveLostData()` recovers the photo.
-  - The window starts small, near the top and away from the shutter. Tap it to show opacity −/+ and close.
+  - The window starts small, near the top and away from the shutter. Tap it to show opacity −/+, which fades away soon after the last touch.
   - The window shows only while the camera is on screen. Switching to another app hides it; coming back shows it again in the same place and size. This works because the camera is opened for a result and so runs on top of the app's own task. That task's visibility is public only from Android 13 (`TaskInfo.isVisible()`); on older versions the window simply stays up.
 
 ## Floating reference only
 
 A second Android entry point: the home card **Floating Reference**, or **Float reference** on a POI page. It floats the reference without opening a camera.
 
-Unlike the camera flow, the window stays up when the user leaves Trip Planner. That lets them shoot as many photos as they like with any camera app, and then edit the keeper with the home screen's **Edit Photo** or the POI page's Add image. It stays until it's closed with ✕ or a double-tap.
+Unlike the camera flow, the window stays up when the user leaves Trip Planner. That lets them shoot as many photos as they like with any camera app, and then edit the keeper with the home screen's **Edit Photo** or the POI page's Add image. It stays until it's closed with a double-tap (the bar's ✕ was dropped on 2026-11-08, since the double-tap does the same).
 
 **Edit Photo** follows anime_camera_studio's Edit:
 - pick a photo, then go straight to the editor
 - add a reference there, from a POI's references or the gallery
 - the result goes to the phone's gallery, and to the POI's media when the reference came from one
 
-The camera flow itself returns a single photo, because `ACTION_IMAGE_CAPTURE` closes the camera after one shot. The floating-only mode is how you take several photos and pick one.
+`ACTION_IMAGE_CAPTURE` closes the camera after one shot, so the camera flow opens it again after every shot until the user backs out, then lets them pick the shots to keep (`shot_series_screen.dart`). The floating-only mode works with any camera app instead; the user then picks the keeper from the gallery.
 
 ## Deferred
 

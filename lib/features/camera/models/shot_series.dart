@@ -24,10 +24,11 @@ class SeriesShot {
   }
 }
 
-/// The shots taken against one frame, before the user picks the ones to
-/// keep. Android may kill the app while the camera is open for one of them:
-/// each series lives in its own folder with a `series.json`, so the next
-/// launch finds it ([ShotSeriesStore.latest]) and opens the picker again.
+/// The shots taken against one frame in a row, before the user picks the ones
+/// to keep. The camera opens again after every shot, so a series can take a
+/// while, and Android may kill the app meanwhile: each series lives in its
+/// own folder with a `series.json`, so the next launch finds it
+/// ([ShotSeriesStore.latest]) and opens the picker again.
 class ShotSeries {
   final String id;
 

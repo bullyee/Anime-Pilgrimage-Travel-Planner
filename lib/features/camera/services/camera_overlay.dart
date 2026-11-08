@@ -35,8 +35,7 @@ class CameraOverlay {
   ///
   /// With [followCamera] (the camera flow), the window hides while the user
   /// is in another app and comes back with the camera. Without it, the
-  /// window stays up over every app until closed (✕ / double-tap, or
-  /// [hide]).
+  /// window stays up over every app until closed (double-tap, or [hide]).
   static Future<bool> show(
     String path, {
     double opacity = 0.6,

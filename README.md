@@ -174,12 +174,12 @@ Sharing needs a Google sign-in, for you and for the friends you invite.
 
 1. Tap **Take photo** on a place's or a stop's page, or open **Anime Camera** from the home screen and pick a place and one of its frames. Places on today's trip come first.
 2. Line it up:
-   - **On Android**, your phone's own camera app opens, with the frame floating in a small window. **Drag** the window to move it and **pinch** to resize it. **Tap** it for opacity **−** / **+** and **✕**, or **double-tap** to close it. The camera's shutter, focus and zoom work everywhere else on the screen.
+   - **On Android**, your phone's own camera app opens, with the frame floating in a small window. **Drag** the window to move it and **pinch** to resize it. **Tap** it for opacity **−** / **+**, which fade away once you leave them, and **double-tap** it to close it. The camera's shutter, focus and zoom work everywhere else on the screen.
 
      The first time, Android asks you to allow Trip Planner to **display over other apps**. If you'd rather not, you can still shoot without the window.
    - **On iOS**, the frame floats over the in-app camera. Drag it, pinch to resize it, use the **opacity slider**, and switch **flash**, the **native or fill** framing, **zoom** or the **front camera** as needed.
 3. Take the shot.
-   - **On Android**, your shot then shows under the frame, so you can compare. **Take more** opens the camera again for another try. Tap the shots to keep, then **Keep**: a single shot is kept unless you untick it. They're saved as shot to the place's **My photos**, under the trip you were on that day, and to a **Trip Planner** album on your phone; the others are deleted. If Android closes Trip Planner while the camera is open, your shots come back the next time you open it.
+   - **On Android**, the camera opens again with the frame still where you left it, so you can take a few. Press back in the camera when you're done. Your shots then show under the frame: tap the ones to keep, then **Keep**. They're saved as shot to the place's **My photos**, under the trip you were on that day, and to a **Trip Planner** album on your phone; the others are deleted. **Take more** opens the camera again. If Android closes Trip Planner while the camera is open, your shots come back the next time you open it.
    - **On iOS**, the shot opens in the photo editor with the frame attached.
 
 > 💡 **Floating Reference** *(Android)*, on the home screen, or **Float frame** on a page, floats a frame over every app until you close it, so you can take as many shots as you like with any camera app.

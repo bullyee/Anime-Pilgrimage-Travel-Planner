@@ -54,13 +54,14 @@ class ShotSeriesArgs {
 
 final shotSeriesStoreProvider = Provider<ShotSeriesStore>((ref) => ShotSeriesStore());
 
-/// Shots against one frame, then keep the ones you want (roadmap v0.3.0,
-/// "Several shots, then pick").
+/// Several shots against one frame, then keep the ones you want (roadmap
+/// v0.3.0, "Several shots, then pick").
 ///
-/// The phone's camera app returns one photo per opening: each shot comes
-/// back here under the frame, and **Take more** opens the camera again for
-/// another. The ones the user keeps are saved as shot, with no editing on the
-/// spot, and the rest are deleted.
+/// The phone's camera app returns one photo per opening, so after each shot
+/// the camera opens again with the frame still floating where the user left
+/// it, and backing out of the camera ends the series. The shots then show
+/// under the frame; the ones the user keeps are saved as shot, with no
+/// editing on the spot, and the rest are deleted.
 class ShotSeriesScreen extends ConsumerStatefulWidget {
   const ShotSeriesScreen({super.key, required this.args, this.camera, this.gallery});
 
@@ -146,8 +147,7 @@ class _ShotSeriesScreenState extends ConsumerState<ShotSeriesScreen> {
     return shot?.path;
   }
 
-  /// Opens the camera for one shot, which joins the series; backing out of
-  /// the camera adds nothing.
+  /// Opens the camera again after every shot until the user backs out of it.
   Future<void> _shoot() async {
     if (_series == null || _shooting || _saving) return;
     setState(() => _shooting = true);
@@ -162,17 +162,17 @@ class _ShotSeriesScreenState extends ConsumerState<ShotSeriesScreen> {
     }
     String? error;
     try {
-      final path = await _openCamera();
-      if (path != null) {
+      while (mounted) {
+        final path = await _openCamera();
+        if (path == null) break;
         series = await _store.addShot(series, path);
-        if (mounted) {
-          final updated = series;
-          setState(() {
-            _series = updated;
-            _current = updated.shots.length - 1;
-          });
-          _showCurrent();
-        }
+        if (!mounted) break;
+        final updated = series;
+        setState(() {
+          _series = updated;
+          _current = updated.shots.length - 1;
+        });
+        _showCurrent();
       }
     } on PlatformException catch (e) {
       error = 'Camera unavailable: ${e.message ?? e.code}';
@@ -349,7 +349,7 @@ class _ShotSeriesScreenState extends ConsumerState<ShotSeriesScreen> {
                 Text(placeName ?? 'Your shots', overflow: TextOverflow.ellipsis),
                 Text(
                   _shooting
-                      ? (shots.isEmpty ? 'Opening the camera…' : '${_count(shots.length)} · opening the camera…')
+                      ? (shots.isEmpty ? 'Opening the camera…' : '${_count(shots.length)} · camera reopening…')
                       : shots.length > 1
                           ? '${_count(shots.length)} · tap the ones to keep'
                           : _count(shots.length),
