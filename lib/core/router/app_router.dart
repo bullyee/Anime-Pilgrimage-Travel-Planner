@@ -186,6 +186,7 @@ GoRouter router(RouterRef ref) {
         builder: (context, state) => CameraScreen(
           placeKey: state.uri.queryParameters['place'],
           tripId: state.uri.queryParameters['trip'],
+          frameId: state.uri.queryParameters['frame'],
         ),
       ),
     ],
