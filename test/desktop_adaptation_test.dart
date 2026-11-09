@@ -6,6 +6,7 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:trip_planner/features/anime/screens/cutout_editor_screen.dart';
 import 'package:trip_planner/features/auth/providers/auth_provider.dart';
 import 'package:trip_planner/features/camera/screens/camera_screen.dart';
+import 'package:trip_planner/features/home/providers/home_providers.dart';
 import 'package:trip_planner/features/home/screens/home_screen.dart';
 
 void main() {
@@ -52,8 +53,12 @@ void main() {
       addTearDown(tester.view.resetDevicePixelRatio);
 
       await tester.pumpWidget(
-        const ProviderScope(
-          child: MaterialApp(
+        ProviderScope(
+          overrides: [
+            homeFocusProvider.overrideWith((ref) => const AsyncData(HomeNextTrip(null))),
+            authStateChangesProvider.overrideWith((ref) => Stream.value(null)),
+          ],
+          child: const MaterialApp(
             home: HomeScreen(),
           ),
         ),
@@ -68,7 +73,7 @@ void main() {
         (box) => box.constraints.maxWidth == 800,
       );
       expect(maxWidth800Box, isNotEmpty);
-      expect(find.text('Anime Pilgrimage'), findsOneWidget);
+      expect(find.text('Plan a trip'), findsOneWidget);
     });
   });
 }
