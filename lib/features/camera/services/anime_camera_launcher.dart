@@ -1,6 +1,6 @@
 import 'dart:io';
 
-import 'package:flutter/foundation.dart' show kIsWeb;
+import 'package:flutter/foundation.dart' show kIsWeb, visibleForTesting;
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
@@ -13,10 +13,13 @@ import '../widgets/capture_sheets.dart';
 import 'camera_overlay.dart';
 import 'photo_edit_route.dart';
 
+@visibleForTesting
+bool? debugAnimeCameraSupportedOverride;
+
 /// Whether this platform has an Anime Camera at all. Desktop and web don't,
 /// so their camera entry points are hidden.
 bool get animeCameraSupported =>
-    !kIsWeb && (Platform.isAndroid || Platform.isIOS);
+    debugAnimeCameraSupportedOverride ?? (!kIsWeb && (Platform.isAndroid || Platform.isIOS));
 
 /// Whether [floatReference] works here (Android only).
 bool get floatingReferenceSupported => CameraOverlay.isSupported;

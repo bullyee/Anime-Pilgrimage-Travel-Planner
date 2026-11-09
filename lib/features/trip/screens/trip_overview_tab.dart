@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:go_router/go_router.dart';
 import 'package:intl/intl.dart';
 
 import '../../../core/database/database.dart';
@@ -143,14 +144,25 @@ class _TodayCard extends StatelessWidget {
                   ),
                 ),
               ),
-            Align(
-              alignment: Alignment.centerRight,
-              child: TextButton.icon(
-                onPressed: onShowPlan,
-                style: TextButton.styleFrom(foregroundColor: p.tea),
-                icon: const Icon(Icons.arrow_forward, size: 18),
-                label: const Text('Open the plan'),
-              ),
+            Wrap(
+              alignment: WrapAlignment.end,
+              crossAxisAlignment: WrapCrossAlignment.center,
+              spacing: 8,
+              runSpacing: 4,
+              children: [
+                TextButton.icon(
+                  onPressed: () => context.push('/trips/$tripId/map?day=${day.day.id}'),
+                  style: TextButton.styleFrom(foregroundColor: p.tea),
+                  icon: const Icon(Icons.map_outlined, size: 18),
+                  label: const Text('Pilgrimage map'),
+                ),
+                TextButton.icon(
+                  onPressed: onShowPlan,
+                  style: TextButton.styleFrom(foregroundColor: p.tea),
+                  icon: const Icon(Icons.arrow_forward, size: 18),
+                  label: const Text('Open the plan'),
+                ),
+              ],
             ),
           ],
         ),

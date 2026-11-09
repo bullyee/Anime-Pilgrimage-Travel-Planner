@@ -19,6 +19,7 @@ import '../../features/sharing/invite_links.dart';
 import '../../features/sharing/screens/join_trip_screen.dart';
 import '../../features/trip/screens/library_picker_screen.dart';
 import '../../features/trip/screens/new_spot_screen.dart';
+import '../../features/trip/screens/pilgrimage_day_map_screen.dart';
 import '../../features/trip/screens/stop_screen.dart';
 import '../../features/trip/screens/trip_list_screen.dart';
 import '../../features/trip/screens/trip_screen.dart';
@@ -90,6 +91,13 @@ GoRouter router(RouterRef ref) {
         builder: (context, state) => TripScreen(
           tripId: state.pathParameters['tripId']!,
           initialTab: TripTab.values.asNameMap()[state.uri.queryParameters['tab']] ?? TripTab.overview,
+        ),
+      ),
+      GoRoute(
+        path: '/trips/:tripId/map',
+        builder: (context, state) => PilgrimageDayMapScreen(
+          tripId: state.pathParameters['tripId']!,
+          initialDayId: state.uri.queryParameters['day'],
         ),
       ),
       GoRoute(
