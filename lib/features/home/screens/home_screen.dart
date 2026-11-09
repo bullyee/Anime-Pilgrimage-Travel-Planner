@@ -8,6 +8,7 @@ import 'package:trip_planner/features/camera/services/anime_camera_launcher.dart
 import '../providers/home_providers.dart';
 import '../widgets/near_you.dart';
 import '../widgets/next_trip_card.dart';
+import '../widgets/photos_to_edit_card.dart';
 import '../widgets/today_card.dart';
 
 /// Home (roadmap v0.3.0, version A): a column of cards where only the top
@@ -85,6 +86,7 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
                   HomeNextTrip(:final trip) => NextTripCard(next: trip),
                 },
               ),
+              const PhotosToEditCard(),
               const SizedBox(height: 20),
               const NearYou(),
             ],

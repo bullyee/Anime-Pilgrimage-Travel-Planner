@@ -5,6 +5,8 @@ import 'package:latlong2/latlong.dart';
 import 'package:trip_planner/core/database/database.dart';
 import 'package:trip_planner/core/utils/schedule_logic.dart';
 import 'package:trip_planner/features/auth/providers/auth_provider.dart';
+import 'package:trip_planner/features/camera/models/shooting_core_models.dart';
+import 'package:trip_planner/features/camera/providers/shooting_core_providers.dart';
 import 'package:trip_planner/features/home/providers/home_providers.dart';
 import 'package:trip_planner/features/home/screens/home_screen.dart';
 import 'package:trip_planner/features/home/widgets/next_trip_card.dart';
@@ -176,7 +178,10 @@ void main() {
     );
 
     Future<_Trips> pump(WidgetTester tester,
-        {required DateTime now, required List<TripSummary> trips, bool canEdit = true}) async {
+        {required DateTime now,
+        required List<TripSummary> trips,
+        bool canEdit = true,
+        List<PhotoToEditItem> toEdit = const []}) async {
       final repo = _Trips();
       await tester.pumpWidget(ProviderScope(
         overrides: [
@@ -190,6 +195,7 @@ void main() {
           canEditTripProvider.overrideWith((ref, id) => canEdit),
           tripRepositoryProvider.overrideWithValue(repo),
           authStateChangesProvider.overrideWith((ref) => Stream.value(null)),
+          photosToEditStreamProvider.overrideWith((ref) => Stream.value(toEdit)),
         ],
         child: const MaterialApp(home: HomeScreen()),
       ));
@@ -199,6 +205,7 @@ void main() {
 
     testWidgets("on a trip day: today's card, with a map and the next stop", (tester) async {
       final repo = await pump(tester, now: DateTime(2026, 11, 15, 10), trips: [_summary(kyoto, first: _d(14), last: _d(16))]);
+      expect(find.byKey(const Key('homePhotosToEdit')), findsNothing, reason: 'no photos to edit');
 
       expect(find.text('TODAY · SUN, NOV 15'), findsOneWidget);
       expect(find.text('Day 2 of 3'), findsOneWidget);
@@ -216,6 +223,27 @@ void main() {
       await tester.tap(find.text('Undo'));
       await tester.pumpAndSettle();
       expect(repo.statuses.last, ('kyoto-d1-1', 'planned'));
+    });
+
+    testWidgets('photos to edit: a row under the top card, only when there are some', (tester) async {
+      PhotoToEditItem item(String id) => PhotoToEditItem(
+            photo: Photo(
+              id: id,
+              placeKey: 'uji',
+              kind: 'original',
+              localPath: '/photos/$id.jpg',
+              isShared: false,
+              keepAsIs: false,
+              createdAt: DateTime(2026, 11, 15),
+            ),
+          );
+      await pump(tester,
+          now: DateTime(2026, 11, 15, 10),
+          trips: [_summary(kyoto, first: _d(14), last: _d(16))],
+          toEdit: [item('a'), item('b'), item('c')]);
+      expect(find.text('3 photos to edit'), findsOneWidget);
+      final card = tester.getTopLeft(find.byKey(const Key('homePhotosToEdit')));
+      expect(card.dy, greaterThan(tester.getBottomLeft(find.byKey(const Key('homeToday'))).dy));
     });
 
     testWidgets('a viewer sees the next stop but no Mark done', (tester) async {
