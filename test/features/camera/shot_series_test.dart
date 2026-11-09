@@ -253,6 +253,28 @@ void main() {
       expect(await db.select(db.photos).get(), hasLength(3));
     });
 
+    test("a stop of a joined trip whose place isn't in the library: the shot still reaches a place", () async {
+      final trips = DriftTripRepository(db, null, 'me');
+      final kyoto = await trips.createTrip(title: 'Kyoto', ownerId: 'ck', startDate: '2026-11-07', dayCount: 3);
+      // What a joined trip brings: a stop whose place key this library doesn't have.
+      final stop = await trips.createTripOnlySpot(tripId: kyoto.id, name: 'Asagiri Bridge', lat: 34.89, lng: 135.81, addedBy: 'ck');
+      await (db.delete(db.places)..where((p) => p.placeKey.equals(stop.placeKey))).go();
+      final series = ShotSeries(
+        id: 's',
+        createdAt: DateTime(2026, 11, 8),
+        placeKey: stop.placeKey,
+        shots: [shot('a.jpg', DateTime(2026, 11, 8, 10))],
+      );
+
+      final result = await saveKeptShots(series: series, kept: series.shots, db: db);
+
+      expect(result.toPlace, 1);
+      final place = await (db.select(db.places)..where((p) => p.placeKey.equals(stop.placeKey))).getSingle();
+      expect((place.name, place.visibility), ('Asagiri Bridge', 'trip_only'));
+      final photo = (await db.select(db.photos).get()).single;
+      expect((photo.placeKey, photo.tripId), (stop.placeKey, kyoto.id));
+    });
+
     test('a gallery refusal still saves every shot to the place', () async {
       final series = ShotSeries(
         id: 's',

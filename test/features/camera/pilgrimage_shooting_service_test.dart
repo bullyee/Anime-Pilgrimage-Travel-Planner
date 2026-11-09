@@ -409,6 +409,38 @@ void main() {
     });
   });
 
+  group('PilgrimageShootingService - Nearby stop on several days', () {
+    test('a stop planned on two days counts as the target day stop on either, and else its earliest day', () async {
+      final trip = await tripRepo.createTrip(
+        title: 'Two visits',
+        ownerId: 'user_tester',
+        startDate: '2026-08-15',
+        dayCount: 3,
+      );
+      final days = await tripRepo.getDaysForTrip(trip.id);
+      final stop = await tripRepo.createTripOnlySpot(
+        tripId: trip.id,
+        name: 'Uji Bridge',
+        lat: 34.8912,
+        lng: 135.8082,
+        addedBy: 'user_tester',
+      );
+      // Day 3 first, so the insertion order doesn't happen to pick Day 1.
+      await tripRepo.scheduleStop(tripId: trip.id, stopId: stop.id, dayId: days[2].id);
+      await tripRepo.scheduleStop(tripId: trip.id, stopId: stop.id, dayId: days[0].id);
+
+      for (final (day, number) in [(days[0], 1), (days[2], 3)]) {
+        final near = (await service.findNearbyPlaces(db, lat: 34.8910, lng: 135.8080, dayId: day.id)).single;
+        expect(near.isTargetDayStop, isTrue, reason: 'Day $number');
+        expect((near.dayNumber, near.todayScheduleItem!.dayId), (number, day.id));
+      }
+
+      final onDay2 = (await service.findNearbyPlaces(db, lat: 34.8910, lng: 135.8080, dayId: days[1].id)).single;
+      expect(onDay2.isTargetDayStop, isFalse);
+      expect(onDay2.dayNumber, 1, reason: 'its earliest day');
+    });
+  });
+
   group('PilgrimageShootingService - Record Shot', () {
     test('records on-plan shot, attaches photo to trip, reuses visit, and leaves schedule item status untouched', () async {
       final now = DateTime(2026, 8, 15, 11, 30);

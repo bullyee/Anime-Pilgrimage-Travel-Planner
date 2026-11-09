@@ -273,7 +273,21 @@ class PilgrimageShootingService {
       final items = await (db.select(db.scheduleItems)
             ..where((s) => s.tripId.equals(resolvedTripId!) & s.deletedAt.isNull()))
           .get();
-      final itemByStopId = {for (final it in items) it.stopId: it};
+      // A stop can be on several days: prefer its item on the target day,
+      // else the one on the earliest numbered day.
+      final itemsByStopId = <String, List<ScheduleItem>>{};
+      for (final it in items) {
+        itemsByStopId.putIfAbsent(it.stopId, () => []).add(it);
+      }
+      ScheduleItem? itemFor(String stopId) {
+        final stopItems = itemsByStopId[stopId];
+        if (stopItems == null || stopItems.isEmpty) return null;
+        final onTarget = stopItems.where((it) => targetDayId != null && it.dayId == targetDayId).firstOrNull;
+        if (onTarget != null) return onTarget;
+        return (List.of(stopItems)
+              ..sort((a, b) => (dayNumberMap[a.dayId] ?? 1 << 30).compareTo(dayNumberMap[b.dayId] ?? 1 << 30)))
+            .first;
+      }
 
       for (final stop in allTripStops) {
         if (seenStopIds.contains(stop.id)) continue;
@@ -281,7 +295,7 @@ class PilgrimageShootingService {
         final dist = calculateDistanceMeters(lat, lng, stop.lat, stop.lng);
         if (dist <= maxDistanceMeters) {
           seenStopIds.add(stop.id);
-          final schedItem = itemByStopId[stop.id];
+          final schedItem = itemFor(stop.id);
           final stopDayId = schedItem?.dayId;
           final dayNum = stopDayId != null ? dayNumberMap[stopDayId] : null;
           final isTargetDay = targetDayId != null && stopDayId == targetDayId;
