@@ -41,7 +41,7 @@ class _LibraryPickerScreenState extends ConsumerState<LibraryPickerScreen> {
         if (context.canPop()) {
           context.pop();
         } else {
-          context.go('/trips/${widget.tripId}/stops');
+          context.go('/trips/${widget.tripId}');
         }
       case Failure(:final error):
         ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text("Couldn't add the stops: $error")));

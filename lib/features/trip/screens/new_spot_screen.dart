@@ -227,7 +227,7 @@ class _NewSpotScreenState extends ConsumerState<NewSpotScreen> {
         if (context.canPop()) {
           context.pop();
         } else {
-          context.go('/trips/$tripId/stops');
+          context.go('/trips/$tripId');
         }
       } else {
         _say((result as Failure).error);
@@ -324,7 +324,7 @@ class _NewSpotScreenState extends ConsumerState<NewSpotScreen> {
         if (context.canPop()) {
           context.pop(widget.returnsPlaceKey ? createdKey : null);
         } else {
-          context.go(tripId == null ? '/library' : '/trips/$tripId/stops');
+          context.go(tripId == null ? '/library' : '/trips/$tripId');
         }
       case Failure(:final error):
         ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(error)));
