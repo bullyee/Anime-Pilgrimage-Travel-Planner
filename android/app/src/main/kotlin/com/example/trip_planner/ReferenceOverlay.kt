@@ -44,6 +44,11 @@ import kotlin.math.roundToInt
  *    the last touch, and a tap while it shows (or fades) hides it at once
  *  - double-tap to close
  *
+ * Given several frames of one spot, the bar also has ‹ › and a "3/7" count
+ * to switch frames in place: the window keeps its place, width and opacity,
+ * and [onFrameChanged] reports each switch. There's no swipe to switch,
+ * since one finger on the image already drags the window.
+ *
  * [MainActivity] hides the window while the user is in another app and shows
  * it again when they come back to the camera ([setShown]).
  *
@@ -52,7 +57,13 @@ import kotlin.math.roundToInt
  * anime_camera_studio, so no notification and no foreground-service
  * permissions are needed.
  */
-class ReferenceOverlay(activity: Context) {
+class ReferenceOverlay(
+    activity: Context,
+    private val onFrameChanged: (Int) -> Unit = {},
+) {
+    /** Where the window was and how it looked, to put it back the same way. */
+    data class Placement(val x: Int, val y: Int, val width: Int, val alpha: Float)
+
     // On Android 11+ the window lives in its own WindowContext. Its
     // configuration follows the display as the phone rotates, while the
     // Activity's stays in the orientation the app was last shown in — with the
@@ -89,29 +100,52 @@ class ReferenceOverlay(activity: Context) {
 
     private var root: LinearLayout? = null
     private var frame: FrameLayout? = null
+    private var image: ImageView? = null
     private var bar: LinearLayout? = null
+    private var counter: TextView? = null
     private var params: WindowManager.LayoutParams? = null
+
+    // The frames to switch between, and the one showing.
+    private var paths: List<String> = emptyList()
+    private var current = 0
+
+    /** The window's placement when it was last closed (by [hide] or a double-tap). */
+    var lastPlacement: Placement? = null
+        private set
 
     // Image width / height, and the image's on-screen width in px (the
     // height follows the aspect ratio).
     private var aspect = 16f / 9f
     private var imageWidth = 0
 
-    fun show(path: String, opacity: Float): Boolean {
-        val bitmap = decode(path) ?: return false
+    /**
+     * Shows [frames] starting on [index] (one frame for a single reference),
+     * at [opacity]. With [placement], the window goes back there, at that
+     * width and opacity; otherwise it starts small near the top.
+     */
+    fun show(
+        frames: List<String>,
+        index: Int,
+        opacity: Float,
+        placement: Placement? = null,
+    ): Boolean {
+        if (frames.isEmpty()) return false
+        paths = frames
+        current = index.coerceIn(0, frames.lastIndex)
+        val bitmap = decode(paths[current]) ?: return false
         aspect = bitmap.width.toFloat() / bitmap.height
         val screen = screenBounds()
         val landscape = screen.width() > screen.height()
         // Start at ~45% of the screen's short side, in a top corner away
         // from the shutter: camera apps put it at the bottom in portrait and
         // on the right in landscape.
-        imageWidth = (min(screen.width(), screen.height()) * 0.45f).roundToInt()
+        imageWidth = (placement?.width ?: (min(screen.width(), screen.height()) * 0.45f).roundToInt())
             .coerceIn(minWidth(), maxWidth(screen))
 
         val image = ImageView(context).apply {
             setImageBitmap(bitmap)
             scaleType = ImageView.ScaleType.FIT_XY
-            alpha = opacity.coerceIn(MIN_ALPHA, 1f)
+            alpha = (placement?.alpha ?: opacity).coerceIn(MIN_ALPHA, 1f)
         }
         val imageFrame = FrameLayout(context).apply {
             background = GradientDrawable().apply {
@@ -151,14 +185,21 @@ class ReferenceOverlay(activity: Context) {
             PixelFormat.TRANSLUCENT,
         ).apply {
             gravity = Gravity.TOP or Gravity.START
-            x = if (landscape) screen.left + dp(12f) else screen.right - imageWidth - dp(12f)
-            y = screen.top + if (landscape) dp(24f) else dp(96f)
+            if (placement != null) {
+                x = placement.x
+                y = placement.y
+                clamp(this, screen)
+            } else {
+                x = if (landscape) screen.left + dp(12f) else screen.right - imageWidth - dp(12f)
+                y = screen.top + if (landscape) dp(24f) else dp(96f)
+            }
         }
 
         return try {
             wm.addView(column, layout)
             root = column
             frame = imageFrame
+            this.image = image
             bar = controls
             params = layout
             displays.registerDisplayListener(displayListener, handler)
@@ -188,16 +229,57 @@ class ReferenceOverlay(activity: Context) {
         hideBar()
         handler.removeCallbacks(keepOnScreenRunnable)
         runCatching { displays.unregisterDisplayListener(displayListener) }
+        val layout = params
+        val shown = image
+        if (layout != null && shown != null) {
+            lastPlacement = Placement(layout.x, layout.y, imageWidth, shown.alpha)
+        }
         root?.let { runCatching { wm.removeView(it) } }
         root = null
         frame = null
+        image = null
         bar = null
+        counter = null
         params = null
     }
 
     /**
-     * Opacity − / +, shown under the image after a tap. There's no close
-     * button: a double-tap on the image closes the window.
+     * Shows the frame [step] away from the current one, wrapping around at
+     * either end, and reports it. A frame that won't decode is skipped.
+     */
+    private fun switchFrame(step: Int) {
+        val count = paths.size
+        if (count < 2 || root == null) return
+        var next = current
+        repeat(count - 1) {
+            next = Math.floorMod(next + step, count)
+            val bitmap = decode(paths[next]) ?: return@repeat
+            current = next
+            showBitmap(bitmap)
+            onFrameChanged(current)
+            return
+        }
+    }
+
+    /** Puts [bitmap] in the window at the same place and width; its height follows the frame's shape. */
+    private fun showBitmap(bitmap: Bitmap) {
+        val layout = params ?: return
+        val view = root ?: return
+        image?.setImageBitmap(bitmap)
+        counter?.text = countText()
+        aspect = bitmap.width.toFloat() / bitmap.height
+        val screen = screenBounds()
+        setImageWidth(imageWidth.coerceIn(minWidth(), maxWidth(screen)))
+        clamp(layout, screen)
+        runCatching { wm.updateViewLayout(view, layout) }
+    }
+
+    private fun countText(): String = "${current + 1}/${paths.size}"
+
+    /**
+     * Opacity − / +, shown under the image after a tap, with ‹ › and the
+     * frame's number around them when there are several frames. There's no
+     * close button: a double-tap on the image closes the window.
      */
     private fun buildBar(image: ImageView): LinearLayout {
         fun button(label: String, description: String, onClick: () -> Unit) =
@@ -214,23 +296,40 @@ class ReferenceOverlay(activity: Context) {
                 }
             }
 
+        val frames = paths.size > 1
         return LinearLayout(context).apply {
             orientation = LinearLayout.HORIZONTAL
             setBackgroundColor(0xCC202124.toInt())
             visibility = View.GONE
             val slot = { LinearLayout.LayoutParams(0, dp(40f), 1f) }
+            if (frames) {
+                addView(button("‹", "Previous frame") { switchFrame(-1) }, slot())
+            }
             addView(
                 button("−", "Fainter reference") {
                     image.alpha = (image.alpha - 0.1f).coerceIn(MIN_ALPHA, 1f)
                 },
                 slot(),
             )
+            if (frames) {
+                val count = TextView(context).apply {
+                    text = countText()
+                    setTextColor(Color.WHITE)
+                    textSize = 12f
+                    gravity = Gravity.CENTER
+                }
+                counter = count
+                addView(count, slot())
+            }
             addView(
                 button("+", "Stronger reference") {
                     image.alpha = (image.alpha + 0.1f).coerceIn(MIN_ALPHA, 1f)
                 },
                 slot(),
             )
+            if (frames) {
+                addView(button("›", "Next frame") { switchFrame(1) }, slot())
+            }
         }
     }
 
@@ -293,9 +392,10 @@ class ReferenceOverlay(activity: Context) {
         runCatching { wm.updateViewLayout(view, layout) }
     }
 
+    // Sets the height too, which follows the frame's shape even when the
+    // width stays.
     private fun setImageWidth(width: Int) {
         val imageFrame = frame ?: return
-        if (width == imageWidth) return
         imageWidth = width
         imageFrame.layoutParams = (imageFrame.layoutParams as LinearLayout.LayoutParams).apply {
             this.width = imageWidth
@@ -433,9 +533,9 @@ class ReferenceOverlay(activity: Context) {
 
     private fun imageHeight(): Int = (imageWidth / aspect).roundToInt()
 
-    // Wide enough for the bar's buttons; the image never outgrows the
-    // screen in either direction.
-    private fun minWidth(): Int = dp(132f)
+    // Wide enough for the bar's buttons (five with several frames); the
+    // image never outgrows the screen in either direction.
+    private fun minWidth(): Int = dp(if (paths.size > 1) 196f else 132f)
     private fun maxWidth(screen: Rect): Int =
         max(minWidth(), min(screen.width(), (screen.height() * aspect).roundToInt()))
 

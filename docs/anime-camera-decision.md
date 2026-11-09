@@ -52,6 +52,7 @@ A small window shows the reference on top of the phone's camera app. Only the wi
   - On Android 11+ the window goes through its own `WindowContext`. An Activity's configuration stays in the orientation the app was last shown in, so a window added through it was boxed into a portrait-sized strip when the phone was turned to landscape.
   - Capture goes through `image_picker`. If Android kills the app while the camera is open, `retrieveLostData()` recovers the photo.
   - The window starts small, near the top and away from the shutter. Tap it to show opacity −/+, which fades away soon after the last touch.
+  - For a spot with several frames, the same bar has ‹ › and a "3/7" count to switch frames without leaving the camera (2026-11-10). The window keeps its place, width and opacity, and each shot is saved with the frame showing when it came back from the camera. There's no swipe to switch: one finger on the image already drags the window.
   - The window shows only while the camera is on screen. Switching to another app hides it; coming back shows it again in the same place and size. This works because the camera is opened for a result and so runs on top of the app's own task. That task's visibility is public only from Android 13 (`TaskInfo.isVisible()`); on older versions the window simply stays up.
 
 ## Floating reference only
@@ -65,7 +66,7 @@ Unlike the camera flow, the window stays up when the user leaves Trip Planner. T
 - add a reference there, from a POI's references or the gallery
 - the result goes to the phone's gallery, and to the POI's media when the reference came from one
 
-`ACTION_IMAGE_CAPTURE` closes the camera after one shot, so the camera flow opens it again after every shot until the user backs out, then lets them pick the shots to keep (`shot_series_screen.dart`). The floating-only mode works with any camera app instead; the user then picks the keeper from the gallery.
+`ACTION_IMAGE_CAPTURE` closes the camera after one shot, so the camera flow opens it again after every shot until the user backs out, then lets them pick the shots to keep (`shot_series_screen.dart`). Take more brings the window back where it was, at the same size and on the same frame. The floating-only mode works with any camera app instead; the user then picks the keeper from the gallery.
 
 ## Deferred
 
