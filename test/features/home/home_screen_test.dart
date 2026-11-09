@@ -12,6 +12,7 @@ import 'package:trip_planner/features/home/screens/home_screen.dart';
 import 'package:trip_planner/features/home/widgets/next_trip_card.dart';
 import 'package:trip_planner/features/library/models/library_entry.dart';
 import 'package:trip_planner/features/library/providers/library_providers.dart';
+import 'package:trip_planner/features/library/providers/place_providers.dart';
 import 'package:trip_planner/features/planner/models/planner_view.dart';
 import 'package:trip_planner/features/planner/providers/planner_providers.dart';
 import 'package:trip_planner/features/sharing/providers/group_sharing_providers.dart';
@@ -192,6 +193,7 @@ void main() {
           tripSummariesProvider.overrideWith((ref) => AsyncData(trips)),
           plannerViewProvider.overrideWith((ref, id) => AsyncData(view)),
           stopReferenceImagesProvider.overrideWith((ref, id) => Stream.value(const <NewReferenceImage>[])),
+          placeReferenceImagesProvider.overrideWith((ref, key) => Stream.value(const <NewReferenceImage>[])),
           canEditTripProvider.overrideWith((ref, id) => canEdit),
           tripRepositoryProvider.overrideWithValue(repo),
           authStateChangesProvider.overrideWith((ref) => Stream.value(null)),

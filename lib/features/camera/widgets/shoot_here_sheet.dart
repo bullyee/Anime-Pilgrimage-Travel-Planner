@@ -16,14 +16,16 @@ sealed class ShootHereChoice {
 }
 
 /// A place near the user, with the frame to float over the camera (none when
-/// the place has no frame yet). [tripId] is the trip when the place is one
-/// of its stops.
+/// the place has no frame yet) and all its [frames], in the order offered,
+/// to switch between in the camera. [tripId] is the trip when the place is
+/// one of its stops.
 class ShootAtPlace extends ShootHereChoice {
   final String placeKey;
   final String? tripId;
   final NewReferenceImage? frame;
+  final List<NewReferenceImage> frames;
 
-  const ShootAtPlace(this.placeKey, {this.tripId, this.frame});
+  const ShootAtPlace(this.placeKey, {this.tripId, this.frame, this.frames = const []});
 }
 
 /// The ways to shoot that don't depend on where the user is: another
@@ -200,7 +202,10 @@ class _ShootHereSheetState extends ConsumerState<ShootHereSheet> with SingleTick
 
   void _pick(NearbyShootingPlace place, NewReferenceImage? frame) {
     _countdown.stop();
-    Navigator.pop(context, ShootAtPlace(place.placeKey, tripId: place.todayStop?.tripId, frame: frame));
+    Navigator.pop(
+      context,
+      ShootAtPlace(place.placeKey, tripId: place.todayStop?.tripId, frame: frame, frames: shootHereFrames(place)),
+    );
   }
 
   NearbyPlacesQuery? get _query {

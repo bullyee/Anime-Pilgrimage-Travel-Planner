@@ -259,7 +259,7 @@ class _StopScreenState extends ConsumerState<StopScreen> {
               frames: frames,
               index: _frame,
               onPage: (i) => setState(() => _frame = i),
-              onOpen: (i) => _openFrame(stop, frames[i]),
+              onOpen: (i) => _openFrame(stop, frames, i),
             ),
             Padding(
               padding: const EdgeInsets.fromLTRB(16, 12, 16, 0),
@@ -268,7 +268,7 @@ class _StopScreenState extends ConsumerState<StopScreen> {
                 children: [
                   PageActions(
                     frame: current,
-                    onShoot: () => _shoot(stop, current),
+                    onShoot: () => _shoot(stop, frames, _frame),
                     onFloat: current == null ? null : () => _float(current),
                     onDirections: () async {
                       if (!await openDirections(stop.lat, stop.lng)) _report(const Failure("Couldn't open a maps app."));
@@ -364,11 +364,9 @@ class _StopScreenState extends ConsumerState<StopScreen> {
     return path;
   }
 
-  Future<void> _shoot(Stop stop, NewReferenceImage? frame) async {
-    final path = frame == null ? null : await _framePath(frame);
-    if ((frame != null && path == null) || !mounted) return;
-    await shootWithReference(context, ref, placeKey: stop.placeKey, tripId: _tripId, referencePath: path, referenceImageId: frame?.id);
-  }
+  /// The camera on [frames]' [index], with the stop's other frames to switch to.
+  Future<void> _shoot(Stop stop, List<NewReferenceImage> frames, int index) =>
+      shootWithFrames(context, ref, placeKey: stop.placeKey, tripId: _tripId, frames: frames, index: index);
 
   Future<void> _float(NewReferenceImage frame) async {
     final path = await _framePath(frame);
@@ -376,7 +374,8 @@ class _StopScreenState extends ConsumerState<StopScreen> {
     await floatReferenceImage(context, path);
   }
 
-  Future<void> _openFrame(Stop stop, NewReferenceImage frame) async {
+  Future<void> _openFrame(Stop stop, List<NewReferenceImage> frames, int index) async {
+    final frame = frames[index];
     final path = await _framePath(frame);
     if (path == null || !mounted) return;
     await Navigator.of(context).push(MaterialPageRoute<void>(
@@ -384,7 +383,7 @@ class _StopScreenState extends ConsumerState<StopScreen> {
         path: path,
         title: frameCaption(frame) ?? 'Anime frame',
         actions: [
-          if (animeCameraSupported) ViewerAction('Take photo', () => _shoot(stop, frame), primary: true),
+          if (animeCameraSupported) ViewerAction('Take photo', () => _shoot(stop, frames, index), primary: true),
           if (floatingReferenceSupported) ViewerAction('Float frame', () => floatReferenceImage(context, path)),
         ],
       ),

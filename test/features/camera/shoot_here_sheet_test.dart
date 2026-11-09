@@ -211,6 +211,7 @@ void main() {
     await tester.pumpAndSettle();
     final choice = picked! as ShootAtPlace;
     expect((choice.placeKey, choice.frame!.id, choice.tripId), ('bridge', 'b2', 'kyoto'));
+    expect(choice.frames.map((f) => f.id), ['b1', 'b2', 'shared'], reason: 'all its frames, to switch in the camera');
   });
 
   testWidgets("none of the day's stops nearby: the others are open already", (tester) async {
