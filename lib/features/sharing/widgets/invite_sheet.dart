@@ -322,7 +322,7 @@ class _InviteSheetState extends ConsumerState<InviteSheet> {
   /// trip's members afterwards.
   Future<void> _signInNow() async {
     final returnTo = ref.read(signInReturnProvider.notifier);
-    returnTo.state = '/trips/${widget.trip.id}?tab=members';
+    returnTo.state = '/trips/${widget.trip.id}/members';
     try {
       await ref.read(authControllerProvider.notifier).signInWithGoogle();
     } catch (e) {

@@ -22,6 +22,7 @@ import '../../features/trip/screens/new_spot_screen.dart';
 import '../../features/trip/screens/pilgrimage_day_map_screen.dart';
 import '../../features/trip/screens/stop_screen.dart';
 import '../../features/trip/screens/trip_list_screen.dart';
+import '../../features/trip/screens/trip_members_screen.dart';
 import '../../features/trip/screens/trip_screen.dart';
 
 part 'app_router.g.dart';
@@ -92,6 +93,10 @@ GoRouter router(RouterRef ref) {
           tripId: state.pathParameters['tripId']!,
           initialTab: TripTab.values.asNameMap()[state.uri.queryParameters['tab']] ?? TripTab.overview,
         ),
+      ),
+      GoRoute(
+        path: '/trips/:tripId/members',
+        builder: (context, state) => TripMembersScreen(tripId: state.pathParameters['tripId']!),
       ),
       GoRoute(
         path: '/trips/:tripId/map',

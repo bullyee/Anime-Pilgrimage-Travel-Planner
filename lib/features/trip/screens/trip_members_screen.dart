@@ -12,15 +12,38 @@ import '../../sharing/providers/group_sharing_providers.dart';
 import '../../sharing/sharing_text.dart';
 import '../../sharing/widgets/invite_sheet.dart';
 import '../../sharing/widgets/member_avatar.dart';
+import '../providers/trip_providers.dart';
+
+/// The trip's people, opened from the avatars in the trip's top bar.
+class TripMembersScreen extends ConsumerWidget {
+  final String tripId;
+
+  const TripMembersScreen({super.key, required this.tripId});
+
+  @override
+  Widget build(BuildContext context, WidgetRef ref) {
+    final trip = ref.watch(tripDetailProvider(tripId));
+    return Scaffold(
+      appBar: AppBar(title: Text(trip.valueOrNull?.sharing == 'group' ? 'People in this trip' : 'Share this trip')),
+      body: trip.when(
+        loading: () => const Center(child: CircularProgressIndicator()),
+        error: (e, _) => Center(child: Text("Couldn't load this trip: $e")),
+        data: (trip) => trip == null || trip.deletedAt != null
+            ? const Center(child: Text('This trip was deleted.'))
+            : TripMembersView(trip: trip),
+      ),
+    );
+  }
+}
 
 /// Who the trip is shared with. Before it's shared: what sharing sends and
 /// what stays private, and a button to invite people. Once it is: who's in
 /// it and what each can do, the invites still open, and, for the owner,
 /// changing that or stopping sharing.
-class TripMembersTab extends ConsumerWidget {
+class TripMembersView extends ConsumerWidget {
   final Trip trip;
 
-  const TripMembersTab({super.key, required this.trip});
+  const TripMembersView({super.key, required this.trip});
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {

@@ -8,20 +8,20 @@ import '../../../shared/theme/app_theme.dart';
 import '../../planner/widgets/day_planner.dart';
 import '../../sharing/models/trip_member.dart';
 import '../../sharing/providers/group_sharing_providers.dart';
-import '../../sharing/widgets/invite_sheet.dart';
 import '../controllers/trips_controller.dart';
 import '../providers/trip_providers.dart';
 import '../widgets/trip_card.dart';
 import '../widgets/trip_form_sheet.dart';
+import '../widgets/trip_members_button.dart';
 import '../widgets/trip_sync_icon.dart';
-import 'trip_members_tab.dart';
+import 'trip_members_screen.dart';
 import 'trip_overview_tab.dart';
 import 'trip_stops_tab.dart';
 
-enum TripTab { overview, plan, stops, members }
+enum TripTab { overview, plan, stops }
 
-/// One trip, in four tabs: its overview, the day planner, its stops, and
-/// who it's shared with.
+/// One trip, in three tabs: its overview, the day planner and its stops.
+/// Its people open from the avatars in the top bar.
 class TripScreen extends ConsumerStatefulWidget {
   final String tripId;
   final TripTab initialTab;
@@ -134,12 +134,7 @@ class _TripScreenState extends ConsumerState<TripScreen> with SingleTickerProvid
             icon: const Icon(Icons.map_outlined),
             onPressed: () => context.push('/trips/${trip.id}/map'),
           ),
-          if (role == TripMemberRole.owner || role == TripMemberRole.editor)
-            IconButton(
-              tooltip: 'Invite people',
-              icon: const Icon(Icons.person_add_alt_1_outlined),
-              onPressed: () => showInviteSheet(context, trip),
-            ),
+          TripMembersButton(trip: trip),
           if (menu.isNotEmpty)
             PopupMenuButton<String>(
               onSelected: (value) {
@@ -152,7 +147,7 @@ class _TripScreenState extends ConsumerState<TripScreen> with SingleTickerProvid
         ],
         bottom: TabBar(
           controller: _tabs,
-          tabs: const [Tab(text: 'Overview'), Tab(text: 'Plan'), Tab(text: 'Stops'), Tab(text: 'Members')],
+          tabs: const [Tab(text: 'Overview'), Tab(text: 'Plan'), Tab(text: 'Stops')],
         ),
       ),
       body: TabBarView(
@@ -192,7 +187,6 @@ class _TripScreenState extends ConsumerState<TripScreen> with SingleTickerProvid
             ],
           ),
           TripStopsTab(tripId: trip.id),
-          TripMembersTab(trip: trip),
         ],
       ),
       floatingActionButton: tab == TripTab.stops && hasStops && canEdit

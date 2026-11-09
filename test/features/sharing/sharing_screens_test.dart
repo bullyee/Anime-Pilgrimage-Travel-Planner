@@ -16,7 +16,7 @@ import 'package:trip_planner/features/sharing/models/trip_member.dart';
 import 'package:trip_planner/features/sharing/providers/group_sharing_providers.dart';
 import 'package:trip_planner/features/sharing/screens/join_trip_screen.dart';
 import 'package:trip_planner/features/sharing/services/group_sharing_service.dart';
-import 'package:trip_planner/features/trip/screens/trip_members_tab.dart';
+import 'package:trip_planner/features/trip/screens/trip_members_screen.dart';
 import 'package:trip_planner/features/trip/screens/trip_screen.dart';
 import 'package:trip_planner/features/trip/widgets/trip_card.dart';
 
@@ -177,7 +177,7 @@ void main() {
   }
 
   GoRouter membersRouter(Trip trip) => GoRouter(routes: [
-        GoRoute(path: '/', builder: (_, _) => Scaffold(body: TripMembersTab(trip: trip))),
+        GoRoute(path: '/', builder: (_, _) => TripMembersScreen(tripId: trip.id)),
       ]);
 
   /// Lets drift close its streams before the test ends.
@@ -186,7 +186,7 @@ void main() {
     await tester.pump(const Duration(seconds: 1));
   }
 
-  group('Members tab', () {
+  group('Member list', () {
     testWidgets('a private trip says what sharing sends, and its invite sheet makes an invite', (tester) async {
       final trip = await addTrip();
       await pump(tester, membersRouter(trip));
@@ -342,19 +342,42 @@ void main() {
     });
   });
 
-  testWidgets("the trip page's invite button opens the invite sheet for the owner", (tester) async {
-    await addTrip();
-    await pump(
-      tester,
-      GoRouter(initialLocation: '/trips/t1', routes: [
+  GoRouter tripAndMembersRouter() => GoRouter(initialLocation: '/trips/t1', routes: [
         GoRoute(path: '/trips/:tripId', builder: (_, s) => TripScreen(tripId: s.pathParameters['tripId']!)),
-      ]),
-    );
+        GoRoute(path: '/trips/:tripId/members', builder: (_, s) => TripMembersScreen(tripId: s.pathParameters['tripId']!)),
+      ]);
 
-    await tester.tap(find.byTooltip('Invite people'));
+  testWidgets("a private trip's top bar opens the member list, where the owner invites people", (tester) async {
+    await addTrip();
+    await pump(tester, tripAndMembersRouter());
+
+    await tester.tap(find.byTooltip('Share this trip'));
     await tester.pumpAndSettle();
+    expect(find.text('Plan this trip together'), findsOneWidget);
 
+    await tester.tap(find.text('Invite people'));
+    await tester.pumpAndSettle();
     expect(find.text('Invite to Uji day trip'), findsOneWidget);
+    await done(tester);
+  });
+
+  testWidgets("a shared trip's top bar shows the others' avatars, which open the member list", (tester) async {
+    await addTrip(sharingMode: 'group');
+    sharing.members = [
+      _member('u1', 'Bea', TripMemberRole.owner),
+      _member('aki', 'Aki', TripMemberRole.editor, minutes: 1),
+      _member('ren', 'Ren', TripMemberRole.viewer, minutes: 2),
+    ];
+    await pump(tester, tripAndMembersRouter());
+
+    expect(find.descendant(of: find.byType(AppBar), matching: find.text('A')), findsOneWidget);
+    expect(find.descendant(of: find.byType(AppBar), matching: find.text('R')), findsOneWidget);
+    expect(find.descendant(of: find.byType(AppBar), matching: find.text('B')), findsNothing, reason: 'you are not shown');
+
+    await tester.tap(find.byTooltip('People in this trip'));
+    await tester.pumpAndSettle();
+    expect(find.text('3 people'), findsOneWidget);
+    expect(find.text('Invite'), findsOneWidget);
     await done(tester);
   });
 
