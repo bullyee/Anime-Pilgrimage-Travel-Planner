@@ -1,10 +1,7 @@
-import 'dart:io';
-
 import '../../../core/database/database.dart';
-import '../../library/repositories/place_repository.dart';
-import '../../library/services/photo_trip.dart';
-import '../../poi/services/media_asset_service.dart';
 import '../models/shot_series.dart';
+import 'pilgrimage_shooting_service.dart';
+import 'shot_plan.dart';
 
 /// What [saveKeptShots] managed: how many shots went to the place and to the
 /// gallery, and why the gallery refused, if it did.
@@ -20,18 +17,19 @@ class KeptShotsResult {
 /// editing on the spot (roadmap v0.3.0).
 ///
 /// Each one goes to the phone's gallery through [toGallery], when given, and,
-/// when the series is for a place, to that place's photos with its frame,
-/// filed under the series' trip or else the trip that has the place on the
-/// day it was taken. The shots' files stay where they are; the caller
-/// discards the series afterwards.
-///
-/// The roadmap's "Record a shot" (backend item 3) takes over the place part
-/// and also marks the place visited and the stop done.
+/// when the series is for a place, is recorded with
+/// [PilgrimageShootingService.recordShot]: a copy in the app, a row in the
+/// place's photos with its frame, and the day's visit to the place, logged
+/// once per place per day however many shots are kept. The photos are filed
+/// under the series' trip, else the trip that has the place on the day they
+/// were taken, else the trip on that day ([shotTrip]). Nothing in the plan
+/// changes: the pick screen's ticks do that (`shot_plan.dart`). The shots'
+/// files stay where they are; the caller discards the series afterwards.
 Future<KeptShotsResult> saveKeptShots({
   required ShotSeries series,
   required List<SeriesShot> kept,
-  required PlaceRepository places,
   required AppDatabase db,
+  PilgrimageShootingService shooting = const PilgrimageShootingService(),
   Future<void> Function(String path)? toGallery,
 }) async {
   var toPlace = 0;
@@ -49,17 +47,27 @@ Future<KeptShotsResult> saveKeptShots({
     }
     final placeKey = series.placeKey;
     if (placeKey == null) continue;
-    final tripId = series.tripId ??
-        await tripForPhoto(db, placeKey, shot.takenAt).catchError((Object _) => null);
-    final saved = await persistPlacePhoto(
-      places: places,
-      source: File(shot.path),
-      placeKey: placeKey,
-      referenceImageId: series.referenceImageId,
-      tripId: tripId,
-      takenAt: shot.takenAt,
-    );
-    if (saved) toPlace++;
+    try {
+      // Not knowing the trip shouldn't lose the photo.
+      final tripId =
+          series.tripId ??
+          await shotTrip(
+            db,
+            placeKey: placeKey,
+            takenAt: shot.takenAt,
+          ).then<String?>((t) => t?.id, onError: (Object _) => null);
+      await shooting.recordShot(
+        db,
+        sourceImagePath: shot.path,
+        placeKey: placeKey,
+        tripId: tripId,
+        referenceImageId: series.referenceImageId,
+        takenAt: shot.takenAt,
+      );
+      toPlace++;
+    } catch (_) {
+      // Counted as not saved; the caller keeps the series so nothing is lost.
+    }
   }
   return KeptShotsResult(toPlace: toPlace, toGallery: galleryCount, galleryError: galleryError);
 }
