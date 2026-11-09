@@ -742,6 +742,95 @@ def main():
                                          'name': {'stringValue': 'x'}, 'updatedAt': {'integerValue': '1000'}}}, user_id='mallory')
     assert_status("id integrity: unicode id equal to path succeeds (200)", 200, code, resp=resp)
 
+    # ==========================================
+    # Phase 3 Shared Pilgrimage Photos Rules Checks
+    # ==========================================
+    future_time = '2026-12-05T00:00:00Z'
+    valid_photo_data = {
+        'fields': {
+            'id': {'stringValue': 'photo_test_1'},
+            'tripId': {'stringValue': 'trip_g1'},
+            'storagePath': {'stringValue': 'tripsV2/trip_g1/trip_photos/photo_test_1.jpg'},
+            'url': {'stringValue': 'https://firebasestorage.googleapis.com/v0/b/mock/o/photo_test_1.jpg'},
+            'caption': {'stringValue': 'Uji river view'},
+            'uploadedBy': {'stringValue': 'alice'},
+            'uploadedByName': {'stringValue': 'Alice'},
+            'updatedAt': {'integerValue': '1000'},
+        }
+    }
+    # 60. Trip owner Alice can create trip_photo (200)
+    code, resp = api_request('POST', 'tripsV2/trip_g1/trip_photos?documentId=photo_test_1', valid_photo_data, user_id='alice')
+    assert_status("Phase 3: Trip owner Alice can create trip_photo (200)", 200, code, resp=resp)
+
+    # 61. Trip member can read trip_photo (200)
+    code, resp = api_request('GET', 'tripsV2/trip_g1/trip_photos/photo_test_1', user_id='alice')
+    assert_status("Phase 3: Trip member Alice can read trip_photo (200)", 200, code, resp=resp)
+
+    # 62. Non-member Eve cannot read trip_photo (403)
+    code, resp = api_request('GET', 'tripsV2/trip_g1/trip_photos/photo_test_1', user_id='eve')
+    assert_status("Phase 3: Non-member Eve cannot read trip_photo (403)", 403, code, resp=resp)
+
+    # 63. Non-member Eve cannot create trip_photo (403)
+    code, resp = api_request('POST', 'tripsV2/trip_g1/trip_photos?documentId=photo_eve', valid_photo_data, user_id='eve')
+    assert_status("Phase 3: Non-member Eve cannot create trip_photo (403)", 403, code, resp=resp)
+
+    # 64. Spoofed uploadedBy != auth.uid is denied (403)
+    spoofed_uploader = {
+        'fields': {
+            'id': {'stringValue': 'photo_spoof_uploader'},
+            'tripId': {'stringValue': 'trip_g1'},
+            'storagePath': {'stringValue': 'tripsV2/trip_g1/trip_photos/photo_spoof_uploader.jpg'},
+            'url': {'stringValue': 'https://storage/photo.jpg'},
+            'uploadedBy': {'stringValue': 'alice'},
+            'updatedAt': {'integerValue': '1000'},
+        }
+    }
+    code, resp = api_request('POST', 'tripsV2/trip_g1/trip_photos?documentId=photo_spoof_uploader', spoofed_uploader, user_id='bob')
+    assert_status("Phase 3: Spoofed uploadedBy != auth.uid is denied (403)", 403, code, resp=resp)
+
+    # 65. Spoofed document id != path is denied (403)
+    spoofed_id = {
+        'fields': {
+            'id': {'stringValue': 'photo_victim'},
+            'tripId': {'stringValue': 'trip_g1'},
+            'storagePath': {'stringValue': 'tripsV2/trip_g1/trip_photos/photo_victim.jpg'},
+            'url': {'stringValue': 'https://storage/photo.jpg'},
+            'uploadedBy': {'stringValue': 'alice'},
+            'updatedAt': {'integerValue': '1000'},
+        }
+    }
+    code, resp = api_request('POST', 'tripsV2/trip_g1/trip_photos?documentId=photo_actual', spoofed_id, user_id='alice')
+    assert_status("Phase 3: Spoofed photo id != path is denied (403)", 403, code, resp=resp)
+
+    # 66. Spoofed tripId != path is denied (403)
+    spoofed_trip = {
+        'fields': {
+            'id': {'stringValue': 'photo_hijack'},
+            'tripId': {'stringValue': 'trip_other'},
+            'storagePath': {'stringValue': 'tripsV2/trip_other/trip_photos/photo_hijack.jpg'},
+            'url': {'stringValue': 'https://storage/photo.jpg'},
+            'uploadedBy': {'stringValue': 'alice'},
+            'updatedAt': {'integerValue': '1000'},
+        }
+    }
+    code, resp = api_request('POST', 'tripsV2/trip_g1/trip_photos?documentId=photo_hijack', spoofed_trip, user_id='alice')
+    assert_status("Phase 3: Spoofed tripId != path is denied (403)", 403, code, resp=resp)
+
+    # 67. Direct DELETE is denied (soft-delete only) (403)
+    code, resp = api_request('DELETE', 'tripsV2/trip_g1/trip_photos/photo_test_1', user_id='alice')
+    assert_status("Phase 3: Direct DELETE of trip_photo is denied (soft-delete only) (403)", 403, code, resp=resp)
+
+    # 68. Soft-delete update with expireAt TTL is allowed for editor/owner (200)
+    soft_delete_data = {
+        'fields': {
+            'deletedAt': {'timestampValue': '2026-11-05T12:00:00Z'},
+            'expireAt': {'timestampValue': future_time},
+            'updatedAt': {'integerValue': '2000'},
+        }
+    }
+    code, resp = api_request('PATCH', 'tripsV2/trip_g1/trip_photos/photo_test_1?updateMask.fieldPaths=deletedAt&updateMask.fieldPaths=expireAt&updateMask.fieldPaths=updatedAt', soft_delete_data, user_id='alice')
+    assert_status("Phase 3: Soft-delete PATCH with expireAt TTL succeeds (200)", 200, code, resp=resp)
+
     print(f"\nALL {tests_passed}/{tests_total} FIRESTORE RULES TESTS PASSED!")
 
 if __name__ == '__main__':
