@@ -106,6 +106,10 @@ abstract class TripRepository {
   });
   Future<void> deleteScheduleItem(String itemId);
   Future<void> deleteScheduleItems(List<String> itemIds);
+
+  // Collaborator Update Tracking (Phase 2)
+  Future<DateTime?> getLatestCollaboratorUpdate(String tripId, String currentUserId);
+  Stream<DateTime?> watchLatestCollaboratorUpdate(String tripId, String currentUserId);
 }
 
 /// Drift implementation of [TripRepository].
@@ -1027,6 +1031,70 @@ class DriftTripRepository implements TripRepository {
           syncStatus: const Value(1),
         ),
       );
+    });
+  }
+
+  @override
+  Future<DateTime?> getLatestCollaboratorUpdate(String tripId, String currentUserId) async {
+    final effectiveUser = currentUserId.trim();
+    final row = await _db.customSelect(
+      '''
+      SELECT MAX(latest) as max_updated_at FROM (
+        SELECT MAX(updated_at) as latest FROM trips WHERE id = ? AND updated_by IS NOT NULL AND updated_by != ?
+        UNION ALL
+        SELECT MAX(updated_at) as latest FROM trip_days WHERE trip_id = ? AND updated_by IS NOT NULL AND updated_by != ?
+        UNION ALL
+        SELECT MAX(updated_at) as latest FROM stops WHERE trip_id = ? AND updated_by IS NOT NULL AND updated_by != ?
+        UNION ALL
+        SELECT MAX(updated_at) as latest FROM schedule_items WHERE trip_id = ? AND updated_by IS NOT NULL AND updated_by != ?
+      )
+      ''',
+      variables: [
+        Variable<String>(tripId),
+        Variable<String>(effectiveUser),
+        Variable<String>(tripId),
+        Variable<String>(effectiveUser),
+        Variable<String>(tripId),
+        Variable<String>(effectiveUser),
+        Variable<String>(tripId),
+        Variable<String>(effectiveUser),
+      ],
+      readsFrom: {_db.trips, _db.tripDays, _db.stops, _db.scheduleItems},
+    ).getSingleOrNull();
+
+    final ms = row?.readNullable<int>('max_updated_at');
+    return ms == null ? null : DateTime.fromMillisecondsSinceEpoch(ms);
+  }
+
+  @override
+  Stream<DateTime?> watchLatestCollaboratorUpdate(String tripId, String currentUserId) {
+    final effectiveUser = currentUserId.trim();
+    return _db.customSelect(
+      '''
+      SELECT MAX(latest) as max_updated_at FROM (
+        SELECT MAX(updated_at) as latest FROM trips WHERE id = ? AND updated_by IS NOT NULL AND updated_by != ?
+        UNION ALL
+        SELECT MAX(updated_at) as latest FROM trip_days WHERE trip_id = ? AND updated_by IS NOT NULL AND updated_by != ?
+        UNION ALL
+        SELECT MAX(updated_at) as latest FROM stops WHERE trip_id = ? AND updated_by IS NOT NULL AND updated_by != ?
+        UNION ALL
+        SELECT MAX(updated_at) as latest FROM schedule_items WHERE trip_id = ? AND updated_by IS NOT NULL AND updated_by != ?
+      )
+      ''',
+      variables: [
+        Variable<String>(tripId),
+        Variable<String>(effectiveUser),
+        Variable<String>(tripId),
+        Variable<String>(effectiveUser),
+        Variable<String>(tripId),
+        Variable<String>(effectiveUser),
+        Variable<String>(tripId),
+        Variable<String>(effectiveUser),
+      ],
+      readsFrom: {_db.trips, _db.tripDays, _db.stops, _db.scheduleItems},
+    ).watchSingleOrNull().map((row) {
+      final ms = row?.readNullable<int>('max_updated_at');
+      return ms == null ? null : DateTime.fromMillisecondsSinceEpoch(ms);
     });
   }
 }
