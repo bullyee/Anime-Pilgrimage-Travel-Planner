@@ -46,6 +46,11 @@ class ShotPlan {
   /// The pictures that have a saved photo already.
   final Set<String> savedPictures;
 
+  /// The pictures that count towards [frames]: a stop's own frames when it
+  /// has any (the ones picked for this trip), else the place's. Empty means
+  /// every picture in [framePictures] counts.
+  final Set<String> countedPictures;
+
   const ShotPlan({
     required this.trip,
     this.stop,
@@ -57,6 +62,7 @@ class ShotPlan {
     this.framesShot = 0,
     this.framePictures = const {},
     this.savedPictures = const {},
+    this.countedPictures = const {},
   });
 
   /// The plan when the shots about to be kept were taken with [frameIds]:
@@ -69,16 +75,22 @@ class ShotPlan {
         shotDay: shotDay,
         shotDayNumber: shotDayNumber,
         frames: frames,
-        framesShot: _countShot(framePictures, savedPictures, frameIds),
+        framesShot: _countShot(framePictures, savedPictures, frameIds, countedPictures),
         framePictures: framePictures,
         savedPictures: savedPictures,
+        countedPictures: countedPictures,
       );
 
-  static int _countShot(Map<String, String> pictures, Set<String> saved, Iterable<String?> frameIds) => {
+  static int _countShot(
+    Map<String, String> pictures,
+    Set<String> saved,
+    Iterable<String?> frameIds,
+    Set<String> counted,
+  ) => {
         ...saved,
         for (final id in frameIds)
           if (pictures[id] case final picture?) picture,
-      }.length;
+      }.where((picture) => counted.isEmpty || counted.contains(picture)).length;
 
   bool get done => item?.status == 'done';
 
@@ -176,6 +188,14 @@ Future<ShotPlan?> loadShotPlan(
   // A stop's frames are copies of its place's (the same picture under a new
   // id), so a frame counts once, whichever copy a photo was shot with.
   final picture = {for (final f in frames) f.id: f.localPath ?? f.remoteUrl ?? f.id};
+  // A stop's own frames are the ones picked for this trip (often fewer than
+  // the place has), and they're what the camera offers, so they decide when
+  // the spot is done; a stop without frames of its own falls back to the place's.
+  final stopOwn = [
+    for (final f in frames)
+      if (stop != null && f.stopId == stop.id) f,
+  ];
+  final counted = {for (final f in stopOwn.isNotEmpty ? stopOwn : frames) picture[f.id]!};
   final saved = <String>{};
   if (picture.isNotEmpty) {
     final photos = await (db.select(
@@ -191,10 +211,11 @@ Future<ShotPlan?> loadShotPlan(
     itemDay: item == null ? null : number[item.dayId],
     shotDay: shotDay,
     shotDayNumber: shotDay == null ? null : number[shotDay.id],
-    frames: picture.values.toSet().length,
-    framesShot: ShotPlan._countShot(picture, saved, referenceImageIds),
+    frames: counted.length,
+    framesShot: ShotPlan._countShot(picture, saved, referenceImageIds, counted),
     framePictures: picture,
     savedPictures: saved,
+    countedPictures: counted,
   );
 }
 

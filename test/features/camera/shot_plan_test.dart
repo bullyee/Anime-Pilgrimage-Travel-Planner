@@ -201,6 +201,22 @@ void main() {
     expect((plan.framesShot, plan.frames), (1, 1));
   });
 
+  test("a stop trimmed to fewer frames than its place counts only the stop's", () async {
+    await place('shrine', frames: 4);
+    await stop('shrine', day: 2);
+    // The trip keeps two of the place's four frames (the copies of 3 and 4 go).
+    await (db.delete(db.newReferenceImages)..where(
+          (f) => f.stopId.isNotNull() & f.localPath.isIn(['/frames/shrine-3.jpg', '/frames/shrine-4.jpg']),
+        ))
+        .go();
+    // A photo from before the trip, with a frame the trip left out.
+    await photo('shrine', 'shrine-4');
+
+    final plan = (await loadShotPlan(db, placeKey: 'shrine', takenAt: day2, referenceImageIds: ['shrine-1']))!;
+    expect((plan.framesShot, plan.frames), (1, 2), reason: "the trip's two frames; shrine-4 isn't one of them");
+    expect(plan.withShotFrames(['shrine-1', 'shrine-2']).suggestDone, isTrue);
+  });
+
   test('no trip on the day: nothing to offer', () async {
     await place('bench', frames: 1);
     await stop('bench', day: 2);
