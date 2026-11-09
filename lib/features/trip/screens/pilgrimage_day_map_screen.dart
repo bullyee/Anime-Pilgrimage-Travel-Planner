@@ -1,5 +1,6 @@
 import 'dart:async';
 import 'dart:io';
+import 'dart:math' as math;
 
 import 'package:flutter/material.dart';
 import 'package:flutter_map/flutter_map.dart';
@@ -52,6 +53,7 @@ class _PilgrimageDayMapScreenState extends ConsumerState<PilgrimageDayMapScreen>
   Position? _currentPosition;
   StreamSubscription<Position>? _positionSub;
   bool _locating = false;
+  bool _busy = false;
   bool _initialCameraFitted = false;
   int _currentFrameIndex = 0;
 
@@ -202,14 +204,17 @@ class _PilgrimageDayMapScreenState extends ConsumerState<PilgrimageDayMapScreen>
       _selectedStopId = item.stop.id;
       _currentFrameIndex = 0;
     });
-    // Pan slightly with an offset so the selected pin is visible above the bottom sheet.
+    // Pan slightly with a zoom-proportional offset so the selected pin sits above the bottom card.
+    final targetZoom = _mapController.camera.zoom < 15 ? 16.0 : _mapController.camera.zoom;
+    final latOffset = 0.0018 * math.pow(2.0, 16.0 - targetZoom);
     _mapController.move(
-      LatLng(item.stop.lat - 0.0018, item.stop.lng),
-      _mapController.camera.zoom < 15 ? 16 : _mapController.camera.zoom,
+      LatLng(item.stop.lat - latOffset, item.stop.lng),
+      targetZoom,
     );
   }
 
   Future<void> _toggleVisited(PlannerItem item) async {
+    if (_busy) return;
     final canEdit = ref.read(canEditTripProvider(widget.tripId));
     if (!canEdit) return;
 
@@ -224,62 +229,86 @@ class _PilgrimageDayMapScreenState extends ConsumerState<PilgrimageDayMapScreen>
       return;
     }
 
-    final newDone = !item.done;
-    final planner = ref.read(dayPlannerControllerProvider.notifier);
-    final place = ref.read(placeControllerProvider.notifier);
-    final result = await planner.setVisited(item.item.id, newDone);
-    if (result is Failure) {
+    _busy = true;
+    try {
+      final newDone = !item.done;
+      final planner = ref.read(dayPlannerControllerProvider.notifier);
+      final place = ref.read(placeControllerProvider.notifier);
+      final result = await planner.setVisited(item.item.id, newDone);
+      if (result is Failure) {
+        if (mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text((result as Failure).error)));
+        }
+        return;
+      }
+
+      final hasPlace = ref.read(placeDetailProvider(item.stop.placeKey)).valueOrNull != null;
+      if (hasPlace) {
+        if (newDone) {
+          await place.addVisitToday(item.stop.placeKey, tripId: widget.tripId);
+        } else {
+          await place.removeVisitToday(item.stop.placeKey, tripId: widget.tripId);
+        }
+      }
+
       if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text((result as Failure).error)));
+        final message = !hasPlace
+            ? (newDone ? 'Marked visited for the trip.' : 'No longer marked visited.')
+            : (newDone ? 'Marked visited for the trip, and added to your visits.' : 'No longer marked visited.');
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text(message),
+            duration: const Duration(seconds: 2),
+          ),
+        );
       }
-      return;
-    }
-
-    final hasPlace = ref.read(placeDetailProvider(item.stop.placeKey)).valueOrNull != null;
-    if (hasPlace) {
-      if (newDone) {
-        await place.addVisitToday(item.stop.placeKey, tripId: widget.tripId);
-      } else {
-        await place.removeVisitToday(item.stop.placeKey, tripId: widget.tripId);
-      }
-    }
-
-    if (mounted) {
-      final message = !hasPlace
-          ? (newDone ? 'Marked visited for the trip.' : 'No longer marked visited.')
-          : (newDone ? 'Marked visited for the trip, and added to your visits.' : 'No longer marked visited.');
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(
-          content: Text(message),
-          duration: const Duration(seconds: 2),
-        ),
-      );
+    } finally {
+      _busy = false;
     }
   }
 
   Future<void> _shootWithStop(Stop stop, NewReferenceImage? frame) async {
-    String? path;
-    if (frame != null) {
-      path = await framePath(ref, frame);
-      if (path == null) {
-        if (mounted) {
-          ScaffoldMessenger.of(context).showSnackBar(
-            const SnackBar(content: Text("This frame isn't on this phone yet. Try again when you're online.")),
-          );
+    if (_busy) return;
+    _busy = true;
+    try {
+      String? path;
+      if (frame != null) {
+        path = await framePath(ref, frame);
+        if (path == null) {
+          if (mounted) {
+            ScaffoldMessenger.of(context).showSnackBar(
+              const SnackBar(content: Text("This frame isn't on this phone yet. Try again when you're online.")),
+            );
+          }
+          return;
         }
-        return;
       }
+      if (!mounted) return;
+      _pauseLocationStream();
+      try {
+        await shootWithReference(
+          context,
+          ref,
+          placeKey: stop.placeKey,
+          tripId: widget.tripId,
+          referencePath: path,
+          referenceImageId: frame?.id,
+        );
+      } finally {
+        if (mounted) _resumeLocationStream();
+      }
+    } finally {
+      _busy = false;
     }
-    if (!mounted) return;
+  }
+
+  Future<void> _openPhotoViewer(String path, String title) async {
     _pauseLocationStream();
     try {
-      await shootWithReference(
-        context,
-        ref,
-        placeKey: stop.placeKey,
-        tripId: widget.tripId,
-        referencePath: path,
-        referenceImageId: frame?.id,
+      await Navigator.of(context).push(
+        MaterialPageRoute<void>(
+          builder: (_) => ImageViewer(path: path, title: title, actions: const []),
+        ),
       );
     } finally {
       if (mounted) _resumeLocationStream();
@@ -859,17 +888,20 @@ class _PilgrimageDayMapScreenState extends ConsumerState<PilgrimageDayMapScreen>
                         separatorBuilder: (_, __) => const SizedBox(width: 6),
                         itemBuilder: (context, idx) {
                           final photo = stopPhotos[idx];
-                          return ClipRRect(
-                            borderRadius: BorderRadius.circular(10),
-                            child: AspectRatio(
-                              aspectRatio: 1.0,
-                              child: Image.file(
-                                File(photo.localPath),
-                                fit: BoxFit.cover,
-                                cacheWidth: 320,
-                                errorBuilder: (_, __, ___) => Container(
-                                  color: theme.colorScheme.surfaceContainerHighest,
-                                  child: const Icon(Icons.broken_image_outlined),
+                          return GestureDetector(
+                            onTap: () => _openPhotoViewer(photo.localPath, stop.name),
+                            child: ClipRRect(
+                              borderRadius: BorderRadius.circular(10),
+                              child: AspectRatio(
+                                aspectRatio: 1.0,
+                                child: Image.file(
+                                  File(photo.localPath),
+                                  fit: BoxFit.cover,
+                                  cacheWidth: 320,
+                                  errorBuilder: (_, __, ___) => Container(
+                                    color: theme.colorScheme.surfaceContainerHighest,
+                                    child: const Icon(Icons.broken_image_outlined),
+                                  ),
                                 ),
                               ),
                             ),

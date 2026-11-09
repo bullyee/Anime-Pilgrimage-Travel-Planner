@@ -8,7 +8,6 @@ import 'package:trip_planner/core/database/database.dart';
 import 'package:trip_planner/core/providers/database_provider.dart';
 import 'package:trip_planner/features/auth/providers/auth_provider.dart';
 import 'package:trip_planner/features/camera/services/anime_camera_launcher.dart';
-import 'package:trip_planner/features/library/repositories/place_repository.dart';
 import 'package:trip_planner/features/sharing/providers/group_sharing_providers.dart';
 import 'package:trip_planner/features/trip/repositories/trip_repository.dart';
 import 'package:trip_planner/features/trip/screens/pilgrimage_day_map_screen.dart';
@@ -17,13 +16,11 @@ import 'package:trip_planner/features/trip/screens/trip_screen.dart';
 void main() {
   late AppDatabase db;
   late DriftTripRepository trips;
-  late DriftPlaceRepository places;
 
   setUp(() {
     debugAnimeCameraSupportedOverride = true;
     db = AppDatabase.forTesting(NativeDatabase.memory());
     trips = DriftTripRepository(db, null, 'u1');
-    places = DriftPlaceRepository(db);
   });
 
   tearDown(() {
@@ -426,11 +423,8 @@ void main() {
       await tester.tap(find.text('2'));
       await tester.pumpAndSettle();
 
-      // Tap Mark visited inside runAsync so DB mutations finish
-      await tester.runAsync(() async {
-        await tester.tap(find.text('Mark visited'));
-        await Future<void>.delayed(const Duration(milliseconds: 100));
-      });
+      // Tap Mark visited and pump for SnackBar
+      await tester.tap(find.text('Mark visited'));
       await tester.pump();
       await tester.pump(const Duration(milliseconds: 200));
 
@@ -444,6 +438,29 @@ void main() {
       // Verify no place_visits rows were inserted for external_p2
       final visits = await (db.select(db.placeVisits)..where((v) => v.placeKey.equals('external_p2'))).get();
       expect(visits, isEmpty);
+
+      await tester.pumpWidget(const SizedBox());
+      await tester.pump(const Duration(seconds: 1));
+    });
+
+    testWidgets('rapid double-tap on Mark visited is guarded against concurrent race conditions', (tester) async {
+      final (trip, days, stops) = await setupTestTrip();
+      await pumpMapScreen(tester, tripId: trip.id, dayId: days[0].id);
+
+      // Select unvisited stop 2
+      await tester.tap(find.text('2'));
+      await tester.pumpAndSettle();
+
+      // Rapid double-tap before the first async mutation settles
+      await tester.tap(find.text('Mark visited'));
+      await tester.tap(find.text('Mark visited'));
+      await tester.pumpAndSettle();
+
+      // Verify exactly one visit was recorded and item is done
+      final item = await (db.select(db.scheduleItems)..where((s) => s.stopId.equals(stops[1].id))).getSingle();
+      expect(item.status, 'done');
+      final visits = await (db.select(db.placeVisits)..where((v) => v.placeKey.equals('p2'))).get();
+      expect(visits.length, 1);
 
       await tester.pumpWidget(const SizedBox());
       await tester.pump(const Duration(seconds: 1));
