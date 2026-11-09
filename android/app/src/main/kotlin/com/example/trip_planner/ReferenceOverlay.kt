@@ -40,7 +40,8 @@ import kotlin.math.roundToInt
  * On the window:
  *  - drag to move it
  *  - pinch to resize it (aspect ratio locked)
- *  - tap to show a bar with opacity − / + and close; it hides again by itself
+ *  - tap to show a bar with opacity − / +; it fades out quickly soon after
+ *    the last touch, and a tap while it shows (or fades) hides it at once
  *  - double-tap to close
  *
  * [MainActivity] hides the window while the user is in another app and shows
@@ -70,7 +71,7 @@ class ReferenceOverlay(activity: Context) {
     private val displays = context.getSystemService(Context.DISPLAY_SERVICE) as DisplayManager
     private val metrics get() = context.resources.displayMetrics
     private val handler = Handler(Looper.getMainLooper())
-    private val hideBarRunnable = Runnable { setBarVisible(false) }
+    private val hideBarRunnable = Runnable { fadeOutBar() }
     private val keepOnScreenRunnable = Runnable { keepOnScreen() }
 
     // Rotating the phone swaps the screen's width and height under the
@@ -167,7 +168,7 @@ class ReferenceOverlay(activity: Context) {
         }
     }
 
-    /** False once closed — by the caller, or by the user (✕ / double-tap). */
+    /** False once closed — by the caller, or by the user (double-tap). */
     val isShowing: Boolean get() = root != null
 
     /**
@@ -180,11 +181,11 @@ class ReferenceOverlay(activity: Context) {
         val visibility = if (shown) View.VISIBLE else View.GONE
         if (view.visibility == visibility) return
         view.visibility = visibility
-        if (!shown) setBarVisible(false)
+        if (!shown) hideBar()
     }
 
     fun hide() {
-        handler.removeCallbacks(hideBarRunnable)
+        hideBar()
         handler.removeCallbacks(keepOnScreenRunnable)
         runCatching { displays.unregisterDisplayListener(displayListener) }
         root?.let { runCatching { wm.removeView(it) } }
@@ -194,7 +195,10 @@ class ReferenceOverlay(activity: Context) {
         params = null
     }
 
-    /** Opacity − / + and close, shown under the image after a tap. */
+    /**
+     * Opacity − / +, shown under the image after a tap. There's no close
+     * button: a double-tap on the image closes the window.
+     */
     private fun buildBar(image: ImageView): LinearLayout {
         fun button(label: String, description: String, onClick: () -> Unit) =
             TextView(context).apply {
@@ -204,7 +208,8 @@ class ReferenceOverlay(activity: Context) {
                 textSize = 18f
                 gravity = Gravity.CENTER
                 setOnClickListener {
-                    scheduleBarHide()
+                    // Back to full strength if it had started to fade.
+                    showBar()
                     onClick()
                 }
             }
@@ -226,19 +231,33 @@ class ReferenceOverlay(activity: Context) {
                 },
                 slot(),
             )
-            addView(button("✕", "Close reference") { hide() }, slot())
         }
     }
 
-    private fun setBarVisible(visible: Boolean) {
+    /** Shows the bar at full strength, to fade out once left alone. */
+    private fun showBar() {
         val controls = bar ?: return
-        controls.visibility = if (visible) View.VISIBLE else View.GONE
-        if (visible) scheduleBarHide() else handler.removeCallbacks(hideBarRunnable)
-    }
-
-    private fun scheduleBarHide() {
+        controls.animate().cancel()
+        controls.alpha = 1f
+        controls.visibility = View.VISIBLE
         handler.removeCallbacks(hideBarRunnable)
         handler.postDelayed(hideBarRunnable, BAR_TIMEOUT_MS)
+    }
+
+    /** Hides the bar at once, mid-fade too. */
+    private fun hideBar() {
+        handler.removeCallbacks(hideBarRunnable)
+        val controls = bar ?: return
+        controls.animate().cancel()
+        controls.visibility = View.GONE
+        controls.alpha = 1f
+    }
+
+    private fun fadeOutBar() {
+        val controls = bar ?: return
+        if (controls.visibility != View.VISIBLE) return
+        // The end action only runs if the fade isn't cancelled by a touch.
+        controls.animate().alpha(0f).setDuration(BAR_FADE_MS).withEndAction { hideBar() }.start()
     }
 
     private fun moveBy(dx: Float, dy: Float) {
@@ -325,7 +344,7 @@ class ReferenceOverlay(activity: Context) {
             context,
             object : GestureDetector.SimpleOnGestureListener() {
                 override fun onSingleTapConfirmed(e: MotionEvent): Boolean {
-                    setBarVisible(bar?.visibility != View.VISIBLE)
+                    if (bar?.visibility == View.VISIBLE) hideBar() else showBar()
                     return true
                 }
 
@@ -414,7 +433,7 @@ class ReferenceOverlay(activity: Context) {
 
     private fun imageHeight(): Int = (imageWidth / aspect).roundToInt()
 
-    // Wide enough for the three bar buttons; the image never outgrows the
+    // Wide enough for the bar's buttons; the image never outgrows the
     // screen in either direction.
     private fun minWidth(): Int = dp(132f)
     private fun maxWidth(screen: Rect): Int =
@@ -426,7 +445,9 @@ class ReferenceOverlay(activity: Context) {
     private companion object {
         const val MIN_ALPHA = 0.15f
         const val MAX_DECODE_SIDE = 1600
-        const val BAR_TIMEOUT_MS = 3000L
+        // The bar waits this long after the last touch, then fades this fast.
+        const val BAR_TIMEOUT_MS = 1500L
+        const val BAR_FADE_MS = 150L
         const val ROTATION_SETTLE_MS = 300L
     }
 }
