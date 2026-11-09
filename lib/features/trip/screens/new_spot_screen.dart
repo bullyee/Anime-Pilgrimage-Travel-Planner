@@ -1,13 +1,11 @@
-import 'dart:async';
-
 import 'package:flutter/material.dart';
 import 'package:flutter_map/flutter_map.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
-import 'package:geolocator/geolocator.dart';
 import 'package:go_router/go_router.dart';
 import 'package:latlong2/latlong.dart';
 
 import '../../../core/database/database.dart';
+import '../../../core/services/locate.dart';
 import '../../../core/utils/app_result.dart';
 import '../../library/controllers/library_controller.dart';
 import '../../library/controllers/place_controller.dart';
@@ -240,33 +238,16 @@ class _NewSpotScreenState extends ConsumerState<NewSpotScreen> {
     setState(() => _locating = true);
     String? problem;
     try {
-      if (!await Geolocator.isLocationServiceEnabled()) {
-        problem = 'Location is turned off on this device.';
-      } else {
-        var permission = await Geolocator.checkPermission();
-        if (permission == LocationPermission.denied) permission = await Geolocator.requestPermission();
-        if (permission == LocationPermission.denied || permission == LocationPermission.deniedForever) {
-          problem = 'Allow location access to use your position.';
-        } else {
-          // Ask for a fresh fix: the cached one can be from wherever the
-          // phone was hours ago. Fall back to it only if none comes in time.
-          Position? position;
-          try {
-            position = await Geolocator.getCurrentPosition(
-              locationSettings: const LocationSettings(
-                accuracy: LocationAccuracy.high,
-                timeLimit: Duration(seconds: 8),
-              ),
-            );
-          } on TimeoutException {
-            position = await Geolocator.getLastKnownPosition();
-          }
-          if (position == null) {
-            problem = "Couldn't find your position. Try again in the open.";
-          } else if (mounted) {
-            _map.move(LatLng(position.latitude, position.longitude), 17);
-          }
-        }
+      final found = await locateOnce();
+      final position = found.position;
+      problem = switch (found.problem) {
+        LocateProblem.serviceOff => 'Location is turned off on this device.',
+        LocateProblem.denied || LocateProblem.deniedForever => 'Allow location access to use your position.',
+        LocateProblem.noFix => "Couldn't find your position. Try again in the open.",
+        null => null,
+      };
+      if (position != null && mounted) {
+        _map.move(LatLng(position.latitude, position.longitude), 17);
       }
     } catch (e) {
       problem = "Couldn't find your position: $e";

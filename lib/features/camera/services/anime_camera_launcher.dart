@@ -7,9 +7,11 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 import 'package:image_picker/image_picker.dart';
 
+import '../../library/widgets/place_page_parts.dart' show framePath;
 import '../models/shot_series.dart';
 import '../screens/shot_series_screen.dart';
 import '../widgets/capture_sheets.dart';
+import '../widgets/shoot_here_sheet.dart';
 import 'camera_overlay.dart';
 import 'photo_edit_route.dart';
 
@@ -28,6 +30,10 @@ bool get floatingReferenceSupported => CameraOverlay.isSupported;
 /// The photo is filed under [tripId] when given, or else under the trip that
 /// has the place today.
 ///
+/// Without a place it starts with Shoot here ([pickShootHere]): the frames
+/// of the places around the user, found with GPS, and the ways to shoot
+/// without a place.
+///
 /// - **Android:** the phone's own camera app (full HDR / night / white
 ///   balance processing) with the reference floating over it in a small
 ///   draggable window. See `docs/anime-camera-decision.md`.
@@ -40,6 +46,10 @@ Future<void> openAnimeCamera(
   String? tripId,
 }) async {
   if (!animeCameraSupported) return;
+  if (placeKey == null) {
+    await _shootHere(context, ref, tripId: tripId);
+    return;
+  }
   if (Platform.isAndroid) {
     await _shootWithPhoneCamera(context, ref, placeKey: placeKey, tripId: tripId);
   } else {
@@ -163,6 +173,50 @@ class _Reference {
   final String? placeKey;
 
   const _Reference(this.path, {this.imageId, this.placeKey});
+}
+
+/// Shoot here, then the camera for what the user picked.
+Future<void> _shootHere(BuildContext context, WidgetRef ref, {String? tripId}) async {
+  final android = Platform.isAndroid;
+  final choice = await pickShootHere(context, plainCameraOnly: !android);
+  if (choice == null || !context.mounted) return;
+  switch (choice) {
+    case ShootAtPlace(:final placeKey, :final frame):
+      final trip = tripId ?? choice.tripId;
+      if (!android) {
+        context.push(_inAppCameraLocation(placeKey, trip));
+        return;
+      }
+      _Reference? reference;
+      if (frame != null) {
+        final path = await framePath(ref, frame);
+        if (!context.mounted) return;
+        if (path == null) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            const SnackBar(content: Text("This frame isn't on this phone yet. Try again when you're online.")),
+          );
+          return;
+        }
+        reference = _Reference(path, imageId: frame.id, placeKey: placeKey);
+      }
+      await _shootWith(context, reference, placeKey: placeKey, tripId: trip);
+    case ShootWithoutPlace(:final kind):
+      if (!android) {
+        context.push(_inAppCameraLocation(null, tripId));
+        return;
+      }
+      final source = switch (kind) {
+        ShootHereOther.anotherPlace => _ReferenceSource.place,
+        ShootHereOther.gallery => _ReferenceSource.gallery,
+        ShootHereOther.noReference => _ReferenceSource.none,
+      };
+      _Reference? reference;
+      if (source != _ReferenceSource.none) {
+        reference = await _pickReference(context, ref, source);
+        if (reference == null || !context.mounted) return;
+      }
+      await _shootWith(context, reference, placeKey: reference?.placeKey, tripId: tripId);
+  }
 }
 
 Future<void> _shootWithPhoneCamera(
