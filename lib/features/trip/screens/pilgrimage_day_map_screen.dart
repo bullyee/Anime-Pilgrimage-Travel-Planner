@@ -53,7 +53,8 @@ class _PilgrimageDayMapScreenState extends ConsumerState<PilgrimageDayMapScreen>
   Position? _currentPosition;
   StreamSubscription<Position>? _positionSub;
   bool _locating = false;
-  bool _busy = false;
+  bool _togglingVisited = false;
+  bool _launchingCamera = false;
   bool _initialCameraFitted = false;
   int _currentFrameIndex = 0;
 
@@ -77,25 +78,19 @@ class _PilgrimageDayMapScreenState extends ConsumerState<PilgrimageDayMapScreen>
   @override
   void didChangeAppLifecycleState(AppLifecycleState state) {
     if (state == AppLifecycleState.resumed) {
-      _resumeLocationStream();
+      _startLocationService();
     } else if (state == AppLifecycleState.paused || state == AppLifecycleState.inactive) {
-      _pauseLocationStream();
+      _stopLocationStream();
     }
   }
 
-  void _pauseLocationStream() {
-    if (_positionSub != null && !_positionSub!.isPaused) {
-      _positionSub!.pause();
-    }
-  }
-
-  void _resumeLocationStream() {
-    if (_positionSub != null && _positionSub!.isPaused) {
-      _positionSub!.resume();
-    }
+  void _stopLocationStream() {
+    _positionSub?.cancel();
+    _positionSub = null;
   }
 
   Future<void> _startLocationService() async {
+    if (_positionSub != null) return;
     try {
       if (!await Geolocator.isLocationServiceEnabled()) return;
       var permission = await Geolocator.checkPermission();
@@ -214,7 +209,7 @@ class _PilgrimageDayMapScreenState extends ConsumerState<PilgrimageDayMapScreen>
   }
 
   Future<void> _toggleVisited(PlannerItem item) async {
-    if (_busy) return;
+    if (_togglingVisited) return;
     final canEdit = ref.read(canEditTripProvider(widget.tripId));
     if (!canEdit) return;
 
@@ -229,7 +224,7 @@ class _PilgrimageDayMapScreenState extends ConsumerState<PilgrimageDayMapScreen>
       return;
     }
 
-    _busy = true;
+    _togglingVisited = true;
     try {
       final newDone = !item.done;
       final planner = ref.read(dayPlannerControllerProvider.notifier);
@@ -263,13 +258,13 @@ class _PilgrimageDayMapScreenState extends ConsumerState<PilgrimageDayMapScreen>
         );
       }
     } finally {
-      _busy = false;
+      _togglingVisited = false;
     }
   }
 
   Future<void> _shootWithStop(Stop stop, NewReferenceImage? frame) async {
-    if (_busy) return;
-    _busy = true;
+    if (_launchingCamera) return;
+    _launchingCamera = true;
     try {
       String? path;
       if (frame != null) {
@@ -284,7 +279,7 @@ class _PilgrimageDayMapScreenState extends ConsumerState<PilgrimageDayMapScreen>
         }
       }
       if (!mounted) return;
-      _pauseLocationStream();
+      _stopLocationStream();
       try {
         await shootWithReference(
           context,
@@ -295,15 +290,15 @@ class _PilgrimageDayMapScreenState extends ConsumerState<PilgrimageDayMapScreen>
           referenceImageId: frame?.id,
         );
       } finally {
-        if (mounted) _resumeLocationStream();
+        if (mounted) _startLocationService();
       }
     } finally {
-      _busy = false;
+      _launchingCamera = false;
     }
   }
 
   Future<void> _openPhotoViewer(String path, String title) async {
-    _pauseLocationStream();
+    _stopLocationStream();
     try {
       await Navigator.of(context).push(
         MaterialPageRoute<void>(
@@ -311,7 +306,7 @@ class _PilgrimageDayMapScreenState extends ConsumerState<PilgrimageDayMapScreen>
         ),
       );
     } finally {
-      if (mounted) _resumeLocationStream();
+      if (mounted) _startLocationService();
     }
   }
 
@@ -963,11 +958,11 @@ class _PilgrimageDayMapScreenState extends ConsumerState<PilgrimageDayMapScreen>
                   tooltip: 'Stop details',
                   icon: const Icon(Icons.arrow_forward_ios, size: 16),
                   onPressed: () async {
-                    _pauseLocationStream();
+                    _stopLocationStream();
                     try {
                       await context.push('/trips/${widget.tripId}/stops/${stop.id}');
                     } finally {
-                      if (mounted) _resumeLocationStream();
+                      if (mounted) _startLocationService();
                     }
                   },
                 ),
