@@ -12,6 +12,7 @@ import '../../../core/database/database.dart';
 import '../../../core/utils/app_result.dart';
 import '../../../core/utils/schedule_logic.dart';
 import '../../../shared/theme/app_theme.dart';
+import '../../auth/providers/auth_provider.dart';
 import '../../camera/models/shooting_core_models.dart';
 import '../../camera/services/anime_camera_launcher.dart';
 import '../../camera/services/pilgrimage_shooting_service.dart';
@@ -23,6 +24,7 @@ import '../../planner/controllers/day_planner_controller.dart';
 import '../../planner/models/planner_view.dart';
 import '../../planner/providers/planner_providers.dart';
 import '../../planner/widgets/day_card.dart' show dayName;
+import '../../sharing/providers/group_sharing_providers.dart';
 import '../providers/trip_providers.dart';
 import 'stop_screen.dart' show stopFrames;
 
@@ -42,7 +44,8 @@ class PilgrimageDayMapScreen extends ConsumerStatefulWidget {
   ConsumerState<PilgrimageDayMapScreen> createState() => _PilgrimageDayMapScreenState();
 }
 
-class _PilgrimageDayMapScreenState extends ConsumerState<PilgrimageDayMapScreen> {
+class _PilgrimageDayMapScreenState extends ConsumerState<PilgrimageDayMapScreen>
+    with WidgetsBindingObserver {
   late final MapController _mapController;
   String? _selectedDayId;
   String? _selectedStopId;
@@ -55,6 +58,7 @@ class _PilgrimageDayMapScreenState extends ConsumerState<PilgrimageDayMapScreen>
   @override
   void initState() {
     super.initState();
+    WidgetsBinding.instance.addObserver(this);
     _mapController = MapController();
     _selectedDayId = widget.initialDayId;
     _startLocationService();
@@ -62,9 +66,31 @@ class _PilgrimageDayMapScreenState extends ConsumerState<PilgrimageDayMapScreen>
 
   @override
   void dispose() {
+    WidgetsBinding.instance.removeObserver(this);
     _positionSub?.cancel();
     _mapController.dispose();
     super.dispose();
+  }
+
+  @override
+  void didChangeAppLifecycleState(AppLifecycleState state) {
+    if (state == AppLifecycleState.resumed) {
+      _resumeLocationStream();
+    } else if (state == AppLifecycleState.paused || state == AppLifecycleState.inactive) {
+      _pauseLocationStream();
+    }
+  }
+
+  void _pauseLocationStream() {
+    if (_positionSub != null && !_positionSub!.isPaused) {
+      _positionSub!.pause();
+    }
+  }
+
+  void _resumeLocationStream() {
+    if (_positionSub != null && _positionSub!.isPaused) {
+      _positionSub!.resume();
+    }
   }
 
   Future<void> _startLocationService() async {
@@ -120,12 +146,24 @@ class _PilgrimageDayMapScreenState extends ConsumerState<PilgrimageDayMapScreen>
         }
         return;
       }
-      final pos = await Geolocator.getCurrentPosition(
-        locationSettings: const LocationSettings(accuracy: LocationAccuracy.high, timeLimit: Duration(seconds: 6)),
-      ).catchError((_) => Geolocator.getLastKnownPosition());
+      Position? pos;
+      try {
+        pos = await Geolocator.getCurrentPosition(
+          locationSettings: const LocationSettings(
+            accuracy: LocationAccuracy.high,
+            timeLimit: Duration(seconds: 6),
+          ),
+        );
+      } catch (_) {
+        pos = await Geolocator.getLastKnownPosition();
+      }
       if (pos != null && mounted) {
         setState(() => _currentPosition = pos);
         _mapController.move(LatLng(pos.latitude, pos.longitude), 16);
+      } else if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text("Couldn't obtain GPS location.")),
+        );
       }
     } catch (e) {
       if (mounted) {
@@ -139,11 +177,13 @@ class _PilgrimageDayMapScreenState extends ConsumerState<PilgrimageDayMapScreen>
   }
 
   void _fitStops(List<PlannerItem> items) {
-    final points = [
-      for (final it in items) LatLng(it.stop.lat, it.stop.lng),
-      if (_currentPosition != null) LatLng(_currentPosition!.latitude, _currentPosition!.longitude),
-    ];
-    if (points.isEmpty) return;
+    final points = [for (final it in items) LatLng(it.stop.lat, it.stop.lng)];
+    if (points.isEmpty) {
+      if (_currentPosition != null) {
+        _mapController.move(LatLng(_currentPosition!.latitude, _currentPosition!.longitude), 16);
+      }
+      return;
+    }
     if (points.length == 1) {
       _mapController.move(points.first, 16);
       return;
@@ -170,6 +210,20 @@ class _PilgrimageDayMapScreenState extends ConsumerState<PilgrimageDayMapScreen>
   }
 
   Future<void> _toggleVisited(PlannerItem item) async {
+    final canEdit = ref.read(canEditTripProvider(widget.tripId));
+    if (!canEdit) return;
+
+    final currentUid = ref.read(currentUserIdProvider);
+    final trip = ref.read(tripDetailProvider(widget.tripId)).valueOrNull;
+    if (trip != null && trip.sharing == 'group' && currentUid == guestUserId) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('Please sign in to make changes to a shared trip.')),
+        );
+      }
+      return;
+    }
+
     final newDone = !item.done;
     final planner = ref.read(dayPlannerControllerProvider.notifier);
     final place = ref.read(placeControllerProvider.notifier);
@@ -180,15 +234,23 @@ class _PilgrimageDayMapScreenState extends ConsumerState<PilgrimageDayMapScreen>
       }
       return;
     }
-    if (newDone) {
-      await place.addVisitToday(item.stop.placeKey, tripId: widget.tripId);
-    } else {
-      await place.removeVisitToday(item.stop.placeKey, tripId: widget.tripId);
+
+    final hasPlace = ref.read(placeDetailProvider(item.stop.placeKey)).valueOrNull != null;
+    if (hasPlace) {
+      if (newDone) {
+        await place.addVisitToday(item.stop.placeKey, tripId: widget.tripId);
+      } else {
+        await place.removeVisitToday(item.stop.placeKey, tripId: widget.tripId);
+      }
     }
+
     if (mounted) {
+      final message = !hasPlace
+          ? (newDone ? 'Marked visited for the trip.' : 'No longer marked visited.')
+          : (newDone ? 'Marked visited for the trip, and added to your visits.' : 'No longer marked visited.');
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
-          content: Text(newDone ? 'Marked visited!' : 'Visit cleared.'),
+          content: Text(message),
           duration: const Duration(seconds: 2),
         ),
       );
@@ -196,16 +258,32 @@ class _PilgrimageDayMapScreenState extends ConsumerState<PilgrimageDayMapScreen>
   }
 
   Future<void> _shootWithStop(Stop stop, NewReferenceImage? frame) async {
-    final path = frame == null ? null : await framePath(ref, frame);
+    String? path;
+    if (frame != null) {
+      path = await framePath(ref, frame);
+      if (path == null) {
+        if (mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            const SnackBar(content: Text("This frame isn't on this phone yet. Try again when you're online.")),
+          );
+        }
+        return;
+      }
+    }
     if (!mounted) return;
-    await shootWithReference(
-      context,
-      ref,
-      placeKey: stop.placeKey,
-      tripId: widget.tripId,
-      referencePath: path,
-      referenceImageId: frame?.id,
-    );
+    _pauseLocationStream();
+    try {
+      await shootWithReference(
+        context,
+        ref,
+        placeKey: stop.placeKey,
+        tripId: widget.tripId,
+        referencePath: path,
+        referenceImageId: frame?.id,
+      );
+    } finally {
+      if (mounted) _resumeLocationStream();
+    }
   }
 
   @override
@@ -610,6 +688,7 @@ class _PilgrimageDayMapScreenState extends ConsumerState<PilgrimageDayMapScreen>
     final theme = Theme.of(context);
     final p = theme.trip;
     final stop = item.stop;
+    final canEdit = ref.watch(canEditTripProvider(widget.tripId));
 
     // Load stop frames
     final place = ref.watch(placeDetailProvider(stop.placeKey)).valueOrNull;
@@ -667,7 +746,7 @@ class _PilgrimageDayMapScreenState extends ConsumerState<PilgrimageDayMapScreen>
                             Icon(Icons.near_me_outlined, size: 14, color: p.tea),
                             const SizedBox(width: 4),
                             Text(
-                              '${bearingInfo.description(preferClock: false)} (${bearingInfo.cardinal})',
+                              bearingInfo.description(preferClock: false),
                               style: theme.textTheme.bodySmall?.copyWith(color: p.tea, fontWeight: FontWeight.w600),
                             ),
                             const SizedBox(width: 8),
@@ -718,29 +797,53 @@ class _PilgrimageDayMapScreenState extends ConsumerState<PilgrimageDayMapScreen>
                               child: Icon(Icons.photo_outlined, size: 36, color: Colors.grey),
                             ),
                           )
-                        : ClipRRect(
-                            borderRadius: BorderRadius.circular(12),
-                            child: Stack(
-                              fit: StackFit.expand,
-                              children: [
-                                FrameImage(frame: currentFrame, cacheWidth: 720),
-                                if (frames.length > 1)
-                                  Positioned(
-                                    bottom: 4,
-                                    right: 4,
-                                    child: Container(
-                                      padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
-                                      decoration: BoxDecoration(
-                                        color: Colors.black.withValues(alpha: 0.65),
-                                        borderRadius: BorderRadius.circular(8),
-                                      ),
-                                      child: Text(
-                                        '${_currentFrameIndex + 1}/${frames.length}',
-                                        style: const TextStyle(color: Colors.white, fontSize: 11),
+                        : GestureDetector(
+                            onTap: frames.length > 1
+                                ? () {
+                                    setState(() {
+                                      _currentFrameIndex = (_currentFrameIndex + 1) % frames.length;
+                                    });
+                                  }
+                                : null,
+                            onHorizontalDragEnd: frames.length > 1
+                                ? (details) {
+                                    final v = details.primaryVelocity;
+                                    if (v == null || v == 0) return;
+                                    if (v < 0) {
+                                      setState(() {
+                                        _currentFrameIndex = (_currentFrameIndex + 1) % frames.length;
+                                      });
+                                    } else {
+                                      setState(() {
+                                        _currentFrameIndex = (_currentFrameIndex - 1 + frames.length) % frames.length;
+                                      });
+                                    }
+                                  }
+                                : null,
+                            child: ClipRRect(
+                              borderRadius: BorderRadius.circular(12),
+                              child: Stack(
+                                fit: StackFit.expand,
+                                children: [
+                                  FrameImage(frame: currentFrame, cacheWidth: 720),
+                                  if (frames.length > 1)
+                                    Positioned(
+                                      bottom: 4,
+                                      right: 4,
+                                      child: Container(
+                                        padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+                                        decoration: BoxDecoration(
+                                          color: Colors.black.withValues(alpha: 0.65),
+                                          borderRadius: BorderRadius.circular(8),
+                                        ),
+                                        child: Text(
+                                          '${_currentFrameIndex + 1}/${frames.length}',
+                                          style: const TextStyle(color: Colors.white, fontSize: 11),
+                                        ),
                                       ),
                                     ),
-                                  ),
-                              ],
+                                ],
+                              ),
                             ),
                           ),
                   ),
@@ -783,31 +886,58 @@ class _PilgrimageDayMapScreenState extends ConsumerState<PilgrimageDayMapScreen>
             // Action Buttons Row: Take photo, Mark visited, Details
             Row(
               children: [
-                Expanded(
-                  child: FilledButton.icon(
-                    onPressed: () => _shootWithStop(stop, currentFrame),
-                    icon: const Icon(Icons.photo_camera, size: 18),
-                    label: const Text('Take photo'),
+                if (animeCameraSupported) ...[
+                  Expanded(
+                    child: FilledButton.icon(
+                      onPressed: () => _shootWithStop(stop, currentFrame),
+                      icon: const Icon(Icons.photo_camera, size: 18),
+                      label: const Text('Take photo'),
+                    ),
                   ),
-                ),
-                const SizedBox(width: 8),
-                OutlinedButton.icon(
-                  onPressed: () => _toggleVisited(item),
-                  icon: Icon(
-                    item.done ? Icons.check_circle : Icons.check_circle_outline,
-                    size: 18,
-                    color: item.done ? p.tea : null,
-                  ),
-                  label: Text(
-                    item.done ? 'Visited' : 'Mark visited',
-                    style: TextStyle(color: item.done ? p.tea : null),
-                  ),
-                ),
-                const SizedBox(width: 4),
+                  if (canEdit) const SizedBox(width: 8),
+                ],
+                if (canEdit) ...[
+                  if (!animeCameraSupported)
+                    Expanded(
+                      child: OutlinedButton.icon(
+                        onPressed: () => _toggleVisited(item),
+                        icon: Icon(
+                          item.done ? Icons.check_circle : Icons.check_circle_outline,
+                          size: 18,
+                          color: item.done ? p.tea : null,
+                        ),
+                        label: Text(
+                          item.done ? 'Visited' : 'Mark visited',
+                          style: TextStyle(color: item.done ? p.tea : null),
+                        ),
+                      ),
+                    )
+                  else
+                    OutlinedButton.icon(
+                      onPressed: () => _toggleVisited(item),
+                      icon: Icon(
+                        item.done ? Icons.check_circle : Icons.check_circle_outline,
+                        size: 18,
+                        color: item.done ? p.tea : null,
+                      ),
+                      label: Text(
+                        item.done ? 'Visited' : 'Mark visited',
+                        style: TextStyle(color: item.done ? p.tea : null),
+                      ),
+                    ),
+                  const SizedBox(width: 4),
+                ],
                 IconButton(
                   tooltip: 'Stop details',
                   icon: const Icon(Icons.arrow_forward_ios, size: 16),
-                  onPressed: () => context.push('/trips/${widget.tripId}/stops/${stop.id}'),
+                  onPressed: () async {
+                    _pauseLocationStream();
+                    try {
+                      await context.push('/trips/${widget.tripId}/stops/${stop.id}');
+                    } finally {
+                      if (mounted) _resumeLocationStream();
+                    }
+                  },
                 ),
               ],
             ),

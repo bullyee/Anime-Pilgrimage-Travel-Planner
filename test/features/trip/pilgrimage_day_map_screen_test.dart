@@ -7,7 +7,9 @@ import 'package:go_router/go_router.dart';
 import 'package:trip_planner/core/database/database.dart';
 import 'package:trip_planner/core/providers/database_provider.dart';
 import 'package:trip_planner/features/auth/providers/auth_provider.dart';
+import 'package:trip_planner/features/camera/services/anime_camera_launcher.dart';
 import 'package:trip_planner/features/library/repositories/place_repository.dart';
+import 'package:trip_planner/features/sharing/providers/group_sharing_providers.dart';
 import 'package:trip_planner/features/trip/repositories/trip_repository.dart';
 import 'package:trip_planner/features/trip/screens/pilgrimage_day_map_screen.dart';
 import 'package:trip_planner/features/trip/screens/trip_screen.dart';
@@ -18,12 +20,16 @@ void main() {
   late DriftPlaceRepository places;
 
   setUp(() {
+    debugAnimeCameraSupportedOverride = true;
     db = AppDatabase.forTesting(NativeDatabase.memory());
     trips = DriftTripRepository(db, null, 'u1');
     places = DriftPlaceRepository(db);
   });
 
-  tearDown(() => db.close());
+  tearDown(() {
+    debugAnimeCameraSupportedOverride = null;
+    return db.close();
+  });
 
   Future<(Trip, List<TripDay>, List<Stop>)> setupTestTrip() async {
     // 1. Insert places
@@ -76,6 +82,7 @@ void main() {
     WidgetTester tester, {
     required String tripId,
     String? dayId,
+    List<dynamic> extraOverrides = const [],
   }) async {
     tester.view.physicalSize = const Size(1080, 2400);
     tester.view.devicePixelRatio = 3;
@@ -103,6 +110,7 @@ void main() {
         overrides: [
           databaseProvider.overrideWithValue(db),
           currentUserIdProvider.overrideWithValue('u1'),
+          ...extraOverrides.cast(),
         ],
         child: MaterialApp.router(routerConfig: router),
       ),
@@ -267,6 +275,175 @@ void main() {
       await tester.pumpAndSettle();
 
       expect(find.text('PilgrimageMapPageReached'), findsOneWidget);
+
+      await tester.pumpWidget(const SizedBox());
+      await tester.pump(const Duration(seconds: 1));
+    });
+
+    testWidgets('viewer cannot mark visited (button hidden)', (tester) async {
+      final (trip, days, _) = await setupTestTrip();
+      await pumpMapScreen(
+        tester,
+        tripId: trip.id,
+        dayId: days[0].id,
+        extraOverrides: [
+          canEditTripProvider(trip.id).overrideWithValue(false),
+        ],
+      );
+
+      // Tap stop 2 marker
+      await tester.tap(find.text('2'));
+      await tester.pumpAndSettle();
+
+      // Card is open with stop details, but Mark visited button is not present
+      expect(find.text('Byodoin Temple'), findsOneWidget);
+      expect(find.text('Take photo'), findsOneWidget);
+      expect(find.text('Mark visited'), findsNothing);
+
+      await tester.pumpWidget(const SizedBox());
+      await tester.pump(const Duration(seconds: 1));
+    });
+
+    testWidgets('Take photo is hidden on unsupported platforms', (tester) async {
+      debugAnimeCameraSupportedOverride = false;
+      final (trip, days, _) = await setupTestTrip();
+      await pumpMapScreen(tester, tripId: trip.id, dayId: days[0].id);
+
+      // Tap stop 2 marker
+      await tester.tap(find.text('2'));
+      await tester.pumpAndSettle();
+
+      expect(find.text('Byodoin Temple'), findsOneWidget);
+      expect(find.text('Take photo'), findsNothing);
+      expect(find.text('Mark visited'), findsOneWidget);
+
+      await tester.pumpWidget(const SizedBox());
+      await tester.pump(const Duration(seconds: 1));
+    });
+
+    testWidgets('swiping or tapping frame preview cycles current frame', (tester) async {
+      final (trip, days, stops) = await setupTestTrip();
+      // Insert 2 frames for stop 2 / place p2
+      await db.into(db.newReferenceImages).insert(NewReferenceImagesCompanion.insert(
+            id: 'ref1',
+            placeKey: const Value('p2'),
+            localPath: const Value('p2_frame1.jpg'),
+          ));
+      await db.into(db.newReferenceImages).insert(NewReferenceImagesCompanion.insert(
+            id: 'ref2',
+            placeKey: const Value('p2'),
+            localPath: const Value('p2_frame2.jpg'),
+          ));
+
+      await pumpMapScreen(tester, tripId: trip.id, dayId: days[0].id);
+
+      // Open stop 2
+      await tester.tap(find.text('2'));
+      await tester.pumpAndSettle();
+
+      // Verify frame counter badge shows 1/2
+      expect(find.text('1/2'), findsOneWidget);
+
+      // Tap the frame preview to cycle to frame 2
+      await tester.tap(find.text('1/2'));
+      await tester.pumpAndSettle();
+      expect(find.text('2/2'), findsOneWidget);
+
+      // Tap again to cycle back to frame 1
+      await tester.tap(find.text('2/2'));
+      await tester.pumpAndSettle();
+      expect(find.text('1/2'), findsOneWidget);
+
+      await tester.pumpWidget(const SizedBox());
+      await tester.pump(const Duration(seconds: 1));
+    });
+
+    testWidgets('offline frame missing local file shows snackbar instead of opening camera', (tester) async {
+      final (trip, days, stops) = await setupTestTrip();
+      // Insert frame with localPath pointing to non-existent local file
+      await db.into(db.newReferenceImages).insert(NewReferenceImagesCompanion.insert(
+            id: 'ref_offline',
+            placeKey: const Value('p2'),
+            localPath: const Value('/nonexistent/frame.jpg'),
+          ));
+
+      await pumpMapScreen(tester, tripId: trip.id, dayId: days[0].id);
+
+      // Open stop 2
+      await tester.tap(find.text('2'));
+      await tester.pumpAndSettle();
+
+      // Tap Take photo inside runAsync so real File.exists() completes
+      await tester.runAsync(() async {
+        await tester.tap(find.widgetWithText(FilledButton, 'Take photo'));
+        await Future<void>.delayed(const Duration(milliseconds: 50));
+      });
+      await tester.pump();
+      await tester.pump(const Duration(milliseconds: 200));
+
+      // Verify snackbar is shown
+      expect(find.text("This frame isn't on this phone yet. Try again when you're online."), findsOneWidget);
+
+      await tester.pumpWidget(const SizedBox());
+      await tester.pump(const Duration(seconds: 1));
+    });
+
+    testWidgets('mark visited on joined trip without place row updates schedule item cleanly', (tester) async {
+      // Create trip and stops where stop2 has placeKey 'external_p' that does NOT exist in db.places
+      final trip = await trips.createTrip(title: 'Joined Trip', ownerId: 'other_user', dayCount: 1);
+      final days = await trips.getDaysForTrip(trip.id);
+      await db.into(db.stops).insert(StopsCompanion.insert(
+            id: 'stop_remote_1',
+            tripId: trip.id,
+            placeKey: 'external_p1',
+            name: 'Remote Spot 1',
+            lat: 34.8900,
+            lng: 135.8000,
+            addedBy: 'other_user',
+          ));
+      await db.into(db.stops).insert(StopsCompanion.insert(
+            id: 'stop_remote_2',
+            tripId: trip.id,
+            placeKey: 'external_p2',
+            name: 'Remote Spot 2',
+            lat: 34.8850,
+            lng: 135.8100,
+            addedBy: 'other_user',
+          ));
+      await trips.scheduleStop(tripId: trip.id, stopId: 'stop_remote_1', dayId: days[0].id, fixedTime: 9 * 60);
+      await trips.scheduleStop(tripId: trip.id, stopId: 'stop_remote_2', dayId: days[0].id, fixedTime: 11 * 60);
+
+      await pumpMapScreen(
+        tester,
+        tripId: trip.id,
+        dayId: days[0].id,
+        extraOverrides: [
+          canEditTripProvider(trip.id).overrideWithValue(true),
+        ],
+      );
+
+      // Open remote spot 2 pin
+      await tester.tap(find.text('2'));
+      await tester.pumpAndSettle();
+
+      // Tap Mark visited inside runAsync so DB mutations finish
+      await tester.runAsync(() async {
+        await tester.tap(find.text('Mark visited'));
+        await Future<void>.delayed(const Duration(milliseconds: 100));
+      });
+      await tester.pump();
+      await tester.pump(const Duration(milliseconds: 200));
+
+      // Toast says "Marked visited for the trip." (not added to your visits)
+      expect(find.text('Marked visited for the trip.'), findsOneWidget);
+
+      // Verify schedule item is updated to done
+      final item = await (db.select(db.scheduleItems)..where((s) => s.stopId.equals('stop_remote_2'))).getSingle();
+      expect(item.status, 'done');
+
+      // Verify no place_visits rows were inserted for external_p2
+      final visits = await (db.select(db.placeVisits)..where((v) => v.placeKey.equals('external_p2'))).get();
+      expect(visits, isEmpty);
 
       await tester.pumpWidget(const SizedBox());
       await tester.pump(const Duration(seconds: 1));
