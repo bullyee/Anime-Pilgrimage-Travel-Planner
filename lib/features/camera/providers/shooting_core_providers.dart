@@ -20,11 +20,15 @@ final todayTripProvider = FutureProvider.autoDispose<TodayTripInfo?>((ref) async
 class NearbyPlacesQuery {
   final double lat;
   final double lng;
+  final String? tripId;
+  final String? dayId;
   final double maxDistanceMeters;
 
   const NearbyPlacesQuery({
     required this.lat,
     required this.lng,
+    this.tripId,
+    this.dayId,
     this.maxDistanceMeters = 150.0,
   });
 
@@ -35,10 +39,12 @@ class NearbyPlacesQuery {
           runtimeType == other.runtimeType &&
           lat == other.lat &&
           lng == other.lng &&
+          tripId == other.tripId &&
+          dayId == other.dayId &&
           maxDistanceMeters == other.maxDistanceMeters;
 
   @override
-  int get hashCode => Object.hash(lat, lng, maxDistanceMeters);
+  int get hashCode => Object.hash(lat, lng, tripId, dayId, maxDistanceMeters);
 }
 
 /// Provides list of [NearbyShootingPlace] candidates within range of the given coordinate.
@@ -50,6 +56,8 @@ final nearbyShootingPlacesProvider =
     db,
     lat: query.lat,
     lng: query.lng,
+    tripId: query.tripId,
+    dayId: query.dayId,
     maxDistanceMeters: query.maxDistanceMeters,
   );
 });

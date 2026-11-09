@@ -110,41 +110,71 @@ class PilgrimageShootingService {
 
   /// Finds candidate pilgrimage places nearby the given GPS coordinates within [maxDistanceMeters] (default 150m).
   ///
-  /// Searches:
-  /// 1. Stops scheduled for today's active trip day (from [stops] directly, regardless of whether
-  ///    the place is 'trip_only' or belongs to a joined shared trip without a local library place row).
-  /// 2. Places in the user's library (`visibility == 'saved'`), excluding places already represented by today's stops.
+  /// On a trip day, returns:
+  /// 1. Stops on the target day within range (first, ordered by distance ascending).
+  /// 2. Other stops in the trip within range, tagged with their scheduled day (second, ordered by distance ascending).
+  /// 3. Remaining saved library places within range (third, ordered by distance ascending).
   ///
-  /// Loads reference frames matching either `placeKey` or `stopId`.
-  ///
-  /// Today's stops are always placed first in the list, then candidates are ordered by distance ascending.
+  /// When no trip is active, returns library places within range.
   Future<List<NearbyShootingPlace>> findNearbyPlaces(
     AppDatabase db, {
     required double lat,
     required double lng,
+    String? tripId,
+    String? dayId,
     double maxDistanceMeters = 150.0,
     DateTime? now,
   }) async {
+    // 1. Resolve active trip and target day
     final todayTrip = await getTodayTrip(db, now: now);
+    final resolvedTripId = tripId ?? todayTrip?.trip.id;
+    final targetDayId = dayId ?? (resolvedTripId == todayTrip?.trip.id ? todayTrip?.day.id : null);
 
-    final candidateStops = <({Stop stop, ScheduleItem item, double distanceMeters})>[];
+    final candidateStops = <({Stop stop, ScheduleItem? item, String? dayId, int? dayNumber, bool isTargetDay, double distanceMeters})>[];
     final qualifyingPlaceKeys = <String>{};
     final qualifyingStopIds = <String>{};
     final seenStopIds = <String>{};
     final seenPlaceKeys = <String>{};
 
-    if (todayTrip != null) {
-      for (final item in todayTrip.scheduleItems) {
-        if (seenStopIds.contains(item.stopId)) continue;
-        final stop = todayTrip.stopMap[item.stopId];
-        if (stop == null || stop.deletedAt != null) continue;
+    if (resolvedTripId != null) {
+      // Load all non-deleted stops in the trip
+      final allTripStops = await (db.select(db.stops)
+            ..where((s) => s.tripId.equals(resolvedTripId) & s.deletedAt.isNull()))
+          .get();
+
+      // Load days to compute 1-based day numbers
+      final days = await (db.select(db.tripDays)
+            ..where((d) => d.tripId.equals(resolvedTripId))
+            ..orderBy([(d) => OrderingTerm.asc(d.sortKey)]))
+          .get();
+      final dayNumberMap = <String, int>{};
+      for (var i = 0; i < days.length; i++) {
+        dayNumberMap[days[i].id] = i + 1;
+      }
+
+      // Load schedule items for this trip
+      final items = await (db.select(db.scheduleItems)
+            ..where((s) => s.tripId.equals(resolvedTripId)))
+          .get();
+      final itemByStopId = {for (final it in items) it.stopId: it};
+
+      for (final stop in allTripStops) {
+        if (seenStopIds.contains(stop.id)) continue;
 
         final dist = calculateDistanceMeters(lat, lng, stop.lat, stop.lng);
         if (dist <= maxDistanceMeters) {
           seenStopIds.add(stop.id);
+          final schedItem = itemByStopId[stop.id];
+          final stopDayId = schedItem?.dayId;
+          final dayNum = stopDayId != null ? dayNumberMap[stopDayId] : null;
+          final isTargetDay = targetDayId != null && stopDayId == targetDayId;
+
           candidateStops.add((
             stop: stop,
-            item: item,
+            item: schedItem,
+            dayId: stopDayId,
+            dayNumber: dayNum,
+            isTargetDay: isTargetDay,
             distanceMeters: dist,
           ));
           qualifyingStopIds.add(stop.id);
@@ -179,7 +209,7 @@ class PilgrimageShootingService {
       return const [];
     }
 
-    // Load places for today's stops if they exist in the places table
+    // Load places for stops if they exist in the places table
     final stopPlaceKeys = candidateStops
         .map((c) => c.stop.placeKey)
         .where((k) => k.isNotEmpty)
@@ -223,7 +253,7 @@ class PilgrimageShootingService {
 
     final results = <NearbyShootingPlace>[];
 
-    // Build today stops candidates
+    // Build stop candidates
     for (final candidate in candidateStops) {
       final stop = candidate.stop;
       final place = placeMapForStops[stop.placeKey];
@@ -248,9 +278,11 @@ class PilgrimageShootingService {
         lng: stop.lng,
         placeKey: stop.placeKey,
         distanceMeters: candidate.distanceMeters,
-        isTodayStop: true,
+        isTargetDayStop: candidate.isTargetDay,
         todayStop: stop,
         todayScheduleItem: candidate.item,
+        dayId: candidate.dayId,
+        dayNumber: candidate.dayNumber,
         referenceFrames: frameMap.values.toList(),
         animeTitle: animeTitle,
       ));
@@ -269,16 +301,21 @@ class PilgrimageShootingService {
         lng: place.lng,
         placeKey: place.placeKey,
         distanceMeters: candidate.distanceMeters,
-        isTodayStop: false,
+        isTargetDayStop: false,
         referenceFrames: frames,
         animeTitle: animeTitle,
       ));
     }
 
-    // Sort: today's stops first, then nearest distance ascending
+    // Sort:
+    // 1. Target day stops first, nearest first
+    // 2. Other trip stops second, nearest first
+    // 3. Saved library places third, nearest first
     results.sort((a, b) {
-      if (a.isTodayStop != b.isTodayStop) {
-        return a.isTodayStop ? -1 : 1;
+      final aPriority = a.isTargetDayStop ? 0 : (a.todayStop != null ? 1 : 2);
+      final bPriority = b.isTargetDayStop ? 0 : (b.todayStop != null ? 1 : 2);
+      if (aPriority != bPriority) {
+        return aPriority.compareTo(bPriority);
       }
       return a.distanceMeters.compareTo(b.distanceMeters);
     });
@@ -290,12 +327,10 @@ class PilgrimageShootingService {
   ///
   /// Atomically:
   /// 1. Copies photo file to app documents directory if persistent copy needed.
-  /// 2. Creates a row in [photos] table (`kind: 'original'`).
-  /// 3. Creates a row in [place_visits] for today.
-  /// 4. If a trip is active today:
-  ///    - If [placeKey] was on the day's schedule, marks it `'done'`.
-  ///    - If [placeKey] is off the plan, creates a stop if needed and adds a schedule item
-  ///      marked `'done'` to today's day block.
+  /// 2. Ensures place row exists in [places] (creating a `trip_only` stub if missing to satisfy FKs).
+  /// 3. Creates a row in [photos] table (`kind: 'original'`).
+  /// 4. Creates or reuses a row in [place_visits] for today (one visit per place per day).
+  /// 5. Associates photo with trip and resolves active stop/item without mutating the plan.
   Future<ShotRecordResult> recordShot(
     AppDatabase db, {
     required String sourceImagePath,
@@ -313,14 +348,17 @@ class PilgrimageShootingService {
     final finalLocalPath = await _persistPhotoFile(sourceImagePath);
 
     return db.transaction(() async {
-      // 1. Resolve active trip for today
+      // 1. Resolve active trip
       final todayTrip = await getTodayTrip(db, now: effectiveTakenAt);
       final resolvedTripId = tripId ?? todayTrip?.trip.id;
 
       // 1.5 Ensure place row exists in places table to satisfy foreign key constraints
       final existingPlace = await (db.select(db.places)..where((p) => p.placeKey.equals(placeKey))).getSingleOrNull();
       if (existingPlace == null) {
-        final matchingStop = todayTrip?.stops.where((s) => s.placeKey == placeKey).firstOrNull;
+        final matchingStop = stopId != null
+            ? await (db.select(db.stops)..where((s) => s.id.equals(stopId))).getSingleOrNull()
+            : await (db.select(db.stops)..where((s) => s.placeKey.equals(placeKey))).getSingleOrNull();
+
         await db.into(db.places).insert(PlacesCompanion.insert(
           placeKey: placeKey,
           name: matchingStop?.name ?? 'Spot',
@@ -359,102 +397,51 @@ class PilgrimageShootingService {
         createdAt: Value(photo.createdAt),
       ));
 
-      // 3. Insert PlaceVisit row
-      final visitId = _uuid.v4();
-      final visit = PlaceVisit(
-        id: visitId,
-        placeKey: placeKey,
-        date: todayStr,
-        tripId: resolvedTripId,
-        createdAt: DateTime.now(),
-      );
+      // 3. Insert or reuse PlaceVisit row (one per place per day)
+      final existingVisit = await (db.select(db.placeVisits)
+            ..where((v) => v.placeKey.equals(placeKey) & v.date.equals(todayStr)))
+          .getSingleOrNull();
 
-      await db.into(db.placeVisits).insert(PlaceVisitsCompanion.insert(
-        id: visit.id,
-        placeKey: visit.placeKey,
-        date: visit.date,
-        tripId: Value(visit.tripId),
-        createdAt: Value(visit.createdAt),
-      ));
+      final PlaceVisit visit;
+      if (existingVisit != null) {
+        visit = existingVisit;
+      } else {
+        final visitId = _uuid.v4();
+        visit = PlaceVisit(
+          id: visitId,
+          placeKey: placeKey,
+          date: todayStr,
+          tripId: resolvedTripId,
+          createdAt: DateTime.now(),
+        );
 
-      // 4. Update or Add Schedule Item in today's trip
+        await db.into(db.placeVisits).insert(PlaceVisitsCompanion.insert(
+          id: visit.id,
+          placeKey: visit.placeKey,
+          date: visit.date,
+          tripId: Value(visit.tripId),
+          createdAt: Value(visit.createdAt),
+        ));
+      }
+
+      // 4. Resolve stop in trip if present (without altering schedule items or creating unwanted stops)
       Stop? activeStop;
       ScheduleItem? activeItem;
-      bool wasOffPlan = false;
 
-      if (todayTrip != null && (resolvedTripId == null || resolvedTripId == todayTrip.trip.id)) {
-        final currentTripId = todayTrip.trip.id;
-        final currentDayId = todayTrip.day.id;
-
-        // Check if place is already on today's scheduled items
-        ScheduleItem? existingDayItem;
-        for (final item in todayTrip.scheduleItems) {
-          final s = todayTrip.stopMap[item.stopId];
-          if (s != null && s.placeKey == placeKey) {
-            existingDayItem = item;
-            activeStop = s;
-            break;
-          }
-        }
-
-        if (existingDayItem != null) {
-          // On-plan shot: mark existing item done
-          await (db.update(db.scheduleItems)..where((s) => s.id.equals(existingDayItem!.id))).write(
-            ScheduleItemsCompanion(
-              status: const Value('done'),
-              syncStatus: const Value(1),
-              updatedAt: Value(DateTime.now()),
-            ),
-          );
-          activeItem = existingDayItem.copyWith(status: 'done', syncStatus: 1);
-        } else {
-          // Off-plan shot! Add place to today's day block
-          wasOffPlan = true;
-
-          // Find or create Stop for this place
-          final existingTripStop = await (db.select(db.stops)
-                ..where((s) => s.tripId.equals(currentTripId) & s.placeKey.equals(placeKey) & s.deletedAt.isNull()))
+      if (resolvedTripId != null) {
+        if (stopId != null) {
+          activeStop = await (db.select(db.stops)
+                ..where((s) => s.id.equals(stopId) & s.deletedAt.isNull()))
               .getSingleOrNull();
+        }
+        activeStop ??= await (db.select(db.stops)
+              ..where((s) => s.tripId.equals(resolvedTripId) & s.placeKey.equals(placeKey) & s.deletedAt.isNull()))
+            .getSingleOrNull();
 
-          if (existingTripStop != null) {
-            activeStop = existingTripStop;
-          } else {
-            // Fetch place facts
-            final place = await (db.select(db.places)..where((p) => p.placeKey.equals(placeKey))).getSingleOrNull();
-            final stopName = place?.name ?? 'Spot';
-            final stopLat = place?.lat ?? 0.0;
-            final stopLng = place?.lng ?? 0.0;
-
-            final newStopId = _uuid.v4();
-            await db.into(db.stops).insert(StopsCompanion.insert(
-              id: newStopId,
-              tripId: currentTripId,
-              placeKey: placeKey,
-              name: stopName,
-              lat: stopLat,
-              lng: stopLng,
-              addedBy: 'local_user',
-              syncStatus: const Value(1),
-            ));
-            activeStop = await (db.select(db.stops)..where((s) => s.id.equals(newStopId))).getSingle();
-          }
-
-          // Generate next sortKey for day block
-          final existingKeys = todayTrip.scheduleItems.map((i) => i.sortKey).toList();
-          final nextSortKey = FractionalIndexUtil.append(existingKeys);
-
-          final newItemId = _uuid.v4();
-          await db.into(db.scheduleItems).insert(ScheduleItemsCompanion.insert(
-            id: newItemId,
-            tripId: currentTripId,
-            dayId: currentDayId,
-            stopId: activeStop.id,
-            sortKey: nextSortKey,
-            status: const Value('done'),
-            syncStatus: const Value(1),
-          ));
-
-          activeItem = await (db.select(db.scheduleItems)..where((s) => s.id.equals(newItemId))).getSingle();
+        if (activeStop != null) {
+          activeItem = await (db.select(db.scheduleItems)
+                ..where((s) => s.stopId.equals(activeStop!.id) & s.tripId.equals(resolvedTripId)))
+              .getSingleOrNull();
         }
       }
 
@@ -463,7 +450,7 @@ class PilgrimageShootingService {
         visit: visit,
         stop: activeStop,
         scheduleItem: activeItem,
-        wasOffPlan: wasOffPlan,
+        wasOffPlan: resolvedTripId != null && activeStop == null,
       );
     });
   }

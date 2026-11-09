@@ -280,10 +280,81 @@ void main() {
       expect(candidate.primaryFrame?.id, equals('ref_stop_frame_1'));
       expect(candidate.primaryFrame?.localPath, equals('/frames/shared_frame.jpg'));
     });
+
+    test('finds stops across whole trip: target day first, other days second (with dayNumber), library third', () async {
+      final now = DateTime(2026, 8, 15, 10, 0);
+
+      final trip = await tripRepo.createTrip(
+        title: 'Two Day Pilgrimage',
+        ownerId: 'user_tester',
+        startDate: '2026-08-15',
+        dayCount: 2,
+      );
+      final days = await tripRepo.getDaysForTrip(trip.id);
+      final day1 = days[0];
+      final day2 = days[1];
+
+      // Stop on Day 1 (target day), 100m away
+      final stopDay1 = await tripRepo.createTripOnlySpot(
+        tripId: trip.id,
+        name: 'Day 1 Spot (100m)',
+        lat: 34.8919,
+        lng: 135.8080,
+        addedBy: 'user_tester',
+      );
+      await tripRepo.scheduleStop(tripId: trip.id, stopId: stopDay1.id, dayId: day1.id);
+
+      // Stop on Day 2, 20m away (closer, but scheduled on Day 2!)
+      final stopDay2 = await tripRepo.createTripOnlySpot(
+        tripId: trip.id,
+        name: 'Day 2 Spot (20m closer)',
+        lat: 34.8911,
+        lng: 135.8081,
+        addedBy: 'user_tester',
+      );
+      await tripRepo.scheduleStop(tripId: trip.id, stopId: stopDay2.id, dayId: day2.id);
+
+      // Library place, 40m away (not in trip)
+      await placeRepo.upsertPlace(PlacesCompanion.insert(
+        placeKey: 'place_lib_nearby',
+        name: 'Library Spot (40m)',
+        lat: 34.8913,
+        lng: 135.8080,
+      ));
+
+      final candidates = await service.findNearbyPlaces(
+        db,
+        lat: 34.8910,
+        lng: 135.8080,
+        tripId: trip.id,
+        dayId: day1.id,
+        maxDistanceMeters: 150.0,
+        now: now,
+      );
+
+      expect(candidates.length, equals(3));
+
+      // 1. Target day (Day 1) stop is FIRST even though Day 2 stop is closer!
+      expect(candidates[0].name, equals('Day 1 Spot (100m)'));
+      expect(candidates[0].isTargetDayStop, isTrue);
+      expect(candidates[0].isTodayStop, isTrue);
+      expect(candidates[0].dayNumber, equals(1));
+
+      // 2. Day 2 stop is SECOND (tagged with Day 2 for "Other places nearby")
+      expect(candidates[1].name, equals('Day 2 Spot (20m closer)'));
+      expect(candidates[1].isTargetDayStop, isFalse);
+      expect(candidates[1].isTodayStop, isFalse);
+      expect(candidates[1].dayNumber, equals(2));
+
+      // 3. Library spot not in trip is THIRD
+      expect(candidates[2].name, equals('Library Spot (40m)'));
+      expect(candidates[2].isTargetDayStop, isFalse);
+      expect(candidates[2].todayStop, isNull);
+    });
   });
 
   group('PilgrimageShootingService - Record Shot', () {
-    test('records on-plan shot, creates Photo & PlaceVisit, and marks schedule item done', () async {
+    test('records on-plan shot, attaches photo to trip, reuses visit, and leaves schedule item status untouched', () async {
       final now = DateTime(2026, 8, 15, 11, 30);
 
       await placeRepo.upsertPlace(PlacesCompanion.insert(
@@ -324,15 +395,15 @@ void main() {
       expect(result.photo.kind, equals('original'));
       expect(result.photo.keepAsIs, isFalse);
       expect(result.visit.date, equals('2026-08-15'));
-      expect(result.scheduleItem?.status, equals('done'));
+      // Shot does NOT mark stop done (user's call later)
+      expect(result.scheduleItem?.status, equals('planned'));
 
-      // Verify in DB
+      // Verify in DB that schedule item is untouched
       final dbItem = await (db.select(db.scheduleItems)..where((s) => s.id.equals(item.id))).getSingle();
-      expect(dbItem.status, equals('done'));
-      expect(dbItem.syncStatus, equals(1)); // marked dirty for sync
+      expect(dbItem.status, equals('planned'));
     });
 
-    test('records off-plan shot, automatically adds place to today day and marks done', () async {
+    test('records shot for place not in trip without mutating plan (files photo under trip, no phantom stops)', () async {
       final now = DateTime(2026, 8, 15, 15, 0);
 
       // Place in library but not planned in today's trip
@@ -359,15 +430,46 @@ void main() {
 
       expect(result.wasOffPlan, isTrue);
       expect(result.photo.placeKey, equals('place_kumiko_bench'));
-      expect(result.stop?.name, equals('Kumiko Bench'));
-      expect(result.scheduleItem?.status, equals('done'));
-      expect(result.scheduleItem?.sortKey, isNotEmpty);
+      expect(result.photo.tripId, equals(trip.id));
+      expect(result.stop, isNull);
+      expect(result.scheduleItem, isNull);
 
-      // Verify schedule items on day block
+      // Verify no schedule items or stops were created in the trip
       final days = await tripRepo.getDaysForTrip(trip.id);
       final dayItems = await tripRepo.getScheduleItemsForDay(days.first.id);
-      expect(dayItems.length, equals(1));
-      expect(dayItems.first.status, equals('done'));
+      expect(dayItems, isEmpty);
+      final tripStops = await tripRepo.getStopsForTrip(trip.id);
+      expect(tripStops, isEmpty);
+    });
+
+    test('multiple shots at the same place write only one place_visits row for the day', () async {
+      final now = DateTime(2026, 8, 15, 10, 0);
+
+      await placeRepo.upsertPlace(PlacesCompanion.insert(
+        placeKey: 'place_multi_shot',
+        name: 'Multi Shot Spot',
+        lat: 34.8910,
+        lng: 135.8080,
+      ));
+
+      for (var i = 1; i <= 5; i++) {
+        await service.recordShot(
+          db,
+          sourceImagePath: '/dummy/camera/shot_$i.jpg',
+          placeKey: 'place_multi_shot',
+          takenAt: now,
+        );
+      }
+
+      final visits = await (db.select(db.placeVisits)
+            ..where((v) => v.placeKey.equals('place_multi_shot')))
+          .get();
+      expect(visits.length, equals(1));
+
+      final photos = await (db.select(db.photos)
+            ..where((p) => p.placeKey.equals('place_multi_shot')))
+          .get();
+      expect(photos.length, equals(5));
     });
 
     test('records shot without a trip cleanly (personal library only)', () async {
@@ -426,7 +528,7 @@ void main() {
       );
 
       expect(result.photo.placeKey, equals(remotePlaceKey));
-      expect(result.scheduleItem?.status, equals('done'));
+      expect(result.scheduleItem?.status, equals('planned'));
 
       // Verify place row was safely created to maintain FK integrity
       final place = await (db.select(db.places)..where((p) => p.placeKey.equals(remotePlaceKey))).getSingleOrNull();

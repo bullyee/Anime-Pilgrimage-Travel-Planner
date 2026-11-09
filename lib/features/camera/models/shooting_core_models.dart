@@ -11,9 +11,11 @@ class NearbyShootingPlace {
   final double? _lng;
   final String? _placeKey;
   final double distanceMeters;
-  final bool isTodayStop;
+  final bool isTargetDayStop;
   final Stop? todayStop;
   final ScheduleItem? todayScheduleItem;
+  final String? dayId;
+  final int? dayNumber;
   final List<NewReferenceImage> referenceFrames;
   final String? animeTitle;
 
@@ -24,16 +26,21 @@ class NearbyShootingPlace {
     double? lng,
     String? placeKey,
     required this.distanceMeters,
-    this.isTodayStop = false,
+    bool isTodayStop = false,
+    bool? isTargetDayStop,
     this.todayStop,
     this.todayScheduleItem,
+    this.dayId,
+    this.dayNumber,
     this.referenceFrames = const [],
     this.animeTitle,
-  })  : _name = name,
+  })  : isTargetDayStop = isTargetDayStop ?? isTodayStop,
+        _name = name,
         _lat = lat,
         _lng = lng,
         _placeKey = placeKey;
 
+  bool get isTodayStop => isTargetDayStop;
   String get name => _name ?? place?.name ?? todayStop?.name ?? '';
   double get lat => _lat ?? place?.lat ?? todayStop?.lat ?? 0.0;
   double get lng => _lng ?? place?.lng ?? todayStop?.lng ?? 0.0;
