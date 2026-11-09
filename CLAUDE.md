@@ -55,6 +55,7 @@ Source of truth: `lib/core/database/tables_v10.dart`; migrations live in `lib/co
 
 ## Workflows
 - Tests: `flutter test` (unit tests under `test/`), and the Firestore rules on the emulator: `firebase emulators:exec "python test/rules_v2_emulator_test.py" --only firestore --project trip-planner-2775c` (needs Java 21, e.g. Android Studio's `jbr`, as `JAVA_HOME`). CI (`.github/workflows/ci.yml`) runs both on every PR and on `master`.
+- Fast test verification: `powershell -File tool\verify.ps1` (runs unit tests with compact failure reporting; pass `-WithEmulator` to include Firestore rules; see `.claude/skills/verify/SKILL.md`).
 - Firebase deploys: from `master` only, and only what changed (`firebase deploy --only firestore:rules`, `--only hosting`).
 - Run and drive the app on Android: `.claude/skills/run-app/SKILL.md`.
 - Releases: `.claude/skills/release/SKILL.md` (Antigravity reaches it through `.agents/skills/release/`). GitHub pre-releases tagged `vX.Y.Z` with an APK; the `pubspec.yaml` version matches the tag; history in `CHANGELOG.md`. Pushing the tag runs `.github/workflows/release.yml`, which builds and signs the APK (keystore from the `ANDROID_DEBUG_KEYSTORE_B64` secret) and attaches it to a draft pre-release.
