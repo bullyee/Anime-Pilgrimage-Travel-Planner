@@ -14,11 +14,11 @@ import '../models/shooting_core_models.dart';
 /// Core backend service for v0.3.0 Pilgrimage Shooting Mode (Step 1).
 ///
 /// Features:
-/// 1. [findNearbyPlaces]: Locates library places within ~150m of current GPS coordinate,
-///    sorting places from today's active trip stops first, then nearest first.
+/// 1. [findNearbyPlaces]: Locates places within ~150m of current GPS coordinate,
+///    sorting target day trip stops first, other trip stops second, and library places third.
 /// 2. [getTodayTrip]: Resolves today's active trip and day block from the calendar date.
-/// 3. [recordShot]: Atomic mutation that copies a field shot, inserts a photo row,
-///    creates/updates a place visit, marks the schedule item done, and handles off-plan stops.
+/// 3. [recordShot]: Atomic mutation that persists photo file, inserts photo row,
+///    creates/updates a place visit, and links to trip stops without mutating the plan.
 /// 4. [watchPhotosToEdit]: Streams raw pilgrimage photos waiting to be edited at home,
 ///    with [markPhotoAsKeptAsIs] to mark them as completed without edits.
 class PilgrimageShootingService {
@@ -82,7 +82,7 @@ class PilgrimageShootingService {
       for (int i = 0; i < resolvedDates.length; i++) {
         final resolved = resolvedDates[i];
         if (!resolved.isBackup && resolved.date != null && resolved.date == todayDate) {
-          final matchedDay = days[i];
+          final matchedDay = days.firstWhere((d) => d.id == resolved.block.id);
 
           final items = await (db.select(db.scheduleItems)
                 ..where((s) => s.dayId.equals(matchedDay.id) & s.deletedAt.isNull())
@@ -127,7 +127,14 @@ class PilgrimageShootingService {
   }) async {
     // 1. Resolve active trip and target day
     final todayTrip = await getTodayTrip(db, now: now);
-    final resolvedTripId = tripId ?? todayTrip?.trip.id;
+    String? resolvedTripId = tripId;
+    if (resolvedTripId == null && dayId != null) {
+      final dayRow = await (db.select(db.tripDays)
+            ..where((d) => d.id.equals(dayId) & d.deletedAt.isNull()))
+          .getSingleOrNull();
+      resolvedTripId = dayRow?.tripId;
+    }
+    resolvedTripId ??= todayTrip?.trip.id;
     final targetDayId = dayId ?? (resolvedTripId == todayTrip?.trip.id ? todayTrip?.day.id : null);
 
     final candidateStops = <({Stop stop, ScheduleItem? item, String? dayId, int? dayNumber, bool isTargetDay, double distanceMeters})>[];
@@ -139,22 +146,50 @@ class PilgrimageShootingService {
     if (resolvedTripId != null) {
       // Load all non-deleted stops in the trip
       final allTripStops = await (db.select(db.stops)
-            ..where((s) => s.tripId.equals(resolvedTripId) & s.deletedAt.isNull()))
+            ..where((s) => s.tripId.equals(resolvedTripId!) & s.deletedAt.isNull()))
           .get();
 
-      // Load days to compute 1-based day numbers
+      // Load trip for startDate and dayCount
+      final trip = await (db.select(db.trips)
+            ..where((t) => t.id.equals(resolvedTripId!) & t.deletedAt.isNull()))
+          .getSingleOrNull();
+
+      // Load days excluding deleted ones
       final days = await (db.select(db.tripDays)
-            ..where((d) => d.tripId.equals(resolvedTripId))
+            ..where((d) => d.tripId.equals(resolvedTripId!) & d.deletedAt.isNull())
             ..orderBy([(d) => OrderingTerm.asc(d.sortKey)]))
           .get();
+
       final dayNumberMap = <String, int>{};
-      for (var i = 0; i < days.length; i++) {
-        dayNumberMap[days[i].id] = i + 1;
+      if (trip != null && days.isNotEmpty) {
+        final blocks = days.map((d) {
+          return DayBlockInfo(
+            id: d.id,
+            sortKey: d.sortKey,
+            title: d.title,
+            pinnedDate: d.pinnedDate != null ? DateTime.tryParse(d.pinnedDate!) : null,
+          );
+        }).toList();
+
+        final startDate = trip.startDate != null ? DateTime.tryParse(trip.startDate!) : null;
+        final resolvedDates = ScheduleLogicEngine.computeBlockDates(
+          blocks: blocks,
+          startDate: startDate,
+          dayCount: trip.dayCount,
+        );
+
+        int nonBackupCounter = 1;
+        for (int i = 0; i < resolvedDates.length; i++) {
+          final res = resolvedDates[i];
+          if (!res.isBackup) {
+            dayNumberMap[res.block.id] = nonBackupCounter++;
+          }
+        }
       }
 
-      // Load schedule items for this trip
+      // Load non-deleted schedule items for this trip
       final items = await (db.select(db.scheduleItems)
-            ..where((s) => s.tripId.equals(resolvedTripId)))
+            ..where((s) => s.tripId.equals(resolvedTripId!) & s.deletedAt.isNull()))
           .get();
       final itemByStopId = {for (final it in items) it.stopId: it};
 
@@ -347,112 +382,154 @@ class PilgrimageShootingService {
     // Ensure photo file is persisted in app storage
     final finalLocalPath = await _persistPhotoFile(sourceImagePath);
 
-    return db.transaction(() async {
-      // 1. Resolve active trip
-      final todayTrip = await getTodayTrip(db, now: effectiveTakenAt);
-      final resolvedTripId = tripId ?? todayTrip?.trip.id;
+    try {
+      return await db.transaction(() async {
+        // 1. Resolve active trip
+        final todayTrip = await getTodayTrip(db, now: effectiveTakenAt);
+        final resolvedTripId = tripId ?? todayTrip?.trip.id;
 
-      // 1.5 Ensure place row exists in places table to satisfy foreign key constraints
-      final existingPlace = await (db.select(db.places)..where((p) => p.placeKey.equals(placeKey))).getSingleOrNull();
-      if (existingPlace == null) {
-        final matchingStop = stopId != null
-            ? await (db.select(db.stops)..where((s) => s.id.equals(stopId))).getSingleOrNull()
-            : await (db.select(db.stops)..where((s) => s.placeKey.equals(placeKey))).getSingleOrNull();
+        // 1.5 Ensure place row exists in places table to satisfy foreign key constraints
+        final existingPlace = await (db.select(db.places)..where((p) => p.placeKey.equals(placeKey))).getSingleOrNull();
+        if (existingPlace == null) {
+          Stop? matchingStop;
+          if (stopId != null) {
+            matchingStop = await (db.select(db.stops)
+                  ..where((s) => s.id.equals(stopId) & s.deletedAt.isNull()))
+                .getSingleOrNull();
+          }
+          if (matchingStop == null && resolvedTripId != null) {
+            matchingStop = (await (db.select(db.stops)
+                  ..where((s) =>
+                      s.tripId.equals(resolvedTripId) &
+                      s.placeKey.equals(placeKey) &
+                      s.deletedAt.isNull()))
+                .get())
+                .firstOrNull;
+          }
 
-        await db.into(db.places).insert(PlacesCompanion.insert(
+          if (matchingStop == null) {
+            throw ArgumentError('Place not found for placeKey: $placeKey');
+          }
+
+          await db.into(db.places).insert(PlacesCompanion.insert(
+            placeKey: placeKey,
+            name: matchingStop.name,
+            lat: matchingStop.lat,
+            lng: matchingStop.lng,
+            address: Value(matchingStop.address),
+            visibility: const Value('trip_only'),
+          ));
+        }
+
+        // 2. Insert Photo row
+        final photoId = _uuid.v4();
+        final photo = Photo(
+          id: photoId,
           placeKey: placeKey,
-          name: matchingStop?.name ?? 'Spot',
-          lat: matchingStop?.lat ?? 0.0,
-          lng: matchingStop?.lng ?? 0.0,
-          address: Value(matchingStop?.address),
-          visibility: const Value('trip_only'),
-        ));
-      }
-
-      // 2. Insert Photo row
-      final photoId = _uuid.v4();
-      final photo = Photo(
-        id: photoId,
-        placeKey: placeKey,
-        tripId: resolvedTripId,
-        kind: 'original',
-        localPath: finalLocalPath,
-        referenceImageId: referenceImageId,
-        isShared: false,
-        keepAsIs: keepAsIs,
-        takenAt: effectiveTakenAt,
-        createdAt: DateTime.now(),
-      );
-
-      await db.into(db.photos).insert(PhotosCompanion.insert(
-        id: photo.id,
-        placeKey: photo.placeKey,
-        tripId: Value(photo.tripId),
-        kind: const Value('original'),
-        localPath: photo.localPath,
-        referenceImageId: Value(photo.referenceImageId),
-        isShared: const Value(false),
-        keepAsIs: Value(photo.keepAsIs),
-        takenAt: Value(photo.takenAt),
-        createdAt: Value(photo.createdAt),
-      ));
-
-      // 3. Insert or reuse PlaceVisit row (one per place per day)
-      final existingVisit = await (db.select(db.placeVisits)
-            ..where((v) => v.placeKey.equals(placeKey) & v.date.equals(todayStr)))
-          .getSingleOrNull();
-
-      final PlaceVisit visit;
-      if (existingVisit != null) {
-        visit = existingVisit;
-      } else {
-        final visitId = _uuid.v4();
-        visit = PlaceVisit(
-          id: visitId,
-          placeKey: placeKey,
-          date: todayStr,
           tripId: resolvedTripId,
+          kind: 'original',
+          localPath: finalLocalPath,
+          referenceImageId: referenceImageId,
+          isShared: false,
+          keepAsIs: keepAsIs,
+          takenAt: effectiveTakenAt,
           createdAt: DateTime.now(),
         );
 
-        await db.into(db.placeVisits).insert(PlaceVisitsCompanion.insert(
-          id: visit.id,
-          placeKey: visit.placeKey,
-          date: visit.date,
-          tripId: Value(visit.tripId),
-          createdAt: Value(visit.createdAt),
+        await db.into(db.photos).insert(PhotosCompanion.insert(
+          id: photo.id,
+          placeKey: photo.placeKey,
+          tripId: Value(photo.tripId),
+          kind: const Value('original'),
+          localPath: photo.localPath,
+          referenceImageId: Value(photo.referenceImageId),
+          isShared: const Value(false),
+          keepAsIs: Value(photo.keepAsIs),
+          takenAt: Value(photo.takenAt),
+          createdAt: Value(photo.createdAt),
         ));
-      }
 
-      // 4. Resolve stop in trip if present (without altering schedule items or creating unwanted stops)
-      Stop? activeStop;
-      ScheduleItem? activeItem;
+        // 3. Insert or reuse PlaceVisit row (one per place per day)
+        final existingVisit = (await (db.select(db.placeVisits)
+              ..where((v) => v.placeKey.equals(placeKey) & v.date.equals(todayStr))
+              ..limit(1))
+            .get())
+            .firstOrNull;
 
-      if (resolvedTripId != null) {
-        if (stopId != null) {
-          activeStop = await (db.select(db.stops)
-                ..where((s) => s.id.equals(stopId) & s.deletedAt.isNull()))
-              .getSingleOrNull();
+        final PlaceVisit visit;
+        if (existingVisit != null) {
+          visit = existingVisit;
+        } else {
+          final visitId = _uuid.v4();
+          visit = PlaceVisit(
+            id: visitId,
+            placeKey: placeKey,
+            date: todayStr,
+            tripId: resolvedTripId,
+            createdAt: DateTime.now(),
+          );
+
+          await db.into(db.placeVisits).insert(PlaceVisitsCompanion.insert(
+            id: visit.id,
+            placeKey: visit.placeKey,
+            date: visit.date,
+            tripId: Value(visit.tripId),
+            createdAt: Value(visit.createdAt),
+          ));
         }
-        activeStop ??= await (db.select(db.stops)
-              ..where((s) => s.tripId.equals(resolvedTripId) & s.placeKey.equals(placeKey) & s.deletedAt.isNull()))
-            .getSingleOrNull();
 
-        if (activeStop != null) {
-          activeItem = await (db.select(db.scheduleItems)
-                ..where((s) => s.stopId.equals(activeStop!.id) & s.tripId.equals(resolvedTripId)))
-              .getSingleOrNull();
+        // 4. Resolve stop in trip if present (without altering schedule items or creating unwanted stops)
+        Stop? activeStop;
+        ScheduleItem? activeItem;
+
+        if (resolvedTripId != null) {
+          if (stopId != null) {
+            activeStop = await (db.select(db.stops)
+                  ..where((s) => s.id.equals(stopId) & s.deletedAt.isNull()))
+                .getSingleOrNull();
+          }
+          if (activeStop == null) {
+            activeStop = (await (db.select(db.stops)
+                  ..where((s) =>
+                      s.tripId.equals(resolvedTripId) &
+                      s.placeKey.equals(placeKey) &
+                      s.deletedAt.isNull()))
+                .get())
+                .firstOrNull;
+          }
+
+          if (activeStop != null) {
+            final items = await (db.select(db.scheduleItems)
+                  ..where((s) =>
+                      s.stopId.equals(activeStop!.id) &
+                      s.tripId.equals(resolvedTripId) &
+                      s.deletedAt.isNull()))
+                .get();
+            activeItem = (todayTrip != null
+                    ? items.where((i) => i.dayId == todayTrip.day.id).firstOrNull
+                    : null) ??
+                items.firstOrNull;
+          }
         }
-      }
 
-      return ShotRecordResult(
-        photo: photo,
-        visit: visit,
-        stop: activeStop,
-        scheduleItem: activeItem,
-        wasOffPlan: resolvedTripId != null && activeStop == null,
-      );
-    });
+        return ShotRecordResult(
+          photo: photo,
+          visit: visit,
+          stop: activeStop,
+          scheduleItem: activeItem,
+          wasOffPlan: resolvedTripId != null && activeStop == null,
+        );
+      });
+    } catch (e) {
+      // Clean up orphaned physical file on transaction failure
+      if (finalLocalPath != sourceImagePath) {
+        try {
+          final f = File(finalLocalPath);
+          if (await f.exists()) await f.delete();
+        } catch (_) {}
+      }
+      rethrow;
+    }
   }
 
   /// Streams photos waiting to be edited at home.

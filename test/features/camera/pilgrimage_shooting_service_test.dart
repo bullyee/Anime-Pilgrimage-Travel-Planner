@@ -351,6 +351,62 @@ void main() {
       expect(candidates[2].isTargetDayStop, isFalse);
       expect(candidates[2].todayStop, isNull);
     });
+
+    test('findNearbyPlaces resolves trip from dayId and calculates correct day numbers skipping backup and deleted days', () async {
+      final trip = await tripRepo.createTrip(
+        title: 'Trip with Backup & Deleted Days',
+        ownerId: 'user_tester',
+        startDate: '2026-08-15',
+        dayCount: 2,
+      );
+      final days = await tripRepo.getDaysForTrip(trip.id);
+      // days: Day 1 (index 0), Day 2 (index 1)
+
+      // Add a backup day block (3rd block on a 2-day trip, so index 2 >= dayCount => isBackup)
+      final backupDay = await tripRepo.addDayBlock(
+        trip.id,
+        title: 'Rain Plan Backup',
+      );
+
+      // Add a stop to Day 2
+      final stopDay2 = await tripRepo.createTripOnlySpot(
+        tripId: trip.id,
+        name: 'Day 2 Shrine',
+        lat: 34.8912,
+        lng: 135.8082,
+        addedBy: 'user_tester',
+      );
+      await tripRepo.scheduleStop(tripId: trip.id, stopId: stopDay2.id, dayId: days[1].id);
+
+      // Add a stop to Backup Day
+      final stopBackup = await tripRepo.createTripOnlySpot(
+        tripId: trip.id,
+        name: 'Backup Museum',
+        lat: 34.8914,
+        lng: 135.8084,
+        addedBy: 'user_tester',
+      );
+      await tripRepo.scheduleStop(tripId: trip.id, stopId: stopBackup.id, dayId: backupDay.id);
+
+      // Query with dayId of Day 2, with NO tripId passed, and off-trip date (now: September)
+      final candidates = await service.findNearbyPlaces(
+        db,
+        lat: 34.8910,
+        lng: 135.8080,
+        dayId: days[1].id, // Day 2 passed without tripId
+        now: DateTime(2026, 9, 1),
+      );
+
+      // Should find Day 2 stop as target day stop (isTargetDayStop = true)
+      final d2Candidate = candidates.firstWhere((c) => c.name == 'Day 2 Shrine');
+      expect(d2Candidate.isTargetDayStop, isTrue);
+      expect(d2Candidate.dayNumber, equals(2));
+
+      // Backup day stop should have no dayNumber assigned
+      final backupCandidate = candidates.firstWhere((c) => c.name == 'Backup Museum');
+      expect(backupCandidate.isTargetDayStop, isFalse);
+      expect(backupCandidate.dayNumber, isNull);
+    });
   });
 
   group('PilgrimageShootingService - Record Shot', () {
@@ -535,6 +591,64 @@ void main() {
       expect(place, isNotNull);
       expect(place?.visibility, equals('trip_only'));
       expect(place?.name, equals('Remote Stop for Shot'));
+    });
+
+    test('recordShot handles stop moved to backlog and rescheduled without throwing Too many elements', () async {
+      final now = DateTime(2026, 8, 15, 11, 0);
+
+      final trip = await tripRepo.createTrip(
+        title: 'Rescheduled Stop Trip',
+        ownerId: 'user_tester',
+        startDate: '2026-08-15',
+        dayCount: 2,
+      );
+      final days = await tripRepo.getDaysForTrip(trip.id);
+
+      final stop = await tripRepo.createTripOnlySpot(
+        tripId: trip.id,
+        name: 'Rescheduled Uji Bridge',
+        lat: 34.8910,
+        lng: 135.8080,
+        addedBy: 'user_tester',
+      );
+
+      // 1. Schedule on Day 1
+      final item1 = await tripRepo.scheduleStop(tripId: trip.id, stopId: stop.id, dayId: days[0].id);
+
+      // 2. Drag to backlog (soft delete schedule item)
+      await tripRepo.deleteScheduleItem(item1.id);
+
+      // 3. Schedule back onto Day 2
+      final item2 = await tripRepo.scheduleStop(tripId: trip.id, stopId: stop.id, dayId: days[1].id);
+
+      // Verify that 2 rows exist for this stop in scheduleItems (1 soft-deleted, 1 active)
+      final allItems = await (db.select(db.scheduleItems)..where((s) => s.stopId.equals(stop.id))).get();
+      expect(allItems.length, equals(2));
+
+      // 4. Shoot at the stop - must NOT throw StateError (Too many elements)
+      final result = await service.recordShot(
+        db,
+        sourceImagePath: '/dummy/camera/rescheduled.jpg',
+        placeKey: stop.placeKey!,
+        stopId: stop.id,
+        tripId: trip.id,
+        takenAt: now,
+      );
+
+      expect(result.scheduleItem, isNotNull);
+      expect(result.scheduleItem?.id, equals(item2.id));
+      expect(result.scheduleItem?.dayId, equals(days[1].id));
+    });
+
+    test('recordShot throws ArgumentError when neither place nor stop exists', () async {
+      expect(
+        () => service.recordShot(
+          db,
+          sourceImagePath: '/dummy/camera/nonexistent.jpg',
+          placeKey: 'completely_unknown_place_key',
+        ),
+        throwsA(isA<ArgumentError>()),
+      );
     });
   });
 

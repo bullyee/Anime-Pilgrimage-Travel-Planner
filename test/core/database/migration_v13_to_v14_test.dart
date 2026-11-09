@@ -102,7 +102,7 @@ void main() {
 
       final photo = await (db.select(db.photos)..where((p) => p.id.equals('p1'))).getSingle();
       expect(photo.localPath, equals('/local/p1.jpg'));
-      expect(photo.keepAsIs, isFalse);
+      expect(photo.keepAsIs, isTrue);
     });
   });
 }

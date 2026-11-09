@@ -85,6 +85,9 @@ class AppDatabase extends _$AppDatabase {
             }
             if (!await _hasColumn('photos', 'keep_as_is')) {
               await m.addColumn(photos, photos.keepAsIs);
+              // Set existing historical photos to keep_as_is = 1 so the user's existing
+              // library photos are not flooded into the "Photos to edit" inbox.
+              await customStatement('UPDATE photos SET keep_as_is = 1 WHERE keep_as_is = 0');
             }
           }
         },
