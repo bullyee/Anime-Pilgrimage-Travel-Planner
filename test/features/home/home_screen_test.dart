@@ -280,6 +280,13 @@ void main() {
       expect(find.text('Trips'), findsOneWidget);
       expect(find.text('Library'), findsOneWidget);
       expect(find.byKey(const Key('homeNearYou')), findsNothing, reason: 'an empty library has nothing near');
+
+      // Signing in is for shared trips only: sharing and joining ask for it.
+      await tester.tap(find.byTooltip('More'));
+      await tester.pumpAndSettle();
+      expect(find.text('Edit a photo from the gallery'), findsOneWidget);
+      expect(find.text('Sign in'), findsNothing);
+      expect(find.text('Sign out'), findsNothing);
     });
   });
 }

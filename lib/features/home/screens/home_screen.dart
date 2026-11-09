@@ -2,7 +2,6 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 
-import 'package:trip_planner/features/auth/providers/auth_provider.dart';
 import 'package:trip_planner/features/camera/services/anime_camera_launcher.dart';
 
 import '../providers/home_providers.dart';
@@ -13,9 +12,12 @@ import '../widgets/today_card.dart';
 
 /// Home (roadmap v0.3.0, version A): a column of cards where only the top
 /// one follows the date. On a day of a trip it is today, with a small map
-/// that opens the trip's day map; on other days it is the next trip. Near
-/// you is the same every day. Shoot sits in the middle of the bottom bar,
-/// with Trips and Library either side.
+/// that opens the trip's day map; on other days it is the next trip. Under
+/// it, the photos to edit when there are any; Near you is the same every
+/// day. Shoot sits in the middle of the bottom bar, with Trips and Library
+/// either side. There's no Sign in here: the app works without an account,
+/// and sharing, inviting and joining a trip ask for one when they need it
+/// (sign-out is in My Trips).
 class HomeScreen extends ConsumerStatefulWidget {
   const HomeScreen({super.key});
 
@@ -23,7 +25,7 @@ class HomeScreen extends ConsumerStatefulWidget {
   ConsumerState<HomeScreen> createState() => _HomeScreenState();
 }
 
-enum _More { floatReference, editPhoto, signIn, signOut }
+enum _More { floatReference, editPhoto }
 
 class _HomeScreenState extends ConsumerState<HomeScreen> {
   @override
@@ -41,16 +43,11 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
         await floatReference(context, ref);
       case _More.editPhoto:
         await editPhotoFromGallery(context, ref);
-      case _More.signIn:
-        context.push('/login');
-      case _More.signOut:
-        await ref.read(authControllerProvider.notifier).signOut();
     }
   }
 
   @override
   Widget build(BuildContext context) {
-    final signedIn = ref.watch(authStateChangesProvider).valueOrNull != null;
     final focus = ref.watch(homeFocusProvider);
 
     return Scaffold(
@@ -64,9 +61,6 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
               if (floatingReferenceSupported)
                 const PopupMenuItem(value: _More.floatReference, child: Text('Float a frame over any app')),
               const PopupMenuItem(value: _More.editPhoto, child: Text('Edit a photo from the gallery')),
-              signedIn
-                  ? const PopupMenuItem(value: _More.signOut, child: Text('Sign out'))
-                  : const PopupMenuItem(value: _More.signIn, child: Text('Sign in')),
             ],
           ),
         ],

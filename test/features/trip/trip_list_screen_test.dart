@@ -17,7 +17,7 @@ void main() {
   setUp(() => db = AppDatabase.forTesting(NativeDatabase.memory()));
   tearDown(() => db.close());
 
-  Future<void> pumpList(WidgetTester tester) async {
+  Future<void> pumpList(WidgetTester tester, {String userId = 'u1'}) async {
     final router = GoRouter(
       initialLocation: '/trips',
       routes: [
@@ -31,7 +31,8 @@ void main() {
     await tester.pumpWidget(ProviderScope(
       overrides: [
         databaseProvider.overrideWithValue(db),
-        currentUserIdProvider.overrideWithValue('u1'),
+        currentUserIdProvider.overrideWithValue(userId),
+        authStateChangesProvider.overrideWith((ref) => Stream.value(null)),
         syncEngineServiceV2Provider.overrideWithValue(null),
       ],
       child: MaterialApp.router(routerConfig: router),
@@ -48,6 +49,21 @@ void main() {
     await pumpList(tester);
     expect(find.text('No trips yet'), findsOneWidget);
     expect(find.byType(FloatingActionButton), findsNothing);
+    await disposeApp(tester);
+  });
+
+  testWidgets('signed in: the account menu has Sign out', (tester) async {
+    await pumpList(tester);
+    await tester.tap(find.byTooltip('Account'));
+    await tester.pumpAndSettle();
+    expect(find.text('Sign out'), findsOneWidget);
+    await disposeApp(tester);
+  });
+
+  testWidgets('signed out: no account menu, since sharing and joining ask to sign in', (tester) async {
+    await pumpList(tester, userId: 'guest_local_user');
+    expect(find.byTooltip('Account'), findsNothing);
+    expect(find.text('Sign in'), findsNothing);
     await disposeApp(tester);
   });
 
