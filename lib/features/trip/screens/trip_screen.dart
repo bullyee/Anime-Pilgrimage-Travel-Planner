@@ -4,11 +4,13 @@ import 'package:go_router/go_router.dart';
 
 import '../../../core/database/database.dart';
 import '../../../core/utils/app_result.dart';
+import '../../../shared/widgets/undo_snack_bar.dart';
 import '../../planner/widgets/day_planner.dart';
 import '../../planner/widgets/planner_sheets.dart';
 import '../../sharing/models/trip_member.dart';
 import '../../sharing/providers/group_sharing_providers.dart';
 import '../controllers/trips_controller.dart';
+import '../providers/trip_list_providers.dart';
 import '../providers/trip_providers.dart';
 import '../widgets/trip_card.dart';
 import '../widgets/trip_form_sheet.dart';
@@ -172,7 +174,9 @@ class _TripScreenState extends ConsumerState<TripScreen> {
       context: context,
       builder: (context) => AlertDialog(
         title: Text('Delete “${trip.title}”?'),
-        content: const Text("Its days, stops and schedule are deleted too. You can't undo this yet."),
+        content: Text(trip.sharing == 'group'
+            ? 'Its days, stops and schedule are deleted too, for everyone in it.'
+            : 'Its days, stops and schedule are deleted too.'),
         actions: [
           TextButton(onPressed: () => Navigator.pop(context, false), child: const Text('Cancel')),
           FilledButton(onPressed: () => Navigator.pop(context, true), child: const Text('Delete')),
@@ -180,17 +184,19 @@ class _TripScreenState extends ConsumerState<TripScreen> {
       ),
     );
     if (confirmed != true || !context.mounted) return;
-    final result = await ref.read(tripsControllerProvider.notifier).deleteTrip(trip.id);
-    if (!context.mounted) return;
-    switch (result) {
-      case Success():
-        if (context.canPop()) {
-          context.pop();
-        } else {
-          context.go('/trips');
-        }
-      case Failure(:final error):
-        ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text("Couldn't delete the trip: $error")));
+    // Hidden now, deleted once the Undo is gone (see pendingTripDeletesProvider).
+    final messenger = ScaffoldMessenger.of(context);
+    final pending = ref.read(pendingTripDeletesProvider.notifier)..hide(trip.id);
+    if (context.canPop()) {
+      context.pop();
+    } else {
+      context.go('/trips');
+    }
+    final bar = showUndoSnackBar(messenger, 'Deleted “${trip.title}”.', onUndo: () => pending.undo(trip.id));
+    final reason = await bar.closed;
+    if (reason == SnackBarClosedReason.action) return;
+    if (await pending.commit(trip.id) case Failure(:final error)) {
+      messenger.showSnackBar(SnackBar(content: Text("Couldn't delete the trip: $error")));
     }
   }
 }

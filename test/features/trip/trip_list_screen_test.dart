@@ -10,6 +10,7 @@ import 'package:trip_planner/features/auth/providers/auth_provider.dart';
 import 'package:trip_planner/features/sync/providers/sync_v2_providers.dart';
 import 'package:trip_planner/features/trip/repositories/trip_repository.dart';
 import 'package:trip_planner/features/trip/screens/trip_list_screen.dart';
+import 'package:trip_planner/features/trip/screens/trip_screen.dart';
 
 void main() {
   late AppDatabase db;
@@ -43,6 +44,56 @@ void main() {
     await tester.pumpWidget(const SizedBox());
     await tester.pump(const Duration(seconds: 1));
   }
+
+  testWidgets('a deleted trip leaves the list at once, comes back with Undo, and is deleted once Undo is gone',
+      (tester) async {
+    final repo = DriftTripRepository(db);
+    final uji = await repo.createTrip(title: 'Uji', ownerId: 'u1', startDate: '2027-04-29');
+    await repo.createTrip(title: 'Kyoto', ownerId: 'u1', startDate: '2027-05-10');
+    final router = GoRouter(initialLocation: '/trips/${uji.id}', routes: [
+      GoRoute(path: '/trips', builder: (_, _) => const TripListScreen()),
+      GoRoute(path: '/trips/:tripId', builder: (_, s) => TripScreen(tripId: s.pathParameters['tripId']!)),
+    ]);
+    await tester.pumpWidget(ProviderScope(
+      overrides: [
+        databaseProvider.overrideWithValue(db),
+        currentUserIdProvider.overrideWithValue('u1'),
+        syncEngineServiceV2Provider.overrideWithValue(null),
+      ],
+      child: MaterialApp.router(routerConfig: router),
+    ));
+    await tester.pumpAndSettle();
+
+    Future<void> delete() async {
+      await tester.tap(find.byKey(const Key('tripMenu')));
+      await tester.pumpAndSettle();
+      await tester.tap(find.text('Delete trip'));
+      await tester.pumpAndSettle();
+      await tester.tap(find.widgetWithText(FilledButton, 'Delete'));
+      await tester.pumpAndSettle();
+    }
+
+    await delete();
+    expect(find.text('Kyoto'), findsOneWidget, reason: 'back on the trip list');
+    expect(find.text('Uji'), findsNothing);
+    expect(find.text('Deleted “Uji”.'), findsOneWidget);
+    expect(await repo.getTrip(uji.id), isNotNull, reason: 'not deleted while Undo is on screen');
+
+    await tester.tap(find.text('Undo'));
+    await tester.pumpAndSettle();
+    expect(find.text('Uji'), findsOneWidget);
+    expect(await repo.getTrip(uji.id), isNotNull);
+
+    await tester.tap(find.text('Uji'));
+    await tester.pumpAndSettle();
+    await delete();
+    await tester.pump(const Duration(seconds: 7));
+    await tester.pumpAndSettle();
+    expect(find.text('Deleted “Uji”.'), findsNothing);
+    expect(await repo.getTrip(uji.id), isNull, reason: 'deleted once Undo went away');
+    expect(find.text('Uji'), findsNothing);
+    await disposeApp(tester);
+  });
 
   testWidgets('with no trips it says so and offers to make one', (tester) async {
     await pumpList(tester);

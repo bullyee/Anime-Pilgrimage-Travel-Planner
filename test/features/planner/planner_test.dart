@@ -224,6 +224,25 @@ void main() {
       expect(v.trip.dayCount, 1);
       expect(v.days.single.day.id, days[1].id);
     });
+
+    test('a removed day comes back in its place, as a dated or a backup day', () async {
+      final backup = (await controller().addDay(trip.id, backup: true) as Success<String>).value;
+
+      final dated = await controller().removeDay(trip.id, days[0].id);
+      expect((dated as Success<bool>).value, isTrue);
+      expect(await controller().restoreDay(trip.id, days[0].id, dated: true), isA<Success<void>>());
+      var v = await view(trip.id);
+      expect(v.trip.dayCount, 2);
+      expect([for (final d in v.datedDays) d.day.id], [days[0].id, days[1].id]);
+      expect([for (final d in v.backupDays) d.day.id], [backup]);
+
+      final wasBackup = await controller().removeDay(trip.id, backup);
+      expect((wasBackup as Success<bool>).value, isFalse);
+      await controller().restoreDay(trip.id, backup, dated: false);
+      v = await view(trip.id);
+      expect(v.trip.dayCount, 2);
+      expect([for (final d in v.backupDays) d.day.id], [backup]);
+    });
   });
 
   group('TripScreen', () {
@@ -281,6 +300,32 @@ void main() {
       expect((await r.getTrip(trip.id))!.dayCount, 3);
       expect(find.text('Day 3'), findsOneWidget);
       expect(find.text('0/1'), findsOneWidget, reason: "Day 1's tile counts its visited stops");
+      await disposeApp(tester);
+    });
+
+    testWidgets('a removed day comes back with Undo', (tester) async {
+      tester.view.physicalSize = const Size(1080, 2400);
+      tester.view.devicePixelRatio = 3;
+      addTearDown(tester.view.reset);
+      final r = DriftTripRepository(db);
+      final trip = await r.createTrip(title: 'Uji', ownerId: 'u1', startDate: '2027-04-29', dayCount: 2);
+      final days = await r.getDaysForTrip(trip.id);
+
+      await pump(tester, trip.id);
+      await tester.tap(find.byTooltip('Day options').first);
+      await tester.pumpAndSettle();
+      // The menu's item, over the empty day's own button.
+      await tester.tap(find.text('Remove this day').last);
+      await tester.pumpAndSettle();
+      expect((await r.getDaysForTrip(trip.id)).single.id, days[1].id);
+      expect((await r.getTrip(trip.id))!.dayCount, 1);
+      expect(find.text('Removed Day 1.'), findsOneWidget);
+
+      await tester.tap(find.text('Undo'));
+      await tester.pumpAndSettle();
+      expect((await r.getDaysForTrip(trip.id)).map((d) => d.id), [days[0].id, days[1].id]);
+      expect((await r.getTrip(trip.id))!.dayCount, 2);
+      await tester.pump(const Duration(seconds: 7));
       await disposeApp(tester);
     });
 

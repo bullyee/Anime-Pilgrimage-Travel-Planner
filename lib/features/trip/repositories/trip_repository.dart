@@ -28,6 +28,10 @@ abstract class TripRepository {
   Future<TripDay> addDayBlock(String tripId, {String? title, String? pinnedDate});
   Future<void> updateDayBlock(TripDaysCompanion day);
   Future<void> deleteDayBlock(String dayId);
+
+  /// Undoes [deleteDayBlock]: the day comes back where it was, with the
+  /// schedule items that were deleted with it.
+  Future<void> restoreDayBlock(String dayId);
   Future<void> swapDayBlocks(String dayIdA, String dayIdB);
   Future<void> pinDayBlockDate(String dayId, String? pinnedDate);
   Future<void> reorderDayBlock(String dayId, String newSortKey);
@@ -57,6 +61,9 @@ abstract class TripRepository {
   Future<void> updateStop(StopsCompanion stop);
   Future<void> setStopsArea(List<String> stopIds, String? area);
   Future<void> deleteStop(String stopId);
+
+  /// Undoes [deleteStop]: the stop comes back, on the days it was on.
+  Future<void> restoreStop(String stopId);
 
   // Stop Labels & Reference Images
   Future<List<Label>> getLabelsForStop(String stopId);
@@ -397,6 +404,35 @@ class DriftTripRepository implements TripRepository {
   }
 
   @override
+  Future<void> restoreDayBlock(String dayId) async {
+    final now = _now();
+    await _db.transaction(() async {
+      final day = await (_db.select(_db.tripDays)..where((tbl) => tbl.id.equals(dayId))).getSingleOrNull();
+      final deletedAt = day?.deletedAt;
+      if (deletedAt == null) return;
+      await (_db.update(_db.tripDays)..where((tbl) => tbl.id.equals(dayId))).write(
+        TripDaysCompanion(
+          deletedAt: const Value(null),
+          updatedAt: Value(now),
+          updatedBy: Value(_currentUserId),
+          syncStatus: const Value(1),
+        ),
+      );
+      // Only the items deleted with the day, which carry its deletion time.
+      await (_db.update(_db.scheduleItems)
+            ..where((tbl) => tbl.dayId.equals(dayId) & tbl.deletedAt.equalsValue(deletedAt)))
+          .write(
+        ScheduleItemsCompanion(
+          deletedAt: const Value(null),
+          updatedAt: Value(now),
+          updatedBy: Value(_currentUserId),
+          syncStatus: const Value(1),
+        ),
+      );
+    });
+  }
+
+  @override
   Future<void> swapDayBlocks(String dayIdA, String dayIdB) async {
     await _db.transaction(() async {
       final dayA = await (_db.select(_db.tripDays)..where((tbl) => tbl.id.equals(dayIdA))).getSingle();
@@ -684,6 +720,35 @@ class DriftTripRepository implements TripRepository {
       await (_db.update(_db.scheduleItems)..where((tbl) => tbl.stopId.equals(stopId) & tbl.deletedAt.isNull())).write(
         ScheduleItemsCompanion(
           deletedAt: Value(now),
+          updatedAt: Value(now),
+          updatedBy: Value(_currentUserId),
+          syncStatus: const Value(1),
+        ),
+      );
+    });
+  }
+
+  @override
+  Future<void> restoreStop(String stopId) async {
+    final now = _now();
+    await _db.transaction(() async {
+      final stop = await (_db.select(_db.stops)..where((tbl) => tbl.id.equals(stopId))).getSingleOrNull();
+      final deletedAt = stop?.deletedAt;
+      if (deletedAt == null) return;
+      await (_db.update(_db.stops)..where((tbl) => tbl.id.equals(stopId))).write(
+        StopsCompanion(
+          deletedAt: const Value(null),
+          updatedAt: Value(now),
+          updatedBy: Value(_currentUserId),
+          syncStatus: const Value(1),
+        ),
+      );
+      // Only the items deleted with the stop, which carry its deletion time.
+      await (_db.update(_db.scheduleItems)
+            ..where((tbl) => tbl.stopId.equals(stopId) & tbl.deletedAt.equalsValue(deletedAt)))
+          .write(
+        ScheduleItemsCompanion(
+          deletedAt: const Value(null),
           updatedAt: Value(now),
           updatedBy: Value(_currentUserId),
           syncStatus: const Value(1),

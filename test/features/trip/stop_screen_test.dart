@@ -121,6 +121,7 @@ void main() {
       tester.view.devicePixelRatio = 3;
       addTearDown(tester.view.reset);
       final router = GoRouter(initialLocation: location, routes: [
+        GoRoute(path: '/trips/:tripId', builder: (_, s) => Scaffold(body: Text('plan of ${s.pathParameters['tripId']}'))),
         GoRoute(path: '/trips/:tripId/stops', builder: (_, s) => TripStopsScreen(tripId: s.pathParameters['tripId']!)),
         GoRoute(
           path: '/trips/:tripId/stops/:stopId',
@@ -296,6 +297,29 @@ void main() {
 
       expect((await trips.getLabelsForStop(stop.id)).single.name, 'Uji');
       expect(await places.getLabelsForPlace('p1'), isEmpty);
+      await disposeApp(tester);
+    });
+
+    testWidgets('a removed stop goes at once, and Undo puts it back on its day', (tester) async {
+      final (trip, stop) = await uji();
+      final itemBefore = (await trips.getScheduleItemsForTrip(trip.id)).single;
+      await pump(tester, '/trips/${trip.id}/stops/${stop.id}');
+
+      await tester.tap(find.byTooltip('More'));
+      await tester.pumpAndSettle();
+      await tester.tap(find.text('Remove from the trip'));
+      await tester.pumpAndSettle();
+      expect(find.text('plan of ${trip.id}'), findsOneWidget, reason: 'no dialog; back on the plan');
+      expect(await trips.getStopsForTrip(trip.id), isEmpty);
+      expect(find.text('Removed Uji Bridge.'), findsOneWidget);
+
+      await tester.tap(find.text('Undo'));
+      await tester.pumpAndSettle();
+      expect((await trips.getStopsForTrip(trip.id)).single.id, stop.id);
+      final item = (await trips.getScheduleItemsForTrip(trip.id)).single;
+      expect((item.id, item.dayId, item.fixedTime), (itemBefore.id, itemBefore.dayId, itemBefore.fixedTime));
+      expect((await places.getPlace('p1')), isNotNull, reason: 'the library is not touched');
+      await tester.pump(const Duration(seconds: 7));
       await disposeApp(tester);
     });
 

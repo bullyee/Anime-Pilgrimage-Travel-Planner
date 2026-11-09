@@ -9,6 +9,7 @@ import '../../../core/utils/app_result.dart';
 import '../../../core/utils/schedule_logic.dart';
 import '../../../shared/theme/app_theme.dart';
 import '../../../shared/widgets/name_dialog.dart';
+import '../../../shared/widgets/undo_snack_bar.dart';
 import '../../sharing/providers/group_sharing_providers.dart';
 import '../../trip/providers/trip_providers.dart';
 import '../../trip/screens/trip_stops_screen.dart' show openAddStopsSheet;
@@ -264,7 +265,19 @@ class _DayPlannerState extends ConsumerState<DayPlanner> {
       _report(const Failure('Move this day\'s stops first, or put them back in the backlog.'));
       return;
     }
-    _report(await _controller.removeDay(widget.tripId, day.day.id), ok: 'Removed ${dayLabel(day)}.');
+    final controller = _controller;
+    final messenger = ScaffoldMessenger.of(context);
+    final result = await controller.removeDay(widget.tripId, day.day.id);
+    switch (result) {
+      case Success(value: final dated):
+        showUndoSnackBar(messenger, 'Removed ${dayName(day)}.', onUndo: () async {
+          if (await controller.restoreDay(widget.tripId, day.day.id, dated: dated) case Failure(:final error)) {
+            messenger.showSnackBar(SnackBar(content: Text(error)));
+          }
+        });
+      case Failure():
+        _report(result);
+    }
   }
 
   void _showDayFromGrid(PlannerView view, {PlannerDay? day, bool backlog = false}) {

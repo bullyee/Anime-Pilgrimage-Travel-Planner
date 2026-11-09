@@ -131,6 +131,11 @@ class TripStopsController extends Notifier<AsyncValue<void>> {
   Future<AppResult<void>> removeStop(String stopId) =>
       _run(() => ref.read(tripRepositoryProvider).deleteStop(stopId));
 
+  /// Undoes [removeStop]: the stop comes back, on the days it was on. Like
+  /// any change it syncs to a shared trip, so it comes back for everyone.
+  Future<AppResult<void>> restoreStop(String stopId) =>
+      _run(() => ref.read(tripRepositoryProvider).restoreStop(stopId));
+
   Future<AppResult<T>> _run<T>(Future<T> Function() action) async {
     state = const AsyncLoading();
     try {

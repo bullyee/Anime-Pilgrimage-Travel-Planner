@@ -123,6 +123,47 @@ void main() {
       expect(await tripRepo.getScheduleItemsForTrip(trip.id), isEmpty);
     });
 
+    test('restoreDayBlock brings back the day and only the items deleted with it', () async {
+      final trip = await tripRepo.createTrip(title: 'Restore Day Test', ownerId: 'user_1', dayCount: 2);
+      final days = await tripRepo.getDaysForTrip(trip.id);
+      final a = await tripRepo.createTripOnlySpot(tripId: trip.id, name: 'A', lat: 0, lng: 0, addedBy: 'user_1');
+      final b = await tripRepo.createTripOnlySpot(tripId: trip.id, name: 'B', lat: 0, lng: 0, addedBy: 'user_1');
+      final kept = await tripRepo.scheduleStop(tripId: trip.id, stopId: a.id, dayId: days[0].id);
+      final earlier = await tripRepo.scheduleStop(tripId: trip.id, stopId: b.id, dayId: days[0].id);
+      // Taken off the day before the day went: it stays off.
+      await tripRepo.deleteScheduleItem(earlier.id);
+      await tripRepo.deleteDayBlock(days[0].id);
+      await (db.update(db.tripDays)..where((d) => d.id.equals(days[0].id))).write(const TripDaysCompanion(syncStatus: Value(0)));
+
+      await tripRepo.restoreDayBlock(days[0].id);
+
+      final restored = await tripRepo.getDaysForTrip(trip.id);
+      expect(restored.map((d) => d.id), [days[0].id, days[1].id], reason: 'back in its place');
+      expect(restored.first.syncStatus, 1, reason: 'the restore syncs like any change');
+      expect((await tripRepo.getScheduleItemsForTrip(trip.id)).map((i) => i.id), [kept.id]);
+    });
+
+    test('restoreStop brings back the stop on the days it was on', () async {
+      final trip = await tripRepo.createTrip(title: 'Restore Stop Test', ownerId: 'user_1', dayCount: 2);
+      final days = await tripRepo.getDaysForTrip(trip.id);
+      final stop = await tripRepo.createTripOnlySpot(tripId: trip.id, name: 'A', lat: 0, lng: 0, addedBy: 'user_1');
+      final item = await tripRepo.scheduleStop(tripId: trip.id, stopId: stop.id, dayId: days[1].id, fixedTime: 600);
+      final before = (await tripRepo.getStop(stop.id))!.updatedAt;
+
+      await tripRepo.deleteStop(stop.id);
+      expect(await tripRepo.getStopsForTrip(trip.id), isEmpty);
+      await tripRepo.restoreStop(stop.id);
+
+      final back = (await tripRepo.getStopsForTrip(trip.id)).single;
+      expect(back.id, stop.id);
+      expect(back.deletedAt, isNull);
+      expect(back.updatedAt.isAfter(before), isTrue, reason: 'newer than the deletion, so it wins on sync');
+      final items = await tripRepo.getScheduleItemsForTrip(trip.id);
+      expect(items.single.id, item.id);
+      expect(items.single.dayId, days[1].id);
+      expect(items.single.fixedTime, 600);
+    });
+
     test('addPlaceToTrip copies place facts, reference images and labels', () async {
       // 1. Create a Place with labels and reference image
       final animeLabel = await placeRepo.getOrCreateLabel(kind: 'anime', name: 'Hyouka', bangumiId: '32000');

@@ -6,6 +6,7 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:trip_planner/core/database/database.dart';
 import 'package:trip_planner/features/sync/services/firestore_sync_v2_service.dart';
 import 'package:trip_planner/features/sync/services/sync_engine_service_v2.dart';
+import 'package:trip_planner/features/trip/repositories/trip_repository.dart';
 
 class FakeFirestoreSyncV2Service implements FirestoreSyncV2Service {
   final Map<String, Map<String, dynamic>> trips = {};
@@ -695,6 +696,88 @@ void main() {
 
       final localTrip = await (db.select(db.trips)..where((t) => t.id.equals('trip_lww'))).getSingle();
       expect(localTrip.title, 'Local Newer Title'); // Local was preserved!
+    });
+  });
+
+  group('SyncEngineServiceV2 - Undo a deletion', () {
+    Future<void> until(bool Function() done) async {
+      for (var i = 0; i < 40 && !done(); i++) {
+        await Future.delayed(const Duration(milliseconds: 50));
+      }
+    }
+
+    test('a removed stop that is restored goes up live again and comes back on the other phones', () async {
+      // Alice's phone: a shared trip with one stop on its day.
+      syncEngine.startSync();
+      final repo = DriftTripRepository(db, null, currentUserId);
+      final now = DateTime.now();
+      await db.into(db.trips).insert(TripsCompanion.insert(
+            id: 'trip_u',
+            title: 'Uji',
+            ownerId: currentUserId,
+            sharing: const Value('group'),
+            updatedAt: Value(now),
+            syncStatus: const Value(1),
+          ));
+      await db.into(db.tripDays).insert(TripDaysCompanion.insert(
+            id: 'day_u',
+            tripId: 'trip_u',
+            sortKey: 'a0',
+            updatedAt: Value(now),
+            syncStatus: const Value(1),
+          ));
+      final stop = await repo.createTripOnlySpot(tripId: 'trip_u', name: 'Bridge', lat: 34.9, lng: 135.8, addedBy: currentUserId);
+      final item = await repo.scheduleStop(tripId: 'trip_u', stopId: stop.id, dayId: 'day_u');
+      Map<String, dynamic>? cloudStop() => fakeFirestore.tripStops['trip_u']?[stop.id];
+      Map<String, dynamic>? cloudItem() => fakeFirestore.tripScheduleItems['trip_u']?[item.id];
+      await until(() => cloudItem() != null);
+      expect(cloudStop()!['deletedAt'], isNull);
+
+      // Removed: the tombstones go up.
+      await repo.deleteStop(stop.id);
+      await until(() => cloudItem()!['deletedAt'] != null);
+      expect(cloudStop()!['deletedAt'], isNotNull);
+      final tombstone = Map<String, dynamic>.of(cloudStop()!);
+      final itemTombstone = Map<String, dynamic>.of(cloudItem()!);
+
+      // Undo: the stop and its place on the day go up live, newer than the tombstones.
+      await repo.restoreStop(stop.id);
+      await until(() => cloudItem()!['deletedAt'] == null);
+      expect(cloudStop()!['deletedAt'], isNull);
+      expect((cloudStop()!['updatedAt'] as DateTime).isAfter(tombstone['updatedAt'] as DateTime), isTrue);
+      expect(cloudItem()!['dayId'], 'day_u');
+      expect((await (db.select(db.stops)..where((s) => s.id.equals(stop.id))).getSingle()).syncStatus, 0);
+
+      // Bob's phone saw the deletion, then gets the restore.
+      driftRuntimeOptions.dontWarnAboutMultipleDatabases = true;
+      final bobDb = AppDatabase.forTesting(NativeDatabase.memory());
+      final bobCloud = FakeFirestoreSyncV2Service();
+      final bob = SyncEngineServiceV2(localDb: bobDb, firestoreSync: bobCloud, currentUserId: 'user_bob');
+      addTearDown(() async {
+        bob.stopSync();
+        await bobDb.close();
+      });
+      bob.startSync();
+      bobCloud.emitUserTrips([
+        {...fakeFirestore.trips['trip_u']!, 'members': [currentUserId, 'user_bob']},
+      ]);
+      await Future.delayed(const Duration(milliseconds: 100));
+      bobCloud.emitDays('trip_u', fakeFirestore.tripDays['trip_u']!.values.toList());
+      bobCloud.emitStops('trip_u', [tombstone]);
+      bobCloud.emitScheduleItems('trip_u', [itemTombstone]);
+      await Future.delayed(const Duration(milliseconds: 100));
+      Future<Stop> bobStop() => (bobDb.select(bobDb.stops)..where((s) => s.id.equals(stop.id))).getSingle();
+      Future<ScheduleItem> bobItem() =>
+          (bobDb.select(bobDb.scheduleItems)..where((i) => i.id.equals(item.id))).getSingle();
+      expect((await bobStop()).deletedAt, isNotNull);
+      expect((await bobItem()).deletedAt, isNotNull);
+
+      bobCloud.emitStops('trip_u', [cloudStop()!]);
+      bobCloud.emitScheduleItems('trip_u', [cloudItem()!]);
+      await Future.delayed(const Duration(milliseconds: 100));
+      expect((await bobStop()).deletedAt, isNull);
+      expect((await bobItem()).deletedAt, isNull);
+      expect((await bobItem()).dayId, 'day_u');
     });
   });
 

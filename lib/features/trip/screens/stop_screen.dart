@@ -7,6 +7,7 @@ import '../../../core/utils/app_result.dart';
 import '../../../core/utils/schedule_logic.dart';
 import '../../../shared/theme/app_theme.dart';
 import '../../../shared/widgets/name_dialog.dart';
+import '../../../shared/widgets/undo_snack_bar.dart';
 import '../../camera/services/anime_camera_launcher.dart';
 import '../../library/controllers/library_controller.dart';
 import '../../library/controllers/place_controller.dart';
@@ -443,30 +444,25 @@ class _StopScreenState extends ConsumerState<StopScreen> {
           SnackBarAction(label: 'Undo', onPressed: () => _planner.restoreItem(itemId)),
         );
       case 'remove':
-        final confirmed = await showDialog<bool>(
-          context: context,
-          builder: (dialogContext) => AlertDialog(
-            title: Text('Remove “${stop.name}”?'),
-            content: Text(slot == null
-                ? 'It goes for everyone in the trip. Your library is not changed.'
-                : 'It goes for everyone in the trip, and comes off ${dayName(slot.day)}. Your library is not changed.'),
-            actions: [
-              TextButton(onPressed: () => Navigator.pop(dialogContext, false), child: const Text('Cancel')),
-              FilledButton(onPressed: () => Navigator.pop(dialogContext, true), child: const Text('Remove')),
-            ],
-          ),
-        );
-        if (confirmed != true || !mounted) return;
-        final result = await _stops.removeStop(stop.id);
+        // No confirmation: Undo brings it back, on its day, for everyone.
+        final stops = _stops;
+        final messenger = ScaffoldMessenger.of(context);
+        final result = await stops.removeStop(stop.id);
         if (!mounted) return;
-        if (result is Success) {
-          if (context.canPop()) {
-            context.pop();
-          } else {
-            context.go('/trips/$_tripId');
-          }
+        if (result is Failure) {
+          _report(result);
+          return;
         }
-        _report(result, 'Removed ${stop.name}.');
+        if (context.canPop()) {
+          context.pop();
+        } else {
+          context.go('/trips/$_tripId');
+        }
+        showUndoSnackBar(messenger, 'Removed ${stop.name}.', onUndo: () async {
+          if (await stops.restoreStop(stop.id) case Failure(:final error)) {
+            messenger.showSnackBar(SnackBar(content: Text(error)));
+          }
+        });
     }
   }
 

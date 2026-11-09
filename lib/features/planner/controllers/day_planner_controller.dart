@@ -183,15 +183,31 @@ class DayPlannerController extends Notifier<AsyncValue<void>> {
   }
 
   /// Removes a day, with anything still on it. Removing a dated day makes
-  /// the trip one day shorter.
-  Future<AppResult<void>> removeDay(String tripId, String dayId) {
+  /// the trip one day shorter. Returns whether it was a dated day, which
+  /// [restoreDay] needs.
+  Future<AppResult<bool>> removeDay(String tripId, String dayId) {
     return _run(() async {
       final repo = ref.read(tripRepositoryProvider);
       final trip = (await repo.getTrip(tripId))!;
       final index = (await repo.getDaysForTrip(tripId)).indexWhere((d) => d.id == dayId);
       await repo.deleteDayBlock(dayId);
-      if (index >= 0 && index < trip.dayCount) {
+      final dated = index >= 0 && index < trip.dayCount;
+      if (dated) {
         await repo.updateTrip(TripsCompanion(id: Value(tripId), dayCount: Value(trip.dayCount - 1)));
+      }
+      return dated;
+    });
+  }
+
+  /// Undoes [removeDay]: the day comes back in its place with what was on
+  /// it, and a [dated] day makes the trip one day longer again.
+  Future<AppResult<void>> restoreDay(String tripId, String dayId, {required bool dated}) {
+    return _run(() async {
+      final repo = ref.read(tripRepositoryProvider);
+      await repo.restoreDayBlock(dayId);
+      if (dated) {
+        final trip = (await repo.getTrip(tripId))!;
+        await repo.updateTrip(TripsCompanion(id: Value(tripId), dayCount: Value(trip.dayCount + 1)));
       }
     });
   }
