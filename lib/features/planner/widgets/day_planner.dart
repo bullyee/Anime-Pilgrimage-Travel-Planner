@@ -17,6 +17,23 @@ import 'planner_drag.dart';
 import 'planner_grid.dart';
 import 'planner_sheets.dart';
 
+/// Asks a [DayPlanner] to show a stop: the carousel pages to its day, or to
+/// the backlog when it's on no day.
+class PlannerJump extends ChangeNotifier {
+  String? _stopId;
+
+  void toStop(String stopId) {
+    _stopId = stopId;
+    notifyListeners();
+  }
+
+  String? _take() {
+    final id = _stopId;
+    _stopId = null;
+    return id;
+  }
+}
+
 /// The Plan tab: one day at a time in a carousel, or all days in a grid.
 /// Nothing changes unless [editing] is on, except marking stops visited,
 /// which a viewer can't do either.
@@ -25,6 +42,7 @@ class DayPlanner extends ConsumerStatefulWidget {
   final bool grid;
   final bool editing;
   final ValueChanged<bool> onGridChanged;
+  final PlannerJump? jump;
 
   const DayPlanner({
     super.key,
@@ -32,6 +50,7 @@ class DayPlanner extends ConsumerStatefulWidget {
     required this.grid,
     required this.editing,
     required this.onGridChanged,
+    this.jump,
   });
 
   @override
@@ -58,6 +77,9 @@ class _DayPlannerState extends ConsumerState<DayPlanner> {
   String? _focusDayId;
   bool _focusBacklog = false;
 
+  /// A stop to show, from [DayPlanner.jump], once the plan is loaded.
+  String? _jumpStopId;
+
   final _pointers = <int, Offset>{};
   double? _pinchStart;
   bool _pinchDone = false;
@@ -68,11 +90,23 @@ class _DayPlannerState extends ConsumerState<DayPlanner> {
   void initState() {
     super.initState();
     _drag.addListener(_onDragChanged);
+    widget.jump?.addListener(_onJump);
+    // Asked for before this planner was built.
+    _jumpStopId = widget.jump?._take();
+  }
+
+  void _onJump() {
+    final stopId = widget.jump?._take();
+    if (stopId != null) setState(() => _jumpStopId = stopId);
   }
 
   @override
   void didUpdateWidget(DayPlanner old) {
     super.didUpdateWidget(old);
+    if (old.jump != widget.jump) {
+      old.jump?.removeListener(_onJump);
+      widget.jump?.addListener(_onJump);
+    }
     if (old.grid && !widget.grid) {
       // Coming back from the grid: the carousel is rebuilt at the remembered page.
       _pages.dispose();
@@ -83,6 +117,7 @@ class _DayPlannerState extends ConsumerState<DayPlanner> {
   @override
   void dispose() {
     _ticker?.cancel();
+    widget.jump?.removeListener(_onJump);
     _drag.removeListener(_onDragChanged);
     _drag.dispose();
     _pages.dispose();
@@ -247,6 +282,25 @@ class _DayPlannerState extends ConsumerState<DayPlanner> {
     _pages = PageController(viewportFraction: 0.88, initialPage: _page);
   }
 
+  /// Turns a stop asked for by [DayPlanner.jump] into its day, or the
+  /// backlog, to page to; from the grid, it goes back to one day at a time.
+  void _resolveJump(PlannerView view) {
+    final stopId = _jumpStopId;
+    if (stopId == null) return;
+    _jumpStopId = null;
+    final day = view.days.where((d) => d.items.any((it) => it.stop.id == stopId)).firstOrNull;
+    if (day != null) {
+      _focusDayId = day.day.id;
+      _page = day.index;
+    } else if (view.backlog.any((s) => s.id == stopId)) {
+      _focusBacklog = true;
+      _page = view.days.length + (widget.editing ? 1 : 0);
+    } else {
+      return;
+    }
+    if (widget.grid) WidgetsBinding.instance.addPostFrameCallback((_) => widget.onGridChanged(false));
+  }
+
   /// Moves the carousel to a day that was just added or opened, once it's there.
   void _applyFocus(PlannerView view) {
     final pageCount = view.days.length + (widget.editing ? 2 : 1);
@@ -278,6 +332,7 @@ class _DayPlannerState extends ConsumerState<DayPlanner> {
           _startPicked = true;
           _startAtToday(view);
         }
+        _resolveJump(view);
         if (!widget.grid) _applyFocus(view);
         return Listener(
           onPointerDown: _onPointerDown,

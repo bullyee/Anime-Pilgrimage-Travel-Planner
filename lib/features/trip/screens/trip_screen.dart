@@ -6,6 +6,7 @@ import '../../../core/database/database.dart';
 import '../../../core/utils/app_result.dart';
 import '../../../shared/theme/app_theme.dart';
 import '../../planner/widgets/day_planner.dart';
+import '../../planner/widgets/planner_sheets.dart';
 import '../../sharing/models/trip_member.dart';
 import '../../sharing/providers/group_sharing_providers.dart';
 import '../controllers/trips_controller.dart';
@@ -16,12 +17,11 @@ import '../widgets/trip_members_button.dart';
 import '../widgets/trip_sync_icon.dart';
 import 'trip_members_screen.dart';
 import 'trip_overview_tab.dart';
-import 'trip_stops_tab.dart';
 
-enum TripTab { overview, plan, stops }
+enum TripTab { overview, plan }
 
-/// One trip, in three tabs: its overview, the day planner and its stops.
-/// Its people open from the avatars in the top bar.
+/// One trip, in two tabs: its overview and the day planner. Its stops open
+/// from the search action, and its people from the avatars in the top bar.
 class TripScreen extends ConsumerStatefulWidget {
   final String tripId;
   final TripTab initialTab;
@@ -37,6 +37,7 @@ class _TripScreenState extends ConsumerState<TripScreen> with SingleTickerProvid
       TabController(length: TripTab.values.length, vsync: this, initialIndex: widget.initialTab.index);
   bool _grid = false;
   bool _editing = false;
+  final _jump = PlannerJump();
 
   @override
   void initState() {
@@ -48,6 +49,7 @@ class _TripScreenState extends ConsumerState<TripScreen> with SingleTickerProvid
   void dispose() {
     _tabs.removeListener(_onTabChanged);
     _tabs.dispose();
+    _jump.dispose();
     super.dispose();
   }
 
@@ -81,7 +83,6 @@ class _TripScreenState extends ConsumerState<TripScreen> with SingleTickerProvid
       lastDate: dated.isEmpty ? null : dated.last.date,
     );
     final tab = TripTab.values[_tabs.index];
-    final hasStops = ref.watch(tripStopsProvider(trip.id)).valueOrNull?.isNotEmpty ?? false;
     final role = ref.watch(myTripRoleProvider(trip.id));
     final canEdit = ref.watch(canEditTripProvider(trip.id));
     // A viewer's role can change while they're on the page.
@@ -115,6 +116,11 @@ class _TripScreenState extends ConsumerState<TripScreen> with SingleTickerProvid
           ],
         ),
         actions: [
+          IconButton(
+            tooltip: 'Search stops',
+            icon: const Icon(Icons.search),
+            onPressed: () => _searchStops(context, trip.id, editing),
+          ),
           if (tab == TripTab.plan)
             IconButton(
               tooltip: _grid ? 'Show one day at a time' : 'Show all days',
@@ -147,7 +153,7 @@ class _TripScreenState extends ConsumerState<TripScreen> with SingleTickerProvid
         ],
         bottom: TabBar(
           controller: _tabs,
-          tabs: const [Tab(text: 'Overview'), Tab(text: 'Plan'), Tab(text: 'Stops')],
+          tabs: const [Tab(text: 'Overview'), Tab(text: 'Plan')],
         ),
       ),
       body: TabBarView(
@@ -182,21 +188,24 @@ class _TripScreenState extends ConsumerState<TripScreen> with SingleTickerProvid
                   grid: _grid,
                   editing: editing,
                   onGridChanged: (grid) => setState(() => _grid = grid),
+                  jump: _jump,
                 ),
               ),
             ],
           ),
-          TripStopsTab(tripId: trip.id),
         ],
       ),
-      floatingActionButton: tab == TripTab.stops && hasStops && canEdit
-          ? FloatingActionButton.extended(
-              onPressed: () => openAddStopsSheet(context, trip.id),
-              icon: const Icon(Icons.add),
-              label: const Text('Add stops'),
-            )
-          : null,
     );
+  }
+
+  /// Opens the trip's stops with a search field. A stop picked there is
+  /// shown on its day in the plan, with its sheet open.
+  Future<void> _searchStops(BuildContext context, String tripId, bool editing) async {
+    final stopId = await context.push<String>('/trips/$tripId/stops');
+    if (stopId == null || !context.mounted) return;
+    _showTab(TripTab.plan);
+    _jump.toStop(stopId);
+    await showPlannerStopSheet(context, tripId: tripId, stopId: stopId, editing: editing);
   }
 
   Future<void> _editTrip(BuildContext context, Trip trip) async {

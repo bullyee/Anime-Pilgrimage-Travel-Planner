@@ -24,6 +24,7 @@ import '../../features/trip/screens/stop_screen.dart';
 import '../../features/trip/screens/trip_list_screen.dart';
 import '../../features/trip/screens/trip_members_screen.dart';
 import '../../features/trip/screens/trip_screen.dart';
+import '../../features/trip/screens/trip_stops_screen.dart';
 
 part 'app_router.g.dart';
 
@@ -107,10 +108,7 @@ GoRouter router(RouterRef ref) {
       ),
       GoRoute(
         path: '/trips/:tripId/stops',
-        builder: (context, state) => TripScreen(
-          tripId: state.pathParameters['tripId']!,
-          initialTab: TripTab.stops,
-        ),
+        builder: (context, state) => TripStopsScreen(tripId: state.pathParameters['tripId']!),
       ),
       GoRoute(
         path: '/trips/:tripId/stops/add',

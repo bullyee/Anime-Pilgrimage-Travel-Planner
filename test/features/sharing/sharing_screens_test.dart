@@ -18,6 +18,7 @@ import 'package:trip_planner/features/sharing/screens/join_trip_screen.dart';
 import 'package:trip_planner/features/sharing/services/group_sharing_service.dart';
 import 'package:trip_planner/features/trip/screens/trip_members_screen.dart';
 import 'package:trip_planner/features/trip/screens/trip_screen.dart';
+import 'package:trip_planner/features/trip/screens/trip_stops_screen.dart';
 import 'package:trip_planner/features/trip/widgets/trip_card.dart';
 
 import 'fake_sharing_firestore.dart';
@@ -384,6 +385,7 @@ void main() {
   group('Trip page by role', () {
     GoRouter tripRouter() => GoRouter(initialLocation: '/trips/t1', routes: [
           GoRoute(path: '/trips/:tripId', builder: (_, s) => TripScreen(tripId: s.pathParameters['tripId']!)),
+          GoRoute(path: '/trips/:tripId/stops', builder: (_, s) => TripStopsScreen(tripId: s.pathParameters['tripId']!)),
         ]);
 
     Future<List<String>> menuItems(WidgetTester tester) async {
@@ -414,7 +416,7 @@ void main() {
       await tester.pumpAndSettle();
       expect(find.byTooltip('Edit the plan'), findsNothing);
 
-      await tester.tap(find.text('Stops'));
+      await tester.tap(find.byTooltip('Search stops'));
       await tester.pumpAndSettle();
       expect(find.text('Add stops'), findsNothing);
       expect(find.textContaining('once someone who can edit the trip adds them'), findsOneWidget);
@@ -449,7 +451,7 @@ void main() {
       await tester.tap(find.text('Plan'));
       await tester.pumpAndSettle();
       expect(find.byTooltip('Edit the plan'), findsNothing);
-      await tester.tap(find.text('Stops'));
+      await tester.tap(find.byTooltip('Search stops'));
       await tester.pumpAndSettle();
       expect(find.text('Add stops'), findsNothing);
       await done(tester);

@@ -42,18 +42,20 @@ void openAddStopsSheet(BuildContext context, String tripId) {
   );
 }
 
-/// The Stops tab: the trip's stops, what's planned on which day, and what
-/// isn't yet. The tab's add button lives on the trip screen.
-class TripStopsTab extends ConsumerStatefulWidget {
+/// The trip's stops with a search field, opened from the search action in
+/// the trip's top bar: what's planned on which day, and what isn't yet.
+/// Tapping a stop goes back to the plan, which shows it on its day; when
+/// there is no plan to go back to, it opens the stop's page.
+class TripStopsScreen extends ConsumerStatefulWidget {
   final String tripId;
 
-  const TripStopsTab({super.key, required this.tripId});
+  const TripStopsScreen({super.key, required this.tripId});
 
   @override
-  ConsumerState<TripStopsTab> createState() => _TripStopsTabState();
+  ConsumerState<TripStopsScreen> createState() => _TripStopsScreenState();
 }
 
-class _TripStopsTabState extends ConsumerState<TripStopsTab> {
+class _TripStopsScreenState extends ConsumerState<TripStopsScreen> {
   final _search = TextEditingController();
   String _query = '';
   StopOrder _order = StopOrder.plan;
@@ -64,87 +66,90 @@ class _TripStopsTabState extends ConsumerState<TripStopsTab> {
     super.dispose();
   }
 
+  void _open(String stopId) {
+    if (context.canPop()) {
+      context.pop(stopId);
+    } else {
+      context.push('/trips/${widget.tripId}/stops/$stopId');
+    }
+  }
+
   @override
   Widget build(BuildContext context) {
     final entriesAsync = ref.watch(tripStopEntriesProvider(widget.tripId));
+    final canEdit = ref.watch(canEditTripProvider(widget.tripId));
+    final entries = entriesAsync.valueOrNull ?? const <TripStopEntry>[];
 
-    return entriesAsync.when(
-      loading: () => const Center(child: CircularProgressIndicator()),
-      error: (e, _) => Center(child: Text("Couldn't load the stops: $e")),
-      data: (entries) {
-        if (entries.isEmpty) {
-          final canEdit = ref.watch(canEditTripProvider(widget.tripId));
-          return _EmptyStops(onAdd: canEdit ? () => openAddStopsSheet(context, widget.tripId) : null);
-        }
-        final q = _query.trim().toLowerCase();
-        final matching = q.isEmpty
-            ? entries
-            : entries
-                .where((e) =>
-                    e.stop.name.toLowerCase().contains(q) ||
-                    (e.stop.address?.toLowerCase().contains(q) ?? false))
-                .toList();
-        final shown = orderStopEntries(matching, _order);
-        return Align(
-          alignment: Alignment.topCenter,
-          child: ConstrainedBox(
-            constraints: const BoxConstraints(maxWidth: 720),
-            child: Column(
-              children: [
-                Padding(
-                  padding: const EdgeInsets.fromLTRB(16, 12, 8, 4),
-                  child: Row(
-                    children: [
-                      Expanded(
-                        child: TextField(
-                          controller: _search,
-                          decoration: InputDecoration(
-                            prefixIcon: const Icon(Icons.search),
-                            hintText: 'Search ${entries.length} stops',
-                            isDense: true,
-                            suffixIcon: _query.isEmpty
-                                ? null
-                                : IconButton(
-                                    tooltip: 'Clear search',
-                                    icon: const Icon(Icons.close),
-                                    onPressed: () => setState(() {
-                                      _search.clear();
-                                      _query = '';
-                                    }),
-                                  ),
-                          ),
-                          onChanged: (v) => setState(() => _query = v),
-                        ),
-                      ),
-                      PopupMenuButton<StopOrder>(
-                        tooltip: 'Sort stops',
-                        icon: const Icon(Icons.sort),
-                        onSelected: (order) => setState(() => _order = order),
-                        itemBuilder: (context) => [
-                          for (final order in StopOrder.values)
-                            CheckedPopupMenuItem(value: order, checked: order == _order, child: Text(order.label)),
-                        ],
-                      ),
-                    ],
-                  ),
-                ),
-                Expanded(
-                  child: shown.isEmpty
-                      ? const Center(child: Text('No stops match your search.'))
-                      : ListView.builder(
-                          padding: const EdgeInsets.only(bottom: 96),
-                          itemCount: shown.length,
-                          itemBuilder: (context, i) => _StopTile(
-                            entry: shown[i],
-                            onTap: () => context.push('/trips/${widget.tripId}/stops/${shown[i].stop.id}'),
-                          ),
-                        ),
-                ),
-              ],
-            ),
+    return Scaffold(
+      appBar: AppBar(
+        titleSpacing: 0,
+        title: TextField(
+          controller: _search,
+          autofocus: true,
+          decoration: InputDecoration(
+            hintText: entries.isEmpty ? 'Search stops' : 'Search ${entries.length} stops',
+            border: InputBorder.none,
           ),
-        );
-      },
+          onChanged: (v) => setState(() => _query = v),
+        ),
+        actions: [
+          if (_query.isNotEmpty)
+            IconButton(
+              tooltip: 'Clear search',
+              icon: const Icon(Icons.close),
+              onPressed: () => setState(() {
+                _search.clear();
+                _query = '';
+              }),
+            ),
+          PopupMenuButton<StopOrder>(
+            tooltip: 'Sort stops',
+            icon: const Icon(Icons.sort),
+            onSelected: (order) => setState(() => _order = order),
+            itemBuilder: (context) => [
+              for (final order in StopOrder.values)
+                CheckedPopupMenuItem(value: order, checked: order == _order, child: Text(order.label)),
+            ],
+          ),
+        ],
+      ),
+      floatingActionButton: canEdit && entries.isNotEmpty
+          ? FloatingActionButton.extended(
+              onPressed: () => openAddStopsSheet(context, widget.tripId),
+              icon: const Icon(Icons.add),
+              label: const Text('Add stops'),
+            )
+          : null,
+      body: entriesAsync.when(
+        loading: () => const Center(child: CircularProgressIndicator()),
+        error: (e, _) => Center(child: Text("Couldn't load the stops: $e")),
+        data: (entries) {
+          if (entries.isEmpty) {
+            return _EmptyStops(onAdd: canEdit ? () => openAddStopsSheet(context, widget.tripId) : null);
+          }
+          final q = _query.trim().toLowerCase();
+          final matching = q.isEmpty
+              ? entries
+              : entries
+                  .where((e) =>
+                      e.stop.name.toLowerCase().contains(q) ||
+                      (e.stop.address?.toLowerCase().contains(q) ?? false))
+                  .toList();
+          final shown = orderStopEntries(matching, _order);
+          if (shown.isEmpty) return const Center(child: Text('No stops match your search.'));
+          return Align(
+            alignment: Alignment.topCenter,
+            child: ConstrainedBox(
+              constraints: const BoxConstraints(maxWidth: 720),
+              child: ListView.builder(
+                padding: const EdgeInsets.only(top: 4, bottom: 96),
+                itemCount: shown.length,
+                itemBuilder: (context, i) => _StopTile(entry: shown[i], onTap: () => _open(shown[i].stop.id)),
+              ),
+            ),
+          );
+        },
+      ),
     );
   }
 }

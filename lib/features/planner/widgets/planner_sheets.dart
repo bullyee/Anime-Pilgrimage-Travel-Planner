@@ -7,6 +7,7 @@ import '../../../core/utils/app_result.dart';
 import '../../../core/utils/schedule_logic.dart';
 import '../../../shared/theme/app_theme.dart';
 import '../../sharing/providers/group_sharing_providers.dart';
+import '../../trip/screens/trip_stops_screen.dart' show openAddStopsSheet;
 import '../controllers/day_planner_controller.dart';
 import '../models/planner_view.dart';
 import '../providers/planner_providers.dart';
@@ -433,7 +434,7 @@ class _AddFromBacklogSheet extends ConsumerWidget {
               Padding(
                 padding: const EdgeInsets.fromLTRB(20, 8, 20, 16),
                 child: Text(
-                  'Every stop in this trip is on a day. Add more stops in the Stops tab.',
+                  'Every stop in this trip is on a day.',
                   style: theme.textTheme.bodyMedium?.copyWith(color: theme.colorScheme.onSurfaceVariant),
                 ),
               )
@@ -457,9 +458,21 @@ class _AddFromBacklogSheet extends ConsumerWidget {
               ),
             Padding(
               padding: const EdgeInsets.fromLTRB(20, 8, 20, 12),
-              child: Align(
-                alignment: Alignment.centerRight,
-                child: FilledButton(onPressed: () => Navigator.pop(context), child: const Text('Done')),
+              child: Row(
+                children: [
+                  TextButton.icon(
+                    onPressed: () {
+                      // The sheet's context is gone once it closes, so take the outer one first.
+                      final outer = Navigator.of(context).context;
+                      Navigator.pop(context);
+                      openAddStopsSheet(outer, tripId);
+                    },
+                    icon: const Icon(Icons.add_location_alt_outlined),
+                    label: const Text('Add stops'),
+                  ),
+                  const Spacer(),
+                  FilledButton(onPressed: () => Navigator.pop(context), child: const Text('Done')),
+                ],
               ),
             ),
           ],

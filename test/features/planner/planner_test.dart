@@ -14,6 +14,7 @@ import 'package:trip_planner/features/trip/controllers/trips_controller.dart';
 import 'package:trip_planner/features/trip/providers/trip_providers.dart';
 import 'package:trip_planner/features/trip/repositories/trip_repository.dart';
 import 'package:trip_planner/features/trip/screens/trip_screen.dart';
+import 'package:trip_planner/features/trip/screens/trip_stops_screen.dart';
 
 DateTime _utc(int y, int m, int d) => DateTime.utc(y, m, d);
 
@@ -229,6 +230,7 @@ void main() {
     Future<void> pump(WidgetTester tester, String tripId) async {
       final router = GoRouter(initialLocation: '/trips/$tripId', routes: [
         GoRoute(path: '/trips/:tripId', builder: (_, s) => TripScreen(tripId: s.pathParameters['tripId']!)),
+        GoRoute(path: '/trips/:tripId/stops', builder: (_, s) => TripStopsScreen(tripId: s.pathParameters['tripId']!)),
       ]);
       await tester.pumpWidget(ProviderScope(
         overrides: [databaseProvider.overrideWithValue(db), currentUserIdProvider.overrideWithValue('u1')],
@@ -333,6 +335,45 @@ void main() {
       await tester.pumpAndSettle();
       // Day 2 is the card in the middle, with Day 1 peeking in on the left.
       expect(tester.getTopLeft(find.text('DAY 2')).dx, lessThan(100));
+      await disposeApp(tester);
+    });
+
+    testWidgets('a stop found by searching is shown on its day, with its sheet open', (tester) async {
+      tester.view.physicalSize = const Size(1080, 2400);
+      tester.view.devicePixelRatio = 3;
+      addTearDown(tester.view.reset);
+      final r = DriftTripRepository(db);
+      final trip = await r.createTrip(title: 'Uji', ownerId: 'u1', startDate: '2027-04-29', dayCount: 3);
+      final days = await r.getDaysForTrip(trip.id);
+      final bridge = await r.createTripOnlySpot(tripId: trip.id, name: 'Bridge', lat: 0, lng: 0, addedBy: 'u1');
+      await r.createTripOnlySpot(tripId: trip.id, name: 'Shrine', lat: 0, lng: 0, addedBy: 'u1');
+      await r.scheduleStop(tripId: trip.id, stopId: bridge.id, dayId: days[2].id, fixedTime: 10 * 60);
+
+      await pump(tester, trip.id);
+      await tester.tap(find.byTooltip('Search stops'));
+      await tester.pumpAndSettle();
+      expect(find.text('Day 3 · 10:00'), findsOneWidget);
+      expect(find.text('Not on a day yet'), findsOneWidget);
+      await tester.enterText(find.byType(TextField), 'bri');
+      await tester.pumpAndSettle();
+      expect(find.text('Shrine'), findsNothing);
+      await tester.tap(find.text('Bridge'));
+      await tester.pumpAndSettle();
+
+      expect(find.text('Open stop page'), findsOneWidget);
+      await tester.tap(find.text('Done'));
+      await tester.pumpAndSettle();
+      // Day 3 is the card on screen, with Day 2 peeking in on the left.
+      expect(tester.getTopLeft(find.text('DAY 3')).dx, lessThan(100));
+
+      // A stop on no day is shown in the backlog.
+      await tester.tap(find.byTooltip('Search stops'));
+      await tester.pumpAndSettle();
+      await tester.tap(find.text('Shrine'));
+      await tester.pumpAndSettle();
+      await tester.tap(find.text('Done'));
+      await tester.pumpAndSettle();
+      expect(tester.getTopLeft(find.text('BACKLOG')).dx, lessThan(100));
       await disposeApp(tester);
     });
 

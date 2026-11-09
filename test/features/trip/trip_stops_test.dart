@@ -13,7 +13,7 @@ import 'package:trip_planner/features/trip/providers/trip_providers.dart';
 import 'package:trip_planner/features/trip/providers/trip_stop_providers.dart';
 import 'package:trip_planner/features/trip/repositories/trip_repository.dart';
 import 'package:trip_planner/features/trip/screens/library_picker_screen.dart';
-import 'package:trip_planner/features/trip/screens/trip_stops_tab.dart';
+import 'package:trip_planner/features/trip/screens/trip_stops_screen.dart';
 
 Future<void> _savePlace(AppDatabase db, String key, String name) => db.into(db.places).insert(
       PlacesCompanion.insert(placeKey: key, name: name, lat: 34.89, lng: 135.80, visibility: const Value('saved')),
@@ -179,7 +179,7 @@ void main() {
   group('screens', () {
     Future<void> pump(WidgetTester tester, String location) async {
       final router = GoRouter(initialLocation: location, routes: [
-        GoRoute(path: '/trips/:tripId/stops', builder: (_, s) => Scaffold(body: TripStopsTab(tripId: s.pathParameters['tripId']!))),
+        GoRoute(path: '/trips/:tripId/stops', builder: (_, s) => TripStopsScreen(tripId: s.pathParameters['tripId']!)),
         GoRoute(path: '/trips/:tripId/stops/add', builder: (_, s) => LibraryPickerScreen(tripId: s.pathParameters['tripId']!)),
         GoRoute(path: '/trips/:tripId/stops/new', builder: (_, _) => const Scaffold(body: Text('new spot'))),
       ]);

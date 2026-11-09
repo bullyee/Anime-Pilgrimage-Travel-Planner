@@ -463,7 +463,7 @@ class _StopScreenState extends ConsumerState<StopScreen> {
           if (context.canPop()) {
             context.pop();
           } else {
-            context.go('/trips/$_tripId?tab=stops');
+            context.go('/trips/$_tripId');
           }
         }
         _report(result, 'Removed ${stop.name}.');
