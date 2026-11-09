@@ -82,29 +82,44 @@ class LibraryBackupService {
     final payloadBytes = utf8.encode(jsonEncode(payload));
     archive.addFile(ArchiveFile('library.json', payloadBytes.length, payloadBytes));
 
-    // 3. Physical Photo Files
+    // 3. Physical Place Cover Files
+    for (final place in places) {
+      if (place.coverLocalPath != null && place.coverLocalPath!.isNotEmpty) {
+        final file = File(place.coverLocalPath!);
+        if (await file.exists()) {
+          final bytes = await file.readAsBytes();
+          final safeKey = place.placeKey.replaceAll(RegExp(r'[^a-zA-Z0-9_-]'), '_');
+          final filename = '${safeKey}_${p.basename(place.coverLocalPath!)}';
+          archive.addFile(ArchiveFile('covers/$filename', bytes.length, bytes));
+        }
+      }
+    }
+
+    // 4. Physical Photo Files (prefixed with photo.id to prevent filename collisions)
     for (final photo in photos) {
       final file = File(photo.localPath);
       if (await file.exists()) {
         final bytes = await file.readAsBytes();
-        final filename = p.basename(photo.localPath);
+        final safeId = photo.id.replaceAll(RegExp(r'[^a-zA-Z0-9_-]'), '_');
+        final filename = '${safeId}_${p.basename(photo.localPath)}';
         archive.addFile(ArchiveFile('photos/$filename', bytes.length, bytes));
       }
     }
 
-    // 4. Physical Reference Frame Files
+    // 5. Physical Reference Frame Files (prefixed with ref.id to prevent filename collisions)
     for (final ref in refImages) {
-      if (ref.localPath != null) {
+      if (ref.localPath != null && ref.localPath!.isNotEmpty) {
         final file = File(ref.localPath!);
         if (await file.exists()) {
           final bytes = await file.readAsBytes();
-          final filename = p.basename(ref.localPath!);
+          final safeId = ref.id.replaceAll(RegExp(r'[^a-zA-Z0-9_-]'), '_');
+          final filename = '${safeId}_${p.basename(ref.localPath!)}';
           archive.addFile(ArchiveFile('frames/$filename', bytes.length, bytes));
         }
       }
     }
 
-    // 5. Encode and Save Zip
+    // 6. Encode and Save Zip
     final zipEncoder = ZipEncoder();
     final encoded = zipEncoder.encode(archive);
     if (encoded == null) {
@@ -140,6 +155,7 @@ class LibraryBackupService {
 
     ArchiveFile? manifestFile;
     ArchiveFile? payloadFile;
+    final coverFiles = <String, List<int>>{};
     final photoFiles = <String, List<int>>{};
     final frameFiles = <String, List<int>>{};
 
@@ -148,6 +164,8 @@ class LibraryBackupService {
         manifestFile = file;
       } else if (file.name == 'library.json') {
         payloadFile = file;
+      } else if (file.name.startsWith('covers/') && !file.isDirectory) {
+        coverFiles[p.basename(file.name)] = file.content as List<int>;
       } else if (file.name.startsWith('photos/') && !file.isDirectory) {
         photoFiles[p.basename(file.name)] = file.content as List<int>;
       } else if (file.name.startsWith('frames/') && !file.isDirectory) {
@@ -163,10 +181,20 @@ class LibraryBackupService {
     final payloadJson = jsonDecode(payloadStr) as Map<String, dynamic>;
 
     final docsDir = baseStorageDir ?? await _getDocsDir();
+    final targetCoversDir = Directory(p.join(docsDir.path, 'app_covers'));
     final targetPhotosDir = Directory(p.join(docsDir.path, 'app_photos'));
     final targetFramesDir = Directory(p.join(docsDir.path, 'app_frames'));
+    await targetCoversDir.create(recursive: true);
     await targetPhotosDir.create(recursive: true);
     await targetFramesDir.create(recursive: true);
+
+    // Write physical cover files
+    final coverPathMap = <String, String>{};
+    for (final entry in coverFiles.entries) {
+      final targetPath = p.join(targetCoversDir.path, entry.key);
+      await File(targetPath).writeAsBytes(entry.value);
+      coverPathMap[entry.key] = targetPath;
+    }
 
     // Write physical photo files
     final photoPathMap = <String, String>{};
@@ -201,17 +229,65 @@ class LibraryBackupService {
         map['createdAt'] ??= DateTime.now().toIso8601String();
         map['updatedAt'] ??= DateTime.now().toIso8601String();
         final place = Place.fromJson(map);
-        await db.into(db.places).insertOnConflictUpdate(place.toCompanion(true));
+        String? restoredCoverPath = place.coverLocalPath;
+        if (place.coverLocalPath != null && place.coverLocalPath!.isNotEmpty) {
+          final safeKey = place.placeKey.replaceAll(RegExp(r'[^a-zA-Z0-9_-]'), '_');
+          final base = p.basename(place.coverLocalPath!);
+          final prefixedName = '${safeKey}_$base';
+          restoredCoverPath = coverPathMap[prefixedName] ?? coverPathMap[base] ?? place.coverLocalPath;
+        }
+        final companion = place.copyWith(coverLocalPath: Value(restoredCoverPath)).toCompanion(true);
+        await db.into(db.places).insertOnConflictUpdate(companion);
         placesCount++;
       }
 
-      // 2. Labels (Parent)
+      // 2. Labels (Parent) — deduplicate against secondary unique indexes
+      //    (idx_labels_bangumi_id and idx_labels_kind_name) and build ID remap table.
+      final existingLabels = await db.select(db.labels).get();
+      final byBangumiId = <String, Label>{
+        for (final l in existingLabels)
+          if (l.bangumiId != null && l.bangumiId!.isNotEmpty) l.bangumiId!: l,
+      };
+      final byKindAndName = <(String, String), Label>{
+        for (final l in existingLabels)
+          if (l.kind == 'tag' || l.kind == 'region') (l.kind, l.name): l,
+      };
+      final labelIdMap = <String, String>{};
+
       final rawLabels = (payloadJson['labels'] as List?) ?? const [];
       for (final raw in rawLabels) {
         final map = Map<String, dynamic>.from(raw as Map);
         map['createdAt'] ??= DateTime.now().toIso8601String();
         final label = Label.fromJson(map);
-        await db.into(db.labels).insertOnConflictUpdate(label.toCompanion(true));
+
+        Label? matchedExisting;
+        if (label.bangumiId != null && label.bangumiId!.isNotEmpty) {
+          matchedExisting = byBangumiId[label.bangumiId!];
+        }
+        if (matchedExisting == null && (label.kind == 'tag' || label.kind == 'region')) {
+          matchedExisting = byKindAndName[(label.kind, label.name)];
+        }
+
+        if (matchedExisting != null && matchedExisting.id != label.id) {
+          // Remap imported label ID to existing local label ID to avoid UNIQUE constraint crash
+          // and preserve existing local associations.
+          labelIdMap[label.id] = matchedExisting.id;
+          await (db.update(db.labels)..where((l) => l.id.equals(matchedExisting!.id))).write(
+            LabelsCompanion(
+              name: Value(label.name),
+              bangumiId: Value(label.bangumiId ?? matchedExisting.bangumiId),
+            ),
+          );
+        } else {
+          labelIdMap[label.id] = label.id;
+          await db.into(db.labels).insertOnConflictUpdate(label.toCompanion(true));
+          if (label.bangumiId != null && label.bangumiId!.isNotEmpty) {
+            byBangumiId[label.bangumiId!] = label;
+          }
+          if (label.kind == 'tag' || label.kind == 'region') {
+            byKindAndName[(label.kind, label.name)] = label;
+          }
+        }
         labelsCount++;
       }
 
@@ -219,7 +295,9 @@ class LibraryBackupService {
       final rawPlaceLabels = (payloadJson['placeLabels'] as List?) ?? const [];
       for (final raw in rawPlaceLabels) {
         final pl = PlaceLabel.fromJson(raw as Map<String, dynamic>);
-        await db.into(db.placeLabels).insertOnConflictUpdate(pl.toCompanion(true));
+        final mappedLabelId = labelIdMap[pl.labelId] ?? pl.labelId;
+        final remapped = pl.copyWith(labelId: mappedLabelId);
+        await db.into(db.placeLabels).insertOnConflictUpdate(remapped.toCompanion(true));
         placeLabelsCount++;
       }
 
@@ -242,8 +320,10 @@ class LibraryBackupService {
         map['keepAsIs'] ??= false;
         map['createdAt'] ??= DateTime.now().toIso8601String();
         final photo = Photo.fromJson(map);
-        final filename = p.basename(photo.localPath);
-        final restoredLocalPath = photoPathMap[filename] ?? photo.localPath;
+        final safeId = photo.id.replaceAll(RegExp(r'[^a-zA-Z0-9_-]'), '_');
+        final base = p.basename(photo.localPath);
+        final prefixedName = '${safeId}_$base';
+        final restoredLocalPath = photoPathMap[prefixedName] ?? photoPathMap[base] ?? photo.localPath;
 
         final companion = photo.copyWith(localPath: restoredLocalPath).toCompanion(true);
         await db.into(db.photos).insertOnConflictUpdate(companion);
@@ -257,12 +337,22 @@ class LibraryBackupService {
         map['createdAt'] ??= DateTime.now().toIso8601String();
         final ref = NewReferenceImage.fromJson(map);
         String? restoredLocalPath;
-        if (ref.localPath != null) {
-          final filename = p.basename(ref.localPath!);
-          restoredLocalPath = framePathMap[filename] ?? ref.localPath;
+        if (ref.localPath != null && ref.localPath!.isNotEmpty) {
+          final safeId = ref.id.replaceAll(RegExp(r'[^a-zA-Z0-9_-]'), '_');
+          final base = p.basename(ref.localPath!);
+          final prefixedName = '${safeId}_$base';
+          restoredLocalPath = framePathMap[prefixedName] ?? framePathMap[base] ?? ref.localPath;
         }
+        final mappedAnimeLabelId = ref.animeLabelId != null
+            ? (labelIdMap[ref.animeLabelId!] ?? ref.animeLabelId)
+            : null;
 
-        final companion = ref.copyWith(localPath: Value(restoredLocalPath)).toCompanion(true);
+        final companion = ref
+            .copyWith(
+              localPath: Value(restoredLocalPath),
+              animeLabelId: Value(mappedAnimeLabelId),
+            )
+            .toCompanion(true);
         await db.into(db.newReferenceImages).insertOnConflictUpdate(companion);
         refImagesCount++;
       }

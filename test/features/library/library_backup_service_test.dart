@@ -243,4 +243,152 @@ void main() {
     expect(places.first.name, equals('Updated Name'));
     expect(places.first.chineseName, equals('更新後的名稱'));
   });
+
+  test('Adversarial: deduplicates labels by bangumiId and (kind, name) without UNIQUE constraint failure and remaps references', () async {
+    // 1. Source device DB has an anime label with bangumiId '115908' and a region label 'Kyoto'
+    await db.into(db.places).insert(
+          PlacesCompanion.insert(
+            placeKey: 'place_uji',
+            name: 'Uji Bridge',
+            lat: 34.89,
+            lng: 135.80,
+          ),
+        );
+    await db.into(db.labels).insert(
+          LabelsCompanion.insert(
+            id: 'old_anime_uuid',
+            kind: 'anime',
+            name: 'Hibike! Euphonium',
+            bangumiId: const Value('115908'),
+          ),
+        );
+    await db.into(db.labels).insert(
+          LabelsCompanion.insert(
+            id: 'old_region_uuid',
+            kind: 'region',
+            name: 'Kyoto',
+          ),
+        );
+    await db.into(db.placeLabels).insert(
+          PlaceLabelsCompanion.insert(placeKey: 'place_uji', labelId: 'old_anime_uuid'),
+        );
+    await db.into(db.placeLabels).insert(
+          PlaceLabelsCompanion.insert(placeKey: 'place_uji', labelId: 'old_region_uuid'),
+        );
+    await db.into(db.newReferenceImages).insert(
+          NewReferenceImagesCompanion.insert(
+            id: 'ref_uji',
+            placeKey: const Value('place_uji'),
+            animeLabelId: const Value('old_anime_uuid'),
+          ),
+        );
+
+    final exportPath = p.join(tempDir.path, 'label_dedup.pilgrimage');
+    final zipFile = await backupService.exportLibraryArchive(db, targetZipPath: exportPath);
+
+    // 2. Target device DB ALREADY has the same anime (bangumiId '115908') and region ('Kyoto') with DIFFERENT UUIDs
+    final targetDb = AppDatabase.forTesting(NativeDatabase.memory());
+    final targetStorageDir = Directory(p.join(tempDir.path, 'target_dedup_storage'));
+    await targetStorageDir.create(recursive: true);
+
+    try {
+      await targetDb.into(targetDb.labels).insert(
+            LabelsCompanion.insert(
+              id: 'new_device_anime_uuid',
+              kind: 'anime',
+              name: 'Sound! Euphonium',
+              bangumiId: const Value('115908'),
+            ),
+          );
+      await targetDb.into(targetDb.labels).insert(
+            LabelsCompanion.insert(
+              id: 'new_device_region_uuid',
+              kind: 'region',
+              name: 'Kyoto',
+            ),
+          );
+
+      // 3. Import must succeed without SqliteException(2067): UNIQUE constraint failed
+      final summary = await backupService.importLibraryArchive(
+        targetDb,
+        zipFile,
+        baseStorageDir: targetStorageDir,
+      );
+      expect(summary.placesImported, equals(1));
+      expect(summary.labelsImported, equals(2));
+      expect(summary.placeLabelsImported, equals(2));
+      expect(summary.referenceImagesImported, equals(1));
+
+      // Verify targetDb still has only 2 labels with the target device's UUIDs
+      final targetLabels = await targetDb.select(targetDb.labels).get();
+      expect(targetLabels.map((l) => l.id).toSet(), equals({'new_device_anime_uuid', 'new_device_region_uuid'}));
+
+      // Verify placeLabels and referenceImage animeLabelId were remapped to target device's UUIDs
+      final targetPlaceLabels = await targetDb.select(targetDb.placeLabels).get();
+      expect(
+        targetPlaceLabels.map((pl) => pl.labelId).toSet(),
+        equals({'new_device_anime_uuid', 'new_device_region_uuid'}),
+      );
+
+      final targetRef = await (targetDb.select(targetDb.newReferenceImages)..where((r) => r.id.equals('ref_uji'))).getSingle();
+      expect(targetRef.animeLabelId, equals('new_device_anime_uuid'));
+    } finally {
+      await targetDb.close();
+    }
+  });
+
+  test('Adversarial: preserves distinct photos with identical basenames and restores place coverLocalPath', () async {
+    final dirA = Directory(p.join(tempDir.path, 'dirA'))..createSync(recursive: true);
+    final dirB = Directory(p.join(tempDir.path, 'dirB'))..createSync(recursive: true);
+    final coverFile = File(p.join(tempDir.path, 'cover.jpg'))..writeAsBytesSync([1, 2, 3, 4]);
+    final photoFileA = File(p.join(dirA.path, 'IMG_0001.jpg'))..writeAsBytesSync([10, 20, 30]);
+    final photoFileB = File(p.join(dirB.path, 'IMG_0001.jpg'))..writeAsBytesSync([40, 50, 60, 70]);
+
+    await db.into(db.places).insert(
+          PlacesCompanion.insert(
+            placeKey: 'place_cover_test',
+            name: 'Cover Test Spot',
+            lat: 35.0,
+            lng: 135.0,
+            coverLocalPath: Value(coverFile.path),
+          ),
+        );
+    await db.into(db.photos).insert(
+          PhotosCompanion.insert(
+            id: 'photo_a',
+            placeKey: 'place_cover_test',
+            localPath: photoFileA.path,
+          ),
+        );
+    await db.into(db.photos).insert(
+          PhotosCompanion.insert(
+            id: 'photo_b',
+            placeKey: 'place_cover_test',
+            localPath: photoFileB.path,
+          ),
+        );
+
+    final exportPath = p.join(tempDir.path, 'collision_test.pilgrimage');
+    final zipFile = await backupService.exportLibraryArchive(db, targetZipPath: exportPath);
+
+    final targetDb = AppDatabase.forTesting(NativeDatabase.memory());
+    final targetStorageDir = Directory(p.join(tempDir.path, 'target_collision_storage'))..createSync(recursive: true);
+
+    try {
+      await backupService.importLibraryArchive(targetDb, zipFile, baseStorageDir: targetStorageDir);
+
+      final restoredPlace = await (targetDb.select(targetDb.places)..where((p) => p.placeKey.equals('place_cover_test'))).getSingle();
+      expect(restoredPlace.coverLocalPath, isNotNull);
+      expect(restoredPlace.coverLocalPath!.startsWith(targetStorageDir.path), isTrue);
+      expect(File(restoredPlace.coverLocalPath!).readAsBytesSync(), equals([1, 2, 3, 4]));
+
+      final restoredA = await (targetDb.select(targetDb.photos)..where((p) => p.id.equals('photo_a'))).getSingle();
+      final restoredB = await (targetDb.select(targetDb.photos)..where((p) => p.id.equals('photo_b'))).getSingle();
+      expect(restoredA.localPath, isNot(equals(restoredB.localPath)));
+      expect(File(restoredA.localPath).readAsBytesSync(), equals([10, 20, 30]));
+      expect(File(restoredB.localPath).readAsBytesSync(), equals([40, 50, 60, 70]));
+    } finally {
+      await targetDb.close();
+    }
+  });
 }
