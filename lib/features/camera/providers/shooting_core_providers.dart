@@ -22,6 +22,7 @@ class NearbyPlacesQuery {
   final double lng;
   final String? tripId;
   final String? dayId;
+  final double? deviceHeading;
   final double maxDistanceMeters;
 
   const NearbyPlacesQuery({
@@ -29,6 +30,7 @@ class NearbyPlacesQuery {
     required this.lng,
     this.tripId,
     this.dayId,
+    this.deviceHeading,
     this.maxDistanceMeters = 150.0,
   });
 
@@ -41,10 +43,11 @@ class NearbyPlacesQuery {
           lng == other.lng &&
           tripId == other.tripId &&
           dayId == other.dayId &&
+          deviceHeading == other.deviceHeading &&
           maxDistanceMeters == other.maxDistanceMeters;
 
   @override
-  int get hashCode => Object.hash(lat, lng, tripId, dayId, maxDistanceMeters);
+  int get hashCode => Object.hash(lat, lng, tripId, dayId, deviceHeading, maxDistanceMeters);
 }
 
 /// Provides list of [NearbyShootingPlace] candidates within range of the given coordinate.
@@ -58,6 +61,7 @@ final nearbyShootingPlacesProvider =
     lng: query.lng,
     tripId: query.tripId,
     dayId: query.dayId,
+    deviceHeading: query.deviceHeading,
     maxDistanceMeters: query.maxDistanceMeters,
   );
 });
@@ -68,3 +72,71 @@ final photosToEditStreamProvider = StreamProvider.autoDispose<List<PhotoToEditIt
   final service = ref.watch(pilgrimageShootingServiceProvider);
   return service.watchPhotosToEdit(db);
 });
+
+/// Query parameters for watching or fetching a pilgrimage route feed.
+///
+/// Riverpod equality is keyed on [tripId] and [dayId] so that stream subscriptions
+/// are not unnecessarily torn down and recreated on every GPS coordinate update
+/// or compass heading tick.
+class LiveFeedQuery {
+  final String? tripId;
+  final String? dayId;
+  final double? userLat;
+  final double? userLng;
+  final double? deviceHeading;
+
+  const LiveFeedQuery({
+    this.tripId,
+    this.dayId,
+    this.userLat,
+    this.userLng,
+    this.deviceHeading,
+  });
+
+  @override
+  bool operator ==(Object other) =>
+      identical(this, other) ||
+      other is LiveFeedQuery &&
+          runtimeType == other.runtimeType &&
+          tripId == other.tripId &&
+          dayId == other.dayId;
+
+  @override
+  int get hashCode => Object.hash(tripId, dayId);
+}
+
+/// Streams real-time [TodayPilgrimageFeed] for the pilgrimage route.
+final pilgrimageFeedStreamProvider =
+    StreamProvider.autoDispose.family<TodayPilgrimageFeed?, LiveFeedQuery>((ref, query) {
+  final db = ref.watch(databaseProvider);
+  final service = ref.watch(pilgrimageShootingServiceProvider);
+  return service.watchPilgrimageFeed(
+    db,
+    tripId: query.tripId,
+    dayId: query.dayId,
+    userLat: query.userLat,
+    userLng: query.userLng,
+    deviceHeading: query.deviceHeading,
+  );
+});
+
+/// Legacy alias for [pilgrimageFeedStreamProvider].
+final todayPilgrimageFeedStreamProvider = pilgrimageFeedStreamProvider;
+
+/// Fetches one-shot [TodayPilgrimageFeed] snapshot for the pilgrimage route.
+final pilgrimageFeedProvider =
+    FutureProvider.autoDispose.family<TodayPilgrimageFeed?, LiveFeedQuery>((ref, query) async {
+  final db = ref.watch(databaseProvider);
+  final service = ref.watch(pilgrimageShootingServiceProvider);
+  return service.getPilgrimageFeed(
+    db,
+    tripId: query.tripId,
+    dayId: query.dayId,
+    userLat: query.userLat,
+    userLng: query.userLng,
+    deviceHeading: query.deviceHeading,
+  );
+});
+
+/// Legacy alias for [pilgrimageFeedProvider].
+final todayPilgrimageFeedProvider = pilgrimageFeedProvider;

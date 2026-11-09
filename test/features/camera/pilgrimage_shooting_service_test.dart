@@ -732,6 +732,299 @@ void main() {
       );
       expect(candidates.length, equals(1));
       expect(candidates.first.name, equals('Provider Spot'));
+
+      // Verify pilgrimage feed provider with LiveFeedQuery
+      final lfq = LiveFeedQuery(tripId: trip.id, userLat: 34.8910, userLng: 135.8080);
+      final lfqMoved = LiveFeedQuery(tripId: trip.id, userLat: 34.8920, userLng: 135.8090, deviceHeading: 90.0);
+      // Riverpod equality keys on tripId/dayId so lfq == lfqMoved (no stream teardown)
+      expect(lfq, equals(lfqMoved));
+      expect(lfq.hashCode, equals(lfqMoved.hashCode));
+
+      final feed = await container.read(pilgrimageFeedProvider(lfq).future);
+      expect(feed, isNotNull);
+      expect(feed!.trip.id, equals(trip.id));
+    });
+  });
+
+  group('PilgrimageShootingService - Bearing & Orientation', () {
+    test('calculateBearingDegrees computes accurate True North angles', () {
+      // Due North
+      expect(PilgrimageShootingService.calculateBearingDegrees(35.0, 135.0, 36.0, 135.0), closeTo(0.0, 0.5));
+      // Due South
+      expect(PilgrimageShootingService.calculateBearingDegrees(35.0, 135.0, 34.0, 135.0), closeTo(180.0, 0.5));
+      // Due East
+      expect(PilgrimageShootingService.calculateBearingDegrees(35.0, 135.0, 35.0, 136.0), closeTo(90.0, 1.0));
+      // Due West
+      expect(PilgrimageShootingService.calculateBearingDegrees(35.0, 135.0, 35.0, 134.0), closeTo(270.0, 1.0));
+    });
+
+    test('getCardinalDirection maps degrees to 8-point cardinal and Chinese strings', () {
+      expect(PilgrimageShootingService.getCardinalDirection(0.0), equals(('N', '北')));
+      expect(PilgrimageShootingService.getCardinalDirection(45.0), equals(('NE', '東北')));
+      expect(PilgrimageShootingService.getCardinalDirection(90.0), equals(('E', '東')));
+      expect(PilgrimageShootingService.getCardinalDirection(135.0), equals(('SE', '東南')));
+      expect(PilgrimageShootingService.getCardinalDirection(180.0), equals(('S', '南')));
+      expect(PilgrimageShootingService.getCardinalDirection(225.0), equals(('SW', '西南')));
+      expect(PilgrimageShootingService.getCardinalDirection(270.0), equals(('W', '西')));
+      expect(PilgrimageShootingService.getCardinalDirection(315.0), equals(('NW', '西北')));
+      expect(PilgrimageShootingService.getCardinalDirection(359.0), equals(('N', '北')));
+    });
+
+    test('calculateClockHour maps relative heading to 12 clock positions', () {
+      // Target straight ahead (bearing 90, heading 90) => 12 o'clock
+      expect(PilgrimageShootingService.calculateClockHour(90.0, 90.0), equals(12));
+      // Target 90 degrees right (bearing 180, heading 90) => 3 o'clock
+      expect(PilgrimageShootingService.calculateClockHour(180.0, 90.0), equals(3));
+      // Target 180 degrees behind (bearing 270, heading 90) => 6 o'clock
+      expect(PilgrimageShootingService.calculateClockHour(270.0, 90.0), equals(6));
+      // Target 90 degrees left (bearing 0, heading 90) => 9 o'clock
+      expect(PilgrimageShootingService.calculateClockHour(0.0, 90.0), equals(9));
+    });
+
+    test('calculateBearingInfo handles arrived status and formatting', () {
+      final closeInfo = PilgrimageShootingService.calculateBearingInfo(
+        userLat: 35.00000,
+        userLng: 135.00000,
+        spotLat: 35.00005,
+        spotLng: 135.00005,
+        deviceHeading: 45.0,
+        arrivalThresholdMeters: 15.0,
+      );
+      expect(closeInfo.isArrived, isTrue);
+      expect(closeInfo.description(), contains('Arrived'));
+
+      final farInfo = PilgrimageShootingService.calculateBearingInfo(
+        userLat: 35.0000,
+        userLng: 135.0000,
+        spotLat: 35.0050,
+        spotLng: 135.0050,
+        deviceHeading: 0.0,
+      );
+      expect(farInfo.isArrived, isFalse);
+      expect(farInfo.clockHour, isNotNull);
+      expect(farInfo.description(preferClock: true), contains("o'clock"));
+      expect(farInfo.description(preferClock: false), contains('NE'));
+    });
+  });
+
+  group('PilgrimageShootingService - Check-in Without Photo', () {
+    test('checkInWithoutPhoto marks planned schedule item as done when markDone is true', () async {
+      final now = DateTime(2026, 8, 15, 10, 0);
+
+      final trip = await tripRepo.createTrip(
+        title: 'Check-in Trip',
+        ownerId: 'user_tester',
+        startDate: '2026-08-15',
+        dayCount: 1,
+      );
+      final days = await tripRepo.getDaysForTrip(trip.id);
+
+      final stop = await tripRepo.createTripOnlySpot(
+        tripId: trip.id,
+        name: 'Spot to Check In',
+        lat: 34.8910,
+        lng: 135.8080,
+        addedBy: 'user_tester',
+      );
+      final item = await tripRepo.scheduleStop(tripId: trip.id, stopId: stop.id, dayId: days.first.id);
+
+      final result = await service.checkInWithoutPhoto(
+        db,
+        placeKey: stop.placeKey!,
+        stopId: stop.id,
+        tripId: trip.id,
+        scheduleItemId: item.id,
+        visitedAt: now,
+        markDone: true,
+      );
+
+      expect(result.wasOffPlan, isFalse);
+      expect(result.scheduleItem, isNotNull);
+      expect(result.scheduleItem?.status, equals('done'));
+      expect(result.visit.date, equals('2026-08-15'));
+
+      // Check DB row
+      final updatedItem = await (db.select(db.scheduleItems)..where((s) => s.id.equals(item.id))).getSingle();
+      expect(updatedItem.status, equals('done'));
+    });
+
+    test('checkInWithoutPhoto logs visit but does NOT mark item done when markDone is false (for viewers)', () async {
+      final now = DateTime(2026, 8, 15, 10, 0);
+
+      final trip = await tripRepo.createTrip(
+        title: 'Viewer Trip',
+        ownerId: 'owner_user',
+        startDate: '2026-08-15',
+        dayCount: 1,
+      );
+      final days = await tripRepo.getDaysForTrip(trip.id);
+
+      final stop = await tripRepo.createTripOnlySpot(
+        tripId: trip.id,
+        name: 'Viewer Check In Spot',
+        lat: 34.8910,
+        lng: 135.8080,
+        addedBy: 'owner_user',
+      );
+      final item = await tripRepo.scheduleStop(tripId: trip.id, stopId: stop.id, dayId: days.first.id);
+
+      final result = await service.checkInWithoutPhoto(
+        db,
+        placeKey: stop.placeKey!,
+        stopId: stop.id,
+        tripId: trip.id,
+        scheduleItemId: item.id,
+        visitedAt: now,
+        markDone: false, // Viewer!
+      );
+
+      expect(result.wasOffPlan, isFalse);
+      expect(result.visit.date, equals('2026-08-15'));
+      // Item status remains planned!
+      expect(result.scheduleItem?.status, equals('planned'));
+
+      final itemInDb = await (db.select(db.scheduleItems)..where((s) => s.id.equals(item.id))).getSingle();
+      expect(itemInDb.status, equals('planned'));
+    });
+
+    test('checkInWithoutPhoto works with dayId and scheduleItemId on other days (Day 3)', () async {
+      final now = DateTime(2026, 8, 15, 10, 0); // Day 1 date
+
+      final trip = await tripRepo.createTrip(
+        title: 'Multi-Day Scouting Trip',
+        ownerId: 'user_tester',
+        startDate: '2026-08-15',
+        dayCount: 3,
+      );
+      final days = await tripRepo.getDaysForTrip(trip.id);
+      final day3 = days[2];
+
+      final stop = await tripRepo.createTripOnlySpot(
+        tripId: trip.id,
+        name: 'Day 3 Peak',
+        lat: 34.8910,
+        lng: 135.8080,
+        addedBy: 'user_tester',
+      );
+      final itemDay3 = await tripRepo.scheduleStop(tripId: trip.id, stopId: stop.id, dayId: day3.id);
+
+      final result = await service.checkInWithoutPhoto(
+        db,
+        placeKey: stop.placeKey!,
+        stopId: stop.id,
+        tripId: trip.id,
+        dayId: day3.id,
+        scheduleItemId: itemDay3.id,
+        visitedAt: now,
+        markDone: true,
+      );
+
+      expect(result.wasOffPlan, isFalse);
+      expect(result.scheduleItem?.id, equals(itemDay3.id));
+      expect(result.scheduleItem?.status, equals('done'));
+      expect(result.scheduleItem?.dayId, equals(day3.id));
+    });
+
+    test('checkInWithoutPhoto handles off-plan check-in without creating phantom schedule items', () async {
+      final now = DateTime(2026, 8, 15, 10, 0);
+
+      await placeRepo.upsertPlace(PlacesCompanion.insert(
+        placeKey: 'place_off_plan_checkin',
+        name: 'Off Plan Shrine',
+        lat: 34.8910,
+        lng: 135.8080,
+      ));
+
+      final trip = await tripRepo.createTrip(
+        title: 'Strict Plan Trip',
+        ownerId: 'user_tester',
+        startDate: '2026-08-15',
+        dayCount: 1,
+      );
+
+      final result = await service.checkInWithoutPhoto(
+        db,
+        placeKey: 'place_off_plan_checkin',
+        tripId: trip.id,
+        visitedAt: now,
+        markDone: true,
+      );
+
+      expect(result.wasOffPlan, isTrue);
+      expect(result.stop, isNull);
+      expect(result.scheduleItem, isNull);
+      expect(result.visit.placeKey, equals('place_off_plan_checkin'));
+
+      // Ensure no stops or schedule items were added
+      final tripStops = await tripRepo.getStopsForTrip(trip.id);
+      expect(tripStops, isEmpty);
+    });
+  });
+
+  group('PilgrimageShootingService - Live Pilgrimage Feed', () {
+    test('getPilgrimageFeed hydrates stops, detects next target, nearest stop, and computes progress', () async {
+      final now = DateTime(2026, 8, 15, 10, 0);
+
+      final trip = await tripRepo.createTrip(
+        title: 'Feed Trip',
+        ownerId: 'user_tester',
+        startDate: '2026-08-15',
+        dayCount: 1,
+      );
+      final days = await tripRepo.getDaysForTrip(trip.id);
+
+      final stop1 = await tripRepo.createTripOnlySpot(
+        tripId: trip.id,
+        name: 'Feed Stop 1',
+        lat: 34.8910,
+        lng: 135.8080,
+        addedBy: 'user_tester',
+      );
+      final item1 = await tripRepo.scheduleStop(tripId: trip.id, stopId: stop1.id, dayId: days.first.id);
+
+      final stop2 = await tripRepo.createTripOnlySpot(
+        tripId: trip.id,
+        name: 'Feed Stop 2',
+        lat: 34.8920,
+        lng: 135.8090,
+        addedBy: 'user_tester',
+      );
+      await tripRepo.scheduleStop(tripId: trip.id, stopId: stop2.id, dayId: days.first.id);
+
+      // Check-in at stop 1
+      await service.checkInWithoutPhoto(
+        db,
+        placeKey: stop1.placeKey!,
+        scheduleItemId: item1.id,
+        visitedAt: now,
+        markDone: true,
+      );
+
+      // Query feed close to stop 2
+      final feed = await service.getPilgrimageFeed(
+        db,
+        tripId: trip.id,
+        dayId: days.first.id,
+        userLat: 34.8921,
+        userLng: 135.8091,
+        deviceHeading: 0.0,
+      );
+
+      expect(feed, isNotNull);
+      expect(feed!.totalCount, equals(2));
+      expect(feed.completedCount, equals(1));
+      expect(feed.progress, equals(0.5));
+
+      // Stop 1 is done
+      expect(feed.stops[0].isDone, isTrue);
+      expect(feed.stops[0].isNextTarget, isFalse);
+
+      // Stop 2 is next target and nearest
+      expect(feed.stops[1].isPlanned, isTrue);
+      expect(feed.stops[1].isNextTarget, isTrue);
+      expect(feed.stops[1].isNearest, isTrue);
+      expect(feed.nextTarget?.stop.id, equals(stop2.id));
+      expect(feed.nearestStop?.stop.id, equals(stop2.id));
     });
   });
 }

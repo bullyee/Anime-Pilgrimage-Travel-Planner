@@ -45,6 +45,87 @@ class PilgrimageShootingService {
     return earthRadiusMeters * c;
   }
 
+  /// Calculates the initial forward bearing angle from point 1 to point 2 in degrees (0.0 to 359.9).
+  static double calculateBearingDegrees(
+    double lat1,
+    double lng1,
+    double lat2,
+    double lng2,
+  ) {
+    if ((lat1 - lat2).abs() < 1e-9 && (lng1 - lng2).abs() < 1e-9) {
+      return 0.0;
+    }
+    final phi1 = lat1 * math.pi / 180.0;
+    final phi2 = lat2 * math.pi / 180.0;
+    final deltaLambda = (lng2 - lng1) * math.pi / 180.0;
+
+    final y = math.sin(deltaLambda) * math.cos(phi2);
+    final x = math.cos(phi1) * math.sin(phi2) -
+        math.sin(phi1) * math.cos(phi2) * math.cos(deltaLambda);
+    final theta = math.atan2(y, x);
+    return (theta * 180.0 / math.pi + 360.0) % 360.0;
+  }
+
+  /// Converts a bearing degree into 8-point cardinal abbreviation and localized Chinese name.
+  static (String cardinal, String cardinalZh) getCardinalDirection(double bearingDegrees) {
+    final normalized = (bearingDegrees % 360.0 + 360.0) % 360.0;
+    const directions = [
+      ('N', '北'),
+      ('NE', '東北'),
+      ('E', '東'),
+      ('SE', '東南'),
+      ('S', '南'),
+      ('SW', '西南'),
+      ('W', '西'),
+      ('NW', '西北'),
+    ];
+    final index = ((normalized + 22.5) ~/ 45) % 8;
+    return directions[index];
+  }
+
+  /// Calculates the relative clock position (1 to 12) from current device heading.
+  ///
+  /// For example, 12 o'clock means straight ahead, 3 o'clock means right, 6 o'clock means behind.
+  static int calculateClockHour(double bearingDegrees, double deviceHeadingDegrees) {
+    final normBearing = (bearingDegrees % 360.0 + 360.0) % 360.0;
+    final normHeading = (deviceHeadingDegrees % 360.0 + 360.0) % 360.0;
+    final relativeAngle = (normBearing - normHeading + 360.0) % 360.0;
+    final hour = (((relativeAngle + 15.0) % 360.0) ~/ 30.0);
+    return hour == 0 ? 12 : hour;
+  }
+
+  /// Calculates complete orientation and directional guidance toward a spot.
+  static SpotBearingInfo calculateBearingInfo({
+    required double userLat,
+    required double userLng,
+    required double spotLat,
+    required double spotLng,
+    double? deviceHeading,
+    double arrivalThresholdMeters = 15.0,
+  }) {
+    final distance = calculateDistanceMeters(userLat, userLng, spotLat, spotLng);
+    final bearing = calculateBearingDegrees(userLat, userLng, spotLat, spotLng);
+    final (cardinal, cardinalZh) = getCardinalDirection(bearing);
+
+    int? clockHour;
+    double? relativeAngle;
+    if (deviceHeading != null) {
+      final normHeading = (deviceHeading % 360.0 + 360.0) % 360.0;
+      relativeAngle = (bearing - normHeading + 360.0) % 360.0;
+      clockHour = calculateClockHour(bearing, normHeading);
+    }
+
+    return SpotBearingInfo(
+      distanceMeters: distance,
+      bearingDegrees: bearing,
+      cardinal: cardinal,
+      cardinalZh: cardinalZh,
+      clockHour: clockHour,
+      relativeAngleDegrees: relativeAngle,
+      isArrived: distance <= arrivalThresholdMeters,
+    );
+  }
+
   /// Resolves which trip and day block corresponds to the given date (default today).
   Future<TodayTripInfo?> getTodayTrip(AppDatabase db, {DateTime? now}) async {
     final effectiveNow = now ?? DateTime.now();
@@ -122,6 +203,7 @@ class PilgrimageShootingService {
     required double lng,
     String? tripId,
     String? dayId,
+    double? deviceHeading,
     double maxDistanceMeters = 150.0,
     DateTime? now,
   }) async {
@@ -305,6 +387,15 @@ class PilgrimageShootingService {
       }
 
       final animeTitle = stop.placeKey.isNotEmpty ? animeLabels[stop.placeKey] : null;
+      final bearing = deviceHeading != null
+          ? calculateBearingInfo(
+              userLat: lat,
+              userLng: lng,
+              spotLat: stop.lat,
+              spotLng: stop.lng,
+              deviceHeading: deviceHeading,
+            )
+          : null;
 
       results.add(NearbyShootingPlace(
         place: place,
@@ -320,6 +411,7 @@ class PilgrimageShootingService {
         dayNumber: candidate.dayNumber,
         referenceFrames: frameMap.values.toList(),
         animeTitle: animeTitle,
+        bearingInfo: bearing,
       ));
     }
 
@@ -328,6 +420,15 @@ class PilgrimageShootingService {
       final place = candidate.place;
       final frames = refMapByPlaceKey[place.placeKey] ?? const [];
       final animeTitle = animeLabels[place.placeKey];
+      final bearing = deviceHeading != null
+          ? calculateBearingInfo(
+              userLat: lat,
+              userLng: lng,
+              spotLat: place.lat,
+              spotLng: place.lng,
+              deviceHeading: deviceHeading,
+            )
+          : null;
 
       results.add(NearbyShootingPlace(
         place: place,
@@ -339,6 +440,7 @@ class PilgrimageShootingService {
         isTargetDayStop: false,
         referenceFrames: frames,
         animeTitle: animeTitle,
+        bearingInfo: bearing,
       ));
     }
 
@@ -586,6 +688,408 @@ class PilgrimageShootingService {
       const PhotosCompanion(keepAsIs: Value(true)),
     );
   }
+
+  /// Records a check-in visit at a pilgrimage place without taking a camera photo.
+  ///
+  /// - Automatically ensures a place row exists in [places] to satisfy FK constraints.
+  /// - Inserts or reuses a [place_visits] row (one per place per day).
+  /// - When [markDone] is `true` (default), marks the matching schedule item as `'done'`
+  ///   if the stop is part of the itinerary. Viewers can pass [markDone] = `false`
+  ///   to record their visit personally without modifying the shared trip itinerary.
+  /// - Respects "the plan follows the user": off-plan check-ins log the visit without
+  ///   adding unwanted stops or phantom schedule items.
+  Future<CheckInResult> checkInWithoutPhoto(
+    AppDatabase db, {
+    required String placeKey,
+    String? stopId,
+    String? tripId,
+    String? dayId,
+    String? scheduleItemId,
+    DateTime? visitedAt,
+    bool markDone = true,
+  }) async {
+    final effectiveVisitedAt = visitedAt ?? DateTime.now();
+    final todayStr = _formatIsoDate(effectiveVisitedAt);
+
+    return db.transaction(() async {
+      // 1. Resolve tripId
+      String? resolvedTripId = tripId;
+      if (resolvedTripId == null && dayId != null) {
+        final dayRow = await (db.select(db.tripDays)
+              ..where((d) => d.id.equals(dayId) & d.deletedAt.isNull()))
+            .getSingleOrNull();
+        resolvedTripId = dayRow?.tripId;
+      }
+      if (resolvedTripId == null) {
+        final todayTrip = await getTodayTrip(db, now: effectiveVisitedAt);
+        resolvedTripId = todayTrip?.trip.id;
+      }
+
+      // 1.5 Ensure place row exists in places table to satisfy foreign key constraints
+      final existingPlace = await (db.select(db.places)..where((p) => p.placeKey.equals(placeKey))).getSingleOrNull();
+      if (existingPlace == null) {
+        Stop? matchingStop;
+        if (stopId != null) {
+          matchingStop = await (db.select(db.stops)
+                ..where((s) => s.id.equals(stopId) & s.deletedAt.isNull()))
+              .getSingleOrNull();
+        }
+        if (matchingStop == null && resolvedTripId != null) {
+          matchingStop = (await (db.select(db.stops)
+                ..where((s) =>
+                    s.tripId.equals(resolvedTripId!) &
+                    s.placeKey.equals(placeKey) &
+                    s.deletedAt.isNull()))
+              .get())
+              .firstOrNull;
+        }
+
+        if (matchingStop == null) {
+          throw ArgumentError('Place not found for placeKey: $placeKey');
+        }
+
+        await db.into(db.places).insert(PlacesCompanion.insert(
+          placeKey: placeKey,
+          name: matchingStop.name,
+          lat: matchingStop.lat,
+          lng: matchingStop.lng,
+          address: Value(matchingStop.address),
+          visibility: const Value('trip_only'),
+        ));
+      }
+
+      // 2. Insert or reuse PlaceVisit row (one per place per day)
+      final existingVisit = (await (db.select(db.placeVisits)
+            ..where((v) => v.placeKey.equals(placeKey) & v.date.equals(todayStr))
+            ..limit(1))
+          .get())
+          .firstOrNull;
+
+      final PlaceVisit visit;
+      if (existingVisit != null) {
+        visit = existingVisit;
+      } else {
+        final visitId = _uuid.v4();
+        visit = PlaceVisit(
+          id: visitId,
+          placeKey: placeKey,
+          date: todayStr,
+          tripId: resolvedTripId,
+          createdAt: DateTime.now(),
+        );
+
+        await db.into(db.placeVisits).insert(PlaceVisitsCompanion.insert(
+          id: visit.id,
+          placeKey: visit.placeKey,
+          date: visit.date,
+          tripId: Value(visit.tripId),
+          createdAt: Value(visit.createdAt),
+        ));
+      }
+
+      // 3. Resolve activeStop and activeItem across the trip
+      Stop? activeStop;
+      ScheduleItem? activeItem;
+
+      if (scheduleItemId != null) {
+        activeItem = await (db.select(db.scheduleItems)
+              ..where((s) => s.id.equals(scheduleItemId) & s.deletedAt.isNull()))
+            .getSingleOrNull();
+        if (activeItem != null) {
+          activeStop = await (db.select(db.stops)
+                ..where((s) => s.id.equals(activeItem!.stopId) & s.deletedAt.isNull()))
+              .getSingleOrNull();
+          resolvedTripId ??= activeItem.tripId;
+        }
+      }
+
+      if (activeStop == null && resolvedTripId != null) {
+        if (stopId != null) {
+          activeStop = await (db.select(db.stops)
+                ..where((s) => s.id.equals(stopId) & s.deletedAt.isNull()))
+              .getSingleOrNull();
+        }
+        if (activeStop == null) {
+          activeStop = (await (db.select(db.stops)
+                ..where((s) =>
+                    s.tripId.equals(resolvedTripId!) &
+                    s.placeKey.equals(placeKey) &
+                    s.deletedAt.isNull()))
+              .get())
+              .firstOrNull;
+        }
+
+        if (activeStop != null && activeItem == null) {
+          final items = await (db.select(db.scheduleItems)
+                ..where((s) =>
+                    s.stopId.equals(activeStop!.id) &
+                    s.tripId.equals(resolvedTripId!) &
+                    s.deletedAt.isNull()))
+              .get();
+          if (dayId != null) {
+            activeItem = items.where((i) => i.dayId == dayId).firstOrNull ?? items.firstOrNull;
+          } else {
+            activeItem = items.firstOrNull;
+          }
+        }
+      }
+
+      // 4. If markDone is true and activeItem exists, mark it done
+      if (activeItem != null && markDone && activeItem.status != 'done') {
+        final now = DateTime.now();
+        await (db.update(db.scheduleItems)
+              ..where((s) => s.id.equals(activeItem!.id) & s.tripId.equals(activeItem.tripId)))
+            .write(
+          ScheduleItemsCompanion(
+            status: const Value('done'),
+            syncStatus: const Value(1),
+            updatedAt: Value(now),
+          ),
+        );
+        activeItem = activeItem.copyWith(status: 'done', syncStatus: 1, updatedAt: now);
+      }
+
+      return CheckInResult(
+        visit: visit,
+        stop: activeStop,
+        scheduleItem: activeItem,
+        wasOffPlan: resolvedTripId != null && activeStop == null,
+      );
+    });
+  }
+
+  /// Fetches a hydrated [TodayPilgrimageFeed] for the specified [tripId] and [dayId]
+  /// (defaulting to today's active trip and day block if omitted).
+  Future<TodayPilgrimageFeed?> getPilgrimageFeed(
+    AppDatabase db, {
+    String? tripId,
+    String? dayId,
+    double? userLat,
+    double? userLng,
+    double? deviceHeading,
+    DateTime? now,
+  }) async {
+    final Trip? trip;
+    final TripDay? day;
+    final List<ScheduleItem> scheduleItems;
+    final Map<String, Stop> stopMap;
+
+    if (tripId != null || dayId != null) {
+      String? targetTripId = tripId;
+      if (targetTripId == null && dayId != null) {
+        final d = await (db.select(db.tripDays)
+              ..where((tbl) => tbl.id.equals(dayId) & tbl.deletedAt.isNull()))
+            .getSingleOrNull();
+        targetTripId = d?.tripId;
+      }
+      if (targetTripId == null) return null;
+
+      trip = await (db.select(db.trips)
+            ..where((t) => t.id.equals(targetTripId!) & t.deletedAt.isNull()))
+          .getSingleOrNull();
+      if (trip == null) return null;
+
+      if (dayId != null) {
+        day = await (db.select(db.tripDays)
+              ..where((d) => d.id.equals(dayId) & d.deletedAt.isNull()))
+            .getSingleOrNull();
+      } else {
+        day = (await (db.select(db.tripDays)
+              ..where((d) => d.tripId.equals(targetTripId!) & d.deletedAt.isNull())
+              ..orderBy([(d) => OrderingTerm.asc(d.sortKey)]))
+            .get())
+            .firstOrNull;
+      }
+      if (day == null) return null;
+
+      scheduleItems = await (db.select(db.scheduleItems)
+            ..where((s) => s.dayId.equals(day!.id) & s.deletedAt.isNull())
+            ..orderBy([(s) => OrderingTerm.asc(s.sortKey)]))
+          .get();
+
+      final stops = await (db.select(db.stops)
+            ..where((s) => s.tripId.equals(targetTripId!) & s.deletedAt.isNull()))
+          .get();
+      stopMap = {for (final s in stops) s.id: s};
+    } else {
+      final todayTrip = await getTodayTrip(db, now: now);
+      if (todayTrip == null) return null;
+      trip = todayTrip.trip;
+      day = todayTrip.day;
+      scheduleItems = todayTrip.scheduleItems;
+      stopMap = todayTrip.stopMap;
+    }
+
+    if (scheduleItems.isEmpty) {
+      return TodayPilgrimageFeed(
+        trip: trip,
+        day: day,
+        stops: const [],
+      );
+    }
+
+    // Collect all placeKeys and stopIds
+    final placeKeys = <String>{};
+    final stopIds = <String>{};
+    for (final item in scheduleItems) {
+      stopIds.add(item.stopId);
+      final s = stopMap[item.stopId];
+      if (s != null && s.placeKey.isNotEmpty) {
+        placeKeys.add(s.placeKey);
+      }
+    }
+
+    // 1. Batch load Places
+    final places = placeKeys.isNotEmpty
+        ? await (db.select(db.places)..where((p) => p.placeKey.isIn(placeKeys))).get()
+        : <Place>[];
+    final placeMap = {for (final p in places) p.placeKey: p};
+
+    // 2. Batch load Reference Frames (by placeKey or stopId)
+    final refImages = await (db.select(db.newReferenceImages)
+          ..where((r) =>
+              (r.placeKey.isNotNull() & r.placeKey.isIn(placeKeys)) |
+              (r.stopId.isNotNull() & r.stopId.isIn(stopIds))))
+        .get();
+    final refMapByPlaceKey = <String, List<NewReferenceImage>>{};
+    final refMapByStopId = <String, List<NewReferenceImage>>{};
+    for (final ref in refImages) {
+      if (ref.placeKey != null) {
+        refMapByPlaceKey.putIfAbsent(ref.placeKey!, () => []).add(ref);
+      }
+      if (ref.stopId != null) {
+        refMapByStopId.putIfAbsent(ref.stopId!, () => []).add(ref);
+      }
+    }
+
+    // 3. Batch load Anime Labels
+    final animeLabels = await _loadPlaceAnimeLabels(db, placeKeys.toList());
+
+    // 4. Determine nearest stop if GPS available
+    String? nearestStopId;
+    double minDistance = double.infinity;
+    final bearingsByStopId = <String, SpotBearingInfo>{};
+
+    if (userLat != null && userLng != null) {
+      for (final item in scheduleItems) {
+        final stop = stopMap[item.stopId];
+        if (stop == null) continue;
+        final targetLat = stop.lat != 0.0 ? stop.lat : (placeMap[stop.placeKey]?.lat ?? 0.0);
+        final targetLng = stop.lng != 0.0 ? stop.lng : (placeMap[stop.placeKey]?.lng ?? 0.0);
+
+        if (targetLat != 0.0 || targetLng != 0.0) {
+          final bearing = calculateBearingInfo(
+            userLat: userLat,
+            userLng: userLng,
+            spotLat: targetLat,
+            spotLng: targetLng,
+            deviceHeading: deviceHeading,
+          );
+          bearingsByStopId[stop.id] = bearing;
+          if (bearing.distanceMeters < minDistance) {
+            minDistance = bearing.distanceMeters;
+            nearestStopId = stop.id;
+          }
+        }
+      }
+    }
+
+    // 5. Build live stops list
+    bool nextTargetFound = false;
+    final liveStops = <LivePilgrimageStop>[];
+
+    for (final item in scheduleItems) {
+      final stop = stopMap[item.stopId];
+      if (stop == null) continue;
+
+      final place = placeMap[stop.placeKey];
+      final frames = [
+        ...?refMapByStopId[stop.id],
+        if (refMapByStopId[stop.id] == null && stop.placeKey.isNotEmpty)
+          ...?refMapByPlaceKey[stop.placeKey],
+      ];
+      final animeTitle = animeLabels[stop.placeKey];
+      final bearing = bearingsByStopId[stop.id];
+
+      final isNearest = stop.id == nearestStopId;
+      final isNext = !nextTargetFound && item.status == 'planned';
+      if (isNext) {
+        nextTargetFound = true;
+      }
+
+      liveStops.add(LivePilgrimageStop(
+        scheduleItem: item,
+        stop: stop,
+        place: place,
+        referenceFrames: frames,
+        animeTitle: animeTitle,
+        bearingInfo: bearing,
+        isNextTarget: isNext,
+        isNearest: isNearest,
+      ));
+    }
+
+    return TodayPilgrimageFeed(
+      trip: trip,
+      day: day,
+      stops: liveStops,
+    );
+  }
+
+  /// Streams the live pilgrimage route reactively whenever schedule items change.
+  Stream<TodayPilgrimageFeed?> watchPilgrimageFeed(
+    AppDatabase db, {
+    String? tripId,
+    String? dayId,
+    double? userLat,
+    double? userLng,
+    double? deviceHeading,
+    DateTime? now,
+  }) {
+    return (db.select(db.scheduleItems)).watch().asyncMap((_) async {
+      return getPilgrimageFeed(
+        db,
+        tripId: tripId,
+        dayId: dayId,
+        userLat: userLat,
+        userLng: userLng,
+        deviceHeading: deviceHeading,
+        now: now,
+      );
+    });
+  }
+
+  /// Convenience method for today's live feed.
+  Future<TodayPilgrimageFeed?> getTodayPilgrimageFeed(
+    AppDatabase db, {
+    double? userLat,
+    double? userLng,
+    double? deviceHeading,
+    DateTime? now,
+  }) =>
+      getPilgrimageFeed(
+        db,
+        userLat: userLat,
+        userLng: userLng,
+        deviceHeading: deviceHeading,
+        now: now,
+      );
+
+  /// Convenience stream for today's live feed.
+  Stream<TodayPilgrimageFeed?> watchTodayPilgrimageFeed(
+    AppDatabase db, {
+    double? userLat,
+    double? userLng,
+    double? deviceHeading,
+    DateTime? now,
+  }) =>
+      watchPilgrimageFeed(
+        db,
+        userLat: userLat,
+        userLng: userLng,
+        deviceHeading: deviceHeading,
+        now: now,
+      );
 
   // ===========================================================================
   // PRIVATE HELPERS
