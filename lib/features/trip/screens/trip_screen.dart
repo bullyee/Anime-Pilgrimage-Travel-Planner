@@ -4,7 +4,6 @@ import 'package:go_router/go_router.dart';
 
 import '../../../core/database/database.dart';
 import '../../../core/utils/app_result.dart';
-import '../../../shared/theme/app_theme.dart';
 import '../../planner/widgets/day_planner.dart';
 import '../../planner/widgets/planner_sheets.dart';
 import '../../sharing/models/trip_member.dart';
@@ -16,48 +15,40 @@ import '../widgets/trip_form_sheet.dart';
 import '../widgets/trip_members_button.dart';
 import '../widgets/trip_sync_icon.dart';
 import 'trip_members_screen.dart';
-import 'trip_overview_tab.dart';
+import 'trip_stops_screen.dart';
 
-enum TripTab { overview, plan }
-
-/// One trip, in two tabs: its overview and the day planner. Its stops open
-/// from the search action, and its people from the avatars in the top bar.
+/// One trip's page, which is its plan: the days, one at a time or all at
+/// once, with the stops not on a day yet at the end. Owners and editors
+/// change it in place; viewers see the same page without the ways to change
+/// it. Each day opens its map, the day's Pilgrimage view. The top bar
+/// searches the stops and opens the trip's people.
 class TripScreen extends ConsumerStatefulWidget {
   final String tripId;
-  final TripTab initialTab;
 
-  const TripScreen({super.key, required this.tripId, this.initialTab = TripTab.overview});
+  /// A stop whose day the plan opens on, instead of today's.
+  final String? initialStopId;
+
+  const TripScreen({super.key, required this.tripId, this.initialStopId});
 
   @override
   ConsumerState<TripScreen> createState() => _TripScreenState();
 }
 
-class _TripScreenState extends ConsumerState<TripScreen> with SingleTickerProviderStateMixin {
-  late final TabController _tabs =
-      TabController(length: TripTab.values.length, vsync: this, initialIndex: widget.initialTab.index);
+class _TripScreenState extends ConsumerState<TripScreen> {
   bool _grid = false;
-  bool _editing = false;
   final _jump = PlannerJump();
 
   @override
   void initState() {
     super.initState();
-    _tabs.addListener(_onTabChanged);
+    if (widget.initialStopId case final stopId?) _jump.toStop(stopId);
   }
 
   @override
   void dispose() {
-    _tabs.removeListener(_onTabChanged);
-    _tabs.dispose();
     _jump.dispose();
     super.dispose();
   }
-
-  void _onTabChanged() {
-    if (!_tabs.indexIsChanging) setState(() {});
-  }
-
-  void _showTab(TripTab tab) => _tabs.animateTo(tab.index);
 
   @override
   Widget build(BuildContext context) {
@@ -82,13 +73,11 @@ class _TripScreenState extends ConsumerState<TripScreen> with SingleTickerProvid
       firstDate: dated.isEmpty ? null : dated.first.date,
       lastDate: dated.isEmpty ? null : dated.last.date,
     );
-    final tab = TripTab.values[_tabs.index];
     final role = ref.watch(myTripRoleProvider(trip.id));
     final canEdit = ref.watch(canEditTripProvider(trip.id));
-    // A viewer's role can change while they're on the page.
-    final editing = _editing && canEdit;
     final shared = trip.sharing == 'group';
     final menu = [
+      if (canEdit) const PopupMenuItem(value: 'add', child: Text('Add stops')),
       if (canEdit) const PopupMenuItem(value: 'edit', child: Text('Edit name and dates')),
       if (role == TripMemberRole.owner) const PopupMenuItem(value: 'delete', child: Text('Delete trip')),
       if (shared && role != null && role != TripMemberRole.owner)
@@ -98,6 +87,7 @@ class _TripScreenState extends ConsumerState<TripScreen> with SingleTickerProvid
     return Scaffold(
       appBar: AppBar(
         centerTitle: false,
+        titleSpacing: 0,
         title: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           mainAxisSize: MainAxisSize.min,
@@ -111,6 +101,8 @@ class _TripScreenState extends ConsumerState<TripScreen> with SingleTickerProvid
             ),
             Text(
               role == TripMemberRole.viewer ? '$subtitle · View only' : subtitle,
+              maxLines: 1,
+              overflow: TextOverflow.ellipsis,
               style: theme.textTheme.bodySmall?.copyWith(color: theme.colorScheme.onSurfaceVariant),
             ),
           ],
@@ -119,31 +111,20 @@ class _TripScreenState extends ConsumerState<TripScreen> with SingleTickerProvid
           IconButton(
             tooltip: 'Search stops',
             icon: const Icon(Icons.search),
-            onPressed: () => _searchStops(context, trip.id, editing),
+            onPressed: () => _searchStops(context, trip.id, canEdit),
           ),
-          if (tab == TripTab.plan)
-            IconButton(
-              tooltip: _grid ? 'Show one day at a time' : 'Show all days',
-              icon: Icon(_grid ? Icons.view_carousel_outlined : Icons.grid_view),
-              onPressed: () => setState(() => _grid = !_grid),
-            ),
-          if (tab == TripTab.plan && canEdit)
-            editing
-                ? TextButton(onPressed: () => setState(() => _editing = false), child: const Text('Done'))
-                : IconButton(
-                    tooltip: 'Edit the plan',
-                    icon: const Icon(Icons.edit_outlined),
-                    onPressed: () => setState(() => _editing = true),
-                  ),
           IconButton(
-            tooltip: 'Pilgrimage map',
-            icon: const Icon(Icons.map_outlined),
-            onPressed: () => context.push('/trips/${trip.id}/map'),
+            tooltip: _grid ? 'Show one day at a time' : 'Show all days',
+            icon: Icon(_grid ? Icons.view_carousel_outlined : Icons.grid_view),
+            onPressed: () => setState(() => _grid = !_grid),
           ),
           TripMembersButton(trip: trip),
           if (menu.isNotEmpty)
             PopupMenuButton<String>(
+              key: const Key('tripMenu'),
+              tooltip: 'More',
               onSelected: (value) {
+                if (value == 'add') openAddStopsSheet(context, trip.id);
                 if (value == 'edit') _editTrip(context, trip);
                 if (value == 'delete') _deleteTrip(context, trip);
                 if (value == 'leave') leaveTrip(context, ref, trip);
@@ -151,49 +132,14 @@ class _TripScreenState extends ConsumerState<TripScreen> with SingleTickerProvid
               itemBuilder: (_) => menu,
             ),
         ],
-        bottom: TabBar(
-          controller: _tabs,
-          tabs: const [Tab(text: 'Overview'), Tab(text: 'Plan')],
-        ),
       ),
-      body: TabBarView(
-        controller: _tabs,
-        // Swiping belongs to the planner's days, so tabs change by tapping.
-        physics: const NeverScrollableScrollPhysics(),
-        children: [
-          TripOverviewTab(trip: trip, onShowPlan: () => _showTab(TripTab.plan)),
-          Column(
-            children: [
-              if (editing)
-                Container(
-                  width: double.infinity,
-                  color: theme.trip.teaSoft,
-                  padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
-                  child: Row(
-                    children: [
-                      Icon(Icons.edit_outlined, size: 18, color: theme.trip.tea),
-                      const SizedBox(width: 10),
-                      Expanded(
-                        child: Text(
-                          'Editing the plan. Hold a stop to move it. Changes are saved as you go.',
-                          style: theme.textTheme.bodySmall?.copyWith(color: theme.colorScheme.onSurface),
-                        ),
-                      ),
-                    ],
-                  ),
-                ),
-              Expanded(
-                child: DayPlanner(
-                  tripId: trip.id,
-                  grid: _grid,
-                  editing: editing,
-                  onGridChanged: (grid) => setState(() => _grid = grid),
-                  jump: _jump,
-                ),
-              ),
-            ],
-          ),
-        ],
+      body: DayPlanner(
+        tripId: trip.id,
+        grid: _grid,
+        // A viewer's role can change while they're on the page.
+        editing: canEdit,
+        onGridChanged: (grid) => setState(() => _grid = grid),
+        jump: _jump,
       ),
     );
   }
@@ -203,7 +149,6 @@ class _TripScreenState extends ConsumerState<TripScreen> with SingleTickerProvid
   Future<void> _searchStops(BuildContext context, String tripId, bool editing) async {
     final stopId = await context.push<String>('/trips/$tripId/stops');
     if (stopId == null || !context.mounted) return;
-    _showTab(TripTab.plan);
     _jump.toStop(stopId);
     await showPlannerStopSheet(context, tripId: tripId, stopId: stopId, editing: editing);
   }

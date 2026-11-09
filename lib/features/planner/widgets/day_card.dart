@@ -20,6 +20,15 @@ class DayCardActions {
   final void Function(PlannerDay day) onMoveToTrip;
   final void Function(PlannerDay day) onRemove;
   final void Function(PlannerDay day) onRename;
+
+  /// Opens the day's map, its Pilgrimage view.
+  final void Function(PlannerDay day) onOpenMap;
+
+  /// Adds stops to the trip, from the library or as new spots.
+  final VoidCallback onAddStops;
+
+  /// Whether some of the trip's stops are on no day yet.
+  final bool hasBacklog;
   final VoidCallback onZoomOut;
   final void Function(String dayId, ListHandle handle) registerList;
   final void Function(String dayId, ListHandle handle) unregisterList;
@@ -34,6 +43,9 @@ class DayCardActions {
     required this.onMoveToTrip,
     required this.onRemove,
     required this.onRename,
+    required this.onOpenMap,
+    required this.onAddStops,
+    required this.hasBacklog,
     required this.onZoomOut,
     required this.registerList,
     required this.unregisterList,
@@ -58,6 +70,12 @@ String dayWithDate(PlannerDay day) => [
       if (day.day.title?.trim().isNotEmpty ?? false) day.day.title!.trim(),
     ].join(' · ');
 
+/// "2 of 5 visited", or null for a day with nothing on it.
+String? dayProgressLabel(PlannerDay day) {
+  if (day.items.isEmpty) return null;
+  return '${day.items.where((it) => it.done).length} of ${day.items.length} visited';
+}
+
 /// Notes the free dates a pin left before [day], or null when there are none.
 String? freeDaysLabel(PlannerDay day) => switch (day.freeDaysBefore) {
       <= 0 => null,
@@ -65,8 +83,8 @@ String? freeDaysLabel(PlannerDay day) => switch (day.freeDaysBefore) {
       final n => 'After $n free days',
     };
 
-/// One day of the single-day view: its date, its stops with times, and, while
-/// editing, the ways to change it.
+/// One day of the single-day view: its date, how far it has got, its stops
+/// with times, and, while editing, the ways to change it.
 class DayCard extends StatefulWidget {
   final PlannerDay day;
   final bool editing;
@@ -153,7 +171,14 @@ class _DayCardState extends State<DayCard> {
           _DayHeader(day: d, editing: widget.editing, actions: widget.actions),
           Padding(
             padding: const EdgeInsets.fromLTRB(16, 0, 16, 8),
-            child: Text(meta, style: theme.textTheme.bodySmall?.copyWith(color: theme.colorScheme.onSurfaceVariant)),
+            child: Row(
+              children: [
+                Expanded(
+                  child: Text(meta, style: theme.textTheme.bodySmall?.copyWith(color: theme.colorScheme.onSurfaceVariant)),
+                ),
+                if (dayProgressLabel(d) case final progress?) _Progress(day: d, label: progress),
+              ],
+            ),
           ),
           Expanded(
             child: DragTarget<PlannerDrag>(
@@ -217,16 +242,18 @@ class _DayCardState extends State<DayCard> {
     if (here && slot.beforeItemId == null) rows.add(const _InsertLine());
 
     if (widget.editing) {
+      // With nothing in the backlog, new stops come from the library or the map.
+      final fromBacklog = widget.actions.hasBacklog;
       rows.add(Padding(
         padding: const EdgeInsets.only(top: 12),
         child: OutlinedButton.icon(
-          onPressed: () => widget.actions.onAddFromBacklog(d),
+          onPressed: fromBacklog ? () => widget.actions.onAddFromBacklog(d) : widget.actions.onAddStops,
           style: OutlinedButton.styleFrom(
             foregroundColor: theme.trip.tea,
             side: BorderSide(color: theme.trip.tea.withValues(alpha: 0.6), width: 1.5),
           ),
           icon: const Icon(Icons.add),
-          label: const Text('Add from backlog'),
+          label: Text(fromBacklog ? 'Add from backlog' : 'Add stops'),
         ),
       ));
       if (d.items.isEmpty) {
@@ -239,7 +266,7 @@ class _DayCardState extends State<DayCard> {
       rows.add(Padding(
         padding: const EdgeInsets.symmetric(vertical: 24),
         child: Text(
-          'Tap the pencil to plan this day.',
+          'Nothing planned for this day.',
           textAlign: TextAlign.center,
           style: theme.textTheme.bodyMedium?.copyWith(color: theme.colorScheme.onSurfaceVariant),
         ),
@@ -319,6 +346,12 @@ class _DayHeader extends StatelessWidget {
                 ],
               ),
             ),
+            if (!day.isBackup)
+              IconButton(
+                tooltip: 'Day map',
+                onPressed: () => actions.onOpenMap(day),
+                icon: Icon(Icons.map_outlined, color: p.tea),
+              ),
             if (!day.isBackup && (editing || day.isPinned))
               IconButton(
                 tooltip: day.isPinned ? 'Pinned date' : 'Pin this day to a date',
@@ -365,6 +398,30 @@ class _DayHeader extends StatelessWidget {
           ],
         ),
       ),
+    );
+  }
+}
+
+/// How many of a day's stops were visited, in tea once they all were.
+class _Progress extends StatelessWidget {
+  final PlannerDay day;
+  final String label;
+
+  const _Progress({required this.day, required this.label});
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    final done = day.items.where((it) => it.done).length;
+    final all = done == day.items.length;
+    final color = done == 0 ? theme.colorScheme.onSurfaceVariant : theme.trip.tea;
+    return Row(
+      mainAxisSize: MainAxisSize.min,
+      children: [
+        Icon(all ? Icons.check_circle : Icons.check_circle_outline, size: 14, color: color),
+        const SizedBox(width: 4),
+        Text(label, style: theme.textTheme.bodySmall?.copyWith(color: color, fontWeight: all ? FontWeight.w700 : null)),
+      ],
     );
   }
 }

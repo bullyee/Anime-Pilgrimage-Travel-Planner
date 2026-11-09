@@ -52,9 +52,9 @@ class GroupSharingService {
 
     // Ensure the cloud trip document and owner member record exist before creating the invite
     // so Firestore security rules (`isTripEditorOrOwner(tripId)`) authorize invite creation.
-    // This comes before the trip is marked shared here: the Members tab starts listening to the
+    // This comes before the trip is marked shared here: the member list starts listening to the
     // members as soon as it is, the rules refuse that listen until the cloud trip exists, and a
-    // refused listen doesn't retry, so the tab would show the error until the app restarts.
+    // refused listen doesn't retry, so the list would show the error until the app restarts.
     final promoting = trip != null && trip.sharing != 'group';
     if (trip != null && trip.ownerId == currentUserId) {
       final initBatch = _firestore.batch();

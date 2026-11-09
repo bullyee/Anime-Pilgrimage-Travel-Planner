@@ -235,8 +235,8 @@ void main() {
       await tester.pump(const Duration(seconds: 1));
     });
 
-    testWidgets('TripScreen app bar action navigates to PilgrimageDayMapScreen', (tester) async {
-      final (trip, _, _) = await setupTestTrip();
+    testWidgets("a day's map button in the plan opens that day's map", (tester) async {
+      final (trip, days, _) = await setupTestTrip();
       tester.view.physicalSize = const Size(1080, 2400);
       tester.view.devicePixelRatio = 3;
       addTearDown(tester.view.reset);
@@ -250,7 +250,7 @@ void main() {
           ),
           GoRoute(
             path: '/trips/:tripId/map',
-            builder: (_, s) => const Scaffold(body: Text('PilgrimageMapPageReached')),
+            builder: (_, s) => Scaffold(body: Text('PilgrimageMapPageReached ${s.uri.queryParameters['day']}')),
           ),
         ],
       );
@@ -266,12 +266,12 @@ void main() {
       );
       await tester.pumpAndSettle();
 
-      // Tap pilgrimage map icon in app bar
-      expect(find.byTooltip('Pilgrimage map'), findsOneWidget);
-      await tester.tap(find.byTooltip('Pilgrimage map'));
+      // The first day's card is the one on screen.
+      final dayOne = find.ancestor(of: find.text('DAY 1'), matching: find.byType(Card));
+      await tester.tap(find.descendant(of: dayOne, matching: find.byTooltip('Day map')));
       await tester.pumpAndSettle();
 
-      expect(find.text('PilgrimageMapPageReached'), findsOneWidget);
+      expect(find.text('PilgrimageMapPageReached ${days[0].id}'), findsOneWidget);
 
       await tester.pumpWidget(const SizedBox());
       await tester.pump(const Duration(seconds: 1));

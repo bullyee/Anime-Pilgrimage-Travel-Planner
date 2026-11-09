@@ -2,6 +2,7 @@ import 'dart:async';
 
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:go_router/go_router.dart';
 import 'package:intl/intl.dart';
 
 import '../../../core/utils/app_result.dart';
@@ -9,6 +10,8 @@ import '../../../core/utils/schedule_logic.dart';
 import '../../../shared/theme/app_theme.dart';
 import '../../../shared/widgets/name_dialog.dart';
 import '../../sharing/providers/group_sharing_providers.dart';
+import '../../trip/providers/trip_providers.dart';
+import '../../trip/screens/trip_stops_screen.dart' show openAddStopsSheet;
 import '../controllers/day_planner_controller.dart';
 import '../models/planner_view.dart';
 import '../providers/planner_providers.dart';
@@ -34,9 +37,9 @@ class PlannerJump extends ChangeNotifier {
   }
 }
 
-/// The Plan tab: one day at a time in a carousel, or all days in a grid.
-/// Nothing changes unless [editing] is on, except marking stops visited,
-/// which a viewer can't do either.
+/// The trip's plan: one day at a time in a carousel, or all days in a grid,
+/// with the backlog last. [editing] is on for the people who can change the
+/// trip; without it nothing can be changed or dragged.
 class DayPlanner extends ConsumerStatefulWidget {
   final String tripId;
   final bool grid;
@@ -271,13 +274,20 @@ class _DayPlannerState extends ConsumerState<DayPlanner> {
     widget.onGridChanged(false);
   }
 
-  /// Opens on today's day while the trip is under way. Runs before the
-  /// carousel is first built, so its controller can still be swapped.
+  /// Opens on today's day while the trip is under way. Usually runs before
+  /// the carousel is first built, so its controller can still be swapped;
+  /// when the days came in after it was built, it jumps there instead.
   void _startAtToday(PlannerView view) {
     final today = normalizeDateOnly(DateTime.now());
     final day = view.datedDays.where((d) => d.date == today).firstOrNull;
     if (day == null || day.index == _page) return;
-    _page = day.index;
+    final page = _page = day.index;
+    if (_pages.hasClients) {
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        if (_pages.hasClients) _pages.jumpToPage(page);
+      });
+      return;
+    }
     _pages.dispose();
     _pages = PageController(viewportFraction: 0.88, initialPage: _page);
   }
@@ -286,7 +296,9 @@ class _DayPlannerState extends ConsumerState<DayPlanner> {
   /// backlog, to page to; from the grid, it goes back to one day at a time.
   void _resolveJump(PlannerView view) {
     final stopId = _jumpStopId;
-    if (stopId == null) return;
+    // Until the days, stops and their places on the days have all loaded, a
+    // stop could look like it's in the backlog.
+    if (stopId == null || !_loaded) return;
     _jumpStopId = null;
     final day = view.days.where((d) => d.items.any((it) => it.stop.id == stopId)).firstOrNull;
     if (day != null) {
@@ -300,6 +312,11 @@ class _DayPlannerState extends ConsumerState<DayPlanner> {
     }
     if (widget.grid) WidgetsBinding.instance.addPostFrameCallback((_) => widget.onGridChanged(false));
   }
+
+  bool get _loaded =>
+      ref.read(tripDaysProvider(widget.tripId)).hasValue &&
+      ref.read(tripStopsProvider(widget.tripId)).hasValue &&
+      ref.read(scheduleItemsForTripProvider(widget.tripId)).hasValue;
 
   /// Moves the carousel to a day that was just added or opened, once it's there.
   void _applyFocus(PlannerView view) {
@@ -328,9 +345,11 @@ class _DayPlannerState extends ConsumerState<DayPlanner> {
       error: (e, _) => Center(child: Text("Couldn't load the plan: $e")),
       data: (view) {
         if (view == null) return const Center(child: Text('This trip was deleted.'));
-        if (!_startPicked) {
+        // The trip loads before its days, so wait for them.
+        if (!_startPicked && view.days.isNotEmpty) {
           _startPicked = true;
-          _startAtToday(view);
+          // A stop asked for wins over today.
+          if (_jumpStopId == null) _startAtToday(view);
         }
         _resolveJump(view);
         if (!widget.grid) _applyFocus(view);
@@ -391,6 +410,9 @@ class _DayPlannerState extends ConsumerState<DayPlanner> {
         if (title == null) return;
         _report(await _controller.setDayTitle(day.day.id, title));
       },
+      onOpenMap: (day) => context.push('/trips/${widget.tripId}/map?day=${Uri.encodeQueryComponent(day.day.id)}'),
+      onAddStops: () => openAddStopsSheet(context, widget.tripId),
+      hasBacklog: view.backlog.isNotEmpty,
       onZoomOut: () => widget.onGridChanged(true),
       registerList: (id, handle) => _lists[id] = handle,
       unregisterList: (id, handle) {
@@ -606,10 +628,24 @@ class _BacklogPage extends StatelessWidget {
             Padding(
               padding: const EdgeInsets.fromLTRB(16, 4, 16, 8),
               child: Text(
-                editing ? 'Hold a stop and drag it onto a day.' : 'Stops in this trip that are not on a day yet.',
+                editing && view.backlog.isNotEmpty
+                    ? 'Hold a stop and drag it onto a day.'
+                    : 'Stops in this trip that are not on a day yet.',
                 style: theme.textTheme.bodySmall?.copyWith(color: theme.colorScheme.onSurfaceVariant),
               ),
             ),
+            if (editing)
+              Padding(
+                padding: const EdgeInsets.fromLTRB(16, 0, 16, 8),
+                child: Align(
+                  alignment: Alignment.centerLeft,
+                  child: FilledButton.tonalIcon(
+                    onPressed: () => openAddStopsSheet(context, tripId),
+                    icon: const Icon(Icons.add_location_alt_outlined),
+                    label: const Text('Add stops'),
+                  ),
+                ),
+              ),
             Expanded(
               child: ListView(
                 padding: const EdgeInsets.fromLTRB(8, 0, 8, 96),

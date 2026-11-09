@@ -124,6 +124,7 @@ class PlannerGrid extends StatelessWidget {
           ? (day.day.title ?? 'No date')
           : [date == null ? 'No date yet' : DateFormat.MMMEd().format(date), ?day.day.title].join(' · '),
       note: freeDaysLabel(day),
+      visited: day.items.where((it) => it.done).length,
       pinned: day.isPinned,
       pinConflict: day.pinConflict,
       lines: [for (final it in day.items) it.stop.name],
@@ -181,6 +182,9 @@ class _Summary extends StatelessWidget {
   final String title;
   final String detail;
   final String? note;
+
+  /// How many of [lines] were visited; null for the backlog.
+  final int? visited;
   final bool pinned;
   final bool pinConflict;
   final List<String> lines;
@@ -190,6 +194,7 @@ class _Summary extends StatelessWidget {
     required this.detail,
     required this.lines,
     this.note,
+    this.visited,
     this.pinned = false,
     this.pinConflict = false,
   });
@@ -205,6 +210,18 @@ class _Summary extends StatelessWidget {
         Row(
           children: [
             Expanded(child: Text(title, style: theme.textTheme.titleMedium?.copyWith(fontWeight: FontWeight.w700))),
+            if (visited case final visited? when lines.isNotEmpty)
+              Padding(
+                padding: const EdgeInsets.only(left: 4),
+                child: Text(
+                  '$visited/${lines.length}',
+                  semanticsLabel: '$visited of ${lines.length} visited',
+                  style: theme.textTheme.labelMedium?.copyWith(
+                    color: visited == 0 ? muted : p.tea,
+                    fontWeight: visited == lines.length ? FontWeight.w800 : null,
+                  ),
+                ),
+              ),
             if (pinned) Icon(Icons.lock, size: 16, color: pinConflict ? theme.colorScheme.error : p.vermilion),
           ],
         ),

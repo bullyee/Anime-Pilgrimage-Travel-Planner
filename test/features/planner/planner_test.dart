@@ -227,10 +227,15 @@ void main() {
   });
 
   group('TripScreen', () {
-    Future<void> pump(WidgetTester tester, String tripId) async {
-      final router = GoRouter(initialLocation: '/trips/$tripId', routes: [
-        GoRoute(path: '/trips/:tripId', builder: (_, s) => TripScreen(tripId: s.pathParameters['tripId']!)),
+    Future<void> pump(WidgetTester tester, String tripId, {String query = ''}) async {
+      final router = GoRouter(initialLocation: '/trips/$tripId$query', routes: [
+        GoRoute(
+          path: '/trips/:tripId',
+          builder: (_, s) =>
+              TripScreen(tripId: s.pathParameters['tripId']!, initialStopId: s.uri.queryParameters['stop']),
+        ),
         GoRoute(path: '/trips/:tripId/stops', builder: (_, s) => TripStopsScreen(tripId: s.pathParameters['tripId']!)),
+        GoRoute(path: '/trips/:tripId/map', builder: (_, s) => Scaffold(body: Text('map of ${s.uri.queryParameters['day']}'))),
       ]);
       await tester.pumpWidget(ProviderScope(
         overrides: [databaseProvider.overrideWithValue(db), currentUserIdProvider.overrideWithValue('u1')],
@@ -244,7 +249,7 @@ void main() {
       await tester.pump(const Duration(seconds: 1));
     }
 
-    testWidgets('opens on the overview; the plan is read-only until edited', (tester) async {
+    testWidgets('the page is the plan, which its owner changes without an edit switch', (tester) async {
       // A phone-sized screen.
       tester.view.physicalSize = const Size(1080, 2400);
       tester.view.devicePixelRatio = 3;
@@ -256,18 +261,15 @@ void main() {
       await r.scheduleStop(tripId: trip.id, stopId: bridge.id, dayId: day.id, fixedTime: 10 * 60);
 
       await pump(tester, trip.id);
-      expect(find.text('Days'), findsOneWidget);
-
-      await tester.tap(find.text('Plan'));
-      await tester.pumpAndSettle();
+      expect(find.byType(Tab), findsNothing);
+      expect(find.byTooltip('Edit the plan'), findsNothing);
       expect(find.text('Bridge'), findsOneWidget);
       expect(find.text('10:00'), findsOneWidget);
+      expect(find.text('0 of 1 visited'), findsOneWidget);
+      // Nothing waits in the backlog, so a day offers new stops instead.
       expect(find.text('Add from backlog'), findsNothing);
-
-      await tester.tap(find.byTooltip('Edit the plan'));
-      await tester.pumpAndSettle();
-      expect(find.text('Add from backlog'), findsWidgets);
-      expect(find.textContaining('Editing the plan'), findsOneWidget);
+      expect(find.text('Add stops'), findsWidgets);
+      expect(find.byTooltip('Day options'), findsWidgets);
 
       await tester.tap(find.byTooltip('Show all days'));
       await tester.pumpAndSettle();
@@ -278,14 +280,11 @@ void main() {
       await tester.pumpAndSettle();
       expect((await r.getTrip(trip.id))!.dayCount, 3);
       expect(find.text('Day 3'), findsOneWidget);
-
-      await tester.tap(find.text('Done'));
-      await tester.pumpAndSettle();
-      expect(find.byKey(const Key('addDayTile')), findsNothing);
+      expect(find.text('0/1'), findsOneWidget, reason: "Day 1's tile counts its visited stops");
       await disposeApp(tester);
     });
 
-    testWidgets('while editing, a day is named from its menu, and the name can be taken off', (tester) async {
+    testWidgets('a day is named from its menu, and the name can be taken off', (tester) async {
       tester.view.physicalSize = const Size(1080, 2400);
       tester.view.devicePixelRatio = 3;
       addTearDown(tester.view.reset);
@@ -294,10 +293,6 @@ void main() {
       final day = (await r.getDaysForTrip(trip.id)).single;
 
       await pump(tester, trip.id);
-      await tester.tap(find.text('Plan'));
-      await tester.pumpAndSettle();
-      await tester.tap(find.byTooltip('Edit the plan'));
-      await tester.pumpAndSettle();
       await tester.tap(find.byTooltip('Day options').first);
       await tester.pumpAndSettle();
       await tester.tap(find.text('Name this day'));
@@ -320,7 +315,7 @@ void main() {
       await disposeApp(tester);
     });
 
-    testWidgets("the Today card opens the plan on today's day", (tester) async {
+    testWidgets("it opens on today's day, which shows how far it has got and opens its map", (tester) async {
       tester.view.physicalSize = const Size(1080, 2400);
       tester.view.devicePixelRatio = 3;
       addTearDown(tester.view.reset);
@@ -328,13 +323,24 @@ void main() {
       final r = DriftTripRepository(db);
       final trip = await r.createTrip(
           title: 'Uji', ownerId: 'u1', startDate: isoDate(DateTime(now.year, now.month, now.day - 1)), dayCount: 3);
+      final today = (await r.getDaysForTrip(trip.id))[1];
+      final bridge = await r.createTripOnlySpot(tripId: trip.id, name: 'Bridge', lat: 0, lng: 0, addedBy: 'u1');
+      final shrine = await r.createTripOnlySpot(tripId: trip.id, name: 'Shrine', lat: 0, lng: 0, addedBy: 'u1');
+      await r.scheduleStop(tripId: trip.id, stopId: bridge.id, dayId: today.id);
+      await r.scheduleStop(tripId: trip.id, stopId: shrine.id, dayId: today.id);
+      final first = (await r.getScheduleItemsForTrip(trip.id)).firstWhere((i) => i.stopId == bridge.id);
+      await r.updateScheduleItemStatus(itemId: first.id, status: 'done');
 
       await pump(tester, trip.id);
-      expect(find.text('Today · Day 2'), findsOneWidget);
-      await tester.tap(find.text('Open the plan'));
-      await tester.pumpAndSettle();
       // Day 2 is the card in the middle, with Day 1 peeking in on the left.
       expect(tester.getTopLeft(find.text('DAY 2')).dx, lessThan(100));
+      expect(find.text('TODAY'), findsOneWidget);
+      expect(find.text('1 of 2 visited'), findsOneWidget);
+
+      final dayTwo = find.ancestor(of: find.text('DAY 2'), matching: find.byType(Card));
+      await tester.tap(find.descendant(of: dayTwo, matching: find.byTooltip('Day map')));
+      await tester.pumpAndSettle();
+      expect(find.text('map of ${today.id}'), findsOneWidget);
       await disposeApp(tester);
     });
 
@@ -361,7 +367,8 @@ void main() {
       await tester.pumpAndSettle();
 
       expect(find.text('Open stop page'), findsOneWidget);
-      await tester.tap(find.text('Done'));
+      // Close the sheet by tapping above it.
+      await tester.tapAt(const Offset(180, 40));
       await tester.pumpAndSettle();
       // Day 3 is the card on screen, with Day 2 peeking in on the left.
       expect(tester.getTopLeft(find.text('DAY 3')).dx, lessThan(100));
@@ -371,9 +378,24 @@ void main() {
       await tester.pumpAndSettle();
       await tester.tap(find.text('Shrine'));
       await tester.pumpAndSettle();
-      await tester.tap(find.text('Done'));
+      await tester.tapAt(const Offset(180, 40));
       await tester.pumpAndSettle();
       expect(tester.getTopLeft(find.text('BACKLOG')).dx, lessThan(100));
+      await disposeApp(tester);
+    });
+
+    testWidgets("opened for a stop, it shows that stop's day", (tester) async {
+      tester.view.physicalSize = const Size(1080, 2400);
+      tester.view.devicePixelRatio = 3;
+      addTearDown(tester.view.reset);
+      final r = DriftTripRepository(db);
+      final trip = await r.createTrip(title: 'Uji', ownerId: 'u1', startDate: '2027-04-29', dayCount: 3);
+      final days = await r.getDaysForTrip(trip.id);
+      final bridge = await r.createTripOnlySpot(tripId: trip.id, name: 'Bridge', lat: 0, lng: 0, addedBy: 'u1');
+      await r.scheduleStop(tripId: trip.id, stopId: bridge.id, dayId: days[2].id);
+
+      await pump(tester, trip.id, query: '?tab=plan&stop=${bridge.id}');
+      expect(tester.getTopLeft(find.text('DAY 3')).dx, lessThan(100));
       await disposeApp(tester);
     });
 
@@ -388,10 +410,6 @@ void main() {
       await r.scheduleStop(tripId: trip.id, stopId: bridge.id, dayId: days[0].id, fixedTime: 10 * 60);
 
       await pump(tester, trip.id);
-      await tester.tap(find.text('Plan'));
-      await tester.pumpAndSettle();
-      await tester.tap(find.byTooltip('Edit the plan'));
-      await tester.pumpAndSettle();
 
       // Hold the stop at the right edge until the carousel has paged twice:
       // Day 1, and the row being dragged with it, are gone from the tree.

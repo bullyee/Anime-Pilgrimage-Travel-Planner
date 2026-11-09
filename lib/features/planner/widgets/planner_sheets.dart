@@ -151,6 +151,11 @@ class _StopSheet extends ConsumerWidget {
                       ),
                     ),
                     TextButton(
+                      // Compact, so the row fits beside the labels on a narrow phone.
+                      style: TextButton.styleFrom(
+                        visualDensity: VisualDensity.compact,
+                        padding: const EdgeInsets.symmetric(horizontal: 8),
+                      ),
                       onPressed: () async {
                         final minutes = await pickStartTime(context, initial: item.startMinutes, followsAt: followsAt);
                         if (minutes != null) await controller.setFixedTime(item.item.id, minutes);
@@ -159,6 +164,7 @@ class _StopSheet extends ConsumerWidget {
                     ),
                     if (item.fixed)
                       IconButton(
+                        visualDensity: VisualDensity.compact,
                         tooltip: 'Clear the fixed time',
                         onPressed: () => controller.setFixedTime(item.item.id, null),
                         icon: const Icon(Icons.close),

@@ -398,7 +398,7 @@ void main() {
       await db.into(db.trips).insert(
             TripsCompanion.insert(id: 'trip_1', title: 'Kyoto Trip', ownerId: currentUserId),
           );
-      // The Members tab listens to the members once the trip is marked shared,
+      // The member list listens to the members once the trip is marked shared,
       // and the rules refuse that until the cloud trip exists.
       fakeFirestore.commitError = FirebaseException(plugin: 'cloud_firestore', code: 'permission-denied');
 

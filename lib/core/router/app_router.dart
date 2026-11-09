@@ -90,9 +90,11 @@ GoRouter router(RouterRef ref) {
       ),
       GoRoute(
         path: '/trips/:tripId',
+        // The trip's page is its plan; ?stop= shows that stop's day. Older
+        // links name a tab (?tab=plan), which no longer exist, so that is ignored.
         builder: (context, state) => TripScreen(
           tripId: state.pathParameters['tripId']!,
-          initialTab: TripTab.values.asNameMap()[state.uri.queryParameters['tab']] ?? TripTab.overview,
+          initialStopId: state.uri.queryParameters['stop'],
         ),
       ),
       GoRoute(

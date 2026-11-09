@@ -273,7 +273,7 @@ class _StopScreenState extends ConsumerState<StopScreen> {
                     onDirections: () async {
                       if (!await openDirections(stop.lat, stop.lng)) _report(const Failure("Couldn't open a maps app."));
                     },
-                    last: (icon: Icons.view_timeline_outlined, label: 'In the plan', onTap: () => context.push('/trips/$_tripId?tab=plan')),
+                    last: (icon: Icons.view_timeline_outlined, label: 'In the plan', onTap: () => context.push('/trips/$_tripId?stop=${Uri.encodeQueryComponent(stop.id)}')),
                   ),
                   const SizedBox(height: 16),
                   _StopTitle(stop: stop, draft: tripDraft, nameError: _nameError),

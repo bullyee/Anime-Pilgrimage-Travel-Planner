@@ -416,7 +416,7 @@ class _TripsCard extends StatelessWidget {
               title: Text(t.trip.title),
               subtitle: Text(tripLine(t)),
               trailing: const Icon(Icons.chevron_right),
-              onTap: () => context.push('/trips/${t.trip.id}?tab=stops'),
+              onTap: () => context.push('/trips/${t.trip.id}'),
             ),
         ],
       ),

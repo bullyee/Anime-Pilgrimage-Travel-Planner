@@ -226,28 +226,3 @@ class TripDateBadge extends StatelessWidget {
     );
   }
 }
-
-class TripStatusChip extends StatelessWidget {
-  final TripStatus status;
-
-  const TripStatusChip({super.key, required this.status});
-
-  @override
-  Widget build(BuildContext context) {
-    final theme = Theme.of(context);
-    final (background, foreground) = tripStatusColors(theme, status);
-    final label = switch (status) {
-      TripStatus.ongoing => 'Ongoing',
-      TripStatus.planning => 'Planning',
-      TripStatus.finished => 'Finished',
-    };
-    return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 3),
-      decoration: BoxDecoration(color: background, borderRadius: BorderRadius.circular(999)),
-      child: Text(
-        label,
-        style: theme.textTheme.labelMedium?.copyWith(color: foreground, fontWeight: FontWeight.w700),
-      ),
-    );
-  }
-}

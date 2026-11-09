@@ -388,8 +388,11 @@ void main() {
           GoRoute(path: '/trips/:tripId/stops', builder: (_, s) => TripStopsScreen(tripId: s.pathParameters['tripId']!)),
         ]);
 
+    /// The trip's one day, so the plan has a day card to show.
+    Future<void> addDay() => db.into(db.tripDays).insert(TripDaysCompanion.insert(id: 'd1', tripId: 't1', sortKey: 'a0'));
+
     Future<List<String>> menuItems(WidgetTester tester) async {
-      await tester.tap(find.byType(PopupMenuButton<String>));
+      await tester.tap(find.byKey(const Key('tripMenu')));
       await tester.pumpAndSettle();
       final items = tester
           .widgetList<PopupMenuItem<String>>(find.byWidgetPredicate((w) => w is PopupMenuItem<String>))
@@ -402,6 +405,7 @@ void main() {
 
     testWidgets('a viewer can look but not change the trip, and can leave it', (tester) async {
       await addTrip(ownerId: 'aki', sharingMode: 'group');
+      await addDay();
       sharing.members = [
         _member('aki', 'Aki', TripMemberRole.owner),
         _member('u1', 'Bea', TripMemberRole.viewer, minutes: 1),
@@ -412,9 +416,14 @@ void main() {
       expect(find.byTooltip('Invite people'), findsNothing);
       expect(await menuItems(tester), ['leave']);
 
-      await tester.tap(find.text('Plan'));
-      await tester.pumpAndSettle();
-      expect(find.byTooltip('Edit the plan'), findsNothing);
+      // The plan is there to look at, without the ways to change it.
+      expect(find.text('DAY 1'), findsOneWidget);
+      expect(find.byTooltip('Day options'), findsNothing);
+      expect(find.byTooltip('Pin this day to a date'), findsNothing);
+      expect(find.text('Add stops'), findsNothing);
+      expect(find.text('Add from backlog'), findsNothing);
+      expect(find.byKey(const Key('addDayButton')), findsNothing);
+      expect(find.text('Nothing planned for this day.'), findsOneWidget);
 
       await tester.tap(find.byTooltip('Search stops'));
       await tester.pumpAndSettle();
@@ -425,6 +434,7 @@ void main() {
 
     testWidgets('an editor can change the trip and leave it, but not delete it for everyone', (tester) async {
       await addTrip(ownerId: 'aki', sharingMode: 'group');
+      await addDay();
       sharing.members = [
         _member('aki', 'Aki', TripMemberRole.owner),
         _member('u1', 'Bea', TripMemberRole.editor, minutes: 1),
@@ -432,10 +442,9 @@ void main() {
       await pump(tester, tripRouter());
 
       expect(find.textContaining('View only'), findsNothing);
-      expect(await menuItems(tester), ['edit', 'leave']);
-      await tester.tap(find.text('Plan'));
-      await tester.pumpAndSettle();
-      expect(find.byTooltip('Edit the plan'), findsOneWidget);
+      expect(await menuItems(tester), ['add', 'edit', 'leave']);
+      expect(find.byTooltip('Day options'), findsWidgets);
+      expect(find.text('Add stops'), findsWidgets);
       await done(tester);
     });
 
@@ -448,9 +457,7 @@ void main() {
 
       expect(find.textContaining('View only'), findsNothing, reason: "it isn't known to be view only either");
       expect(find.byType(PopupMenuButton<String>), findsNothing);
-      await tester.tap(find.text('Plan'));
-      await tester.pumpAndSettle();
-      expect(find.byTooltip('Edit the plan'), findsNothing);
+      expect(find.byTooltip('Day options'), findsNothing);
       await tester.tap(find.byTooltip('Search stops'));
       await tester.pumpAndSettle();
       expect(find.text('Add stops'), findsNothing);
@@ -461,7 +468,7 @@ void main() {
       await addTrip();
       await pump(tester, tripRouter());
 
-      expect(await menuItems(tester), ['edit', 'delete']);
+      expect(await menuItems(tester), ['add', 'edit', 'delete']);
       await done(tester);
     });
   });
