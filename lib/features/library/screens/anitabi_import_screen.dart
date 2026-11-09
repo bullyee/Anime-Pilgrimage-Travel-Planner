@@ -7,6 +7,7 @@ import '../../../core/utils/app_result.dart';
 import '../../../shared/theme/app_theme.dart';
 import '../../anime/models/bangumi_subject.dart';
 import '../../anime/services/bangumi_search_service.dart';
+import '../../anime/services/multilingual_anime_search_service.dart';
 import '../../poi/services/anitabi_api_service.dart';
 import '../../trip/controllers/trip_stops_controller.dart';
 import '../../trip/models/trip_summary.dart';
@@ -23,7 +24,8 @@ class AnitabiImportScreen extends ConsumerStatefulWidget {
 
   const AnitabiImportScreen({super.key, this.searchAnime = _search, this.loadWork = _load});
 
-  static Future<List<BangumiSubject>> _search(String query) => BangumiSearchService.searchByName(query);
+  static Future<List<BangumiSubject>> _search(String query) =>
+      MultilingualAnimeSearchService.instance.searchAsSubjects(query);
   static Future<AnitabiWork?> _load(String bangumiId) => AnitabiImport.loadWork(bangumiId);
 
   @override

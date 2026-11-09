@@ -28,6 +28,17 @@ class $PlacesTable extends Places with TableInfo<$PlacesTable, Place> {
     type: DriftSqlType.string,
     requiredDuringInsert: true,
   );
+  static const VerificationMeta _chineseNameMeta = const VerificationMeta(
+    'chineseName',
+  );
+  @override
+  late final GeneratedColumn<String> chineseName = GeneratedColumn<String>(
+    'chinese_name',
+    aliasedName,
+    true,
+    type: DriftSqlType.string,
+    requiredDuringInsert: false,
+  );
   static const VerificationMeta _latMeta = const VerificationMeta('lat');
   @override
   late final GeneratedColumn<double> lat = GeneratedColumn<double>(
@@ -201,6 +212,7 @@ class $PlacesTable extends Places with TableInfo<$PlacesTable, Place> {
   List<GeneratedColumn> get $columns => [
     placeKey,
     name,
+    chineseName,
     lat,
     lng,
     description,
@@ -245,6 +257,15 @@ class $PlacesTable extends Places with TableInfo<$PlacesTable, Place> {
       );
     } else if (isInserting) {
       context.missing(_nameMeta);
+    }
+    if (data.containsKey('chinese_name')) {
+      context.handle(
+        _chineseNameMeta,
+        chineseName.isAcceptableOrUnknown(
+          data['chinese_name']!,
+          _chineseNameMeta,
+        ),
+      );
     }
     if (data.containsKey('lat')) {
       context.handle(
@@ -375,6 +396,10 @@ class $PlacesTable extends Places with TableInfo<$PlacesTable, Place> {
         DriftSqlType.string,
         data['${effectivePrefix}name'],
       )!,
+      chineseName: attachedDatabase.typeMapping.read(
+        DriftSqlType.string,
+        data['${effectivePrefix}chinese_name'],
+      ),
       lat: attachedDatabase.typeMapping.read(
         DriftSqlType.double,
         data['${effectivePrefix}lat'],
@@ -457,6 +482,9 @@ class Place extends DataClass implements Insertable<Place> {
   /// The spot's global identity: `anitabi:<pointId>` for Anitabi imports, UUID for user-created.
   final String placeKey;
   final String name;
+
+  /// Optional Chinese name for the spot when the original name is in Japanese or other scripts.
+  final String? chineseName;
   final double lat;
   final double lng;
   final String? description;
@@ -486,6 +514,7 @@ class Place extends DataClass implements Insertable<Place> {
   const Place({
     required this.placeKey,
     required this.name,
+    this.chineseName,
     required this.lat,
     required this.lng,
     this.description,
@@ -508,6 +537,9 @@ class Place extends DataClass implements Insertable<Place> {
     final map = <String, Expression>{};
     map['place_key'] = Variable<String>(placeKey);
     map['name'] = Variable<String>(name);
+    if (!nullToAbsent || chineseName != null) {
+      map['chinese_name'] = Variable<String>(chineseName);
+    }
     map['lat'] = Variable<double>(lat);
     map['lng'] = Variable<double>(lng);
     if (!nullToAbsent || description != null) {
@@ -557,6 +589,9 @@ class Place extends DataClass implements Insertable<Place> {
     return PlacesCompanion(
       placeKey: Value(placeKey),
       name: Value(name),
+      chineseName: chineseName == null && nullToAbsent
+          ? const Value.absent()
+          : Value(chineseName),
       lat: Value(lat),
       lng: Value(lng),
       description: description == null && nullToAbsent
@@ -606,6 +641,7 @@ class Place extends DataClass implements Insertable<Place> {
     return Place(
       placeKey: serializer.fromJson<String>(json['placeKey']),
       name: serializer.fromJson<String>(json['name']),
+      chineseName: serializer.fromJson<String?>(json['chineseName']),
       lat: serializer.fromJson<double>(json['lat']),
       lng: serializer.fromJson<double>(json['lng']),
       description: serializer.fromJson<String?>(json['description']),
@@ -630,6 +666,7 @@ class Place extends DataClass implements Insertable<Place> {
     return <String, dynamic>{
       'placeKey': serializer.toJson<String>(placeKey),
       'name': serializer.toJson<String>(name),
+      'chineseName': serializer.toJson<String?>(chineseName),
       'lat': serializer.toJson<double>(lat),
       'lng': serializer.toJson<double>(lng),
       'description': serializer.toJson<String?>(description),
@@ -652,6 +689,7 @@ class Place extends DataClass implements Insertable<Place> {
   Place copyWith({
     String? placeKey,
     String? name,
+    Value<String?> chineseName = const Value.absent(),
     double? lat,
     double? lng,
     Value<String?> description = const Value.absent(),
@@ -671,6 +709,7 @@ class Place extends DataClass implements Insertable<Place> {
   }) => Place(
     placeKey: placeKey ?? this.placeKey,
     name: name ?? this.name,
+    chineseName: chineseName.present ? chineseName.value : this.chineseName,
     lat: lat ?? this.lat,
     lng: lng ?? this.lng,
     description: description.present ? description.value : this.description,
@@ -698,6 +737,9 @@ class Place extends DataClass implements Insertable<Place> {
     return Place(
       placeKey: data.placeKey.present ? data.placeKey.value : this.placeKey,
       name: data.name.present ? data.name.value : this.name,
+      chineseName: data.chineseName.present
+          ? data.chineseName.value
+          : this.chineseName,
       lat: data.lat.present ? data.lat.value : this.lat,
       lng: data.lng.present ? data.lng.value : this.lng,
       description: data.description.present
@@ -738,6 +780,7 @@ class Place extends DataClass implements Insertable<Place> {
     return (StringBuffer('Place(')
           ..write('placeKey: $placeKey, ')
           ..write('name: $name, ')
+          ..write('chineseName: $chineseName, ')
           ..write('lat: $lat, ')
           ..write('lng: $lng, ')
           ..write('description: $description, ')
@@ -762,6 +805,7 @@ class Place extends DataClass implements Insertable<Place> {
   int get hashCode => Object.hash(
     placeKey,
     name,
+    chineseName,
     lat,
     lng,
     description,
@@ -785,6 +829,7 @@ class Place extends DataClass implements Insertable<Place> {
       (other is Place &&
           other.placeKey == this.placeKey &&
           other.name == this.name &&
+          other.chineseName == this.chineseName &&
           other.lat == this.lat &&
           other.lng == this.lng &&
           other.description == this.description &&
@@ -806,6 +851,7 @@ class Place extends DataClass implements Insertable<Place> {
 class PlacesCompanion extends UpdateCompanion<Place> {
   final Value<String> placeKey;
   final Value<String> name;
+  final Value<String?> chineseName;
   final Value<double> lat;
   final Value<double> lng;
   final Value<String?> description;
@@ -826,6 +872,7 @@ class PlacesCompanion extends UpdateCompanion<Place> {
   const PlacesCompanion({
     this.placeKey = const Value.absent(),
     this.name = const Value.absent(),
+    this.chineseName = const Value.absent(),
     this.lat = const Value.absent(),
     this.lng = const Value.absent(),
     this.description = const Value.absent(),
@@ -847,6 +894,7 @@ class PlacesCompanion extends UpdateCompanion<Place> {
   PlacesCompanion.insert({
     required String placeKey,
     required String name,
+    this.chineseName = const Value.absent(),
     required double lat,
     required double lng,
     this.description = const Value.absent(),
@@ -871,6 +919,7 @@ class PlacesCompanion extends UpdateCompanion<Place> {
   static Insertable<Place> custom({
     Expression<String>? placeKey,
     Expression<String>? name,
+    Expression<String>? chineseName,
     Expression<double>? lat,
     Expression<double>? lng,
     Expression<String>? description,
@@ -892,6 +941,7 @@ class PlacesCompanion extends UpdateCompanion<Place> {
     return RawValuesInsertable({
       if (placeKey != null) 'place_key': placeKey,
       if (name != null) 'name': name,
+      if (chineseName != null) 'chinese_name': chineseName,
       if (lat != null) 'lat': lat,
       if (lng != null) 'lng': lng,
       if (description != null) 'description': description,
@@ -915,6 +965,7 @@ class PlacesCompanion extends UpdateCompanion<Place> {
   PlacesCompanion copyWith({
     Value<String>? placeKey,
     Value<String>? name,
+    Value<String?>? chineseName,
     Value<double>? lat,
     Value<double>? lng,
     Value<String?>? description,
@@ -936,6 +987,7 @@ class PlacesCompanion extends UpdateCompanion<Place> {
     return PlacesCompanion(
       placeKey: placeKey ?? this.placeKey,
       name: name ?? this.name,
+      chineseName: chineseName ?? this.chineseName,
       lat: lat ?? this.lat,
       lng: lng ?? this.lng,
       description: description ?? this.description,
@@ -964,6 +1016,9 @@ class PlacesCompanion extends UpdateCompanion<Place> {
     }
     if (name.present) {
       map['name'] = Variable<String>(name.value);
+    }
+    if (chineseName.present) {
+      map['chinese_name'] = Variable<String>(chineseName.value);
     }
     if (lat.present) {
       map['lat'] = Variable<double>(lat.value);
@@ -1026,6 +1081,7 @@ class PlacesCompanion extends UpdateCompanion<Place> {
     return (StringBuffer('PlacesCompanion(')
           ..write('placeKey: $placeKey, ')
           ..write('name: $name, ')
+          ..write('chineseName: $chineseName, ')
           ..write('lat: $lat, ')
           ..write('lng: $lng, ')
           ..write('description: $description, ')
@@ -1727,6 +1783,21 @@ class $PhotosTable extends Photos with TableInfo<$PhotosTable, Photo> {
     ),
     defaultValue: const Constant(false),
   );
+  static const VerificationMeta _keepAsIsMeta = const VerificationMeta(
+    'keepAsIs',
+  );
+  @override
+  late final GeneratedColumn<bool> keepAsIs = GeneratedColumn<bool>(
+    'keep_as_is',
+    aliasedName,
+    false,
+    type: DriftSqlType.bool,
+    requiredDuringInsert: false,
+    defaultConstraints: GeneratedColumn.constraintIsAlways(
+      'CHECK ("keep_as_is" IN (0, 1))',
+    ),
+    defaultValue: const Constant(false),
+  );
   static const VerificationMeta _takenAtMeta = const VerificationMeta(
     'takenAt',
   );
@@ -1761,6 +1832,7 @@ class $PhotosTable extends Photos with TableInfo<$PhotosTable, Photo> {
     localPath,
     remoteUrl,
     isShared,
+    keepAsIs,
     takenAt,
     createdAt,
   ];
@@ -1839,6 +1911,12 @@ class $PhotosTable extends Photos with TableInfo<$PhotosTable, Photo> {
         isShared.isAcceptableOrUnknown(data['is_shared']!, _isSharedMeta),
       );
     }
+    if (data.containsKey('keep_as_is')) {
+      context.handle(
+        _keepAsIsMeta,
+        keepAsIs.isAcceptableOrUnknown(data['keep_as_is']!, _keepAsIsMeta),
+      );
+    }
     if (data.containsKey('taken_at')) {
       context.handle(
         _takenAtMeta,
@@ -1896,6 +1974,10 @@ class $PhotosTable extends Photos with TableInfo<$PhotosTable, Photo> {
         DriftSqlType.bool,
         data['${effectivePrefix}is_shared'],
       )!,
+      keepAsIs: attachedDatabase.typeMapping.read(
+        DriftSqlType.bool,
+        data['${effectivePrefix}keep_as_is'],
+      )!,
       takenAt: attachedDatabase.typeMapping.read(
         DriftSqlType.dateTime,
         data['${effectivePrefix}taken_at'],
@@ -1927,6 +2009,9 @@ class Photo extends DataClass implements Insertable<Photo> {
 
   /// Whether the user opted in to publish this photo to the shared trip.
   final bool isShared;
+
+  /// Whether the user marked this photo to keep as-is (skipping edit/cutout).
+  final bool keepAsIs;
   final DateTime? takenAt;
   final DateTime createdAt;
   const Photo({
@@ -1939,6 +2024,7 @@ class Photo extends DataClass implements Insertable<Photo> {
     required this.localPath,
     this.remoteUrl,
     required this.isShared,
+    required this.keepAsIs,
     this.takenAt,
     required this.createdAt,
   });
@@ -1962,6 +2048,7 @@ class Photo extends DataClass implements Insertable<Photo> {
       map['remote_url'] = Variable<String>(remoteUrl);
     }
     map['is_shared'] = Variable<bool>(isShared);
+    map['keep_as_is'] = Variable<bool>(keepAsIs);
     if (!nullToAbsent || takenAt != null) {
       map['taken_at'] = Variable<DateTime>(takenAt);
     }
@@ -1988,6 +2075,7 @@ class Photo extends DataClass implements Insertable<Photo> {
           ? const Value.absent()
           : Value(remoteUrl),
       isShared: Value(isShared),
+      keepAsIs: Value(keepAsIs),
       takenAt: takenAt == null && nullToAbsent
           ? const Value.absent()
           : Value(takenAt),
@@ -2010,6 +2098,7 @@ class Photo extends DataClass implements Insertable<Photo> {
       localPath: serializer.fromJson<String>(json['localPath']),
       remoteUrl: serializer.fromJson<String?>(json['remoteUrl']),
       isShared: serializer.fromJson<bool>(json['isShared']),
+      keepAsIs: serializer.fromJson<bool>(json['keepAsIs']),
       takenAt: serializer.fromJson<DateTime?>(json['takenAt']),
       createdAt: serializer.fromJson<DateTime>(json['createdAt']),
     );
@@ -2027,6 +2116,7 @@ class Photo extends DataClass implements Insertable<Photo> {
       'localPath': serializer.toJson<String>(localPath),
       'remoteUrl': serializer.toJson<String?>(remoteUrl),
       'isShared': serializer.toJson<bool>(isShared),
+      'keepAsIs': serializer.toJson<bool>(keepAsIs),
       'takenAt': serializer.toJson<DateTime?>(takenAt),
       'createdAt': serializer.toJson<DateTime>(createdAt),
     };
@@ -2042,6 +2132,7 @@ class Photo extends DataClass implements Insertable<Photo> {
     String? localPath,
     Value<String?> remoteUrl = const Value.absent(),
     bool? isShared,
+    bool? keepAsIs,
     Value<DateTime?> takenAt = const Value.absent(),
     DateTime? createdAt,
   }) => Photo(
@@ -2058,6 +2149,7 @@ class Photo extends DataClass implements Insertable<Photo> {
     localPath: localPath ?? this.localPath,
     remoteUrl: remoteUrl.present ? remoteUrl.value : this.remoteUrl,
     isShared: isShared ?? this.isShared,
+    keepAsIs: keepAsIs ?? this.keepAsIs,
     takenAt: takenAt.present ? takenAt.value : this.takenAt,
     createdAt: createdAt ?? this.createdAt,
   );
@@ -2076,6 +2168,7 @@ class Photo extends DataClass implements Insertable<Photo> {
       localPath: data.localPath.present ? data.localPath.value : this.localPath,
       remoteUrl: data.remoteUrl.present ? data.remoteUrl.value : this.remoteUrl,
       isShared: data.isShared.present ? data.isShared.value : this.isShared,
+      keepAsIs: data.keepAsIs.present ? data.keepAsIs.value : this.keepAsIs,
       takenAt: data.takenAt.present ? data.takenAt.value : this.takenAt,
       createdAt: data.createdAt.present ? data.createdAt.value : this.createdAt,
     );
@@ -2093,6 +2186,7 @@ class Photo extends DataClass implements Insertable<Photo> {
           ..write('localPath: $localPath, ')
           ..write('remoteUrl: $remoteUrl, ')
           ..write('isShared: $isShared, ')
+          ..write('keepAsIs: $keepAsIs, ')
           ..write('takenAt: $takenAt, ')
           ..write('createdAt: $createdAt')
           ..write(')'))
@@ -2110,6 +2204,7 @@ class Photo extends DataClass implements Insertable<Photo> {
     localPath,
     remoteUrl,
     isShared,
+    keepAsIs,
     takenAt,
     createdAt,
   );
@@ -2126,6 +2221,7 @@ class Photo extends DataClass implements Insertable<Photo> {
           other.localPath == this.localPath &&
           other.remoteUrl == this.remoteUrl &&
           other.isShared == this.isShared &&
+          other.keepAsIs == this.keepAsIs &&
           other.takenAt == this.takenAt &&
           other.createdAt == this.createdAt);
 }
@@ -2140,6 +2236,7 @@ class PhotosCompanion extends UpdateCompanion<Photo> {
   final Value<String> localPath;
   final Value<String?> remoteUrl;
   final Value<bool> isShared;
+  final Value<bool> keepAsIs;
   final Value<DateTime?> takenAt;
   final Value<DateTime> createdAt;
   final Value<int> rowid;
@@ -2153,6 +2250,7 @@ class PhotosCompanion extends UpdateCompanion<Photo> {
     this.localPath = const Value.absent(),
     this.remoteUrl = const Value.absent(),
     this.isShared = const Value.absent(),
+    this.keepAsIs = const Value.absent(),
     this.takenAt = const Value.absent(),
     this.createdAt = const Value.absent(),
     this.rowid = const Value.absent(),
@@ -2167,6 +2265,7 @@ class PhotosCompanion extends UpdateCompanion<Photo> {
     required String localPath,
     this.remoteUrl = const Value.absent(),
     this.isShared = const Value.absent(),
+    this.keepAsIs = const Value.absent(),
     this.takenAt = const Value.absent(),
     this.createdAt = const Value.absent(),
     this.rowid = const Value.absent(),
@@ -2183,6 +2282,7 @@ class PhotosCompanion extends UpdateCompanion<Photo> {
     Expression<String>? localPath,
     Expression<String>? remoteUrl,
     Expression<bool>? isShared,
+    Expression<bool>? keepAsIs,
     Expression<DateTime>? takenAt,
     Expression<DateTime>? createdAt,
     Expression<int>? rowid,
@@ -2197,6 +2297,7 @@ class PhotosCompanion extends UpdateCompanion<Photo> {
       if (localPath != null) 'local_path': localPath,
       if (remoteUrl != null) 'remote_url': remoteUrl,
       if (isShared != null) 'is_shared': isShared,
+      if (keepAsIs != null) 'keep_as_is': keepAsIs,
       if (takenAt != null) 'taken_at': takenAt,
       if (createdAt != null) 'created_at': createdAt,
       if (rowid != null) 'rowid': rowid,
@@ -2213,6 +2314,7 @@ class PhotosCompanion extends UpdateCompanion<Photo> {
     Value<String>? localPath,
     Value<String?>? remoteUrl,
     Value<bool>? isShared,
+    Value<bool>? keepAsIs,
     Value<DateTime?>? takenAt,
     Value<DateTime>? createdAt,
     Value<int>? rowid,
@@ -2227,6 +2329,7 @@ class PhotosCompanion extends UpdateCompanion<Photo> {
       localPath: localPath ?? this.localPath,
       remoteUrl: remoteUrl ?? this.remoteUrl,
       isShared: isShared ?? this.isShared,
+      keepAsIs: keepAsIs ?? this.keepAsIs,
       takenAt: takenAt ?? this.takenAt,
       createdAt: createdAt ?? this.createdAt,
       rowid: rowid ?? this.rowid,
@@ -2263,6 +2366,9 @@ class PhotosCompanion extends UpdateCompanion<Photo> {
     if (isShared.present) {
       map['is_shared'] = Variable<bool>(isShared.value);
     }
+    if (keepAsIs.present) {
+      map['keep_as_is'] = Variable<bool>(keepAsIs.value);
+    }
     if (takenAt.present) {
       map['taken_at'] = Variable<DateTime>(takenAt.value);
     }
@@ -2287,6 +2393,7 @@ class PhotosCompanion extends UpdateCompanion<Photo> {
           ..write('localPath: $localPath, ')
           ..write('remoteUrl: $remoteUrl, ')
           ..write('isShared: $isShared, ')
+          ..write('keepAsIs: $keepAsIs, ')
           ..write('takenAt: $takenAt, ')
           ..write('createdAt: $createdAt, ')
           ..write('rowid: $rowid')
@@ -7009,6 +7116,7 @@ typedef $$PlacesTableCreateCompanionBuilder =
     PlacesCompanion Function({
       required String placeKey,
       required String name,
+      Value<String?> chineseName,
       required double lat,
       required double lng,
       Value<String?> description,
@@ -7031,6 +7139,7 @@ typedef $$PlacesTableUpdateCompanionBuilder =
     PlacesCompanion Function({
       Value<String> placeKey,
       Value<String> name,
+      Value<String?> chineseName,
       Value<double> lat,
       Value<double> lng,
       Value<String?> description,
@@ -7161,6 +7270,11 @@ class $$PlacesTableFilterComposer
 
   ColumnFilters<String> get name => $composableBuilder(
     column: $table.name,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<String> get chineseName => $composableBuilder(
+    column: $table.chineseName,
     builder: (column) => ColumnFilters(column),
   );
 
@@ -7365,6 +7479,11 @@ class $$PlacesTableOrderingComposer
     builder: (column) => ColumnOrderings(column),
   );
 
+  ColumnOrderings<String> get chineseName => $composableBuilder(
+    column: $table.chineseName,
+    builder: (column) => ColumnOrderings(column),
+  );
+
   ColumnOrderings<double> get lat => $composableBuilder(
     column: $table.lat,
     builder: (column) => ColumnOrderings(column),
@@ -7460,6 +7579,11 @@ class $$PlacesTableAnnotationComposer
 
   GeneratedColumn<String> get name =>
       $composableBuilder(column: $table.name, builder: (column) => column);
+
+  GeneratedColumn<String> get chineseName => $composableBuilder(
+    column: $table.chineseName,
+    builder: (column) => column,
+  );
 
   GeneratedColumn<double> get lat =>
       $composableBuilder(column: $table.lat, builder: (column) => column);
@@ -7662,6 +7786,7 @@ class $$PlacesTableTableManager
               ({
                 Value<String> placeKey = const Value.absent(),
                 Value<String> name = const Value.absent(),
+                Value<String?> chineseName = const Value.absent(),
                 Value<double> lat = const Value.absent(),
                 Value<double> lng = const Value.absent(),
                 Value<String?> description = const Value.absent(),
@@ -7682,6 +7807,7 @@ class $$PlacesTableTableManager
               }) => PlacesCompanion(
                 placeKey: placeKey,
                 name: name,
+                chineseName: chineseName,
                 lat: lat,
                 lng: lng,
                 description: description,
@@ -7704,6 +7830,7 @@ class $$PlacesTableTableManager
               ({
                 required String placeKey,
                 required String name,
+                Value<String?> chineseName = const Value.absent(),
                 required double lat,
                 required double lng,
                 Value<String?> description = const Value.absent(),
@@ -7724,6 +7851,7 @@ class $$PlacesTableTableManager
               }) => PlacesCompanion.insert(
                 placeKey: placeKey,
                 name: name,
+                chineseName: chineseName,
                 lat: lat,
                 lng: lng,
                 description: description,
@@ -8622,6 +8750,7 @@ typedef $$PhotosTableCreateCompanionBuilder =
       required String localPath,
       Value<String?> remoteUrl,
       Value<bool> isShared,
+      Value<bool> keepAsIs,
       Value<DateTime?> takenAt,
       Value<DateTime> createdAt,
       Value<int> rowid,
@@ -8637,6 +8766,7 @@ typedef $$PhotosTableUpdateCompanionBuilder =
       Value<String> localPath,
       Value<String?> remoteUrl,
       Value<bool> isShared,
+      Value<bool> keepAsIs,
       Value<DateTime?> takenAt,
       Value<DateTime> createdAt,
       Value<int> rowid,
@@ -8711,6 +8841,11 @@ class $$PhotosTableFilterComposer
 
   ColumnFilters<bool> get isShared => $composableBuilder(
     column: $table.isShared,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<bool> get keepAsIs => $composableBuilder(
+    column: $table.keepAsIs,
     builder: (column) => ColumnFilters(column),
   );
 
@@ -8797,6 +8932,11 @@ class $$PhotosTableOrderingComposer
     builder: (column) => ColumnOrderings(column),
   );
 
+  ColumnOrderings<bool> get keepAsIs => $composableBuilder(
+    column: $table.keepAsIs,
+    builder: (column) => ColumnOrderings(column),
+  );
+
   ColumnOrderings<DateTime> get takenAt => $composableBuilder(
     column: $table.takenAt,
     builder: (column) => ColumnOrderings(column),
@@ -8868,6 +9008,9 @@ class $$PhotosTableAnnotationComposer
   GeneratedColumn<bool> get isShared =>
       $composableBuilder(column: $table.isShared, builder: (column) => column);
 
+  GeneratedColumn<bool> get keepAsIs =>
+      $composableBuilder(column: $table.keepAsIs, builder: (column) => column);
+
   GeneratedColumn<DateTime> get takenAt =>
       $composableBuilder(column: $table.takenAt, builder: (column) => column);
 
@@ -8935,6 +9078,7 @@ class $$PhotosTableTableManager
                 Value<String> localPath = const Value.absent(),
                 Value<String?> remoteUrl = const Value.absent(),
                 Value<bool> isShared = const Value.absent(),
+                Value<bool> keepAsIs = const Value.absent(),
                 Value<DateTime?> takenAt = const Value.absent(),
                 Value<DateTime> createdAt = const Value.absent(),
                 Value<int> rowid = const Value.absent(),
@@ -8948,6 +9092,7 @@ class $$PhotosTableTableManager
                 localPath: localPath,
                 remoteUrl: remoteUrl,
                 isShared: isShared,
+                keepAsIs: keepAsIs,
                 takenAt: takenAt,
                 createdAt: createdAt,
                 rowid: rowid,
@@ -8963,6 +9108,7 @@ class $$PhotosTableTableManager
                 required String localPath,
                 Value<String?> remoteUrl = const Value.absent(),
                 Value<bool> isShared = const Value.absent(),
+                Value<bool> keepAsIs = const Value.absent(),
                 Value<DateTime?> takenAt = const Value.absent(),
                 Value<DateTime> createdAt = const Value.absent(),
                 Value<int> rowid = const Value.absent(),
@@ -8976,6 +9122,7 @@ class $$PhotosTableTableManager
                 localPath: localPath,
                 remoteUrl: remoteUrl,
                 isShared: isShared,
+                keepAsIs: keepAsIs,
                 takenAt: takenAt,
                 createdAt: createdAt,
                 rowid: rowid,
