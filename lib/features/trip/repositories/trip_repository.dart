@@ -106,6 +106,11 @@ abstract class TripRepository {
   });
   Future<void> deleteScheduleItem(String itemId);
   Future<void> deleteScheduleItems(List<String> itemIds);
+
+  // Restoration (Undo & Safety Net)
+  Future<void> restoreStop(String stopId, {Duration window = const Duration(days: 30)});
+  Future<void> restoreDayBlock(String dayId, {Duration window = const Duration(days: 30)});
+  Future<void> restoreTrip(String tripId, {Duration window = const Duration(days: 30)});
 }
 
 /// Drift implementation of [TripRepository].
@@ -1027,6 +1032,140 @@ class DriftTripRepository implements TripRepository {
           syncStatus: const Value(1),
         ),
       );
+    });
+  }
+
+  // ==========================================================================
+  // Restoration (Undo & Safety Net)
+  // ==========================================================================
+
+  @override
+  Future<void> restoreStop(String stopId, {Duration window = const Duration(days: 30)}) async {
+    final now = _now();
+    final cutoff = DateTime.now().subtract(window);
+    await _db.transaction(() async {
+      final stop = await (_db.select(_db.stops)..where((tbl) => tbl.id.equals(stopId))).getSingleOrNull();
+      if (stop == null || stop.deletedAt == null) return;
+      final deletedAt = stop.deletedAt!;
+      if (deletedAt.isBefore(cutoff)) return;
+
+      // Revive the stop
+      await (_db.update(_db.stops)..where((tbl) => tbl.id.equals(stopId) & tbl.tripId.equals(stop.tripId))).write(
+        StopsCompanion(
+          deletedAt: const Value(null),
+          updatedAt: Value(now),
+          updatedBy: Value(_currentUserId),
+          syncStatus: const Value(1),
+        ),
+      );
+
+      // Revive schedule items that were deleted at the same time as this stop
+      await (_db.update(_db.scheduleItems)
+            ..where((tbl) =>
+                tbl.stopId.equals(stopId) &
+                tbl.tripId.equals(stop.tripId) &
+                tbl.deletedAt.equals(deletedAt.millisecondsSinceEpoch)))
+          .write(
+        ScheduleItemsCompanion(
+          deletedAt: const Value(null),
+          updatedAt: Value(now),
+          updatedBy: Value(_currentUserId),
+          syncStatus: const Value(1),
+        ),
+      );
+    });
+  }
+
+  @override
+  Future<void> restoreDayBlock(String dayId, {Duration window = const Duration(days: 30)}) async {
+    final now = _now();
+    final cutoff = DateTime.now().subtract(window);
+    await _db.transaction(() async {
+      final day = await (_db.select(_db.tripDays)..where((tbl) => tbl.id.equals(dayId))).getSingleOrNull();
+      if (day == null || day.deletedAt == null) return;
+      final deletedAt = day.deletedAt!;
+      if (deletedAt.isBefore(cutoff)) return;
+
+      // Revive the day block
+      await (_db.update(_db.tripDays)..where((tbl) => tbl.id.equals(dayId) & tbl.tripId.equals(day.tripId))).write(
+        TripDaysCompanion(
+          deletedAt: const Value(null),
+          updatedAt: Value(now),
+          updatedBy: Value(_currentUserId),
+          syncStatus: const Value(1),
+        ),
+      );
+
+      // Revive schedule items deleted with this day whose stops are still active
+      final liveStops = await (_db.select(_db.stops)
+            ..where((tbl) => tbl.tripId.equals(day.tripId) & tbl.deletedAt.isNull()))
+          .get();
+      final liveStopIds = liveStops.map((s) => s.id).toSet();
+
+      if (liveStopIds.isNotEmpty) {
+        await (_db.update(_db.scheduleItems)
+              ..where((tbl) =>
+                  tbl.dayId.equals(dayId) &
+                  tbl.tripId.equals(day.tripId) &
+                  tbl.deletedAt.equals(deletedAt.millisecondsSinceEpoch) &
+                  tbl.stopId.isIn(liveStopIds)))
+            .write(
+          ScheduleItemsCompanion(
+            deletedAt: const Value(null),
+            updatedAt: Value(now),
+            updatedBy: Value(_currentUserId),
+            syncStatus: const Value(1),
+          ),
+        );
+      }
+    });
+  }
+
+  @override
+  Future<void> restoreTrip(String tripId, {Duration window = const Duration(days: 30)}) async {
+    final now = _now();
+    final cutoff = DateTime.now().subtract(window);
+    await _db.transaction(() async {
+      final trip = await (_db.select(_db.trips)..where((tbl) => tbl.id.equals(tripId))).getSingleOrNull();
+      if (trip == null || trip.deletedAt == null) return;
+      final deletedAt = trip.deletedAt!;
+      if (deletedAt.isBefore(cutoff)) return;
+
+      await (_db.update(_db.trips)..where((tbl) => tbl.id.equals(tripId))).write(
+        TripsCompanion(
+          deletedAt: const Value(null),
+          updatedAt: Value(now),
+          updatedBy: Value(_currentUserId),
+          syncStatus: const Value(1),
+        ),
+      );
+
+      await (_db.update(_db.tripDays)
+            ..where((tbl) => tbl.tripId.equals(tripId) & tbl.deletedAt.equals(deletedAt.millisecondsSinceEpoch)))
+          .write(TripDaysCompanion(
+        deletedAt: const Value(null),
+        updatedAt: Value(now),
+        updatedBy: Value(_currentUserId),
+        syncStatus: const Value(1),
+      ));
+
+      await (_db.update(_db.stops)
+            ..where((tbl) => tbl.tripId.equals(tripId) & tbl.deletedAt.equals(deletedAt.millisecondsSinceEpoch)))
+          .write(StopsCompanion(
+        deletedAt: const Value(null),
+        updatedAt: Value(now),
+        updatedBy: Value(_currentUserId),
+        syncStatus: const Value(1),
+      ));
+
+      await (_db.update(_db.scheduleItems)
+            ..where((tbl) => tbl.tripId.equals(tripId) & tbl.deletedAt.equals(deletedAt.millisecondsSinceEpoch)))
+          .write(ScheduleItemsCompanion(
+        deletedAt: const Value(null),
+        updatedAt: Value(now),
+        updatedBy: Value(_currentUserId),
+        syncStatus: const Value(1),
+      ));
     });
   }
 }
