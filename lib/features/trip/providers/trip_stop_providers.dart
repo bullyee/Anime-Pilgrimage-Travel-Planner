@@ -2,6 +2,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../../core/database/database.dart';
 import '../../../core/utils/schedule_logic.dart';
+import '../models/stop_group.dart';
 import 'trip_providers.dart';
 
 /// A stop in the trip's stop list, with where it is planned.
@@ -46,7 +47,11 @@ enum StopOrder {
 /// [entries], which come in plan order, put in [order].
 List<TripStopEntry> orderStopEntries(List<TripStopEntry> entries, StopOrder order) => switch (order) {
       StopOrder.plan => entries,
-      StopOrder.name => [...entries]..sort((a, b) {
+      // A group's stops sort by the group's name, so the group takes its place
+  // by its name.
+  StopOrder.name => [...entries]..sort((a, b) {
+          final byGroup = (stopGroup(a.stop) ?? a.stop.name).toLowerCase().compareTo((stopGroup(b.stop) ?? b.stop.name).toLowerCase());
+          if (byGroup != 0) return byGroup;
           final byName = a.stop.name.toLowerCase().compareTo(b.stop.name.toLowerCase());
           return byName != 0 ? byName : a.stop.id.compareTo(b.stop.id);
         }),
@@ -55,6 +60,38 @@ List<TripStopEntry> orderStopEntries(List<TripStopEntry> entries, StopOrder orde
           return byTime != 0 ? byTime : a.stop.name.toLowerCase().compareTo(b.stop.name.toLowerCase());
         }),
     };
+
+/// A row of the stop list: one stop, or a group with its stops.
+class StopListRow {
+  /// The group's name, for a group's row.
+  final String? group;
+
+  /// The row's stop, or the group's stops in list order; never empty.
+  final List<TripStopEntry> entries;
+
+  const StopListRow({this.group, required this.entries});
+
+  bool get isGroup => group != null;
+}
+
+/// [ordered] as the list's rows: a group's stops make one row, which comes
+/// where its first stop does.
+List<StopListRow> stopListRows(List<TripStopEntry> ordered) {
+  final rows = <StopListRow>[];
+  final groups = <String, List<TripStopEntry>>{};
+  for (final e in ordered) {
+    final group = stopGroup(e.stop);
+    if (group == null) {
+      rows.add(StopListRow(entries: [e]));
+    } else if (groups[group] case final members?) {
+      members.add(e);
+    } else {
+      final members = groups[group] = [e];
+      rows.add(StopListRow(group: group, entries: members));
+    }
+  }
+  return rows;
+}
 
 /// Orders the stops for the list: planned stops by day and time, then the
 /// stops that are not on a day yet, by name.
