@@ -341,7 +341,7 @@ class _DayPlannerState extends ConsumerState<DayPlanner> {
   Widget _single(PlannerView view) {
     final actions = DayCardActions(
       onDrop: _dropOnDay,
-      onOpenStop: (item) => showPlannerStopSheet(context, tripId: widget.tripId, stopId: item.stop.id, editing: widget.editing),
+      onOpenStop: (item) => openPlannerStop(context, tripId: widget.tripId, stopId: item.stop.id, editing: widget.editing),
       onToggleVisited: ref.watch(canEditTripProvider(widget.tripId))
           ? (item) async => _report(await _controller.setVisited(item.item.id, !item.done))
           : null,
@@ -642,7 +642,7 @@ class _BacklogPage extends StatelessWidget {
             child: ListTile(
               dense: true,
               title: Text(s.name, maxLines: 1, overflow: TextOverflow.ellipsis),
-              onTap: () => showPlannerStopSheet(context, tripId: tripId, stopId: s.id, editing: editing),
+              onTap: () => openPlannerStop(context, tripId: tripId, stopId: s.id, editing: editing),
             ),
           ),
     ];
@@ -652,7 +652,7 @@ class _BacklogPage extends StatelessWidget {
     final row = ListTile(
       leading: Icon(Icons.place_outlined, color: Theme.of(context).trip.tea),
       title: Text(name, maxLines: 1, overflow: TextOverflow.ellipsis),
-      onTap: () => showPlannerStopSheet(context, tripId: tripId, stopId: stopId, editing: editing),
+      onTap: () => openPlannerStop(context, tripId: tripId, stopId: stopId, editing: editing),
     );
     return _draggable(context, BacklogDrag(stopId: stopId), row, title: name);
   }

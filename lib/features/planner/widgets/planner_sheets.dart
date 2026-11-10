@@ -29,6 +29,18 @@ void reportResult(BuildContext context, AppResult<dynamic> result, {String? ok, 
   }
 }
 
+/// Opens a stop from the plan: its page when the plan is read-only, where
+/// everything about it is (frames, Take photo, notes, Mark visited); its
+/// sheet while editing, for quick changes (time, stay, another day, the
+/// backlog) without leaving the plan.
+void openPlannerStop(BuildContext context, {required String tripId, required String stopId, required bool editing}) {
+  if (editing) {
+    showPlannerStopSheet(context, tripId: tripId, stopId: stopId, editing: true);
+  } else {
+    context.push('/trips/$tripId/stops/${Uri.encodeComponent(stopId)}');
+  }
+}
+
 /// A stop's details and the quick actions for it. While editing, the stay
 /// can be changed and the stop moved to another day or back to the backlog.
 Future<void> showPlannerStopSheet(

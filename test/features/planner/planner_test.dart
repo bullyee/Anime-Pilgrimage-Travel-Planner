@@ -376,6 +376,45 @@ void main() {
       await disposeApp(tester);
     });
 
+    testWidgets('a stop opens its page from the read-only plan, and its sheet while editing', (tester) async {
+      tester.view.physicalSize = const Size(1080, 2400);
+      // About 411 dp wide: the sheet's start-time row overflows at 360 dp on master.
+      tester.view.devicePixelRatio = 2.625;
+      addTearDown(tester.view.reset);
+      final r = DriftTripRepository(db);
+      final trip = await r.createTrip(title: 'Uji', ownerId: 'u1', startDate: '2027-04-29', dayCount: 1);
+      final day = (await r.getDaysForTrip(trip.id)).single;
+      final bridge = await r.createTripOnlySpot(tripId: trip.id, name: 'Bridge', lat: 0, lng: 0, addedBy: 'u1');
+      await r.scheduleStop(tripId: trip.id, stopId: bridge.id, dayId: day.id, fixedTime: 10 * 60);
+      final router = GoRouter(initialLocation: '/trips/${trip.id}', routes: [
+        GoRoute(path: '/trips/:tripId', builder: (_, s) => TripScreen(tripId: s.pathParameters['tripId']!)),
+        GoRoute(
+          path: '/trips/:tripId/stops/:stopId',
+          builder: (_, s) => Scaffold(body: Text('Stop page ${s.pathParameters['stopId']}')),
+        ),
+      ]);
+      await tester.pumpWidget(ProviderScope(
+        overrides: [databaseProvider.overrideWithValue(db), currentUserIdProvider.overrideWithValue('u1')],
+        child: MaterialApp.router(routerConfig: router),
+      ));
+      await tester.pumpAndSettle();
+      await tester.tap(find.text('Plan'));
+      await tester.pumpAndSettle();
+
+      await tester.tap(find.text('Bridge'));
+      await tester.pumpAndSettle();
+      expect(find.text('Stop page ${bridge.id}'), findsOneWidget, reason: 'no sheet in between');
+
+      router.pop();
+      await tester.pumpAndSettle();
+      await tester.tap(find.byTooltip('Edit the plan'));
+      await tester.pumpAndSettle();
+      await tester.tap(find.text('Bridge'));
+      await tester.pumpAndSettle();
+      expect(find.text('Move to backlog'), findsOneWidget, reason: 'the sheet, for quick changes');
+      await disposeApp(tester);
+    });
+
     testWidgets("moving a stop to the backlog shows Undo, which doesn't stay", (tester) async {
       tester.view.physicalSize = const Size(1080, 2400);
       // About 411 dp wide, like a Pixel 10a.
