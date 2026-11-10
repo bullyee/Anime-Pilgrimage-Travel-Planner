@@ -44,7 +44,25 @@ class NearYou extends ConsumerWidget {
       );
     }
     final at = where.at;
-    if (at == null) return const SizedBox.shrink();
+    if (at == null) {
+      // Allowed, but no fix this time (no last known position, or GPS took
+      // too long): say so and offer another try rather than vanishing.
+      return Column(
+        key: const Key('homeNearYou'),
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          header,
+          Text("Couldn't find where you are.",
+              style: theme.textTheme.bodyMedium?.copyWith(color: theme.colorScheme.onSurfaceVariant)),
+          const SizedBox(height: 8),
+          OutlinedButton.icon(
+            onPressed: () => ref.invalidate(homeWhereProvider),
+            icon: Icon(Icons.my_location, color: p.tea),
+            label: const Text('Try again'),
+          ),
+        ],
+      );
+    }
     final near = nearbyPlaces(entries, at);
 
     return Column(
