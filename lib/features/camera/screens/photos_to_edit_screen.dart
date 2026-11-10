@@ -81,6 +81,8 @@ class _PhotosToEditScreenState extends ConsumerState<PhotosToEditScreen> {
       ..showSnackBar(
         SnackBar(
           content: Text(ids.length == 1 ? 'Kept as it is.' : 'Kept ${ids.length} photos as they are.'),
+          // Goes by itself: with an action it would stay until dismissed.
+          persist: false,
           action: SnackBarAction(
             label: 'Undo',
             onPressed: () async {
