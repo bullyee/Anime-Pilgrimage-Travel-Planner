@@ -3,16 +3,20 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 import 'package:intl/intl.dart';
 
+import '../../../core/database/database.dart';
 import '../../../core/utils/app_result.dart';
 import '../../../core/utils/schedule_logic.dart';
 import '../../../shared/theme/app_theme.dart';
 import '../../sharing/providers/group_sharing_providers.dart';
+import '../../trip/controllers/trip_stops_controller.dart';
 import '../controllers/day_planner_controller.dart';
 import '../models/planner_view.dart';
 import '../providers/planner_providers.dart';
 import 'day_card.dart' show dayLabel, dayName, dayWithDate;
 
-/// Shows [result]'s error, or [ok] when it worked.
+/// Shows [result]'s error, or [ok] when it worked. An [action] (Undo) goes
+/// away with the message: a SnackBar with an action would otherwise stay until
+/// dismissed, covering the backlog drop bar.
 void reportResult(BuildContext context, AppResult<dynamic> result, {String? ok, SnackBarAction? action}) {
   if (!context.mounted) return;
   final messenger = ScaffoldMessenger.of(context);
@@ -20,7 +24,7 @@ void reportResult(BuildContext context, AppResult<dynamic> result, {String? ok, 
     case Failure(:final error):
       messenger.showSnackBar(SnackBar(content: Text(error)));
     case Success():
-      if (ok != null) messenger.showSnackBar(SnackBar(content: Text(ok), action: action));
+      if (ok != null) messenger.showSnackBar(SnackBar(content: Text(ok), action: action, persist: false));
   }
 }
 
@@ -241,6 +245,12 @@ class _StopSheet extends ConsumerWidget {
                     icon: const Icon(Icons.inbox_outlined),
                     label: const Text('Move to backlog'),
                   ),
+                if (editing)
+                  OutlinedButton.icon(
+                    onPressed: () => _remove(context, ref, stop, day),
+                    icon: const Icon(Icons.delete_outline),
+                    label: const Text('Remove from the trip'),
+                  ),
               ],
             ),
             if (editing) ...[
@@ -271,6 +281,29 @@ class _StopSheet extends ConsumerWidget {
         ),
       ),
     );
+  }
+
+  /// Takes [stop] out of the trip after asking, as the stop page does, so a
+  /// stop in the backlog can go without opening its page.
+  Future<void> _remove(BuildContext context, WidgetRef ref, Stop stop, PlannerDay? day) async {
+    final confirmed = await showDialog<bool>(
+      context: context,
+      builder: (dialogContext) => AlertDialog(
+        title: Text('Remove “${stop.name}”?'),
+        content: Text(day == null
+            ? 'It goes for everyone in the trip. Your library is not changed.'
+            : 'It goes for everyone in the trip, and comes off ${dayName(day)}. Your library is not changed.'),
+        actions: [
+          TextButton(onPressed: () => Navigator.pop(dialogContext, false), child: const Text('Cancel')),
+          FilledButton(onPressed: () => Navigator.pop(dialogContext, true), child: const Text('Remove')),
+        ],
+      ),
+    );
+    if (confirmed != true || !context.mounted) return;
+    final result = await ref.read(tripStopsControllerProvider.notifier).removeStop(stop.id);
+    if (!context.mounted) return;
+    Navigator.pop(context);
+    reportResult(context, result, ok: 'Removed ${stop.name}.');
   }
 }
 

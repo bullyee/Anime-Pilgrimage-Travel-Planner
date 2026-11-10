@@ -375,5 +375,86 @@ void main() {
       expect(find.text('Drop here to move it to the backlog'), findsNothing);
       await disposeApp(tester);
     });
+
+    testWidgets("moving a stop to the backlog shows Undo, which doesn't stay", (tester) async {
+      tester.view.physicalSize = const Size(1080, 2400);
+      // About 411 dp wide, like a Pixel 10a.
+      tester.view.devicePixelRatio = 2.625;
+      addTearDown(tester.view.reset);
+      final r = DriftTripRepository(db);
+      final trip = await r.createTrip(title: 'Uji', ownerId: 'u1', startDate: '2027-04-29', dayCount: 1);
+      final day = (await r.getDaysForTrip(trip.id)).single;
+      final bridge = await r.createTripOnlySpot(tripId: trip.id, name: 'Bridge', lat: 0, lng: 0, addedBy: 'u1');
+      await r.scheduleStop(tripId: trip.id, stopId: bridge.id, dayId: day.id, fixedTime: 10 * 60);
+
+      await pump(tester, trip.id);
+      await tester.tap(find.text('Plan'));
+      await tester.pumpAndSettle();
+      await tester.tap(find.byTooltip('Edit the plan'));
+      await tester.pumpAndSettle();
+      await tester.tap(find.text('Bridge'));
+      await tester.pumpAndSettle();
+      await tester.tap(find.text('Move to backlog'));
+      await tester.pump();
+      await tester.pump(const Duration(milliseconds: 500));
+      expect(find.text('Moved Bridge to the backlog.'), findsOneWidget);
+      expect(find.text('Undo'), findsOneWidget);
+
+      // A SnackBar with an action would stay until dismissed, over the
+      // backlog bar; this one goes by itself.
+      await tester.pump(const Duration(seconds: 5));
+      await tester.pumpAndSettle();
+      expect(find.text('Moved Bridge to the backlog.'), findsNothing);
+      await disposeApp(tester);
+    });
+  });
+
+  group('Stop sheet', () {
+    Future<void> openSheet(WidgetTester tester, String tripId, String stopId) async {
+      await tester.pumpWidget(ProviderScope(
+        overrides: [databaseProvider.overrideWithValue(db), currentUserIdProvider.overrideWithValue('u1')],
+        child: MaterialApp(
+          home: Scaffold(
+            body: Builder(
+              builder: (context) => TextButton(
+                onPressed: () => showPlannerStopSheet(context, tripId: tripId, stopId: stopId, editing: true),
+                child: const Text('Open'),
+              ),
+            ),
+          ),
+        ),
+      ));
+      await tester.tap(find.text('Open'));
+      await tester.pumpAndSettle();
+    }
+
+    testWidgets('a stop in the backlog is removed from its sheet, after asking', (tester) async {
+      tester.view.physicalSize = const Size(1080, 2400);
+      tester.view.devicePixelRatio = 3;
+      addTearDown(tester.view.reset);
+      final r = DriftTripRepository(db);
+      final trip = await r.createTrip(title: 'Uji', ownerId: 'u1', dayCount: 1);
+      final bridge = await r.createTripOnlySpot(tripId: trip.id, name: 'Bridge', lat: 0, lng: 0, addedBy: 'u1');
+
+      await openSheet(tester, trip.id, bridge.id);
+      await tester.ensureVisible(find.text('Remove from the trip'));
+      await tester.tap(find.text('Remove from the trip'));
+      await tester.pumpAndSettle();
+      expect(find.text('Remove “Bridge”?'), findsOneWidget);
+
+      await tester.tap(find.text('Cancel'));
+      await tester.pumpAndSettle();
+      expect(await r.getStopsForTrip(trip.id), hasLength(1));
+
+      await tester.tap(find.text('Remove from the trip'));
+      await tester.pumpAndSettle();
+      await tester.tap(find.widgetWithText(FilledButton, 'Remove'));
+      await tester.pumpAndSettle();
+      expect(await r.getStopsForTrip(trip.id), isEmpty);
+      expect(find.text('Removed Bridge.'), findsOneWidget);
+
+      await tester.pumpWidget(const SizedBox());
+      await tester.pump(const Duration(seconds: 1));
+    });
   });
 }

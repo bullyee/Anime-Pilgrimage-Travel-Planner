@@ -581,7 +581,11 @@ class _BacklogPage extends StatelessWidget {
       data: data,
       delay: const Duration(milliseconds: 350),
       hapticFeedbackOnStart: true,
-      onDragStarted: () => drag.start(data),
+      onDragStarted: () {
+        // An Undo from the last move would cover the backlog bar.
+        ScaffoldMessenger.maybeOf(context)?.hideCurrentSnackBar();
+        drag.start(data);
+      },
       onDragUpdate: (details) => drag.move(details.globalPosition),
       // Not onDragEnd, which is skipped once this row is disposed (see StopRow).
       onDragCompleted: drag.end,
