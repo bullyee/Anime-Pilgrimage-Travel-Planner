@@ -9,6 +9,7 @@ import '../../../core/utils/schedule_logic.dart';
 import '../../../shared/theme/app_theme.dart';
 import '../../../shared/widgets/name_dialog.dart';
 import '../../sharing/providers/group_sharing_providers.dart';
+import '../../trip/providers/trip_providers.dart';
 import '../controllers/day_planner_controller.dart';
 import '../models/planner_view.dart';
 import '../providers/planner_providers.dart';
@@ -274,6 +275,12 @@ class _DayPlannerState extends ConsumerState<DayPlanner> {
       error: (e, _) => Center(child: Text("Couldn't load the plan: $e")),
       data: (view) {
         if (view == null) return const Center(child: Text('This trip was deleted.'));
+        // The view can come before the trip's days do. Wait for them, so the
+        // carousel is first built on the right day.
+        final days = ref.watch(tripDaysProvider(widget.tripId));
+        if (!days.hasValue && !days.hasError) {
+          return const Center(child: CircularProgressIndicator());
+        }
         if (!_startPicked) {
           _startPicked = true;
           _startAtToday(view);

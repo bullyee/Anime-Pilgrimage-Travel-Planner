@@ -7,18 +7,23 @@ import '../../../core/utils/schedule_logic.dart';
 import '../../auth/providers/auth_provider.dart';
 import '../providers/trip_providers.dart';
 
-/// Creates, edits and deletes trips for the trip list and the trip overview.
+/// Creates, edits and deletes trips for the trip list and the trip page.
 final tripsControllerProvider =
     NotifierProvider<TripsController, AsyncValue<void>>(TripsController.new);
 
 class TripsController extends Notifier<AsyncValue<void>> {
   static const maxDays = 60;
 
+  /// The longest description a trip takes. The Firestore rules don't check
+  /// it; this keeps a synced trip document small.
+  static const maxDescriptionLength = 500;
+
   @override
   AsyncValue<void> build() => const AsyncData(null);
 
   Future<AppResult<Trip>> createTrip({
     required String title,
+    String? description,
     DateTime? startDate,
     required int dayCount,
   }) async {
@@ -27,8 +32,11 @@ class TripsController extends Notifier<AsyncValue<void>> {
     if (dayCount < 1 || dayCount > maxDays) {
       return Failure('A trip has 1 to $maxDays days.');
     }
+    final about = _cleanDescription(description);
+    if (about != null && about.length > maxDescriptionLength) return _tooLong;
     return _run(() => ref.read(tripRepositoryProvider).createTrip(
           title: name,
+          description: about,
           ownerId: ref.read(currentUserIdProvider),
           startDate: startDate == null ? null : isoDate(startDate),
           dayCount: dayCount,
@@ -36,14 +44,18 @@ class TripsController extends Notifier<AsyncValue<void>> {
   }
 
   /// Renames the trip and sets or clears its start date. A start date that
-  /// would put a pinned day before the day it follows is refused.
+  /// would put a pinned day before the day it follows is refused. A
+  /// [description] replaces the trip's (blank clears it); null leaves it.
   Future<AppResult<void>> updateTrip({
     required String tripId,
     required String title,
+    String? description,
     DateTime? startDate,
   }) async {
     final name = title.trim();
     if (name.isEmpty) return const Failure('Give the trip a name.');
+    final about = _cleanDescription(description);
+    if (about != null && about.length > maxDescriptionLength) return _tooLong;
     final repo = ref.read(tripRepositoryProvider);
     final trip = await repo.getTrip(tripId);
     if (trip == null) return const Failure('This trip no longer exists.');
@@ -74,8 +86,16 @@ class TripsController extends Notifier<AsyncValue<void>> {
     return _run(() => repo.updateTrip(TripsCompanion(
           id: Value(tripId),
           title: Value(name),
+          description: description == null ? const Value.absent() : Value(about),
           startDate: Value(startDate == null ? null : isoDate(startDate)),
         )));
+  }
+
+  static const _tooLong = Failure<Never>('A description can be up to $maxDescriptionLength characters.');
+
+  static String? _cleanDescription(String? text) {
+    final t = text?.trim();
+    return t == null || t.isEmpty ? null : t;
   }
 
   Future<AppResult<void>> deleteTrip(String tripId) =>

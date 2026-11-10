@@ -15,18 +15,25 @@ import '../widgets/trip_card.dart';
 import '../widgets/trip_form_sheet.dart';
 import '../widgets/trip_sync_icon.dart';
 import 'trip_members_tab.dart';
-import 'trip_overview_tab.dart';
 import 'trip_stops_tab.dart';
 
-enum TripTab { overview, plan, stops, members }
+enum TripTab {
+  plan,
+  stops,
+  members;
 
-/// One trip, in four tabs: its overview, the day planner, its stops, and
-/// who it's shared with.
+  /// The tab a `?tab=` link names. Anything else, such as the old
+  /// `overview`, opens the plan.
+  static TripTab fromQuery(String? name) => values.asNameMap()[name] ?? plan;
+}
+
+/// One trip, in three tabs: the day planner, its stops, and who it's shared
+/// with. The plan opens read-only; the pencil turns editing on.
 class TripScreen extends ConsumerStatefulWidget {
   final String tripId;
   final TripTab initialTab;
 
-  const TripScreen({super.key, required this.tripId, this.initialTab = TripTab.overview});
+  const TripScreen({super.key, required this.tripId, this.initialTab = TripTab.plan});
 
   @override
   ConsumerState<TripScreen> createState() => _TripScreenState();
@@ -54,8 +61,6 @@ class _TripScreenState extends ConsumerState<TripScreen> with SingleTickerProvid
   void _onTabChanged() {
     if (!_tabs.indexIsChanging) setState(() {});
   }
-
-  void _showTab(TripTab tab) => _tabs.animateTo(tab.index);
 
   @override
   Widget build(BuildContext context) {
@@ -88,7 +93,7 @@ class _TripScreenState extends ConsumerState<TripScreen> with SingleTickerProvid
     final editing = _editing && canEdit;
     final shared = trip.sharing == 'group';
     final menu = [
-      if (canEdit) const PopupMenuItem(value: 'edit', child: Text('Edit name and dates')),
+      if (canEdit) const PopupMenuItem(value: 'edit', child: Text('Edit trip')),
       if (role == TripMemberRole.owner) const PopupMenuItem(value: 'delete', child: Text('Delete trip')),
       if (shared && role != null && role != TripMemberRole.owner)
         const PopupMenuItem(value: 'leave', child: Text('Leave trip')),
@@ -152,7 +157,7 @@ class _TripScreenState extends ConsumerState<TripScreen> with SingleTickerProvid
         ],
         bottom: TabBar(
           controller: _tabs,
-          tabs: const [Tab(text: 'Overview'), Tab(text: 'Plan'), Tab(text: 'Stops'), Tab(text: 'Members')],
+          tabs: const [Tab(text: 'Plan'), Tab(text: 'Stops'), Tab(text: 'Members')],
         ),
       ),
       body: TabBarView(
@@ -160,7 +165,6 @@ class _TripScreenState extends ConsumerState<TripScreen> with SingleTickerProvid
         // Swiping belongs to the planner's days, so tabs change by tapping.
         physics: const NeverScrollableScrollPhysics(),
         children: [
-          TripOverviewTab(trip: trip, onShowPlan: () => _showTab(TripTab.plan)),
           Column(
             children: [
               if (editing)
@@ -211,6 +215,7 @@ class _TripScreenState extends ConsumerState<TripScreen> with SingleTickerProvid
     final result = await ref.read(tripsControllerProvider.notifier).updateTrip(
           tripId: trip.id,
           title: form.title,
+          description: form.description,
           startDate: form.startDate,
         );
     if (!context.mounted) return;

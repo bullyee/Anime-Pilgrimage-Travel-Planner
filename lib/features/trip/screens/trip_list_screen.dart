@@ -115,6 +115,7 @@ class _TripListScreenState extends ConsumerState<TripListScreen> {
     if (form == null || !context.mounted) return;
     final result = await ref.read(tripsControllerProvider.notifier).createTrip(
           title: form.title,
+          description: form.description,
           startDate: form.startDate,
           dayCount: form.dayCount,
         );

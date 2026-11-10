@@ -90,7 +90,7 @@ GoRouter router(RouterRef ref) {
         path: '/trips/:tripId',
         builder: (context, state) => TripScreen(
           tripId: state.pathParameters['tripId']!,
-          initialTab: TripTab.values.asNameMap()[state.uri.queryParameters['tab']] ?? TripTab.overview,
+          initialTab: TripTab.fromQuery(state.uri.queryParameters['tab']),
         ),
       ),
       GoRoute(

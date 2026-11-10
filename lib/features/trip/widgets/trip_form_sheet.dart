@@ -4,14 +4,15 @@ import 'package:intl/intl.dart';
 import '../../../core/database/database.dart';
 import '../controllers/trips_controller.dart';
 
-/// What the trip form returns: the name, an optional start date and, for a
-/// new trip, the number of days.
+/// What the trip form returns: the name, the description (blank when there
+/// is none), an optional start date and, for a new trip, the number of days.
 class TripFormResult {
   final String title;
+  final String description;
   final DateTime? startDate;
   final int dayCount;
 
-  const TripFormResult({required this.title, this.startDate, required this.dayCount});
+  const TripFormResult({required this.title, this.description = '', this.startDate, required this.dayCount});
 }
 
 /// Shows the new-trip form, or the edit form when [editing] is given. The day
@@ -37,6 +38,7 @@ class TripFormSheet extends StatefulWidget {
 
 class _TripFormSheetState extends State<TripFormSheet> {
   late final TextEditingController _title;
+  late final TextEditingController _description;
   DateTime? _startDate;
   int _dayCount = 3;
   String? _titleError;
@@ -48,6 +50,7 @@ class _TripFormSheetState extends State<TripFormSheet> {
     super.initState();
     final trip = widget.editing;
     _title = TextEditingController(text: trip?.title ?? '');
+    _description = TextEditingController(text: trip?.description ?? '');
     _startDate = trip?.startDate == null ? null : DateTime.tryParse(trip!.startDate!);
     if (trip != null) _dayCount = trip.dayCount;
   }
@@ -55,6 +58,7 @@ class _TripFormSheetState extends State<TripFormSheet> {
   @override
   void dispose() {
     _title.dispose();
+    _description.dispose();
     super.dispose();
   }
 
@@ -77,7 +81,12 @@ class _TripFormSheetState extends State<TripFormSheet> {
       return;
     }
     Navigator.of(context).pop(
-      TripFormResult(title: title, startDate: _startDate, dayCount: _dayCount),
+      TripFormResult(
+        title: title,
+        description: _description.text.trim(),
+        startDate: _startDate,
+        dayCount: _dayCount,
+      ),
     );
   }
 
@@ -111,6 +120,20 @@ class _TripFormSheetState extends State<TripFormSheet> {
               if (_titleError != null) setState(() => _titleError = null);
             },
             onSubmitted: (_) => _submit(),
+          ),
+          const SizedBox(height: 4),
+          TextField(
+            key: const Key('tripDescriptionField'),
+            controller: _description,
+            textCapitalization: TextCapitalization.sentences,
+            keyboardType: TextInputType.multiline,
+            minLines: 1,
+            maxLines: 4,
+            maxLength: TripsController.maxDescriptionLength,
+            decoration: const InputDecoration(
+              labelText: 'Description (optional)',
+              hintText: 'What the trip is about',
+            ),
           ),
           const SizedBox(height: 8),
           _FieldRow(
