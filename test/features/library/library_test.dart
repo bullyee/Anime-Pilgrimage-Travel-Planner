@@ -198,7 +198,7 @@ void main() {
       sub.close();
     });
 
-    test('merging moves labels, frames, photos, visits, notes and trip stops to the kept place', () async {
+    test('merging moves labels, frames, photos, visits and notes to the kept place, and leaves trips alone', () async {
       final trips = DriftTripRepository(db);
       final trip = await trips.createTrip(title: 'Uji', ownerId: 'u1', dayCount: 1);
       await _savePlace(db, 'keep', 'Uji Bridge');
@@ -217,7 +217,7 @@ void main() {
 
       expect(await controller().mergePlaces(keep: 'keep', others: ['keep', 'dupe']), isA<Success<void>>());
 
-      expect(await places.getPlace('dupe'), isNull);
+      expect((await places.getPlace('dupe'))!.visibility, 'trip_only', reason: 'a trip has it: hidden, not deleted');
       final kept = (await places.getPlace('keep'))!;
       expect(kept.name, 'Uji Bridge', reason: 'the kept facts stay');
       expect(kept.privateNote, 'Tripod.\n\nEast bank at dusk.');
@@ -226,10 +226,13 @@ void main() {
       expect((await places.getReferenceImagesForPlace('keep')), hasLength(1));
       expect((await places.getVisitsForPlace('keep')).map((v) => v.date).toSet(), {'2026-11-01', '2025-04-29'});
       final stop = (await trips.getStopsForTrip(trip.id)).single;
-      expect(stop.placeKey, 'keep');
-      expect(stop.name, '宇治橋', reason: 'the trip keeps its own copy of the facts');
-      expect((stop.updatedBy, stop.syncStatus), ('u1', 1), reason: 'stamped as an edit by the user, to sync');
+      expect((stop.placeKey, stop.name), ('dupe', '宇治橋'), reason: "the trip's stop is its own");
+      expect(stop.updatedBy, isNot('u1'), reason: 'not an edit of the shared trip');
       expect(await controller().mergePlaces(keep: 'keep', others: ['keep']), isA<Failure<void>>());
+
+      await _savePlace(db, 'loose', 'Uji Bridge (again)');
+      expect(await controller().mergePlaces(keep: 'keep', others: ['loose']), isA<Success<void>>());
+      expect(await places.getPlace('loose'), isNull, reason: 'in no trip: deleted');
     });
 
     test('removing a place in a trip only hides it; otherwise it is deleted', () async {
