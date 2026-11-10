@@ -34,7 +34,7 @@ class MainActivity : FlutterActivity() {
         override fun run() {
             val shown = overlay ?: return
             if (!shown.isShowing) {
-                // Closed with a double-tap.
+                // Closed with the bar's ✕.
                 lastPlacement = shown.lastPlacement ?: lastPlacement
                 overlay = null
                 return

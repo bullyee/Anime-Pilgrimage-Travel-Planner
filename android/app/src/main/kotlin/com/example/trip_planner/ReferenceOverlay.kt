@@ -21,6 +21,7 @@ import android.view.Gravity
 import android.view.MotionEvent
 import android.view.ScaleGestureDetector
 import android.view.View
+import android.view.ViewOutlineProvider
 import android.view.WindowInsets
 import android.view.WindowManager
 import android.widget.FrameLayout
@@ -40,9 +41,12 @@ import kotlin.math.roundToInt
  * On the window:
  *  - drag to move it
  *  - pinch to resize it (aspect ratio locked)
- *  - tap to show a bar with opacity − / +; it fades out quickly soon after
- *    the last touch, and a tap while it shows (or fades) hides it at once
- *  - double-tap to close
+ *  - tap to show a bar with opacity − / + and ✕ (close); it fades out
+ *    quickly soon after the last touch, and a tap while it shows (or fades)
+ *    hides it at once
+ *  - double-tap to shrink it to a small round dot of the frame, out of the
+ *    way; drag the dot anywhere, and tap it to open the window again as it
+ *    was (holding it would close it too easily mid-drag, so it doesn't)
  *
  * Given several frames of one spot, the bar also has ‹ › and a "3/7" count
  * to switch frames in place: the window keeps its place, width and opacity,
@@ -103,13 +107,18 @@ class ReferenceOverlay(
     private var image: ImageView? = null
     private var bar: LinearLayout? = null
     private var counter: TextView? = null
+    private var dot: FrameLayout? = null
+    private var dotImage: ImageView? = null
     private var params: WindowManager.LayoutParams? = null
+
+    /** Shrunk to the dot (a double-tap); a tap on the dot opens it again. */
+    private var collapsed = false
 
     // The frames to switch between, and the one showing.
     private var paths: List<String> = emptyList()
     private var current = 0
 
-    /** The window's placement when it was last closed (by [hide] or a double-tap). */
+    /** The window's placement when it was last closed (by [hide] or ✕). */
     var lastPlacement: Placement? = null
         private set
 
@@ -165,8 +174,35 @@ class ReferenceOverlay(
             setOnTouchListener(TouchHandler())
         }
         val controls = buildBar(image)
+        val dotImage = ImageView(context).apply {
+            setImageBitmap(bitmap)
+            scaleType = ImageView.ScaleType.CENTER_CROP
+            clipToOutline = true
+            outlineProvider = ViewOutlineProvider.BACKGROUND
+            background = GradientDrawable().apply { shape = GradientDrawable.OVAL }
+        }
+        val dotView = FrameLayout(context).apply {
+            background = GradientDrawable().apply {
+                shape = GradientDrawable.OVAL
+                setColor(0xCC202124.toInt())
+                setStroke(dp(2f), Color.WHITE)
+            }
+            val pad = dp(3f)
+            setPadding(pad, pad, pad, pad)
+            addView(
+                dotImage,
+                FrameLayout.LayoutParams(
+                    FrameLayout.LayoutParams.MATCH_PARENT,
+                    FrameLayout.LayoutParams.MATCH_PARENT,
+                ),
+            )
+            contentDescription = "Reference, shrunk. Tap to open it again."
+            visibility = View.GONE
+            setOnTouchListener(TouchHandler(onDot = true))
+        }
         val column = LinearLayout(context).apply {
             orientation = LinearLayout.VERTICAL
+            addView(dotView, LinearLayout.LayoutParams(dp(DOT_DP), dp(DOT_DP)))
             addView(imageFrame, LinearLayout.LayoutParams(imageWidth, imageHeight()))
             addView(
                 controls,
@@ -201,6 +237,9 @@ class ReferenceOverlay(
             frame = imageFrame
             this.image = image
             bar = controls
+            dot = dotView
+            this.dotImage = dotImage
+            collapsed = false
             params = layout
             displays.registerDisplayListener(displayListener, handler)
             true
@@ -209,7 +248,7 @@ class ReferenceOverlay(
         }
     }
 
-    /** False once closed — by the caller, or by the user (double-tap). */
+    /** False once closed — by the caller, or by the user (✕). */
     val isShowing: Boolean get() = root != null
 
     /**
@@ -240,7 +279,27 @@ class ReferenceOverlay(
         image = null
         bar = null
         counter = null
+        dot = null
+        dotImage = null
+        collapsed = false
         params = null
+    }
+
+    /**
+     * Shrinks the window to the dot, at the window's top-left corner, or
+     * opens it again from the dot at the dot's place, keeping its width and
+     * opacity.
+     */
+    private fun setCollapsed(value: Boolean) {
+        val layout = params ?: return
+        val view = root ?: return
+        if (collapsed == value) return
+        collapsed = value
+        hideBar()
+        frame?.visibility = if (value) View.GONE else View.VISIBLE
+        dot?.visibility = if (value) View.VISIBLE else View.GONE
+        clamp(layout, screenBounds())
+        runCatching { wm.updateViewLayout(view, layout) }
     }
 
     /**
@@ -266,6 +325,7 @@ class ReferenceOverlay(
         val layout = params ?: return
         val view = root ?: return
         image?.setImageBitmap(bitmap)
+        dotImage?.setImageBitmap(bitmap)
         counter?.text = countText()
         aspect = bitmap.width.toFloat() / bitmap.height
         val screen = screenBounds()
@@ -277,9 +337,10 @@ class ReferenceOverlay(
     private fun countText(): String = "${current + 1}/${paths.size}"
 
     /**
-     * Opacity − / +, shown under the image after a tap, with ‹ › and the
-     * frame's number around them when there are several frames. There's no
-     * close button: a double-tap on the image closes the window.
+     * Opacity − / + and ✕, shown under the image after a tap, with ‹ › and
+     * the frame's number around them when there are several frames. A
+     * double-tap shrinks the window to a dot instead of closing it, so ✕ is
+     * the way to close it from here.
      */
     private fun buildBar(image: ImageView): LinearLayout {
         fun button(label: String, description: String, onClick: () -> Unit) =
@@ -330,6 +391,7 @@ class ReferenceOverlay(
             if (frames) {
                 addView(button("›", "Next frame") { switchFrame(1) }, slot())
             }
+            addView(button("✕", "Close the reference") { hide() }, slot())
         }
     }
 
@@ -403,10 +465,12 @@ class ReferenceOverlay(
         }
     }
 
-    /** Keep the image fully inside [screen]. */
+    /** Keep the image (or the dot) fully inside [screen]. */
     private fun clamp(layout: WindowManager.LayoutParams, screen: Rect) {
-        layout.x = layout.x.coerceIn(screen.left, max(screen.left, screen.right - imageWidth))
-        layout.y = layout.y.coerceIn(screen.top, max(screen.top, screen.bottom - imageHeight()))
+        val width = if (collapsed) dp(DOT_DP) else imageWidth
+        val height = if (collapsed) dp(DOT_DP) else imageHeight()
+        layout.x = layout.x.coerceIn(screen.left, max(screen.left, screen.right - width))
+        layout.y = layout.y.coerceIn(screen.top, max(screen.top, screen.bottom - height))
     }
 
     /**
@@ -439,21 +503,32 @@ class ReferenceOverlay(
      * a drag only resumes after every finger has lifted — lifting one finger
      * of a pinch can't make the window jump.
      */
-    private inner class TouchHandler : View.OnTouchListener {
+    private inner class TouchHandler(private val onDot: Boolean = false) : View.OnTouchListener {
         private val taps = GestureDetector(
             context,
-            object : GestureDetector.SimpleOnGestureListener() {
-                override fun onSingleTapConfirmed(e: MotionEvent): Boolean {
-                    if (bar?.visibility == View.VISIBLE) hideBar() else showBar()
-                    return true
+            if (onDot) {
+                // The dot: a tap opens the window again. No double-tap
+                // here, so a tap acts at once.
+                object : GestureDetector.SimpleOnGestureListener() {
+                    override fun onSingleTapUp(e: MotionEvent): Boolean {
+                        setCollapsed(false)
+                        return true
+                    }
                 }
+            } else {
+                object : GestureDetector.SimpleOnGestureListener() {
+                    override fun onSingleTapConfirmed(e: MotionEvent): Boolean {
+                        if (bar?.visibility == View.VISIBLE) hideBar() else showBar()
+                        return true
+                    }
 
-                override fun onDoubleTap(e: MotionEvent): Boolean {
-                    hide()
-                    return true
+                    override fun onDoubleTap(e: MotionEvent): Boolean {
+                        setCollapsed(true)
+                        return true
+                    }
                 }
             },
-        )
+        ).apply { setIsLongpressEnabled(false) }
         private val pinch = ScaleGestureDetector(
             context,
             object : ScaleGestureDetector.SimpleOnScaleGestureListener() {
@@ -470,7 +545,7 @@ class ReferenceOverlay(
         @SuppressLint("ClickableViewAccessibility")
         override fun onTouch(v: View, e: MotionEvent): Boolean {
             taps.onTouchEvent(e)
-            pinch.onTouchEvent(e)
+            if (!onDot) pinch.onTouchEvent(e)
             when (e.actionMasked) {
                 MotionEvent.ACTION_DOWN -> {
                     lastX = e.rawX
@@ -479,7 +554,7 @@ class ReferenceOverlay(
                 }
                 MotionEvent.ACTION_POINTER_DOWN -> dragging = false
                 MotionEvent.ACTION_MOVE ->
-                    if (dragging && e.pointerCount == 1 && !pinch.isInProgress) {
+                    if (dragging && e.pointerCount == 1 && (onDot || !pinch.isInProgress)) {
                         moveBy(e.rawX - lastX, e.rawY - lastY)
                         lastX = e.rawX
                         lastY = e.rawY
@@ -533,9 +608,9 @@ class ReferenceOverlay(
 
     private fun imageHeight(): Int = (imageWidth / aspect).roundToInt()
 
-    // Wide enough for the bar's buttons (five with several frames); the
-    // image never outgrows the screen in either direction.
-    private fun minWidth(): Int = dp(if (paths.size > 1) 196f else 132f)
+    // Wide enough for the bar's buttons (six with several frames, three
+    // without); the image never outgrows the screen in either direction.
+    private fun minWidth(): Int = dp(if (paths.size > 1) 232f else 132f)
     private fun maxWidth(screen: Rect): Int =
         max(minWidth(), min(screen.width(), (screen.height() * aspect).roundToInt()))
 
@@ -549,5 +624,6 @@ class ReferenceOverlay(
         const val BAR_TIMEOUT_MS = 1500L
         const val BAR_FADE_MS = 150L
         const val ROTATION_SETTLE_MS = 300L
+        const val DOT_DP = 48f
     }
 }

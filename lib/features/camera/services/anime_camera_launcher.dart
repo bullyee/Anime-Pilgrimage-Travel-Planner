@@ -69,7 +69,8 @@ String _inAppCameraLocation(String? placeKey, String? tripId, {String? frameId})
 /// Unlike [openAnimeCamera], the window stays up after the user leaves Trip
 /// Planner, so they can shoot as many photos as they like with any camera
 /// app and add the keeper on the place page later (Add photos). It stays
-/// until closed with a double-tap. Android only.
+/// until closed with its bar's ✕ (a double-tap shrinks it to a dot).
+/// Android only.
 Future<void> floatReference(
   BuildContext context,
   WidgetRef ref, {
@@ -104,7 +105,8 @@ Future<void> floatReferenceImage(BuildContext context, String path) async {
       content: Text(
         shown
             ? 'The reference now floats over other apps. Switch to your '
-                  'camera and shoot; double-tap it to close it.'
+                  'camera and shoot. Double-tap it to shrink it to a dot; tap '
+                  'it for ✕ to close it.'
             : 'Could not show the reference.',
       ),
     ),
@@ -390,10 +392,11 @@ Future<_ReferenceSource?> _askReferenceSource(
   final intro = switch (mode) {
     _SheetMode.camera =>
       'The reference floats over your camera in a small window you can drag '
-          'and pinch. Tap it for opacity.',
+          'and pinch. Tap it for opacity; double-tap it to shrink it to a dot.',
     _SheetMode.floatOnly =>
-      'The reference floats over every app until you double-tap it, so you '
-          'can shoot as many photos as you like with your own camera app.',
+      'The reference floats over every app until you close it, so you can '
+          'shoot as many photos as you like with your own camera app. '
+          'Double-tap it to shrink it to a dot.',
   };
   return showModalBottomSheet<_ReferenceSource>(
     context: context,

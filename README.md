@@ -174,7 +174,7 @@ Sharing needs a Google sign-in, for you and for the friends you invite.
 
 1. Tap **Take photo** on a place's or a stop's page, or open **Anime Camera** from the home screen and pick a place and one of its frames. Places on today's trip come first.
 2. Line it up:
-   - **On Android**, your phone's own camera app opens, with the frame floating in a small window. **Drag** the window to move it and **pinch** to resize it. **Tap** it for opacity **−** / **+**, which fade away once you leave them, and **double-tap** it to close it. The camera's shutter, focus and zoom work everywhere else on the screen.
+   - **On Android**, your phone's own camera app opens, with the frame floating in a small window. **Drag** the window to move it and **pinch** to resize it. **Tap** it for opacity **−** / **+** and **✕** to close it, which fade away once you leave them. **Double-tap** it to shrink it to a small dot out of the way; tap the dot to bring it back. The camera's shutter, focus and zoom work everywhere else on the screen.
 
      The first time, Android asks you to allow Trip Planner to **display over other apps**. If you'd rather not, you can still shoot without the window.
    - **On iOS**, the frame floats over the in-app camera. Drag it, pinch to resize it, use the **opacity slider**, and switch **flash**, the **native or fill** framing, **zoom** or the **front camera** as needed.
