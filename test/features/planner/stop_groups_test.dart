@@ -11,6 +11,7 @@ import 'package:trip_planner/features/auth/providers/auth_provider.dart';
 import 'package:trip_planner/features/planner/controllers/day_planner_controller.dart';
 import 'package:trip_planner/features/planner/models/planner_view.dart';
 import 'package:trip_planner/features/trip/controllers/trip_stops_controller.dart';
+import 'package:trip_planner/features/trip/models/stop_group.dart';
 import 'package:trip_planner/features/trip/providers/trip_providers.dart';
 import 'package:trip_planner/features/trip/repositories/trip_repository.dart';
 import 'package:trip_planner/features/trip/screens/trip_screen.dart';
@@ -51,6 +52,18 @@ void main() {
   }
 
   List<String> names(PlannerDay day) => [for (final it in day.items) it.stop.name];
+
+  test('a group is offered the name its stops start with', () {
+    expect(suggestedGroupName(['莵道高校 正門', '莵道高校 校外']), '莵道高校');
+    expect(suggestedGroupName(['京阪六地蔵駅 駅前・改札', '京阪六地蔵駅 ホーム']), '京阪六地蔵駅');
+    expect(suggestedGroupName(['Cafe Rose 1', 'Cafe Rose 2', 'Cafe Rose 3']), 'Cafe Rose');
+    expect(suggestedGroupName(['Uji Bridge', 'Uji Bridge, west bank']), 'Uji Bridge', reason: 'a whole word, not cut back');
+    expect(suggestedGroupName(['Cafe Rose', 'Cafe Rose']), 'Cafe Rose');
+    expect(suggestedGroupName(['Byodoin', 'Uji Bridge']), 'Byodoin', reason: 'nothing shared: the first name');
+    expect(suggestedGroupName(['Kyoto Tower', 'Kyoto Station']), 'Kyoto');
+    expect(suggestedGroupName(['Kamo river', 'Kamogawa Delta']), 'Kamo river', reason: 'half a word is not offered');
+    expect(suggestedGroupName(['京都タワー', '京都駅']), '京都', reason: 'no spaces in Japanese');
+  });
 
   group('PlannerView blocks', () {
     test('a group\'s consecutive stops form one block; a lone one stays a stop', () async {
@@ -231,7 +244,7 @@ void main() {
       await tester.tap(find.text('Cafe Rose').last);
       await tester.pumpAndSettle();
       expect(find.text('2 selected'), findsOneWidget);
-      await tester.tap(find.byTooltip('Group'));
+      await tester.tap(find.widgetWithText(TextButton, 'Group'));
       await tester.pumpAndSettle();
       // Prefilled with the stops' common name.
       expect(tester.widget<TextField>(find.byKey(const Key('nameDialogField'))).controller!.text, 'Cafe Rose');

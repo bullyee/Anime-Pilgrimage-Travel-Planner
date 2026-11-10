@@ -96,12 +96,11 @@ class _TripStopsTabState extends ConsumerState<TripStopsTab> {
       });
 
   Future<void> _group(List<TripStopEntry> picked) async {
-    final names = picked.map((e) => e.stop.name).toSet();
     final name = await askName(
       context,
       title: 'Group ${stopCount(picked.length)}',
       action: 'Group',
-      initial: names.length == 1 ? names.single : picked.first.stop.name,
+      initial: suggestedGroupName([for (final e in picked) e.stop.name]),
       maxLength: maxGroupNameLength,
       message: 'For different spots close together. They stay together on each day of the plan.',
     );
@@ -310,6 +309,12 @@ class _SelectionBar extends StatelessWidget {
     required this.onMerge,
   });
 
+  Widget _action(String label, VoidCallback? onPressed) => TextButton(
+        style: TextButton.styleFrom(visualDensity: VisualDensity.compact, padding: const EdgeInsets.symmetric(horizontal: 10)),
+        onPressed: onPressed,
+        child: Text(label),
+      );
+
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
@@ -330,10 +335,10 @@ class _SelectionBar extends StatelessWidget {
               style: theme.textTheme.titleMedium,
             ),
           ),
-          if (onUngroup != null)
-            IconButton(tooltip: 'Ungroup', icon: const Icon(Icons.layers_clear_outlined), onPressed: onUngroup),
-          IconButton(tooltip: 'Group', icon: const Icon(Icons.layers_outlined), onPressed: onGroup),
-          IconButton(tooltip: 'Merge', icon: const Icon(Icons.merge), onPressed: onMerge),
+          // Words rather than icons: Group and Merge are easy to mix up.
+          if (onUngroup != null) _action('Ungroup', onUngroup),
+          _action('Group', onGroup),
+          _action('Merge', onMerge),
         ],
       ),
     );

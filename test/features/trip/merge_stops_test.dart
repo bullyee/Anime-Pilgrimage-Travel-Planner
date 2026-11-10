@@ -170,7 +170,7 @@ void main() {
     await tester.pumpAndSettle();
     await tester.tap(find.text('Bridge'));
     await tester.pumpAndSettle();
-    await tester.tap(find.byTooltip('Merge'));
+    await tester.tap(find.widgetWithText(TextButton, 'Merge'));
     await tester.pumpAndSettle();
     expect(find.text('Merge 2 stops'), findsOneWidget);
     // The planned one is picked to keep; pick the other instead.
