@@ -115,6 +115,19 @@ class _TripStopsTabState extends ConsumerState<TripStopsTab> {
     if (result is Success && mounted) setState(_selected.clear);
   }
 
+  Future<void> _merge(List<TripStopEntry> picked) async {
+    final keep = await showModalBottomSheet<TripStopEntry>(
+      context: context,
+      showDragHandle: true,
+      isScrollControlled: true,
+      builder: (_) => _MergeSheet(picked: picked, initial: stopToKeep(picked)),
+    );
+    if (keep == null || !mounted) return;
+    final result = await _controller.mergeStops(keepId: keep.stop.id, stopIds: [for (final e in picked) e.stop.id]);
+    _report(result, 'Merged ${stopCount(picked.length)} into ${keep.stop.name}.');
+    if (result is Success && mounted) setState(_selected.clear);
+  }
+
   Future<void> _ungroupSelected(List<TripStopEntry> picked) async {
     final result = await _controller.ungroupStops(tripId: widget.tripId, stopIds: [for (final e in picked) e.stop.id]);
     _report(result, 'Took ${stopCount(picked.length)} out of their groups.');
@@ -212,6 +225,7 @@ class _TripStopsTabState extends ConsumerState<TripStopsTab> {
                       count: picked.length,
                       onCancel: () => setState(_selected.clear),
                       onGroup: picked.length < 2 ? null : () => _group(picked),
+                      onMerge: picked.length < 2 ? null : () => _merge(picked),
                       onUngroup: picked.every((e) => stopGroup(e.stop) != null) ? () => _ungroupSelected(picked) : null,
                     )
                   else
@@ -285,7 +299,16 @@ class _SelectionBar extends StatelessWidget {
   /// Null unless every selected stop is in a group.
   final VoidCallback? onUngroup;
 
-  const _SelectionBar({required this.count, required this.onCancel, required this.onGroup, required this.onUngroup});
+  /// Null when fewer than two stops are selected.
+  final VoidCallback? onMerge;
+
+  const _SelectionBar({
+    required this.count,
+    required this.onCancel,
+    required this.onGroup,
+    required this.onUngroup,
+    required this.onMerge,
+  });
 
   @override
   Widget build(BuildContext context) {
@@ -310,7 +333,81 @@ class _SelectionBar extends StatelessWidget {
           if (onUngroup != null)
             IconButton(tooltip: 'Ungroup', icon: const Icon(Icons.layers_clear_outlined), onPressed: onUngroup),
           IconButton(tooltip: 'Group', icon: const Icon(Icons.layers_outlined), onPressed: onGroup),
+          IconButton(tooltip: 'Merge', icon: const Icon(Icons.merge), onPressed: onMerge),
         ],
+      ),
+    );
+  }
+}
+
+/// Asks which of the [picked] stops a merge keeps, starting from [initial].
+class _MergeSheet extends StatefulWidget {
+  final List<TripStopEntry> picked;
+  final TripStopEntry initial;
+
+  const _MergeSheet({required this.picked, required this.initial});
+
+  @override
+  State<_MergeSheet> createState() => _MergeSheetState();
+}
+
+class _MergeSheetState extends State<_MergeSheet> {
+  late TripStopEntry _keep = widget.initial;
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    return SafeArea(
+      child: ConstrainedBox(
+        constraints: BoxConstraints(maxHeight: MediaQuery.sizeOf(context).height * 0.75),
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.stretch,
+          children: [
+            Padding(
+              padding: const EdgeInsets.fromLTRB(20, 0, 20, 4),
+              child: Text('Merge ${stopCount(widget.picked.length)}', style: theme.textTheme.titleLarge),
+            ),
+            Padding(
+              padding: const EdgeInsets.fromLTRB(20, 0, 20, 8),
+              child: Text(
+                'For one spot that is in this trip more than once. Pick the stop to keep: its name and facts stay. '
+                'The others\' notes, labels, frames and days move to it, and they leave the trip. '
+                'Your library is not changed.',
+                style: theme.textTheme.bodySmall?.copyWith(color: theme.colorScheme.onSurfaceVariant),
+              ),
+            ),
+            Flexible(
+              child: ListView(
+                shrinkWrap: true,
+                children: [
+                  for (final e in widget.picked)
+                    ListTile(
+                      leading: Icon(
+                        e == _keep ? Icons.radio_button_checked : Icons.radio_button_unchecked,
+                        color: e == _keep ? theme.trip.tea : theme.colorScheme.outline,
+                      ),
+                      title: Text(e.stop.name, maxLines: 1, overflow: TextOverflow.ellipsis),
+                      subtitle: Text(stopWhenLine(e)),
+                      trailing: e == _keep ? const Text('Keep') : null,
+                      onTap: () => setState(() => _keep = e),
+                    ),
+                ],
+              ),
+            ),
+            Padding(
+              padding: const EdgeInsets.fromLTRB(20, 8, 20, 12),
+              child: Row(
+                mainAxisAlignment: MainAxisAlignment.end,
+                children: [
+                  TextButton(onPressed: () => Navigator.pop(context), child: const Text('Cancel')),
+                  const SizedBox(width: 8),
+                  FilledButton(onPressed: () => Navigator.pop(context, _keep), child: const Text('Merge')),
+                ],
+              ),
+            ),
+          ],
+        ),
       ),
     );
   }

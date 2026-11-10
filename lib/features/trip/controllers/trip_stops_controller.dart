@@ -24,6 +24,16 @@ String numberedName(String base, Set<String> taken) {
   return '$base ($n)';
 }
 
+/// A change the controller won't make, with the reason to show.
+class _Refusal implements Exception {
+  final String message;
+
+  const _Refusal(this.message);
+
+  @override
+  String toString() => message;
+}
+
 /// Adds stops to a trip, from the library or as new spots, and removes them.
 final tripStopsControllerProvider =
     NotifierProvider<TripStopsController, AsyncValue<void>>(TripStopsController.new);
@@ -185,6 +195,29 @@ class TripStopsController extends Notifier<AsyncValue<void>> {
       final ids = [for (final s in await repo.getStopsForTrip(tripId)) if (stopGroup(s) == from) s.id];
       await repo.setStopsArea(ids, trimmed);
       await _tidyGroups(repo, tripId, {trimmed});
+    });
+  }
+
+  /// Merges [stopIds] into [keepId], for one spot that is in the trip more
+  /// than once. The kept stop keeps its name and facts and takes on the
+  /// others' notes, labels, frames, group and days; the others are removed.
+  Future<AppResult<void>> mergeStops({required String keepId, required List<String> stopIds}) {
+    final others = [for (final id in stopIds) if (id != keepId) id];
+    if (others.isEmpty) return Future.value(const Failure('Pick at least two stops to merge.'));
+    return _run(() async {
+      final repo = ref.read(tripRepositoryProvider);
+      final kept = await repo.getStop(keepId);
+      final notes = [for (final id in others) (await repo.getStop(id))?.note];
+      if ((mergedStopNote(kept?.note, notes)?.length ?? 0) > maxTripNoteLength) {
+        throw const _Refusal('Their trip notes together are longer than $maxTripNoteLength characters. '
+            'Shorten them first.');
+      }
+      if (kept == null) throw const _Refusal('The stop to keep is gone.');
+      final groups = _groupsOf(await repo.getStopsForTrip(kept.tripId), stopIds);
+      await repo.mergeStops(keepId: keepId, otherIds: others);
+      // The others' groups may be down to one stop, and the kept stop's
+      // group may have gained days.
+      await _tidyGroups(repo, kept.tripId, groups);
     });
   }
 

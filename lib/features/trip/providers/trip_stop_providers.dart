@@ -19,11 +19,15 @@ class TripStopEntry {
   /// When it starts on its day, in minutes from midnight.
   final int? startMinutes;
 
+  /// Its place in its day's order, from 0.
+  final int? position;
+
   const TripStopEntry({
     required this.stop,
     this.dayIndex,
     this.onBackupDay = false,
     this.startMinutes,
+    this.position,
   });
 
   bool get isPlanned => dayIndex != null;
@@ -60,6 +64,19 @@ List<TripStopEntry> orderStopEntries(List<TripStopEntry> entries, StopOrder orde
           return byTime != 0 ? byTime : a.stop.name.toLowerCase().compareTo(b.stop.name.toLowerCase());
         }),
     };
+
+/// The stop of [picked] that a merge keeps unless the user picks another:
+/// the first in the plan, by day and then place in the day, or else the
+/// first added.
+TripStopEntry stopToKeep(List<TripStopEntry> picked) {
+  final planned = picked.where((e) => e.isPlanned).toList()
+    ..sort((a, b) {
+      final byDay = a.dayIndex!.compareTo(b.dayIndex!);
+      return byDay != 0 ? byDay : a.position!.compareTo(b.position!);
+    });
+  if (planned.isNotEmpty) return planned.first;
+  return ([...picked]..sort((a, b) => a.stop.createdAt.compareTo(b.stop.createdAt))).first;
+}
 
 /// A row of the stop list: one stop, or a group with its stops.
 class StopListRow {
@@ -109,6 +126,7 @@ List<TripStopEntry> buildStopEntries({
 
   final dayOf = <String, int>{};
   final startOf = <String, int>{};
+  final positionOf = <String, int>{};
   for (var i = 0; i < ordered.length; i++) {
     final dayItems = items.where((it) => it.dayId == ordered[i].id).map((it) => ScheduleItemInfo(
           id: it.id,
@@ -120,10 +138,11 @@ List<TripStopEntry> buildStopEntries({
           fixedTimeMinutes: it.fixedTime,
           status: it.status,
         ));
-    for (final t in ScheduleLogicEngine.computeScheduleTimes(dayItems.toList())) {
+    for (final (position, t) in ScheduleLogicEngine.computeScheduleTimes(dayItems.toList()).indexed) {
       if (t.item.status == 'skipped' || dayOf.containsKey(t.item.stopId)) continue;
       dayOf[t.item.stopId] = i;
       startOf[t.item.stopId] = t.startMinutes;
+      positionOf[t.item.stopId] = position;
     }
   }
 
@@ -134,6 +153,7 @@ List<TripStopEntry> buildStopEntries({
         dayIndex: dayOf[s.id],
         onBackupDay: (dayOf[s.id] ?? -1) >= dayCount,
         startMinutes: startOf[s.id],
+        position: positionOf[s.id],
       ),
   ];
   entries.sort((a, b) {
