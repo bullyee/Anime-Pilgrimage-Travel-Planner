@@ -155,6 +155,7 @@ class _NextStop extends ConsumerWidget {
       ..hideCurrentSnackBar()
       ..showSnackBar(SnackBar(
         content: Text('${item.stop.name} done'),
+        persist: false,
         action: SnackBarAction(
           label: 'Undo',
           onPressed: () => repo.updateScheduleItemStatus(itemId: item.item.id, status: before),

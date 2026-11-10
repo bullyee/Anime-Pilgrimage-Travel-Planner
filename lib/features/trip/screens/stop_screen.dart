@@ -113,7 +113,7 @@ class _StopScreenState extends ConsumerState<StopScreen> {
       case Failure(:final error):
         messenger.showSnackBar(SnackBar(content: Text(error)));
       case Success():
-        if (ok != null) messenger.showSnackBar(SnackBar(content: Text(ok), action: action));
+        if (ok != null) messenger.showSnackBar(SnackBar(content: Text(ok), action: action, persist: false));
     }
   }
 

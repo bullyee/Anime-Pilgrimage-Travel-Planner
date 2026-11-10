@@ -183,8 +183,8 @@ class _DayPlannerState extends ConsumerState<DayPlanner> {
   // ---------------------------------------------------------------------------
   // Changes.
 
-  void _report(AppResult<dynamic> result, {String? ok, SnackBarAction? action, bool? persist}) =>
-      reportResult(context, result, ok: ok, action: action, persist: persist);
+  void _report(AppResult<dynamic> result, {String? ok, SnackBarAction? action}) =>
+      reportResult(context, result, ok: ok, action: action);
 
   void _toggleGroup(String key) =>
       setState(() => _openGroups.contains(key) ? _openGroups.remove(key) : _openGroups.add(key));
@@ -224,7 +224,6 @@ class _DayPlannerState extends ConsumerState<DayPlanner> {
         final result = await _controller.unscheduleItems(itemIds);
         _report(result,
             ok: 'Moved $group (${stopCount(itemIds.length)}) to the backlog.',
-            persist: false,
             action: SnackBarAction(label: 'Undo', onPressed: () => _controller.restoreItems(itemIds)));
       case BacklogDrag() || BacklogGroupDrag():
         break;
@@ -634,7 +633,7 @@ class _BacklogPage extends StatelessWidget {
       onTap: () => onToggleGroup(key),
     );
     return [
-      _draggable(BacklogGroupDrag(stopIds: [for (final s in stops) s.id], group: group), header,
+      _draggable(context, BacklogGroupDrag(stopIds: [for (final s in stops) s.id], group: group), header,
           title: group, subtitle: stopCount(stops.length)),
       if (expanded)
         for (final s in stops)
@@ -655,16 +654,20 @@ class _BacklogPage extends StatelessWidget {
       title: Text(name, maxLines: 1, overflow: TextOverflow.ellipsis),
       onTap: () => showPlannerStopSheet(context, tripId: tripId, stopId: stopId, editing: editing),
     );
-    return _draggable(BacklogDrag(stopId: stopId), row, title: name);
+    return _draggable(context, BacklogDrag(stopId: stopId), row, title: name);
   }
 
-  Widget _draggable(PlannerDrag data, Widget row, {required String title, String? subtitle}) {
+  Widget _draggable(BuildContext context, PlannerDrag data, Widget row, {required String title, String? subtitle}) {
     if (!editing) return row;
     return LongPressDraggable<PlannerDrag>(
       data: data,
       delay: const Duration(milliseconds: 350),
       hapticFeedbackOnStart: true,
-      onDragStarted: () => drag.start(data),
+      onDragStarted: () {
+        // An Undo from the last move would cover the backlog bar.
+        ScaffoldMessenger.maybeOf(context)?.hideCurrentSnackBar();
+        drag.start(data);
+      },
       onDragUpdate: (details) => drag.move(details.globalPosition),
       // Not onDragEnd, which is skipped once this row is disposed (see StopRow).
       onDragCompleted: drag.end,
