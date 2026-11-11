@@ -4,11 +4,13 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:intl/intl.dart';
 
+import '../../../core/database/database.dart';
 import '../../../core/utils/app_result.dart';
 import '../../../core/utils/schedule_logic.dart';
 import '../../../shared/theme/app_theme.dart';
 import '../../../shared/widgets/name_dialog.dart';
 import '../../sharing/providers/group_sharing_providers.dart';
+import '../../trip/models/stop_group.dart';
 import '../controllers/day_planner_controller.dart';
 import '../models/planner_view.dart';
 import '../providers/planner_providers.dart';
@@ -57,6 +59,9 @@ class _DayPlannerState extends ConsumerState<DayPlanner> {
   /// A day to show once it appears, after it was just added or opened from the grid.
   String? _focusDayId;
   bool _focusBacklog = false;
+
+  /// The groups opened in the days and the backlog, by [groupKey].
+  final _openGroups = <String>{};
 
   final _pointers = <int, Offset>{};
   double? _pinchStart;
@@ -181,6 +186,9 @@ class _DayPlannerState extends ConsumerState<DayPlanner> {
   void _report(AppResult<dynamic> result, {String? ok, SnackBarAction? action}) =>
       reportResult(context, result, ok: ok, action: action);
 
+  void _toggleGroup(String key) =>
+      setState(() => _openGroups.contains(key) ? _openGroups.remove(key) : _openGroups.add(key));
+
   Future<void> _dropOnDay(PlannerDrag drag, DropSlot slot) async {
     final result = switch (drag) {
       ItemDrag(:final itemId) =>
@@ -191,15 +199,35 @@ class _DayPlannerState extends ConsumerState<DayPlanner> {
           dayId: slot.dayId,
           beforeItemId: slot.beforeItemId,
         ),
+      GroupDrag(:final itemIds) =>
+        await _controller.moveItems(itemIds: itemIds, toDayId: slot.dayId, beforeItemId: slot.beforeItemId),
+      BacklogGroupDrag(:final stopIds) => await _controller.scheduleStops(
+          tripId: widget.tripId,
+          stopIds: stopIds,
+          dayId: slot.dayId,
+          beforeItemId: slot.beforeItemId,
+        ),
     };
     _report(result);
   }
 
-  Future<void> _toBacklog(ItemDrag drag, String name) async {
-    final result = await _controller.unschedule(drag.itemId);
-    _report(result,
-        ok: 'Moved $name to the backlog.',
-        action: SnackBarAction(label: 'Undo', onPressed: () => _controller.restoreItem(drag.itemId)));
+  /// Takes a dragged stop or group off its day, with an Undo.
+  Future<void> _toBacklog(PlannerDrag drag, PlannerView view) async {
+    switch (drag) {
+      case ItemDrag(:final itemId):
+        final name = view.days.expand((d) => d.items).where((it) => it.item.id == itemId).firstOrNull?.stop.name ?? 'the stop';
+        final result = await _controller.unschedule(itemId);
+        _report(result,
+            ok: 'Moved $name to the backlog.',
+            action: SnackBarAction(label: 'Undo', onPressed: () => _controller.restoreItem(itemId)));
+      case GroupDrag(:final itemIds, :final group):
+        final result = await _controller.unscheduleItems(itemIds);
+        _report(result,
+            ok: 'Moved $group (${stopCount(itemIds.length)}) to the backlog.',
+            action: SnackBarAction(label: 'Undo', onPressed: () => _controller.restoreItems(itemIds)));
+      case BacklogDrag() || BacklogGroupDrag():
+        break;
+    }
   }
 
   Future<void> _dropOnNewDay(PlannerDrag drag) async {
@@ -313,7 +341,7 @@ class _DayPlannerState extends ConsumerState<DayPlanner> {
   Widget _single(PlannerView view) {
     final actions = DayCardActions(
       onDrop: _dropOnDay,
-      onOpenStop: (item) => showPlannerStopSheet(context, tripId: widget.tripId, stopId: item.stop.id, editing: widget.editing),
+      onOpenStop: (item) => openPlannerStop(context, tripId: widget.tripId, stopId: item.stop.id, editing: widget.editing),
       onToggleVisited: ref.watch(canEditTripProvider(widget.tripId))
           ? (item) async => _report(await _controller.setVisited(item.item.id, !item.done))
           : null,
@@ -337,6 +365,8 @@ class _DayPlannerState extends ConsumerState<DayPlanner> {
         _report(await _controller.setDayTitle(day.day.id, title));
       },
       onZoomOut: () => widget.onGridChanged(true),
+      isGroupExpanded: _openGroups.contains,
+      onToggleGroup: _toggleGroup,
       registerList: (id, handle) => _lists[id] = handle,
       unregisterList: (id, handle) {
         if (_lists[id] == handle) _lists.remove(id);
@@ -357,7 +387,15 @@ class _DayPlannerState extends ConsumerState<DayPlanner> {
             } else if (widget.editing && i == view.days.length) {
               page = _AddDayPage(view: view, onAddDay: () => _addDay(backup: false), onAddBackup: () => _addDay(backup: true), onDrop: _dropOnNewDay);
             } else {
-              page = _BacklogPage(view: view, tripId: widget.tripId, editing: widget.editing, drag: _drag, onDrop: _toBacklog);
+              page = _BacklogPage(
+                view: view,
+                tripId: widget.tripId,
+                editing: widget.editing,
+                drag: _drag,
+                onDrop: (drag) => _toBacklog(drag, view),
+                isGroupExpanded: _openGroups.contains,
+                onToggleGroup: _toggleGroup,
+              );
             }
             return Padding(padding: const EdgeInsets.fromLTRB(5, 12, 5, 16), child: page);
           },
@@ -366,13 +404,12 @@ class _DayPlannerState extends ConsumerState<DayPlanner> {
           listenable: _drag,
           builder: (context, _) {
             final drag = _drag.active;
-            if (drag is! ItemDrag) return const SizedBox.shrink();
-            final name = view.days.expand((d) => d.items).where((it) => it.item.id == drag.itemId).firstOrNull?.stop.name ?? 'the stop';
+            if (drag == null || !_fromDay(drag)) return const SizedBox.shrink();
             return Positioned(
               left: 16,
               right: 16,
               bottom: 16,
-              child: _DropBar(onDrop: (d) => _toBacklog(d, name)),
+              child: _DropBar(onDrop: (d) => _toBacklog(d, view)),
             );
           },
         ),
@@ -381,10 +418,13 @@ class _DayPlannerState extends ConsumerState<DayPlanner> {
   }
 }
 
-/// Shown at the bottom while a stop is dragged: drop it here to take it off
-/// its day without paging to the backlog.
+/// Whether [drag] is of stops on a day, which can go back to the backlog.
+bool _fromDay(PlannerDrag drag) => drag is ItemDrag || drag is GroupDrag;
+
+/// Shown at the bottom while a stop or group is dragged: drop it here to take
+/// it off its day without paging to the backlog.
 class _DropBar extends StatelessWidget {
-  final void Function(ItemDrag drag) onDrop;
+  final void Function(PlannerDrag drag) onDrop;
 
   const _DropBar({required this.onDrop});
 
@@ -394,8 +434,8 @@ class _DropBar extends StatelessWidget {
     final scheme = theme.colorScheme;
     final p = theme.trip;
     return DragTarget<PlannerDrag>(
-      onWillAcceptWithDetails: (details) => details.data is ItemDrag,
-      onAcceptWithDetails: (details) => onDrop(details.data as ItemDrag),
+      onWillAcceptWithDetails: (details) => _fromDay(details.data),
+      onAcceptWithDetails: (details) => onDrop(details.data),
       builder: (context, candidates, _) {
         final hovering = candidates.isNotEmpty;
         final foreground = hovering ? scheme.surface : p.tea;
@@ -505,20 +545,26 @@ class _BacklogPage extends StatelessWidget {
   final String tripId;
   final bool editing;
   final PlannerDragState drag;
-  final void Function(ItemDrag drag, String name) onDrop;
+  final void Function(PlannerDrag drag) onDrop;
+  final bool Function(String key) isGroupExpanded;
+  final void Function(String key) onToggleGroup;
 
-  const _BacklogPage({required this.view, required this.tripId, required this.editing, required this.drag, required this.onDrop});
+  const _BacklogPage({
+    required this.view,
+    required this.tripId,
+    required this.editing,
+    required this.drag,
+    required this.onDrop,
+    required this.isGroupExpanded,
+    required this.onToggleGroup,
+  });
 
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
     return DragTarget<PlannerDrag>(
-      onWillAcceptWithDetails: (details) => editing && details.data is ItemDrag,
-      onAcceptWithDetails: (details) {
-        final d = details.data as ItemDrag;
-        final name = view.days.expand((day) => day.items).where((it) => it.item.id == d.itemId).firstOrNull?.stop.name ?? 'the stop';
-        onDrop(d, name);
-      },
+      onWillAcceptWithDetails: (details) => editing && _fromDay(details.data),
+      onAcceptWithDetails: (details) => onDrop(details.data),
       builder: (context, candidates, _) => Card(
         margin: EdgeInsets.zero,
         color: candidates.isNotEmpty ? theme.trip.teaSoft : theme.colorScheme.surfaceContainerLow,
@@ -559,7 +605,11 @@ class _BacklogPage extends StatelessWidget {
               child: ListView(
                 padding: const EdgeInsets.fromLTRB(8, 0, 8, 96),
                 children: [
-                  for (final s in view.backlog) _backlogRow(context, s.id, s.name),
+                  for (final entry in view.backlogEntries)
+                    if (entry.group case final group?)
+                      ..._groupRows(context, group, entry.stops)
+                    else
+                      _backlogRow(context, entry.stops.single.id, entry.stops.single.name),
                 ],
               ),
             ),
@@ -569,14 +619,46 @@ class _BacklogPage extends StatelessWidget {
     );
   }
 
+  /// A group's stops in the backlog: one entry, dragged as one, that opens
+  /// to show them.
+  List<Widget> _groupRows(BuildContext context, String group, List<Stop> stops) {
+    final theme = Theme.of(context);
+    final key = groupKey('backlog', group);
+    final expanded = isGroupExpanded(key);
+    final header = ListTile(
+      leading: Icon(Icons.layers_outlined, color: theme.trip.tea),
+      title: Text(group, maxLines: 1, overflow: TextOverflow.ellipsis),
+      subtitle: Text(stopCount(stops.length)),
+      trailing: Icon(expanded ? Icons.expand_less : Icons.expand_more),
+      onTap: () => onToggleGroup(key),
+    );
+    return [
+      _draggable(context, BacklogGroupDrag(stopIds: [for (final s in stops) s.id], group: group), header,
+          title: group, subtitle: stopCount(stops.length)),
+      if (expanded)
+        for (final s in stops)
+          Padding(
+            padding: const EdgeInsets.only(left: 24),
+            child: ListTile(
+              dense: true,
+              title: Text(s.name, maxLines: 1, overflow: TextOverflow.ellipsis),
+              onTap: () => openPlannerStop(context, tripId: tripId, stopId: s.id, editing: editing),
+            ),
+          ),
+    ];
+  }
+
   Widget _backlogRow(BuildContext context, String stopId, String name) {
     final row = ListTile(
       leading: Icon(Icons.place_outlined, color: Theme.of(context).trip.tea),
       title: Text(name, maxLines: 1, overflow: TextOverflow.ellipsis),
-      onTap: () => showPlannerStopSheet(context, tripId: tripId, stopId: stopId, editing: editing),
+      onTap: () => openPlannerStop(context, tripId: tripId, stopId: stopId, editing: editing),
     );
+    return _draggable(context, BacklogDrag(stopId: stopId), row, title: name);
+  }
+
+  Widget _draggable(BuildContext context, PlannerDrag data, Widget row, {required String title, String? subtitle}) {
     if (!editing) return row;
-    final data = BacklogDrag(stopId: stopId);
     return LongPressDraggable<PlannerDrag>(
       data: data,
       delay: const Duration(milliseconds: 350),
@@ -590,7 +672,7 @@ class _BacklogPage extends StatelessWidget {
       // Not onDragEnd, which is skipped once this row is disposed (see StopRow).
       onDragCompleted: drag.end,
       onDraggableCanceled: (_, _) => drag.end(),
-      feedback: DragFeedbackCard(title: name),
+      feedback: DragFeedbackCard(title: title, subtitle: subtitle),
       childWhenDragging: Opacity(opacity: 0.3, child: row),
       child: row,
     );

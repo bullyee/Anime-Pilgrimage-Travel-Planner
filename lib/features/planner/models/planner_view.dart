@@ -1,5 +1,6 @@
 import '../../../core/database/database.dart';
 import '../../../core/utils/schedule_logic.dart';
+import '../../trip/models/stop_group.dart';
 
 /// A stop on a day, with the times worked out from the order, stays and
 /// transits.
@@ -25,6 +26,58 @@ class PlannerItem {
   });
 
   bool get done => item.status == 'done';
+
+  /// The group its stop is in, or null.
+  String? get group => stopGroup(stop);
+}
+
+/// A slot of a day: a group's stops that follow each other on the day, shown
+/// as one, or a single stop. A stop whose group has no other stop next to it
+/// is a single stop here.
+class PlannerBlock {
+  /// In the day's order; never empty.
+  final List<PlannerItem> items;
+
+  /// The group's name, for a block of two or more of a group's stops.
+  final String? group;
+
+  const PlannerBlock({required this.items, this.group});
+
+  bool get isGroup => group != null;
+  PlannerItem get first => items.first;
+  int get startMinutes => items.first.startMinutes;
+  int get endMinutes => items.last.endMinutes;
+  int get visited => items.where((it) => it.done).length;
+}
+
+/// [items], in order, made into blocks: consecutive stops of one group form
+/// one block.
+List<PlannerBlock> planBlocks(List<PlannerItem> items) {
+  final runs = <List<PlannerItem>>[];
+  for (final it in items) {
+    final group = it.group;
+    if (group != null && runs.isNotEmpty && runs.last.last.group == group) {
+      runs.last.add(it);
+    } else {
+      runs.add([it]);
+    }
+  }
+  return [for (final run in runs) PlannerBlock(items: run, group: run.length > 1 ? run.first.group : null)];
+}
+
+/// An entry of the backlog: a group's stops that are on no day, shown as one,
+/// or a single stop.
+class BacklogEntry {
+  /// Never empty.
+  final List<Stop> stops;
+
+  /// The group's name, when two or more of its stops are in the backlog.
+  final String? group;
+
+  const BacklogEntry({required this.stops, this.group});
+
+  bool get isGroup => group != null;
+  String get name => group ?? stops.single.name;
 }
 
 /// One day block: its date (by position, or pinned), and its stops in order.
@@ -55,6 +108,10 @@ class PlannerDay {
   });
 
   bool get isPinned => day.pinnedDate != null;
+
+  /// [items] as the day shows them, with a group's consecutive stops as one
+  /// block. [items] stays flat for everything that counts or maps stops.
+  List<PlannerBlock> get blocks => planBlocks(items);
 }
 
 /// The dates a pin on a day may take. [min] or [max] is null when there is
@@ -87,6 +144,24 @@ class PlannerView {
   final List<Stop> backlog;
 
   const PlannerView({required this.trip, required this.days, required this.backlog});
+
+  /// [backlog] as the backlog shows it: a group's stops in it as one entry,
+  /// placed by the group's name among the stops' names.
+  List<BacklogEntry> get backlogEntries {
+    final byGroup = <String, List<Stop>>{};
+    for (final s in backlog) {
+      final group = stopGroup(s);
+      if (group != null) byGroup.putIfAbsent(group, () => []).add(s);
+    }
+    final entries = <BacklogEntry>[
+      for (final s in backlog)
+        if ((byGroup[stopGroup(s)]?.length ?? 0) < 2) BacklogEntry(stops: [s]),
+      for (final MapEntry(:key, :value) in byGroup.entries)
+        if (value.length > 1) BacklogEntry(stops: value, group: key),
+    ];
+    // The backlog comes sorted by name; a group takes its place by its name.
+    return entries..sort((a, b) => a.name.compareTo(b.name));
+  }
 
   List<PlannerDay> get datedDays => days.where((d) => !d.isBackup).toList();
   List<PlannerDay> get backupDays => days.where((d) => d.isBackup).toList();

@@ -2,7 +2,8 @@ import 'package:flutter/material.dart';
 
 /// Asks for a name, with [message] above the field when given. Returns it
 /// trimmed, or null when cancelled. With [allowEmpty], an empty name comes
-/// back as '' rather than keeping the dialog open.
+/// back as '' rather than keeping the dialog open. [maxLength] caps the
+/// name, in characters.
 Future<String?> askName(
   BuildContext context, {
   required String title,
@@ -10,10 +11,18 @@ Future<String?> askName(
   String initial = '',
   String? message,
   bool allowEmpty = false,
+  int? maxLength,
 }) {
   return showDialog<String>(
     context: context,
-    builder: (_) => _NameDialog(title: title, action: action, initial: initial, message: message, allowEmpty: allowEmpty),
+    builder: (_) => _NameDialog(
+      title: title,
+      action: action,
+      initial: initial,
+      message: message,
+      allowEmpty: allowEmpty,
+      maxLength: maxLength,
+    ),
   );
 }
 
@@ -23,15 +32,27 @@ class _NameDialog extends StatefulWidget {
   final String initial;
   final String? message;
   final bool allowEmpty;
+  final int? maxLength;
 
-  const _NameDialog({required this.title, required this.action, required this.initial, this.message, this.allowEmpty = false});
+  const _NameDialog({
+    required this.title,
+    required this.action,
+    required this.initial,
+    this.message,
+    this.allowEmpty = false,
+    this.maxLength,
+  });
 
   @override
   State<_NameDialog> createState() => _NameDialogState();
 }
 
 class _NameDialogState extends State<_NameDialog> {
-  late final _name = TextEditingController(text: widget.initial);
+  late final _name = TextEditingController(
+    text: widget.maxLength != null && widget.initial.length > widget.maxLength!
+        ? widget.initial.substring(0, widget.maxLength!)
+        : widget.initial,
+  );
 
   @override
   void dispose() {
@@ -51,6 +72,7 @@ class _NameDialogState extends State<_NameDialog> {
       controller: _name,
       autofocus: true,
       textCapitalization: TextCapitalization.words,
+      maxLength: widget.maxLength,
       decoration: const InputDecoration(labelText: 'Name'),
       onSubmitted: (_) => _submit(),
     );

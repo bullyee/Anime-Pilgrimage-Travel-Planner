@@ -5,6 +5,7 @@ import 'package:intl/intl.dart';
 
 import '../../../core/utils/schedule_logic.dart';
 import '../../../shared/theme/app_theme.dart';
+import '../../trip/models/stop_group.dart';
 import '../models/planner_view.dart';
 import 'planner_drag.dart';
 
@@ -24,6 +25,11 @@ class DayCardActions {
   final void Function(String dayId, ListHandle handle) registerList;
   final void Function(String dayId, ListHandle handle) unregisterList;
 
+  /// Whether a group's block is open, by [groupKey]. The planner keeps this
+  /// while it is shown; it isn't stored.
+  final bool Function(String key) isGroupExpanded;
+  final void Function(String key) onToggleGroup;
+
   const DayCardActions({
     required this.onDrop,
     required this.onOpenStop,
@@ -37,8 +43,13 @@ class DayCardActions {
     required this.onZoomOut,
     required this.registerList,
     required this.unregisterList,
+    required this.isGroupExpanded,
+    required this.onToggleGroup,
   });
 }
+
+/// What a group's block on a day is known by while it is open.
+String groupKey(String dayId, String group) => '$dayId/$group';
 
 /// "Day 2", or "Backup day".
 String dayLabel(PlannerDay day) => day.isBackup ? 'Backup day' : 'Day ${day.index + 1}';
@@ -109,16 +120,24 @@ class _DayCardState extends State<DayCard> {
     super.dispose();
   }
 
-  /// The slot under [global]: before the first row whose middle is below it.
+  /// The ids of the items being dragged, if they are on a day.
+  Set<String> get _draggedIds => switch (widget.drag.active) {
+        ItemDrag(:final itemId) => {itemId},
+        GroupDrag(:final itemIds) => itemIds.toSet(),
+        _ => const {},
+      };
+
+  /// The slot under [global]: before the first block whose middle is below
+  /// it. A group's block takes nothing in between its stops.
   DropSlot _slotAt(Offset global) {
-    final dragged = widget.drag.active;
-    final draggedId = dragged is ItemDrag ? dragged.itemId : null;
-    for (final it in widget.day.items) {
-      if (it.item.id == draggedId) continue;
-      final box = _rowKeys[it.item.id]?.currentContext?.findRenderObject() as RenderBox?;
+    final dragged = _draggedIds;
+    for (final block in widget.day.blocks) {
+      final id = block.first.item.id;
+      if (dragged.contains(id)) continue;
+      final box = _rowKeys[id]?.currentContext?.findRenderObject() as RenderBox?;
       if (box == null || !box.attached) continue;
       final top = box.localToGlobal(Offset.zero).dy;
-      if (global.dy < top + box.size.height / 2) return DropSlot(_dayId, it.item.id);
+      if (global.dy < top + box.size.height / 2) return DropSlot(_dayId, id);
     }
     return DropSlot(_dayId, null);
   }
@@ -185,34 +204,55 @@ class _DayCardState extends State<DayCard> {
     final d = widget.day;
     final slot = widget.drag.slot;
     final dragging = widget.drag.active;
-    final draggedId = dragging is ItemDrag ? dragging.itemId : null;
+    final draggedIds = _draggedIds;
     final here = dragging != null && slot != null && slot.dayId == _dayId;
 
-    final rows = <Widget>[];
-    PlannerItem? previous;
-    for (final it in d.items) {
-      if (here && slot.beforeItemId == it.item.id) rows.add(const _InsertLine());
-      if (previous != null) {
-        rows.add(previous.item.transitMinutes > 0
-            ? _TravelLine(minutes: previous.item.transitMinutes)
-            : Divider(height: 1, indent: 72, endIndent: 12, color: theme.colorScheme.outlineVariant.withValues(alpha: 0.5)));
-      }
-      previous = it;
-      rows.add(KeyedSubtree(
-        key: _rowKeys.putIfAbsent(it.item.id, GlobalKey.new),
-        child: StopRow(
+    Widget between(PlannerItem previous) => previous.item.transitMinutes > 0
+        ? _TravelLine(minutes: previous.item.transitMinutes)
+        : Divider(height: 1, indent: 72, endIndent: 12, color: theme.colorScheme.outlineVariant.withValues(alpha: 0.5));
+    // A group's stops are dragged with their group, not on their own.
+    StopRow stopRow(PlannerItem it, {required bool inGroup}) => StopRow(
           item: it,
           dayId: _dayId,
-          editing: widget.editing,
-          dimmed: it.item.id == draggedId,
+          editing: widget.editing && !inGroup,
+          dimmed: !inGroup && draggedIds.contains(it.item.id),
           drag: widget.drag,
+          group: inGroup ? null : it.group,
           onTap: () => widget.actions.onOpenStop(it),
           onToggleVisited: switch (widget.actions.onToggleVisited) {
             final toggle? => () => toggle(it),
             null => null,
           },
-        ),
-      ));
+        );
+
+    final rows = <Widget>[];
+    PlannerItem? previous;
+    for (final block in d.blocks) {
+      if (here && slot.beforeItemId == block.first.item.id) rows.add(const _InsertLine());
+      if (previous != null) rows.add(between(previous));
+      previous = block.items.last;
+      final Widget child;
+      if (block.group case final group?) {
+        final key = groupKey(_dayId, group);
+        child = GroupBlock(
+          block: block,
+          dayId: _dayId,
+          editing: widget.editing,
+          expanded: widget.actions.isGroupExpanded(key),
+          dimmed: draggedIds.contains(block.first.item.id),
+          drag: widget.drag,
+          onToggle: () => widget.actions.onToggleGroup(key),
+          rows: [
+            for (final (i, it) in block.items.indexed) ...[
+              if (i > 0) between(block.items[i - 1]),
+              stopRow(it, inGroup: true),
+            ],
+          ],
+        );
+      } else {
+        child = stopRow(block.first, inGroup: false);
+      }
+      rows.add(KeyedSubtree(key: _rowKeys.putIfAbsent(block.first.item.id, GlobalKey.new), child: child));
     }
     if (here && slot.beforeItemId == null) rows.add(const _InsertLine());
 
@@ -378,6 +418,10 @@ class StopRow extends StatelessWidget {
   final PlannerDragState drag;
   final VoidCallback onTap;
 
+  /// The group to note under the name, for a stop of a group that has no
+  /// other stop next to it on the day.
+  final String? group;
+
   /// Null when the user can only view the trip: the circle then only shows
   /// whether the stop was visited.
   final VoidCallback? onToggleVisited;
@@ -391,6 +435,7 @@ class StopRow extends StatelessWidget {
     required this.drag,
     required this.onTap,
     required this.onToggleVisited,
+    this.group,
   });
 
   @override
@@ -463,14 +508,21 @@ class StopRow extends StatelessWidget {
                 ),
               ),
               Expanded(
-                child: Text(
-                  item.stop.name,
-                  maxLines: 1,
-                  overflow: TextOverflow.ellipsis,
-                  style: theme.textTheme.bodyLarge?.copyWith(
-                    decoration: done ? TextDecoration.lineThrough : null,
-                    color: done ? theme.colorScheme.onSurfaceVariant : null,
-                  ),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    Text(
+                      item.stop.name,
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                      style: theme.textTheme.bodyLarge?.copyWith(
+                        decoration: done ? TextDecoration.lineThrough : null,
+                        color: done ? theme.colorScheme.onSurfaceVariant : null,
+                      ),
+                    ),
+                    if (group case final group?) GroupChip(name: group),
+                  ],
                 ),
               ),
               IconButton(
@@ -484,6 +536,189 @@ class StopRow extends StatelessWidget {
             ],
           ),
         ),
+      ),
+    );
+  }
+}
+
+/// A group's stops that follow each other on a day, as one slot: the time
+/// they take, the group's name and how many were visited. It opens to show
+/// its stops; while editing, the header drags the whole group.
+class GroupBlock extends StatelessWidget {
+  final PlannerBlock block;
+  final String dayId;
+  final bool editing;
+  final bool expanded;
+  final bool dimmed;
+  final PlannerDragState drag;
+  final VoidCallback onToggle;
+
+  /// The group's stops, shown when [expanded].
+  final List<Widget> rows;
+
+  const GroupBlock({
+    super.key,
+    required this.block,
+    required this.dayId,
+    required this.editing,
+    required this.expanded,
+    required this.dimmed,
+    required this.drag,
+    required this.onToggle,
+    required this.rows,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    final header = _header(theme);
+    final data = GroupDrag(
+      itemIds: [for (final it in block.items) it.item.id],
+      group: block.group!,
+      fromDayId: dayId,
+    );
+    final top = !editing
+        ? header
+        : LongPressDraggable<PlannerDrag>(
+            data: data,
+            delay: const Duration(milliseconds: 350),
+            hapticFeedbackOnStart: true,
+            onDragStarted: () => drag.start(data),
+            onDragUpdate: (details) => drag.move(details.globalPosition),
+            // Not onDragEnd, which is skipped once this row is disposed (see StopRow).
+            onDragCompleted: drag.end,
+            onDraggableCanceled: (_, _) => drag.end(),
+            feedback: DragFeedbackCard(title: block.group!, subtitle: stopCount(block.items.length)),
+            child: header,
+          );
+    final box = Container(
+      margin: const EdgeInsets.symmetric(vertical: 2),
+      decoration: BoxDecoration(
+        color: theme.trip.teaSoft.withValues(alpha: 0.55),
+        borderRadius: BorderRadius.circular(14),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          top,
+          if (expanded) Padding(padding: const EdgeInsets.only(left: 12, bottom: 4), child: Column(children: rows)),
+        ],
+      ),
+    );
+    return dimmed ? Opacity(opacity: 0.3, child: box) : box;
+  }
+
+  Widget _header(ThemeData theme) {
+    final muted = theme.colorScheme.onSurfaceVariant;
+    final visited = block.visited;
+    return Material(
+      type: MaterialType.transparency,
+      child: InkWell(
+        borderRadius: BorderRadius.circular(14),
+        onTap: onToggle,
+        child: Padding(
+          padding: const EdgeInsets.fromLTRB(8, 6, 0, 6),
+          child: Row(
+            children: [
+              SizedBox(
+                width: 64,
+                child: FittedBox(
+                  fit: BoxFit.scaleDown,
+                  alignment: Alignment.centerLeft,
+                  child: Column(
+                    mainAxisSize: MainAxisSize.min,
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text(
+                        formatTimelineMinutes(block.startMinutes),
+                        style: theme.textTheme.bodyMedium?.copyWith(
+                          fontFeatures: const [FontFeature.tabularFigures()],
+                          fontWeight: FontWeight.w600,
+                          color: muted,
+                        ),
+                      ),
+                      Text(
+                        '–${formatTimelineMinutes(block.endMinutes)}',
+                        style: theme.textTheme.bodySmall?.copyWith(
+                          fontFeatures: const [FontFeature.tabularFigures()],
+                          color: muted,
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+              ),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Row(
+                      children: [
+                        Icon(Icons.layers_outlined, size: 16, color: theme.trip.tea),
+                        const SizedBox(width: 4),
+                        Expanded(
+                          child: Text(
+                            block.group!,
+                            maxLines: 1,
+                            overflow: TextOverflow.ellipsis,
+                            style: theme.textTheme.bodyLarge?.copyWith(fontWeight: FontWeight.w600),
+                          ),
+                        ),
+                      ],
+                    ),
+                    Text(
+                      '${stopCount(block.items.length)} · $visited visited',
+                      style: theme.textTheme.bodySmall
+                          ?.copyWith(color: visited == block.items.length ? theme.trip.tea : muted),
+                    ),
+                  ],
+                ),
+              ),
+              SizedBox(
+                width: 48,
+                height: 40,
+                child: Icon(
+                  expanded ? Icons.expand_less : Icons.expand_more,
+                  semanticLabel: expanded ? 'Hide its stops' : 'Show its stops',
+                  color: muted,
+                ),
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+/// A small note of the group a stop is in.
+class GroupChip extends StatelessWidget {
+  final String name;
+
+  const GroupChip({super.key, required this.name});
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    final p = theme.trip;
+    return Container(
+      margin: const EdgeInsets.only(top: 2),
+      padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 1),
+      decoration: BoxDecoration(color: p.teaSoft, borderRadius: BorderRadius.circular(999)),
+      child: Row(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          Icon(Icons.layers_outlined, size: 12, color: p.tea),
+          const SizedBox(width: 3),
+          Flexible(
+            child: Text(
+              name,
+              maxLines: 1,
+              overflow: TextOverflow.ellipsis,
+              style: theme.textTheme.labelSmall?.copyWith(color: p.tea),
+            ),
+          ),
+        ],
       ),
     );
   }

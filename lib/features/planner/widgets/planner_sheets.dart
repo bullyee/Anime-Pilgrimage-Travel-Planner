@@ -9,6 +9,7 @@ import '../../../core/utils/schedule_logic.dart';
 import '../../../shared/theme/app_theme.dart';
 import '../../sharing/providers/group_sharing_providers.dart';
 import '../../trip/controllers/trip_stops_controller.dart';
+import '../../trip/models/stop_group.dart';
 import '../controllers/day_planner_controller.dart';
 import '../models/planner_view.dart';
 import '../providers/planner_providers.dart';
@@ -25,6 +26,18 @@ void reportResult(BuildContext context, AppResult<dynamic> result, {String? ok, 
       messenger.showSnackBar(SnackBar(content: Text(error)));
     case Success():
       if (ok != null) messenger.showSnackBar(SnackBar(content: Text(ok), action: action, persist: false));
+  }
+}
+
+/// Opens a stop from the plan: its page when the plan is read-only, where
+/// everything about it is (frames, Take photo, notes, Mark visited); its
+/// sheet while editing, for quick changes (time, stay, another day, the
+/// backlog) without leaving the plan.
+void openPlannerStop(BuildContext context, {required String tripId, required String stopId, required bool editing}) {
+  if (editing) {
+    showPlannerStopSheet(context, tripId: tripId, stopId: stopId, editing: true);
+  } else {
+    context.push('/trips/$tripId/stops/${Uri.encodeComponent(stopId)}');
   }
 }
 
@@ -76,6 +89,13 @@ class _StopSheet extends ConsumerWidget {
     }
     final controller = ref.read(dayPlannerControllerProvider.notifier);
     final canEdit = ref.watch(canEditTripProvider(tripId));
+    final group = stopGroup(stop);
+    // A stop shown inside its group's block, on its day or in the backlog,
+    // moves with the group; taken out of the group, it moves on its own.
+    final movesWithGroup = group != null &&
+        (day != null
+            ? day.blocks.any((b) => b.isGroup && b.items.contains(item))
+            : view.backlogEntries.any((e) => e.isGroup && e.stops.contains(stop)));
 
     Widget fact(String label, Widget value) => Padding(
           padding: const EdgeInsets.symmetric(vertical: 6),
@@ -135,6 +155,25 @@ class _StopSheet extends ConsumerWidget {
             ),
             const SizedBox(height: 8),
             fact('When', text(when)),
+            if (group != null)
+              fact(
+                'Group',
+                Row(
+                  children: [
+                    Expanded(child: text(group)),
+                    if (editing)
+                      TextButton(
+                        onPressed: () async {
+                          final result = await ref
+                              .read(tripStopsControllerProvider.notifier)
+                              .ungroupStops(tripId: tripId, stopIds: [stop.id]);
+                          if (context.mounted) reportResult(context, result, ok: 'Took ${stop.name} out of $group.');
+                        },
+                        child: const Text('Take out of the group'),
+                      ),
+                  ],
+                ),
+              ),
             if (item != null && editing)
               fact(
                 'Starts',
@@ -231,7 +270,7 @@ class _StopSheet extends ConsumerWidget {
                     icon: Icon(item.done ? Icons.check_circle : Icons.radio_button_unchecked),
                     label: Text(item.done ? 'Mark as not visited' : 'Mark as visited'),
                   ),
-                if (editing && item != null)
+                if (editing && item != null && !movesWithGroup)
                   OutlinedButton.icon(
                     onPressed: () async {
                       final itemId = item.item.id;
@@ -253,7 +292,14 @@ class _StopSheet extends ConsumerWidget {
                   ),
               ],
             ),
-            if (editing) ...[
+            if (editing && movesWithGroup) ...[
+              const SizedBox(height: 16),
+              Text(
+                'It moves with its group. Take it out of the group to move it on its own.',
+                style: theme.textTheme.bodySmall?.copyWith(color: theme.colorScheme.onSurfaceVariant),
+              ),
+            ],
+            if (editing && !movesWithGroup) ...[
               const SizedBox(height: 16),
               Text(item == null ? 'Add to a day' : 'Move to another day', style: theme.textTheme.titleSmall),
               for (final d in view.days)
@@ -475,16 +521,35 @@ class _AddFromBacklogSheet extends ConsumerWidget {
                 child: ListView(
                   shrinkWrap: true,
                   children: [
-                    for (final s in view.backlog)
-                      ListTile(
-                        title: Text(s.name),
-                        subtitle: s.address == null ? null : Text(s.address!, maxLines: 1, overflow: TextOverflow.ellipsis),
-                        trailing: const Icon(Icons.add_circle_outline),
-                        onTap: () async {
-                          final result = await controller.scheduleStop(tripId: tripId, stopId: s.id, dayId: dayId);
-                          if (context.mounted && result is Failure) reportResult(context, result);
-                        },
-                      ),
+                    for (final entry in view.backlogEntries)
+                      if (entry.group case final group?)
+                        ListTile(
+                          leading: Icon(Icons.layers_outlined, color: theme.trip.tea),
+                          title: Text(group),
+                          subtitle: Text(stopCount(entry.stops.length)),
+                          trailing: const Icon(Icons.add_circle_outline),
+                          onTap: () async {
+                            final result = await controller.scheduleStops(
+                              tripId: tripId,
+                              stopIds: [for (final s in entry.stops) s.id],
+                              dayId: dayId,
+                            );
+                            if (context.mounted && result is Failure) reportResult(context, result);
+                          },
+                        )
+                      else
+                        ListTile(
+                          title: Text(entry.stops.single.name),
+                          subtitle: entry.stops.single.address == null
+                              ? null
+                              : Text(entry.stops.single.address!, maxLines: 1, overflow: TextOverflow.ellipsis),
+                          trailing: const Icon(Icons.add_circle_outline),
+                          onTap: () async {
+                            final result =
+                                await controller.scheduleStop(tripId: tripId, stopId: entry.stops.single.id, dayId: dayId);
+                            if (context.mounted && result is Failure) reportResult(context, result);
+                          },
+                        ),
                   ],
                 ),
               ),

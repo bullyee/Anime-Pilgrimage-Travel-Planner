@@ -5,6 +5,17 @@ import '../../../core/utils/fractional_index.dart';
 import '../../../core/utils/schedule_logic.dart';
 import '../../library/repositories/place_repository.dart';
 
+/// The trip note of stops merged into one: [kept]'s, then each other one
+/// that isn't already there, a blank line apart. Null when none has a note.
+String? mergedStopNote(String? kept, Iterable<String?> others) {
+  final notes = <String>[];
+  for (final note in [kept, ...others]) {
+    final trimmed = note?.trim();
+    if (trimmed != null && trimmed.isNotEmpty && !notes.contains(trimmed)) notes.add(trimmed);
+  }
+  return notes.isEmpty ? null : notes.join('\n\n');
+}
+
 /// Repository interface for managing shared trips, day blocks, stops, and schedule items.
 abstract class TripRepository {
   // Trips
@@ -57,6 +68,11 @@ abstract class TripRepository {
   Future<void> updateStop(StopsCompanion stop);
   Future<void> setStopsArea(List<String> stopIds, String? area);
   Future<void> deleteStop(String stopId);
+
+  /// Merges [otherIds] into [keepId], stops of one trip for the same spot.
+  /// The kept stop keeps its name and facts, and takes on the others' notes,
+  /// labels, frames, group and days; the others are then removed.
+  Future<void> mergeStops({required String keepId, required List<String> otherIds});
 
   // Stop Labels & Reference Images
   Future<List<Label>> getLabelsForStop(String stopId);
@@ -694,6 +710,90 @@ class DriftTripRepository implements TripRepository {
           syncStatus: const Value(1),
         ),
       );
+    });
+  }
+
+  @override
+  Future<void> mergeStops({required String keepId, required List<String> otherIds}) async {
+    await _db.transaction(() async {
+      final kept = await getStop(keepId);
+      if (kept == null || kept.deletedAt != null) throw StateError('The stop to keep is gone.');
+      final others = <Stop>[
+        for (final id in otherIds.toSet())
+          if (id != keepId)
+            if (await getStop(id) case final s? when s.deletedAt == null && s.tripId == kept.tripId) s,
+      ];
+      if (others.isEmpty) return;
+
+      String? clean(String? s) => s == null || s.trim().isEmpty ? null : s.trim();
+      var area = clean(kept.area);
+      for (final other in others) {
+        area ??= clean(other.area);
+      }
+
+      // Labels.
+      final otherIdList = [for (final o in others) o.id];
+      final labelRows = await (_db.select(_db.stopLabels)..where((t) => t.stopId.isIn(otherIdList))).get();
+      for (final row in labelRows) {
+        await _db.into(_db.stopLabels).insertOnConflictUpdate(StopLabelsCompanion.insert(stopId: keepId, labelId: row.labelId));
+      }
+
+      // Frames: one that shows a file the kept stop already has goes.
+      final files = {
+        for (final f in await getReferenceImagesForStop(keepId)) ?(f.localPath ?? f.remoteUrl),
+      };
+      for (final other in others) {
+        for (final frame in await getReferenceImagesForStop(other.id)) {
+          final file = frame.localPath ?? frame.remoteUrl;
+          if (file != null && !files.add(file)) {
+            await (_db.delete(_db.newReferenceImages)..where((t) => t.id.equals(frame.id))).go();
+          } else {
+            await (_db.update(_db.newReferenceImages)..where((t) => t.id.equals(frame.id)))
+                .write(NewReferenceImagesCompanion(stopId: Value(keepId)));
+          }
+        }
+      }
+
+      // Days: the others' items move to the kept stop, except on a day it is
+      // already on, where a visit still counts.
+      final now = _now();
+      Future<List<ScheduleItem>> liveItems(String stopId) =>
+          (_db.select(_db.scheduleItems)..where((t) => t.stopId.equals(stopId) & t.deletedAt.isNull())).get();
+      final onDay = {for (final it in await liveItems(keepId)) it.dayId: it};
+      for (final other in others) {
+        for (final it in await liveItems(other.id)) {
+          final mine = onDay[it.dayId];
+          if (mine == null) {
+            await (_db.update(_db.scheduleItems)..where((t) => t.id.equals(it.id))).write(ScheduleItemsCompanion(
+              stopId: Value(keepId),
+              updatedAt: Value(now),
+              updatedBy: Value(_currentUserId),
+              syncStatus: const Value(1),
+            ));
+            onDay[it.dayId] = it.copyWith(stopId: keepId);
+          } else if (it.status == 'done' && mine.status != 'done') {
+            await (_db.update(_db.scheduleItems)..where((t) => t.id.equals(mine.id))).write(ScheduleItemsCompanion(
+              status: const Value('done'),
+              updatedAt: Value(now),
+              updatedBy: Value(_currentUserId),
+              syncStatus: const Value(1),
+            ));
+            onDay[it.dayId] = mine.copyWith(status: 'done');
+          }
+        }
+      }
+
+      // The kept stop is edited, so it syncs again with what it took on.
+      await (_db.update(_db.stops)..where((t) => t.id.equals(keepId))).write(StopsCompanion(
+        note: Value(mergedStopNote(kept.note, [for (final o in others) o.note])),
+        area: Value(area),
+        updatedAt: Value(now),
+        updatedBy: Value(_currentUserId),
+        syncStatus: const Value(1),
+      ));
+      for (final other in others) {
+        await deleteStop(other.id);
+      }
     });
   }
 
