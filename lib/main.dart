@@ -10,10 +10,12 @@ import 'features/sync/providers/sync_v2_providers.dart';
 import 'shared/theme/app_theme.dart';
 // Added for custom error monitoring
 import 'core/utils/app_logger.dart';
+import 'core/utils/web_url_strategy.dart';
 import 'core/providers/app_provider_observer.dart';
 
 
 void main() async {
+  configureWebUrlStrategy();
   // Ensure bindings are initialized before calling native code (e.g., Firebase)
   WidgetsFlutterBinding.ensureInitialized();
 

@@ -43,7 +43,8 @@ GoRouter router(RouterRef ref) {
   }
 
   return GoRouter(
-    initialLocation: returnTo ?? '/',
+    initialLocation: returnTo,
+    overridePlatformDefaultLocation: returnTo != null,
     
     // AUTH REDIRECT LOGIC
     redirect: (context, state) {

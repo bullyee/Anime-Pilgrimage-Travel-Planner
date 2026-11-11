@@ -140,8 +140,10 @@ class PendingFrames {
   /// Kept in memory only, for tests.
   PendingFrames.inMemory() : _file = _noFile;
 
-  static Future<File> _defaultFile() async =>
-      File(p.join((await getApplicationSupportDirectory()).path, 'anitabi_pending_frames.json'));
+  static Future<File> _defaultFile() async {
+    if (kIsWeb) return _noFile();
+    return File(p.join((await getApplicationSupportDirectory()).path, 'anitabi_pending_frames.json'));
+  }
 
   static Future<File> _noFile() => Future.error(UnsupportedError('kept in memory'));
 
@@ -322,8 +324,11 @@ class AnitabiImport {
       while (queue.isNotEmpty) {
         final spot = queue.removeFirst();
         try {
-          final path = await fetch(spot.imageUrl!);
-          if (path == null) continue;
+          String? path;
+          if (download != null || !kIsWeb) {
+            path = await fetch(spot.imageUrl!);
+            if (path == null) continue;
+          }
           await places.addReferenceImage(
             placeKey: spot.placeKey,
             localPath: path,

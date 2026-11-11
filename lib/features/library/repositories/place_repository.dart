@@ -1,7 +1,9 @@
 import 'dart:io';
 import 'package:drift/drift.dart';
+import 'package:flutter/foundation.dart' show kIsWeb;
 import 'package:uuid/uuid.dart';
 import '../../../core/database/database.dart';
+import '../../../core/utils/platform_media.dart';
 
 /// Repository interface for managing the personal places library, labels, and photos.
 abstract class PlaceRepository {
@@ -751,6 +753,7 @@ class DriftPlaceRepository implements PlaceRepository {
         .getSingleOrNull();
     if (refImgRef != null) return;
 
+    if (kIsWeb || isRemoteOrMemoryUri(path)) return;
     try {
       final file = File(path);
       if (await file.exists()) {

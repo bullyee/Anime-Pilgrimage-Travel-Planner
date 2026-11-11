@@ -1,5 +1,4 @@
 import 'dart:async';
-import 'dart:io';
 import 'dart:math' as math;
 
 import 'package:flutter/material.dart';
@@ -11,6 +10,7 @@ import 'package:latlong2/latlong.dart';
 
 import '../../../core/database/database.dart';
 import '../../../core/utils/app_result.dart';
+import '../../../core/utils/platform_media.dart';
 import '../../../core/utils/schedule_logic.dart';
 import '../../../shared/theme/app_theme.dart';
 import '../../auth/providers/auth_provider.dart';
@@ -877,8 +877,8 @@ class _PilgrimageDayMapScreenState extends ConsumerState<PilgrimageDayMapScreen>
                               borderRadius: BorderRadius.circular(10),
                               child: AspectRatio(
                                 aspectRatio: 1.0,
-                                child: Image.file(
-                                  File(photo.localPath),
+                                child: PlatformImage(
+                                  photo.localPath,
                                   fit: BoxFit.cover,
                                   cacheWidth: 320,
                                   errorBuilder: (_, __, ___) => Container(

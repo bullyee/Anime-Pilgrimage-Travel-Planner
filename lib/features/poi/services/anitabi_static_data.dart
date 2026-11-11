@@ -58,6 +58,10 @@ class AnitabiStaticData {
   /// downloads in this process skip hosts known to be dead.
   static int _preferredBase = 0;
 
+  // In-memory cache used on Web where local filesystem caching is unavailable.
+  static ({DateTime at, String body})? _memIndex;
+  static final Map<String, String> _memPages = {};
+
   final http.Client client;
   final Future<Directory> Function() cacheDir;
   final List<String> baseUrls;
@@ -71,7 +75,11 @@ class AnitabiStaticData {
   }) : _now = now ?? DateTime.now;
 
   @visibleForTesting
-  static void resetPreferredHost() => _preferredBase = 0;
+  static void resetPreferredHost() {
+    _preferredBase = 0;
+    _memIndex = null;
+    _memPages.clear();
+  }
 
   /// The work for [bangumiId] with its spots, or null when Anitabi has no
   /// such work. Throws [AnitabiStaticDataUnavailableException] when the data
@@ -79,7 +87,7 @@ class AnitabiStaticData {
   Future<AnitabiStaticWork?> work(String bangumiId) async {
     final id = int.tryParse(bangumiId);
     if (id == null) return null;
-    final dir = await cacheDir();
+    final dir = kIsWeb ? null : await cacheDir();
 
     final indexBody = await _index(dir);
     final located = await compute(_locateWork, [indexBody, id]);
@@ -109,7 +117,21 @@ class AnitabiStaticData {
     return AnitabiStaticWork(title: title, spots: const []);
   }
 
-  Future<String> _index(Directory dir) async {
+  Future<String> _index(Directory? dir) async {
+    if (dir == null) {
+      final cached = _memIndex;
+      if (cached != null && _now().difference(cached.at) < indexMaxAge) {
+        return cached.body;
+      }
+      try {
+        final body = await _download('g.json');
+        _memIndex = (at: _now(), body: body);
+        return body;
+      } on AnitabiStaticDataUnavailableException {
+        if (cached != null) return cached.body;
+        rethrow;
+      }
+    }
     final file = File(p.join(dir.path, 'g.json'));
     if (await file.exists() &&
         _now().difference(await file.lastModified()) < indexMaxAge) {
@@ -128,7 +150,15 @@ class AnitabiStaticData {
 
   /// Detail pages are cached per index version (`g1.<version>.json`), so a
   /// newer index re-fetches them once and older copies are dropped.
-  Future<String> _page(Directory dir, int page, String version) async {
+  Future<String> _page(Directory? dir, int page, String version) async {
+    if (dir == null) {
+      final key = '$page.$version';
+      final cached = _memPages[key];
+      if (cached != null) return cached;
+      final body = await _download('g$page.json');
+      _memPages.removeWhere((k, _) => k.startsWith('$page.'));
+      return _memPages[key] = body;
+    }
     final file = File(p.join(dir.path, 'g$page.$version.json'));
     if (await file.exists()) return file.readAsString();
     final body = await _download('g$page.json');

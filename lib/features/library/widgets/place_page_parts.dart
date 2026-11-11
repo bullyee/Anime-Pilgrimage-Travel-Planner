@@ -1,5 +1,4 @@
-import 'dart:io';
-
+import 'package:flutter/foundation.dart' show kIsWeb;
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_map/flutter_map.dart';
@@ -11,6 +10,7 @@ import 'package:latlong2/latlong.dart';
 import '../../../core/database/database.dart';
 import '../../../core/providers/thumbnail_cache_provider.dart';
 import '../../../core/utils/app_result.dart';
+import '../../../core/utils/platform_media.dart';
 import '../../../shared/theme/app_theme.dart';
 import '../../camera/services/anime_camera_launcher.dart';
 import '../../camera/services/photo_edit_route.dart';
@@ -33,28 +33,31 @@ final cachedFramePathProvider = FutureProvider.autoDispose.family<String?, Strin
   (ref, url) => ref.watch(thumbnailCacheServiceProvider).getOrFetchThumbnail(url),
 );
 
-/// A file on the device to show [frame] from: its own, or the cached copy of
-/// its link.
+/// A file on the device (or URL on Web) to show [frame] from: its own, else
+/// the cached copy of its link.
 Future<String?> framePath(WidgetRef ref, NewReferenceImage frame) async {
   final local = frame.localPath;
-  if (local != null && local.isNotEmpty && await File(local).exists()) return local;
+  if (local != null && local.isNotEmpty && await mediaExists(local)) return local;
   final url = frame.remoteUrl;
   if (url == null || url.isEmpty) return null;
+  if (kIsWeb) return url;
   return ref.read(cachedFramePathProvider(url).future);
 }
 
-/// Like [framePath], but only a file already on the device: the frame's own,
-/// or a copy of its link cached before. Never downloads.
+/// Like [framePath], but only a file already on the device (or remote URL on
+/// Web). Never downloads to disk.
 Future<String?> framePathOnDevice(WidgetRef ref, NewReferenceImage frame) async {
   final local = frame.localPath;
-  if (local != null && local.isNotEmpty && await File(local).exists()) return local;
+  if (local != null && local.isNotEmpty && await mediaExists(local)) return local;
   final url = frame.remoteUrl;
   if (url == null || url.trim().isEmpty) return null;
+  if (kIsWeb) return url;
   final cached = await ref.read(thumbnailCacheServiceProvider).getCacheFile(url);
   return await cached.exists() ? cached.path : null;
 }
 
-/// A frame's image: the file on the device, else the cached copy of its link.
+/// A frame's image: the file on the device, else the cached copy of its link
+/// (or direct network image on Web).
 class FrameImage extends ConsumerWidget {
   final NewReferenceImage frame;
   final int cacheWidth;
@@ -66,8 +69,8 @@ class FrameImage extends ConsumerWidget {
   Widget build(BuildContext context, WidgetRef ref) {
     final p = Theme.of(context).trip;
     final broken = ColoredBox(color: p.wisteriaSoft, child: Icon(Icons.broken_image_outlined, color: p.wisteria));
-    Widget file(String path, Widget Function() orElse) => Image.file(
-          File(path),
+    Widget imageWidget(String path, Widget Function() orElse) => PlatformImage(
+          path,
           fit: BoxFit.cover,
           cacheWidth: cacheWidth,
           errorBuilder: (_, _, _) => orElse(),
@@ -76,16 +79,18 @@ class FrameImage extends ConsumerWidget {
     Widget remote() {
       final url = frame.remoteUrl;
       if (url == null || url.isEmpty) return broken;
+      if (kIsWeb) return imageWidget(url, () => broken);
       final cached = ref.watch(cachedFramePathProvider(url));
       return cached.when(
-        data: (path) => path == null ? broken : file(path, () => broken),
+        data: (path) => path == null ? broken : imageWidget(path, () => broken),
         loading: () => ColoredBox(color: p.wisteriaSoft),
         error: (_, _) => broken,
       );
     }
 
     final local = frame.localPath;
-    return local != null && local.isNotEmpty ? file(local, remote) : remote();
+    final hasUsableLocal = local != null && local.isNotEmpty && (!kIsWeb || isRemoteOrMemoryUri(local));
+    return hasUsableLocal ? imageWidget(local, remote) : remote();
   }
 }
 
@@ -746,8 +751,8 @@ class PhotosCard extends ConsumerWidget {
                           onTap: () => _open(context, ref, photo),
                           child: ClipRRect(
                             borderRadius: BorderRadius.circular(12),
-                            child: Image.file(
-                              File(photo.localPath),
+                            child: PlatformImage(
+                              photo.localPath,
                               fit: BoxFit.cover,
                               cacheWidth: 360,
                               errorBuilder: (_, _, _) => ColoredBox(
@@ -777,12 +782,15 @@ class PhotosCard extends ConsumerWidget {
         title: DateFormat.yMMMd().add_Hm().format(photo.takenAt ?? photo.createdAt),
         actions: [
           ViewerAction('Edit', () {
+            final framePath = (frame?.localPath?.isNotEmpty ?? false)
+                ? frame!.localPath
+                : frame?.remoteUrl;
             viewerContext.push(PhotoEditArgs(
               path: photo.localPath,
               placeKey: placeKey,
               tripId: photo.tripId,
               photoId: photo.id,
-              referencePath: frame?.localPath,
+              referencePath: framePath,
               referenceImageId: frame?.id,
             ).location);
           }, primary: true),
@@ -884,7 +892,7 @@ class ImageViewer extends StatelessWidget {
           Expanded(
             child: InteractiveViewer(
               maxScale: 5,
-              child: Center(child: Image.file(File(path), fit: BoxFit.contain)),
+              child: Center(child: PlatformImage(path, fit: BoxFit.contain)),
             ),
           ),
           SafeArea(
