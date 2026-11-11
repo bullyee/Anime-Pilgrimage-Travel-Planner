@@ -9,11 +9,15 @@ import 'package:go_router/go_router.dart';
 import 'package:image_picker/image_picker.dart';
 
 import '../../../core/providers/database_provider.dart';
+import '../../auth/providers/auth_provider.dart';
 import '../../library/providers/place_providers.dart';
 import '../../poi/services/background_photo_save.dart' show galleryAlbum, rootMessengerKey;
+import '../../sharing/providers/group_sharing_providers.dart';
+import '../../trip/providers/trip_providers.dart';
 import '../models/shot_series.dart';
 import '../services/camera_overlay.dart';
 import '../services/kept_shots.dart';
+import '../services/shot_plan.dart';
 
 /// What the shots route (`/shots`) carries in its query: a new series to
 /// shoot for a place and frame, or [seriesId], a series to pick from again
@@ -62,6 +66,14 @@ final shotSeriesStoreProvider = Provider<ShotSeriesStore>((ref) => ShotSeriesSto
 /// it, and backing out of the camera ends the series. The shots then show
 /// under the frame; the ones the user keeps are saved as shot, with no
 /// editing on the spot, and the rest are deleted.
+///
+/// Keep records the picks with `recordShot`: the photos, filed under the
+/// trip, and the day's visit. A shot changes nothing in the plan by itself.
+/// For the people who can edit the trip, when the place is on a day of it a
+/// "Mark done" tick under the shots says whether the stop is done (on the
+/// day it's planned for), ticked already when every frame of the spot has a
+/// photo; when it isn't on a day, "Add to Day N" offers to put it on the day
+/// of the shot. Everyone sees the stop's progress ("2 of 5 frames").
 class ShotSeriesScreen extends ConsumerStatefulWidget {
   const ShotSeriesScreen({super.key, required this.args, this.camera, this.gallery});
 
@@ -86,6 +98,13 @@ class _ShotSeriesScreenState extends ConsumerState<ShotSeriesScreen> {
   var _current = 0;
   var _shooting = false;
   var _saving = false;
+
+  /// Where the place stands in a trip on the day, for the ticks; loaded once
+  /// per series, after the first shots.
+  ShotPlan? _plan;
+  String? _planFor;
+  var _markDone = false;
+  var _addToDay = false;
 
   /// The latest write of the picks, so the next write or the series' deletion
   /// waits for it.
@@ -124,6 +143,7 @@ class _ShotSeriesScreenState extends ConsumerState<ShotSeriesScreen> {
         _preselect();
       });
       _showCurrent();
+      _loadPlan();
       return;
     }
     final series = await _store.create(
@@ -189,6 +209,60 @@ class _ShotSeriesScreenState extends ConsumerState<ShotSeriesScreen> {
       // Backed out without a shot: nothing to pick from.
       await _discardSeries(series.id);
       _leave();
+      return;
+    }
+    _loadPlan();
+  }
+
+  Future<void> _loadPlan() async {
+    final series = _series;
+    final placeKey = series?.placeKey;
+    if (series == null || placeKey == null || series.shots.isEmpty || _planFor == series.id) return;
+    _planFor = series.id;
+    try {
+      final plan = await loadShotPlan(
+        ref.read(databaseProvider),
+        placeKey: placeKey,
+        tripId: series.tripId,
+        referenceImageId: series.referenceImageId,
+        takenAt: series.shots.first.takenAt,
+      );
+      if (!mounted || plan == null) return;
+      setState(() {
+        _plan = plan;
+        _markDone = plan.suggestDone;
+      });
+    } catch (_) {
+      // The shots still save without it; only the ticks are missing.
+    }
+  }
+
+  /// Applies the ticks once the shots are saved; what changed, for the
+  /// message.
+  Future<String?> _applyPlan(ShotSeries series, String? placeName) async {
+    final plan = _plan;
+    final placeKey = series.placeKey;
+    // Only the people who can edit the trip change its plan.
+    if (plan == null || placeKey == null || !ref.read(canEditTripProvider(plan.trip.id))) return null;
+    try {
+      final change = await applyShotPlan(
+        ref.read(tripRepositoryProvider),
+        plan,
+        placeKey: placeKey,
+        userId: ref.read(currentUserIdProvider),
+        markDone: _markDone,
+        addToDay: _addToDay,
+      );
+      final name = placeName ?? plan.stop?.name ?? 'it';
+      return switch (change) {
+        ShotPlanChange.markedDone => 'Marked $name done.',
+        ShotPlanChange.unmarked => 'Marked $name not done.',
+        ShotPlanChange.added => 'Added $name to Day ${plan.shotDayNumber}.',
+        ShotPlanChange.addedDone => 'Added $name to Day ${plan.shotDayNumber}, done.',
+        null => null,
+      };
+    } catch (e) {
+      return "Couldn't update ${plan.trip.title}: $e";
     }
   }
 
@@ -252,7 +326,6 @@ class _ShotSeriesScreenState extends ConsumerState<ShotSeriesScreen> {
     final result = await saveKeptShots(
       series: series,
       kept: kept,
-      places: ref.read(placeRepositoryProvider),
       db: ref.read(databaseProvider),
       toGallery: _gallery,
     );
@@ -267,9 +340,11 @@ class _ShotSeriesScreenState extends ConsumerState<ShotSeriesScreen> {
       );
       return;
     }
+    final planNote = await _applyPlan(series, placeName);
     await _discardSeries(series.id);
+    final message = _savedMessage(result, kept.length, series.placeKey == null ? null : placeName ?? 'the place');
     rootMessengerKey.currentState?.showSnackBar(
-      SnackBar(content: Text(_savedMessage(result, kept.length, series.placeKey == null ? null : placeName ?? 'the place'))),
+      SnackBar(content: Text(planNote == null ? message : "$message $planNote")),
     );
     if (mounted) _leave();
   }
@@ -397,32 +472,98 @@ class _ShotSeriesScreenState extends ConsumerState<ShotSeriesScreen> {
                   ],
                 ),
           bottomNavigationBar: SafeArea(
-            child: Padding(
-              padding: const EdgeInsets.fromLTRB(16, 8, 16, 12),
-              child: Row(
-                children: [
-                  OutlinedButton.icon(
-                    onPressed: busy || series == null ? null : _shoot,
-                    icon: const Icon(Icons.photo_camera_outlined),
-                    label: const Text('Take more'),
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                ..._planTicks(placeName),
+                Padding(
+                  padding: const EdgeInsets.fromLTRB(16, 8, 16, 12),
+                  child: Row(
+                    children: [
+                      OutlinedButton.icon(
+                        onPressed: busy || series == null ? null : _shoot,
+                        icon: const Icon(Icons.photo_camera_outlined),
+                        label: const Text('Take more'),
+                      ),
+                      const SizedBox(width: 12),
+                      Expanded(
+                        child: FilledButton.icon(
+                          onPressed: busy || _kept.isEmpty ? null : () => _keep(placeName),
+                          icon: _saving
+                              ? const SizedBox.square(dimension: 18, child: CircularProgressIndicator(strokeWidth: 2))
+                              : const Icon(Icons.check),
+                          label: Text(_kept.isEmpty ? 'Pick to keep' : 'Keep ${_kept.length}'),
+                        ),
+                      ),
+                    ],
                   ),
-                  const SizedBox(width: 12),
-                  Expanded(
-                    child: FilledButton.icon(
-                      onPressed: busy || _kept.isEmpty ? null : () => _keep(placeName),
-                      icon: _saving
-                          ? const SizedBox.square(dimension: 18, child: CircularProgressIndicator(strokeWidth: 2))
-                          : const Icon(Icons.check),
-                      label: Text(_kept.isEmpty ? 'Pick to keep' : 'Keep ${_kept.length}'),
-                    ),
-                  ),
-                ],
-              ),
+                ),
+              ],
             ),
           ),
         ),
       ),
     );
+  }
+
+  /// The ticks for the trip, above the buttons: "Mark done" when the place
+  /// is on a day, else "Add to Day N", with "Mark it done" once ticked. Only
+  /// the people who can edit the trip get them; the others see the stop's
+  /// progress.
+  List<Widget> _planTicks(String? placeName) {
+    final plan = _plan;
+    if (plan == null || _shooting || (_series?.shots.isEmpty ?? true)) return const [];
+    final name = placeName ?? plan.stop?.name ?? 'this place';
+    final progress = plan.progress;
+    if (!ref.watch(canEditTripProvider(plan.trip.id))) {
+      if (plan.stop == null) return const [];
+      return [
+        ListTile(
+          key: const Key('shotPlanProgress'),
+          dense: true,
+          leading: Icon(plan.done ? Icons.check_circle : Icons.photo_library_outlined, color: Colors.white70),
+          title: Text([name, ?progress].join(' · '), overflow: TextOverflow.ellipsis),
+          subtitle: Text(plan.trip.title, style: const TextStyle(color: Colors.white60)),
+        ),
+      ];
+    }
+    Widget tick(String key, String title, List<String?> about, bool value, void Function(bool) onChanged) {
+      final subtitle = [
+        for (final part in about)
+          if (part != null) part,
+      ].join(' · ');
+      return CheckboxListTile(
+        key: Key(key),
+        dense: true,
+        controlAffinity: ListTileControlAffinity.leading,
+        contentPadding: const EdgeInsets.symmetric(horizontal: 8),
+        value: value,
+        onChanged: _saving ? null : (v) => setState(() => onChanged(v ?? false)),
+        title: Text(title, overflow: TextOverflow.ellipsis),
+        subtitle: subtitle.isEmpty
+            ? null
+            : Text(subtitle, overflow: TextOverflow.ellipsis, style: const TextStyle(color: Colors.white60)),
+      );
+    }
+
+    if (plan.canMarkDone) {
+      final elsewhere =
+          plan.itemDay != null && plan.itemDay != plan.shotDayNumber ? 'planned for Day ${plan.itemDay}' : null;
+      return [
+        tick('shotPlanDone', 'Mark $name done', [progress, elsewhere, plan.trip.title], _markDone, (v) => _markDone = v),
+      ];
+    }
+    if (!plan.canAddToDay) return const [];
+    return [
+      tick(
+        'shotPlanAdd',
+        'Add $name to Day ${plan.shotDayNumber}',
+        [plan.trip.title, plan.stop == null ? 'not in the trip yet' : 'not on a day yet'],
+        _addToDay,
+        (v) => _addToDay = v,
+      ),
+      if (_addToDay) tick('shotPlanDone', 'Mark it done', [progress], _markDone, (v) => _markDone = v),
+    ];
   }
 
   static String _count(int n) => n == 1 ? '1 shot' : '$n shots';
