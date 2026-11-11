@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'dart:io';
 
 import 'package:flutter/foundation.dart' show kIsWeb;
@@ -20,52 +21,72 @@ import '../services/kept_shots.dart';
 import '../services/shot_plan.dart';
 
 /// What the shots route (`/shots`) carries in its query: a new series to
-/// shoot for a place and frame, or [seriesId], a series to pick from again
-/// after Android killed the app.
+/// shoot for a place and its frames, starting on [frameIndex], or
+/// [seriesId], a series to pick from again after Android killed the app.
 class ShotSeriesArgs {
   final String? seriesId;
   final String? placeKey;
   final String? tripId;
-  final String? referencePath;
-  final String? referenceImageId;
+
+  /// The spot's frames in its order, to switch between in the floating
+  /// window; one for a single frame or a gallery reference, none for no
+  /// reference.
+  final List<SeriesFrame> frames;
+  final int frameIndex;
 
   const ShotSeriesArgs({
     this.seriesId,
     this.placeKey,
     this.tripId,
-    this.referencePath,
-    this.referenceImageId,
+    this.frames = const [],
+    this.frameIndex = 0,
   });
 
   /// The router has decoded the values already, so they're used as they are
-  /// (see `PhotoEditArgs.fromQuery`, #84).
-  static ShotSeriesArgs fromQuery(Map<String, String> query) => ShotSeriesArgs(
-        seriesId: query['series'],
-        placeKey: query['place'],
-        tripId: query['trip'],
-        referencePath: query['ref'],
-        referenceImageId: query['refId'],
-      );
+  /// (see `PhotoEditArgs.fromQuery`, #84). Each frame is a `ref` with its
+  /// `refId` at the same position (empty for a gallery reference).
+  static ShotSeriesArgs fromQuery(Map<String, List<String>> query) {
+    String? one(String key) => query[key]?.firstOrNull;
+    final paths = query['ref'] ?? const [];
+    final ids = query['refId'] ?? const [];
+    return ShotSeriesArgs(
+      seriesId: one('series'),
+      placeKey: one('place'),
+      tripId: one('trip'),
+      frames: [
+        for (var i = 0; i < paths.length; i++)
+          SeriesFrame(paths[i], imageId: i < ids.length && ids[i].isNotEmpty ? ids[i] : null),
+      ],
+      frameIndex: int.tryParse(one('frame') ?? '') ?? 0,
+    );
+  }
 
   String get location => Uri(path: '/shots', queryParameters: {
         if (seriesId != null) 'series': seriesId!,
         if (placeKey != null) 'place': placeKey!,
         if (tripId != null) 'trip': tripId!,
-        if (referencePath != null) 'ref': referencePath!,
-        if (referenceImageId != null) 'refId': referenceImageId!,
+        if (frames.isNotEmpty) 'ref': [for (final f in frames) f.path],
+        if (frames.isNotEmpty) 'refId': [for (final f in frames) f.imageId ?? ''],
+        if (frameIndex != 0) 'frame': '$frameIndex',
       }).toString();
 }
 
 final shotSeriesStoreProvider = Provider<ShotSeriesStore>((ref) => ShotSeriesStore());
 
-/// Several shots against one frame, then keep the ones you want (roadmap
-/// v0.3.0, "Several shots, then pick").
+/// The window that floats the frames over the camera; tests replace it.
+final referenceWindowProvider = Provider<ReferenceWindow>((ref) => const CameraOverlayWindow());
+
+/// Several shots at one spot, then keep the ones you want (roadmap v0.3.0,
+/// "Several shots, then pick").
 ///
 /// The phone's camera app returns one photo per opening, so after each shot
 /// the camera opens again with the frame still floating where the user left
-/// it, and backing out of the camera ends the series. The shots then show
-/// under the frame; the ones the user keeps are saved as shot, with no
-/// editing on the spot, and the rest are deleted.
+/// it, and backing out of the camera ends the series. When the spot has
+/// several frames, ‹ › in the window switch between them without leaving
+/// the camera, and each shot remembers the frame showing when it came back.
+/// The shots then show under the frame each was taken with; the ones the
+/// user keeps are saved as shot, with no editing on the spot, and the rest
+/// are deleted.
 ///
 /// Keep records the picks with `recordShot`: the photos, filed under the
 /// trip, and the day's visit. A shot changes nothing in the plan by itself.
@@ -92,25 +113,76 @@ class ShotSeriesScreen extends ConsumerStatefulWidget {
 }
 
 class _ShotSeriesScreenState extends ConsumerState<ShotSeriesScreen> {
+  /// The series' shots and frames. While the camera is open, only the
+  /// queued writes ([_queued]) replace it, so a write never drops a shot.
   ShotSeries? _series;
   final _kept = <String>{};
+
+  /// The frame floating now, an index into the series' frames. The window
+  /// reports each switch, which can come while a shot is being added, so it's
+  /// kept apart and written into the series with every write.
+  var _frameIndex = 0;
+
   final _pages = PageController();
   var _current = 0;
   var _shooting = false;
   var _saving = false;
 
+  /// Whether the window has been shown for this series, so Take more brings
+  /// it back where the user left it.
+  var _shownOnce = false;
+
   /// Where the place stands in a trip on the day, for the ticks; loaded once
   /// per series, after the first shots.
   ShotPlan? _plan;
   String? _planFor;
-  var _markDone = false;
+
+  /// The user's answer to "Mark done"; until they touch it, the tick follows
+  /// whether every frame has a shot among the kept ones.
+  bool? _markDoneChoice;
   var _addToDay = false;
 
-  /// The latest write of the picks, so the next write or the series' deletion
-  /// waits for it.
+  /// The latest write of the series, so the next write or the series'
+  /// deletion waits for it.
   Future<void> _writes = Future.value();
 
   ShotSeriesStore get _store => ref.read(shotSeriesStoreProvider);
+  ReferenceWindow get _window => ref.read(referenceWindowProvider);
+
+  /// The series as it should be on disk: with the frame showing and the
+  /// picks.
+  ShotSeries? get _latest => _series?.withFrameIndex(_frameIndex).withKept(_kept);
+
+  /// Runs [op] after the writes before it, one at a time.
+  Future<T> _queued<T>(Future<T> Function() op) {
+    final done = _writes.then((_) => op());
+    _writes = done.then<void>((_) {}, onError: (Object _) {
+      // Only the picks or the frame are lost if Android kills the app; the
+      // shots' files are safe.
+    });
+    return done;
+  }
+
+  /// Writes the series as it is now, after any write before it.
+  void _persist() {
+    _queued(() async {
+      final series = _latest;
+      if (series != null) await _store.save(series);
+    });
+  }
+
+  /// The plan with the kept shots' frames counted as shot.
+  ShotPlan? get _livePlan {
+    final series = _series;
+    final plan = _plan;
+    if (series == null || plan == null) return plan;
+    return plan.withShotFrames([
+      for (final shot in series.shots)
+        if (_kept.contains(shot.path)) series.frameOf(shot)?.imageId,
+    ]);
+  }
+
+  bool get _markDone => _markDoneChoice ?? _livePlan?.suggestDone ?? false;
 
   @override
   void initState() {
@@ -138,6 +210,7 @@ class _ShotSeriesScreenState extends ConsumerState<ShotSeriesScreen> {
       // Back after Android killed the app: the picks so far, on the newest shot.
       setState(() {
         _series = series;
+        _frameIndex = series.frameIndex;
         _kept.addAll(series.kept);
         _current = series.shots.length - 1;
         _preselect();
@@ -149,11 +222,14 @@ class _ShotSeriesScreenState extends ConsumerState<ShotSeriesScreen> {
     final series = await _store.create(
       placeKey: args.placeKey,
       tripId: args.tripId,
-      referencePath: args.referencePath,
-      referenceImageId: args.referenceImageId,
+      frames: args.frames,
+      frameIndex: args.frameIndex,
     );
     if (!mounted) return;
-    setState(() => _series = series);
+    setState(() {
+      _series = series;
+      _frameIndex = series.frameIndex;
+    });
     await _shoot();
   }
 
@@ -174,32 +250,45 @@ class _ShotSeriesScreenState extends ConsumerState<ShotSeriesScreen> {
     await _writes;
     final start = _series;
     if (start == null || !mounted) return;
-    var series = start;
+    final window = _window;
     var floating = false;
-    final reference = series.referencePath;
-    if (reference != null && await CameraOverlay.canDrawOverlays()) {
-      floating = await CameraOverlay.show(reference);
+    StreamSubscription<int>? switches;
+    if (start.frames.isNotEmpty && await window.canShow()) {
+      // The window reports each switch; the frame is written at once, so a
+      // shot Android hands back after killing the app still gets it.
+      switches = window.frameChanges.listen((index) {
+        final frames = _series?.frames.length ?? 0;
+        if (index < 0 || index >= frames || index == _frameIndex) return;
+        _frameIndex = index;
+        _persist();
+      });
+      floating = await window.show(
+        [for (final frame in start.frames) frame.path],
+        index: _frameIndex,
+        keepPlacement: _shownOnce,
+      );
+      _shownOnce = _shownOnce || floating;
     }
     String? error;
     try {
       while (mounted) {
         final path = await _openCamera();
         if (path == null) break;
-        series = await _store.addShot(series, path);
+        // Recorded with the frame showing as the camera hands the shot back.
+        await _queued(() async => _series = await _store.addShot(_latest!, path));
         if (!mounted) break;
-        final updated = series;
-        setState(() {
-          _series = updated;
-          _current = updated.shots.length - 1;
-        });
+        setState(() => _current = _series!.shots.length - 1);
         _showCurrent();
       }
     } on PlatformException catch (e) {
       error = 'Camera unavailable: ${e.message ?? e.code}';
     } finally {
-      if (floating) await CameraOverlay.hide();
+      // Not awaited: nothing waits on the cancel.
+      unawaited(switches?.cancel());
+      if (floating) await window.hide();
     }
     if (!mounted) return;
+    final series = _series!;
     setState(() {
       _shooting = false;
       _preselect();
@@ -224,14 +313,10 @@ class _ShotSeriesScreenState extends ConsumerState<ShotSeriesScreen> {
         ref.read(databaseProvider),
         placeKey: placeKey,
         tripId: series.tripId,
-        referenceImageId: series.referenceImageId,
         takenAt: series.shots.first.takenAt,
       );
       if (!mounted || plan == null) return;
-      setState(() {
-        _plan = plan;
-        _markDone = plan.suggestDone;
-      });
+      setState(() => _plan = plan);
     } catch (_) {
       // The shots still save without it; only the ticks are missing.
     }
@@ -277,14 +362,7 @@ class _ShotSeriesScreenState extends ConsumerState<ShotSeriesScreen> {
   }
 
   /// Writes the picks to the series on disk, one write after another.
-  void _saveKept() {
-    final series = _series?.withKept(_kept);
-    if (series == null) return;
-    _series = series;
-    _writes = _writes.then((_) => _store.saveKept(series, series.kept)).then<void>((_) {}, onError: (Object _) {
-      // Only the picks are lost if Android kills the app; the shots are safe.
-    });
-  }
+  void _saveKept() => _persist();
 
   /// Deletes the series once any pending write of the picks is done, so that
   /// write can't bring its folder back.
@@ -295,7 +373,12 @@ class _ShotSeriesScreenState extends ConsumerState<ShotSeriesScreen> {
 
   void _showCurrent() {
     WidgetsBinding.instance.addPostFrameCallback((_) {
-      if (mounted && _pages.hasClients) _pages.jumpToPage(_current);
+      if (!mounted || !_pages.hasClients) return;
+      final target = _current;
+      _pages.jumpToPage(target);
+      // A jump past the pages laid out so far reports the last of those on
+      // the way; the frame pane follows [_current], so set it back.
+      if (_current != target) setState(() => _current = target);
     });
   }
 
@@ -316,7 +399,7 @@ class _ShotSeriesScreenState extends ConsumerState<ShotSeriesScreen> {
   }
 
   Future<void> _keep(String? placeName) async {
-    final series = _series;
+    final series = _latest;
     if (series == null || _kept.isEmpty || _saving || _shooting) return;
     setState(() => _saving = true);
     final kept = [
@@ -394,7 +477,12 @@ class _ShotSeriesScreenState extends ConsumerState<ShotSeriesScreen> {
     final shots = series?.shots ?? const <SeriesShot>[];
     final placeKey = series?.placeKey ?? widget.args.placeKey;
     final placeName = placeKey == null ? null : ref.watch(placeDetailProvider(placeKey)).valueOrNull?.name;
-    final reference = series?.referencePath ?? widget.args.referencePath;
+    // The frame the shot showing was taken with.
+    final shotFrame = series == null || shots.isEmpty ? null : series.frameOf(shots[_current.clamp(0, shots.length - 1)]);
+    final frameNumber = shotFrame == null ? -1 : series!.frames.indexOf(shotFrame);
+    final frameLabel = series != null && series.frames.length > 1 && frameNumber >= 0
+        ? 'Frame ${frameNumber + 1} of ${series.frames.length}'
+        : 'Frame';
     final base = Theme.of(context);
     final theme = ThemeData(
       useMaterial3: true,
@@ -437,10 +525,14 @@ class _ShotSeriesScreenState extends ConsumerState<ShotSeriesScreen> {
               ? const Center(child: CircularProgressIndicator())
               : Column(
                   children: [
-                    if (reference != null)
+                    if (shotFrame != null)
                       Expanded(
                         flex: 2,
-                        child: _Pane(label: 'Frame', child: _Photo(path: reference)),
+                        child: _Pane(
+                          key: const Key('shotFrame'),
+                          label: frameLabel,
+                          child: _Photo(key: ValueKey(shotFrame.path), path: shotFrame.path),
+                        ),
                       ),
                     Expanded(
                       flex: 3,
@@ -511,7 +603,7 @@ class _ShotSeriesScreenState extends ConsumerState<ShotSeriesScreen> {
   /// the people who can edit the trip get them; the others see the stop's
   /// progress.
   List<Widget> _planTicks(String? placeName) {
-    final plan = _plan;
+    final plan = _livePlan;
     if (plan == null || _shooting || (_series?.shots.isEmpty ?? true)) return const [];
     final name = placeName ?? plan.stop?.name ?? 'this place';
     final progress = plan.progress;
@@ -550,7 +642,7 @@ class _ShotSeriesScreenState extends ConsumerState<ShotSeriesScreen> {
       final elsewhere =
           plan.itemDay != null && plan.itemDay != plan.shotDayNumber ? 'planned for Day ${plan.itemDay}' : null;
       return [
-        tick('shotPlanDone', 'Mark $name done', [progress, elsewhere, plan.trip.title], _markDone, (v) => _markDone = v),
+        tick('shotPlanDone', 'Mark $name done', [progress, elsewhere, plan.trip.title], _markDone, (v) => _markDoneChoice = v),
       ];
     }
     if (!plan.canAddToDay) return const [];
@@ -562,7 +654,7 @@ class _ShotSeriesScreenState extends ConsumerState<ShotSeriesScreen> {
         _addToDay,
         (v) => _addToDay = v,
       ),
-      if (_addToDay) tick('shotPlanDone', 'Mark it done', [progress], _markDone, (v) => _markDone = v),
+      if (_addToDay) tick('shotPlanDone', 'Mark it done', [progress], _markDone, (v) => _markDoneChoice = v),
     ];
   }
 
@@ -572,7 +664,7 @@ class _ShotSeriesScreenState extends ConsumerState<ShotSeriesScreen> {
 /// A photo fitted into its pane, decoded at about the screen's width so a
 /// series of 12 MP shots doesn't fill the memory.
 class _Photo extends StatelessWidget {
-  const _Photo({required this.path, this.fit = BoxFit.contain, this.width});
+  const _Photo({super.key, required this.path, this.fit = BoxFit.contain, this.width});
 
   final String path;
   final BoxFit fit;
@@ -595,7 +687,7 @@ class _Photo extends StatelessWidget {
 
 /// One of the two panes, the frame or a shot, with a small label.
 class _Pane extends StatelessWidget {
-  const _Pane({required this.label, required this.child, this.onTap, this.trailing});
+  const _Pane({super.key, required this.label, required this.child, this.onTap, this.trailing});
 
   final String label;
   final Widget child;

@@ -83,6 +83,12 @@ class CameraNotifier extends StateNotifier<CameraState> {
     );
   }
 
+  /// Switches to another frame of the same spot, keeping where the overlay
+  /// is, its size and its opacity.
+  void switchReference(File file, {required String referenceImageId}) {
+    state = state.copyWith(referenceImage: file, referenceImageId: referenceImageId, overlayVisible: true);
+  }
+
   void clearReferenceImage() {
     state = state.copyWith(clearReferenceImage: true);
   }

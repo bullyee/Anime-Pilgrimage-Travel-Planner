@@ -177,15 +177,16 @@ GoRouter router(RouterRef ref) {
         builder: (context, state) => const PhotosToEditScreen(),
       ),
       GoRoute(
-        // Several shots against one frame, then keep the ones you want.
+        // Several shots at a spot, against its frames, then keep the ones you want.
         path: '/shots',
-        builder: (context, state) => ShotSeriesScreen(args: ShotSeriesArgs.fromQuery(state.uri.queryParameters)),
+        builder: (context, state) => ShotSeriesScreen(args: ShotSeriesArgs.fromQuery(state.uri.queryParametersAll)),
       ),
       GoRoute(
         path: '/camera',
         builder: (context, state) => CameraScreen(
           placeKey: state.uri.queryParameters['place'],
           tripId: state.uri.queryParameters['trip'],
+          frameId: state.uri.queryParameters['frame'],
         ),
       ),
     ],

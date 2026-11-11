@@ -7,7 +7,8 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 import 'package:image_picker/image_picker.dart';
 
-import '../../library/widgets/place_page_parts.dart' show framePath;
+import '../../../core/database/database.dart' show NewReferenceImage;
+import '../../library/widgets/place_page_parts.dart' show framePath, framePathOnDevice;
 import '../models/shot_series.dart';
 import '../screens/shot_series_screen.dart';
 import '../widgets/capture_sheets.dart';
@@ -57,16 +58,19 @@ Future<void> openAnimeCamera(
   }
 }
 
-String _inAppCameraLocation(String? placeKey, String? tripId) => Uri(path: '/camera', queryParameters: {
+String _inAppCameraLocation(String? placeKey, String? tripId, {String? frameId}) =>
+    Uri(path: '/camera', queryParameters: {
       if (placeKey != null) 'place': placeKey,
       if (tripId != null) 'trip': tripId,
+      if (frameId != null) 'frame': frameId,
     }).toString();
 
 /// Floats a reference over whatever is on screen without opening a camera.
 /// Unlike [openAnimeCamera], the window stays up after the user leaves Trip
 /// Planner, so they can shoot as many photos as they like with any camera
 /// app and add the keeper on the place page later (Add photos). It stays
-/// until closed with a double-tap. Android only.
+/// until closed with its bar's ✕ (a double-tap shrinks it to a dot).
+/// Android only.
 Future<void> floatReference(
   BuildContext context,
   WidgetRef ref, {
@@ -101,7 +105,8 @@ Future<void> floatReferenceImage(BuildContext context, String path) async {
       content: Text(
         shown
             ? 'The reference now floats over other apps. Switch to your '
-                  'camera and shoot; double-tap it to close it.'
+                  'camera and shoot. Double-tap it to shrink it to a dot; tap '
+                  'it for ✕ to close it.'
             : 'Could not show the reference.',
       ),
     ),
@@ -165,14 +170,20 @@ enum _ReferenceSource { place, gallery, none }
 /// Which flow the reference sheet is asking for.
 enum _SheetMode { camera, floatOnly }
 
-/// A picked reference image. [imageId] / [placeKey] are set when it's one of
-/// a place's anime frames.
+/// The picked reference: one image, or a place's frames to switch between,
+/// starting on [index]. [placeKey] is set when they're a place's frames.
 class _Reference {
-  final String path;
-  final String? imageId;
+  final List<SeriesFrame> frames;
+  final int index;
   final String? placeKey;
 
-  const _Reference(this.path, {this.imageId, this.placeKey});
+  const _Reference(this.frames, {this.index = 0, this.placeKey});
+
+  _Reference.single(String path, {String? imageId, this.placeKey})
+      : frames = [SeriesFrame(path, imageId: imageId)],
+        index = 0;
+
+  String get path => frames[index].path;
 }
 
 /// Shoot here, then the camera for what the user picked.
@@ -181,25 +192,17 @@ Future<void> _shootHere(BuildContext context, WidgetRef ref, {String? tripId}) a
   final choice = await pickShootHere(context, plainCameraOnly: !android);
   if (choice == null || !context.mounted) return;
   switch (choice) {
-    case ShootAtPlace(:final placeKey, :final frame):
-      final trip = tripId ?? choice.tripId;
-      if (!android) {
-        context.push(_inAppCameraLocation(placeKey, trip));
-        return;
-      }
-      _Reference? reference;
-      if (frame != null) {
-        final path = await framePath(ref, frame);
-        if (!context.mounted) return;
-        if (path == null) {
-          ScaffoldMessenger.of(context).showSnackBar(
-            const SnackBar(content: Text("This frame isn't on this phone yet. Try again when you're online.")),
-          );
-          return;
-        }
-        reference = _Reference(path, imageId: frame.id, placeKey: placeKey);
-      }
-      await _shootWith(context, reference, placeKey: placeKey, tripId: trip);
+    case ShootAtPlace(:final placeKey, :final frame, :final frames):
+      // All the place's frames, to switch to in the camera, starting on the picked one.
+      final all = frame == null || frames.any((f) => f.id == frame.id) ? frames : [frame, ...frames];
+      await shootWithFrames(
+        context,
+        ref,
+        placeKey: placeKey,
+        tripId: tripId ?? choice.tripId,
+        frames: frame == null ? const [] : all,
+        index: frame == null ? 0 : all.indexWhere((f) => f.id == frame.id),
+      );
     case ShootWithoutPlace(:final kind):
       if (!android) {
         context.push(_inAppCameraLocation(null, tripId));
@@ -235,26 +238,79 @@ Future<void> _shootWithPhoneCamera(
   await _shootWith(context, reference, placeKey: placeKey, tripId: tripId);
 }
 
-/// Opens the Anime Camera for a place with its frame already chosen: a place
-/// page's "Take photo". The shots the user keeps are saved to [placeKey]'s
-/// photos with the frame, filed under [tripId] when given. Without a frame
-/// it just shoots.
-Future<void> shootWithReference(
+/// Opens the Anime Camera for a place with its frames, starting on [index]:
+/// Take photo on a place page, a stop page, Home's next stop and the day
+/// map's card, and a place picked in Shoot here. With several frames, the
+/// floating window switches between them without leaving the camera. The
+/// shots the user keeps are saved to [placeKey]'s photos, each with the frame
+/// it was taken with, filed under [tripId] when given. Without frames it
+/// just shoots.
+///
+/// The starting frame is fetched if it only has a link; the others go along
+/// only when they're on the phone already, so opening the camera never waits
+/// on a download per frame.
+Future<void> shootWithFrames(
   BuildContext context,
   WidgetRef ref, {
   required String placeKey,
   String? tripId,
-  String? referencePath,
-  String? referenceImageId,
+  List<NewReferenceImage> frames = const [],
+  int index = 0,
 }) async {
   if (!animeCameraSupported) return;
+  _Reference? reference;
+  if (frames.isNotEmpty) {
+    final resolved = await seriesFrames(
+      frames,
+      index,
+      start: (frame) => framePath(ref, frame),
+      other: (frame) => framePathOnDevice(ref, frame),
+    );
+    if (!context.mounted) return;
+    if (resolved == null) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text("This frame isn't on this phone yet. Try again when you're online.")),
+      );
+      return;
+    }
+    reference = _Reference(resolved.frames, index: resolved.index, placeKey: placeKey);
+  }
   if (!Platform.isAndroid) {
-    context.push(_inAppCameraLocation(placeKey, tripId));
+    // The in-app camera starts on the frame and offers the place's others.
+    final start = reference?.frames[reference.index].imageId;
+    context.push(_inAppCameraLocation(placeKey, tripId, frameId: start));
     return;
   }
-  final reference =
-      referencePath == null ? null : _Reference(referencePath, imageId: referenceImageId, placeKey: placeKey);
   await _shootWith(context, reference, placeKey: placeKey, tripId: tripId);
+}
+
+/// The frames a series switches between, from a place's or stop's [frames]
+/// in their order, and where it starts: [index]'s frame through [start]
+/// (which may download it), the others through [other] (on the device
+/// only). A frame with no file is left out. Null when the starting frame has
+/// no file.
+@visibleForTesting
+Future<({List<SeriesFrame> frames, int index})?> seriesFrames(
+  List<NewReferenceImage> frames,
+  int index, {
+  required Future<String?> Function(NewReferenceImage frame) start,
+  required Future<String?> Function(NewReferenceImage frame) other,
+}) async {
+  if (frames.isEmpty) return null;
+  final first = index.clamp(0, frames.length - 1);
+  final out = <SeriesFrame>[];
+  var at = -1;
+  for (var i = 0; i < frames.length; i++) {
+    final frame = frames[i];
+    final path = i == first ? await start(frame) : await other(frame);
+    if (path == null) {
+      if (i == first) return null;
+      continue;
+    }
+    if (i == first) at = out.length;
+    out.add(SeriesFrame(path, imageId: frame.id));
+  }
+  return (frames: out, index: at);
 }
 
 /// Shoots a series against [reference] on the shots screen: the camera
@@ -282,8 +338,8 @@ Future<void> _shootWith(
   await context.push(ShotSeriesArgs(
     placeKey: placeKey ?? reference?.placeKey,
     tripId: tripId,
-    referencePath: reference?.path,
-    referenceImageId: reference?.imageId,
+    frames: reference?.frames ?? const [],
+    frameIndex: reference?.index ?? 0,
   ).location);
 }
 
@@ -301,7 +357,13 @@ Future<_Reference?> _pickReference(
       if (key == null || !context.mounted) return null;
       final frame = await pickPlaceFrame(context, ref, key);
       if (frame == null) return null;
-      return _Reference(frame.localPath!, imageId: frame.id, placeKey: key);
+      // The place's other frames come along, to switch to in the camera.
+      final frames = [
+        for (final f in await placeFramesOnDevice(ref, key)) SeriesFrame(f.localPath!, imageId: f.id),
+      ];
+      final index = frames.indexWhere((f) => f.imageId == frame.id);
+      if (index < 0) return _Reference.single(frame.localPath!, imageId: frame.id, placeKey: key);
+      return _Reference(frames, index: index, placeKey: key);
     case _ReferenceSource.gallery:
       final XFile? picked;
       try {
@@ -316,7 +378,7 @@ Future<_Reference?> _pickReference(
         return null;
       }
       if (picked == null) return null;
-      return _Reference(picked.path);
+      return _Reference.single(picked.path);
     case _ReferenceSource.none:
       return null;
   }
@@ -330,10 +392,11 @@ Future<_ReferenceSource?> _askReferenceSource(
   final intro = switch (mode) {
     _SheetMode.camera =>
       'The reference floats over your camera in a small window you can drag '
-          'and pinch. Tap it for opacity.',
+          'and pinch. Tap it for opacity; double-tap it to shrink it to a dot.',
     _SheetMode.floatOnly =>
-      'The reference floats over every app until you double-tap it, so you '
-          'can shoot as many photos as you like with your own camera app.',
+      'The reference floats over every app until you close it, so you can '
+          'shoot as many photos as you like with your own camera app. '
+          'Double-tap it to shrink it to a dot.',
   };
   return showModalBottomSheet<_ReferenceSource>(
     context: context,

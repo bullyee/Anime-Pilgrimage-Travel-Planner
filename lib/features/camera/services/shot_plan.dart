@@ -38,6 +38,19 @@ class ShotPlan {
   final int frames;
   final int framesShot;
 
+  /// Each frame's picture: a stop's frames are copies of its place's (the
+  /// same picture under a new id), so a frame counts once, whichever copy a
+  /// photo was shot with.
+  final Map<String, String> framePictures;
+
+  /// The pictures that have a saved photo already.
+  final Set<String> savedPictures;
+
+  /// The pictures that count towards [frames]: a stop's own frames when it
+  /// has any (the ones picked for this trip), else the place's. Empty means
+  /// every picture in [framePictures] counts.
+  final Set<String> countedPictures;
+
   const ShotPlan({
     required this.trip,
     this.stop,
@@ -47,7 +60,37 @@ class ShotPlan {
     this.shotDayNumber,
     this.frames = 0,
     this.framesShot = 0,
+    this.framePictures = const {},
+    this.savedPictures = const {},
+    this.countedPictures = const {},
   });
+
+  /// The plan when the shots about to be kept were taken with [frameIds]:
+  /// their frames count as shot, on top of the saved photos.
+  ShotPlan withShotFrames(Iterable<String?> frameIds) => ShotPlan(
+        trip: trip,
+        stop: stop,
+        item: item,
+        itemDay: itemDay,
+        shotDay: shotDay,
+        shotDayNumber: shotDayNumber,
+        frames: frames,
+        framesShot: _countShot(framePictures, savedPictures, frameIds, countedPictures),
+        framePictures: framePictures,
+        savedPictures: savedPictures,
+        countedPictures: countedPictures,
+      );
+
+  static int _countShot(
+    Map<String, String> pictures,
+    Set<String> saved,
+    Iterable<String?> frameIds,
+    Set<String> counted,
+  ) => {
+        ...saved,
+        for (final id in frameIds)
+          if (pictures[id] case final picture?) picture,
+      }.where((picture) => counted.isEmpty || counted.contains(picture)).length;
 
   bool get done => item?.status == 'done';
 
@@ -83,14 +126,14 @@ Future<Trip?> shotTrip(AppDatabase db, {required String placeKey, required DateT
 }
 
 /// Finds the [ShotPlan] for photos of [placeKey] shot at [takenAt] with the
-/// frame [referenceImageId], in the trip [shotTrip] picks. Null when there
+/// frames [referenceImageIds], in the trip [shotTrip] picks. Null when there
 /// is no trip.
 Future<ShotPlan?> loadShotPlan(
   AppDatabase db, {
   required String placeKey,
   required DateTime takenAt,
   String? tripId,
-  String? referenceImageId,
+  Iterable<String?> referenceImageIds = const [],
 }) async {
   final trip = await shotTrip(db, placeKey: placeKey, takenAt: takenAt, tripId: tripId);
   if (trip == null) return null;
@@ -145,14 +188,20 @@ Future<ShotPlan?> loadShotPlan(
   // A stop's frames are copies of its place's (the same picture under a new
   // id), so a frame counts once, whichever copy a photo was shot with.
   final picture = {for (final f in frames) f.id: f.localPath ?? f.remoteUrl ?? f.id};
-  final shot = <String>{
-    if (referenceImageId != null && picture.containsKey(referenceImageId)) picture[referenceImageId]!,
-  };
+  // A stop's own frames are the ones picked for this trip (often fewer than
+  // the place has), and they're what the camera offers, so they decide when
+  // the spot is done; a stop without frames of its own falls back to the place's.
+  final stopOwn = [
+    for (final f in frames)
+      if (stop != null && f.stopId == stop.id) f,
+  ];
+  final counted = {for (final f in stopOwn.isNotEmpty ? stopOwn : frames) picture[f.id]!};
+  final saved = <String>{};
   if (picture.isNotEmpty) {
     final photos = await (db.select(
       db.photos,
     )..where((p) => p.placeKey.equals(placeKey) & p.referenceImageId.isIn(picture.keys))).get();
-    shot.addAll(photos.map((p) => picture[p.referenceImageId]!));
+    saved.addAll(photos.map((p) => picture[p.referenceImageId]!));
   }
 
   return ShotPlan(
@@ -162,8 +211,11 @@ Future<ShotPlan?> loadShotPlan(
     itemDay: item == null ? null : number[item.dayId],
     shotDay: shotDay,
     shotDayNumber: shotDay == null ? null : number[shotDay.id],
-    frames: picture.values.toSet().length,
-    framesShot: shot.length,
+    frames: counted.length,
+    framesShot: ShotPlan._countShot(picture, saved, referenceImageIds, counted),
+    framePictures: picture,
+    savedPictures: saved,
+    countedPictures: counted,
   );
 }
 

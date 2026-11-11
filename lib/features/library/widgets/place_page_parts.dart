@@ -43,6 +43,17 @@ Future<String?> framePath(WidgetRef ref, NewReferenceImage frame) async {
   return ref.read(cachedFramePathProvider(url).future);
 }
 
+/// Like [framePath], but only a file already on the device: the frame's own,
+/// or a copy of its link cached before. Never downloads.
+Future<String?> framePathOnDevice(WidgetRef ref, NewReferenceImage frame) async {
+  final local = frame.localPath;
+  if (local != null && local.isNotEmpty && await File(local).exists()) return local;
+  final url = frame.remoteUrl;
+  if (url == null || url.trim().isEmpty) return null;
+  final cached = await ref.read(thumbnailCacheServiceProvider).getCacheFile(url);
+  return await cached.exists() ? cached.path : null;
+}
+
 /// A frame's image: the file on the device, else the cached copy of its link.
 class FrameImage extends ConsumerWidget {
   final NewReferenceImage frame;

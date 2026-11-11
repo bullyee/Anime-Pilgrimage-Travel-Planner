@@ -19,8 +19,13 @@ import io.flutter.plugin.common.MethodChannel
  */
 class MainActivity : FlutterActivity() {
     private val channelName = "trip_planner/overlay"
+    private var channel: MethodChannel? = null
     private var overlay: ReferenceOverlay? = null
     private val handler = Handler(Looper.getMainLooper())
+
+    // Where the last window was when it closed, so the next round of the
+    // same shot series (Take more) can put it back there at the same size.
+    private var lastPlacement: ReferenceOverlay.Placement? = null
 
     // While the floating reference is up, show it only while the camera is on
     // screen: switching to another app hides it, coming back shows it again
@@ -29,6 +34,8 @@ class MainActivity : FlutterActivity() {
         override fun run() {
             val shown = overlay ?: return
             if (!shown.isShowing) {
+                // Closed with the bar's ✕.
+                lastPlacement = shown.lastPlacement ?: lastPlacement
                 overlay = null
                 return
             }
@@ -41,7 +48,9 @@ class MainActivity : FlutterActivity() {
         super.configureFlutterEngine(flutterEngine)
         JpegEncoder.register(flutterEngine.dartExecutor.binaryMessenger)
 
-        MethodChannel(flutterEngine.dartExecutor.binaryMessenger, channelName)
+        val overlayChannel = MethodChannel(flutterEngine.dartExecutor.binaryMessenger, channelName)
+        channel = overlayChannel
+        overlayChannel
             .setMethodCallHandler { call, result ->
                 when (call.method) {
                     "canDrawOverlays" -> result.success(canDrawOverlays())
@@ -57,20 +66,30 @@ class MainActivity : FlutterActivity() {
                         result.success(null)
                     }
                     "showOverlay" -> {
-                        val path = call.argument<String>("path")
+                        // One reference ("path"), or a spot's frames
+                        // ("paths") to switch between, starting on "index".
+                        val paths = call.argument<List<String>>("paths")
+                            ?: listOfNotNull(call.argument<String>("path"))
+                        val index = call.argument<Int>("index") ?: 0
                         val opacity = (call.argument<Double>("opacity") ?: 0.6).toFloat()
                         // False for the float-only mode: the window stays
                         // up while the user shoots with any camera app.
                         val follow = call.argument<Boolean>("followCamera") ?: true
+                        // The next round of the same series: back where the
+                        // last window was.
+                        val keepPlacement = call.argument<Boolean>("keepPlacement") ?: false
                         when {
-                            path == null ->
+                            paths.isEmpty() ->
                                 result.error("no_path", "path is required", null)
                             !canDrawOverlays() ->
                                 result.error("no_permission", "overlay permission not granted", null)
                             else -> {
                                 hideOverlay()
-                                val shown = ReferenceOverlay(this)
-                                if (shown.show(path, opacity)) {
+                                val shown = ReferenceOverlay(this) { frame ->
+                                    channel?.invokeMethod("frameChanged", frame)
+                                }
+                                val placement = if (keepPlacement) lastPlacement else null
+                                if (shown.show(paths, index, opacity, placement)) {
                                     overlay = shown
                                     if (follow) handler.post(followCamera)
                                     result.success(true)
@@ -140,7 +159,10 @@ class MainActivity : FlutterActivity() {
 
     private fun hideOverlay() {
         handler.removeCallbacks(followCamera)
-        overlay?.hide()
+        overlay?.let {
+            it.hide()
+            lastPlacement = it.lastPlacement ?: lastPlacement
+        }
         overlay = null
     }
 

@@ -61,7 +61,7 @@ void main() {
     await place('bench', frames: 1);
     final item = await stop('bench', day: 2);
 
-    final plan = (await loadShotPlan(db, placeKey: 'bench', takenAt: day2, referenceImageId: 'bench-1'))!;
+    final plan = (await loadShotPlan(db, placeKey: 'bench', takenAt: day2, referenceImageIds: ['bench-1']))!;
     expect(plan.trip.id, kyoto.id);
     expect((plan.canMarkDone, plan.canAddToDay), (true, false));
     expect((plan.itemDay, plan.shotDayNumber), (2, 2));
@@ -85,7 +85,7 @@ void main() {
     await stop('bridge', day: 2);
     await photo('bridge', 'bridge-1');
 
-    final plan = (await loadShotPlan(db, placeKey: 'bridge', takenAt: day2, referenceImageId: 'bridge-2'))!;
+    final plan = (await loadShotPlan(db, placeKey: 'bridge', takenAt: day2, referenceImageIds: ['bridge-2']))!;
     expect((plan.framesShot, plan.frames), (2, 3), reason: 'the earlier photo and this series');
     expect(plan.progress, '2 of 3 frames');
     expect(plan.suggestDone, isFalse);
@@ -94,11 +94,25 @@ void main() {
     expect((await items()).single.status, 'planned');
   });
 
+  test('shots switched between frames count each frame they were taken with, once', () async {
+    await place('bridge', frames: 3);
+    await stop('bridge', day: 2);
+    await photo('bridge', 'bridge-1');
+
+    final plan = (await loadShotPlan(db, placeKey: 'bridge', takenAt: day2))!;
+    expect(plan.progress, '1 of 3 frames', reason: 'only the saved photo so far');
+    expect(plan.withShotFrames(['bridge-2', 'bridge-2', null]).progress, '2 of 3 frames');
+    final all = plan.withShotFrames(['bridge-1', 'bridge-2', 'bridge-3', 'not-a-frame']);
+    expect((all.framesShot, all.frames), (3, 3));
+    expect(all.suggestDone, isTrue);
+    expect(plan.withShotFrames(const []).framesShot, 1, reason: 'nothing kept: back to the saved photos');
+  });
+
   test('a stop planned for another day stays on that day, and done marks it there', () async {
     await place('bench', frames: 1);
     await stop('bench', day: 3);
 
-    final plan = (await loadShotPlan(db, placeKey: 'bench', takenAt: day2, referenceImageId: 'bench-1'))!;
+    final plan = (await loadShotPlan(db, placeKey: 'bench', takenAt: day2, referenceImageIds: ['bench-1']))!;
     expect((plan.itemDay, plan.shotDayNumber), (3, 2));
     expect(plan.canMarkDone, isTrue);
 
@@ -133,7 +147,7 @@ void main() {
     await place('bench', frames: 1);
     await stop('bench');
 
-    final plan = (await loadShotPlan(db, placeKey: 'bench', takenAt: day2, referenceImageId: 'bench-1'))!;
+    final plan = (await loadShotPlan(db, placeKey: 'bench', takenAt: day2, referenceImageIds: ['bench-1']))!;
     expect((plan.stop?.placeKey, plan.canAddToDay), ('bench', true));
 
     expect(
@@ -150,7 +164,7 @@ void main() {
     final item = await stop('bench', day: 2);
     await trips.updateScheduleItemStatus(itemId: item!.id, status: 'done');
 
-    final plan = (await loadShotPlan(db, placeKey: 'bench', takenAt: day2, referenceImageId: 'bench-1'))!;
+    final plan = (await loadShotPlan(db, placeKey: 'bench', takenAt: day2, referenceImageIds: ['bench-1']))!;
     expect((plan.done, plan.suggestDone), (true, true));
 
     expect(await applyShotPlan(trips, plan, placeKey: 'bench', userId: 'me', markDone: false), ShotPlanChange.unmarked);
@@ -165,7 +179,7 @@ void main() {
     )..where((f) => f.stopId.isNotNull())).get()).firstWhere((f) => f.localPath == '/frames/bench-1.jpg');
     await photo('bench', copy.id);
 
-    final plan = (await loadShotPlan(db, placeKey: 'bench', takenAt: day2, referenceImageId: 'bench-1'))!;
+    final plan = (await loadShotPlan(db, placeKey: 'bench', takenAt: day2, referenceImageIds: ['bench-1']))!;
     expect((plan.framesShot, plan.frames), (1, 2));
   });
 
@@ -183,8 +197,24 @@ void main() {
           ),
         );
 
-    final plan = (await loadShotPlan(db, placeKey: 'bench', takenAt: day2, referenceImageId: 'shared-1'))!;
+    final plan = (await loadShotPlan(db, placeKey: 'bench', takenAt: day2, referenceImageIds: ['shared-1']))!;
     expect((plan.framesShot, plan.frames), (1, 1));
+  });
+
+  test("a stop trimmed to fewer frames than its place counts only the stop's", () async {
+    await place('shrine', frames: 4);
+    await stop('shrine', day: 2);
+    // The trip keeps two of the place's four frames (the copies of 3 and 4 go).
+    await (db.delete(db.newReferenceImages)..where(
+          (f) => f.stopId.isNotNull() & f.localPath.isIn(['/frames/shrine-3.jpg', '/frames/shrine-4.jpg']),
+        ))
+        .go();
+    // A photo from before the trip, with a frame the trip left out.
+    await photo('shrine', 'shrine-4');
+
+    final plan = (await loadShotPlan(db, placeKey: 'shrine', takenAt: day2, referenceImageIds: ['shrine-1']))!;
+    expect((plan.framesShot, plan.frames), (1, 2), reason: "the trip's two frames; shrine-4 isn't one of them");
+    expect(plan.withShotFrames(['shrine-1', 'shrine-2']).suggestDone, isTrue);
   });
 
   test('no trip on the day: nothing to offer', () async {

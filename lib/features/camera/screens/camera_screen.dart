@@ -9,6 +9,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:image/image.dart' as img;
 import 'package:image_picker/image_picker.dart';
 
+import '../../../core/database/database.dart' show NewReferenceImage;
 import '../providers/camera_provider.dart';
 import '../widgets/capture_sheets.dart';
 
@@ -65,7 +66,10 @@ class CameraScreen extends ConsumerStatefulWidget {
   /// The trip the shot is filed under; see [openCaptureInEditor].
   final String? tripId;
 
-  const CameraScreen({super.key, this.placeKey, this.tripId});
+  /// The place's frame to start on, when the camera was opened from one.
+  final String? frameId;
+
+  const CameraScreen({super.key, this.placeKey, this.tripId, this.frameId});
 
   @override
   ConsumerState<CameraScreen> createState() => _CameraScreenState();
@@ -88,6 +92,10 @@ class _CameraScreenState extends ConsumerState<CameraScreen>
   double _gestureStartZoom = 1;
   _CameraFrameMode _frameMode = _CameraFrameMode.native;
 
+  /// The place's frames on the device, to switch between with ‹ › once one
+  /// of them is the reference.
+  List<NewReferenceImage> _placeFrames = const [];
+
   @override
   void initState() {
     super.initState();
@@ -98,7 +106,34 @@ class _CameraScreenState extends ConsumerState<CameraScreen>
     Future.microtask(() {
       ref.read(cameraProvider.notifier).initialize(widget.placeKey);
       _initializeCameras();
+      final placeKey = widget.placeKey;
+      if (placeKey != null) _loadPlaceFrames(placeKey, startOn: widget.frameId);
     });
+  }
+
+  /// Loads [placeKey]'s frames for ‹ ›, and starts on [startOn] when given.
+  Future<void> _loadPlaceFrames(String placeKey, {String? startOn}) async {
+    final frames = await placeFramesOnDevice(ref, placeKey);
+    if (!mounted) return;
+    setState(() => _placeFrames = frames);
+    final start = frames.where((f) => f.id == startOn).firstOrNull;
+    if (start != null && ref.read(cameraProvider).referenceImage == null) {
+      ref.read(cameraProvider.notifier).setReferenceImage(File(start.localPath!), referenceImageId: start.id);
+    }
+  }
+
+  /// The reference's place in [_placeFrames]; null when it isn't one of them.
+  int? _frameIndex(CameraState camState) {
+    final i = _placeFrames.indexWhere((f) => f.id == camState.referenceImageId);
+    return i < 0 ? null : i;
+  }
+
+  /// Shows the place's frame [step] away, keeping the overlay where it is.
+  void _switchFrame(CameraState camState, int step) {
+    final i = _frameIndex(camState);
+    if (i == null || _placeFrames.length < 2) return;
+    final next = _placeFrames[(i + step) % _placeFrames.length];
+    ref.read(cameraProvider.notifier).switchReference(File(next.localPath!), referenceImageId: next.id);
   }
 
   @override
@@ -549,6 +584,29 @@ class _CameraScreenState extends ConsumerState<CameraScreen>
           child: Column(
             mainAxisSize: MainAxisSize.min,
             children: [
+              if (camState.overlayVisible && _placeFrames.length > 1 && _frameIndex(camState) != null)
+                Row(
+                  mainAxisAlignment: MainAxisAlignment.center,
+                  children: [
+                    _CameraIconButton(
+                      icon: Icons.chevron_left,
+                      size: 38,
+                      onTap: () => _switchFrame(camState, _placeFrames.length - 1),
+                    ),
+                    Padding(
+                      padding: const EdgeInsets.symmetric(horizontal: 12),
+                      child: Text(
+                        '${_frameIndex(camState)! + 1}/${_placeFrames.length}',
+                        style: const TextStyle(color: Colors.white, fontFeatures: [FontFeature.tabularFigures()]),
+                      ),
+                    ),
+                    _CameraIconButton(
+                      icon: Icons.chevron_right,
+                      size: 38,
+                      onTap: () => _switchFrame(camState, 1),
+                    ),
+                  ],
+                ),
               if (camState.referenceImage != null)
                 Row(
                   children: [
@@ -680,6 +738,7 @@ class _CameraScreenState extends ConsumerState<CameraScreen>
     ref
         .read(cameraProvider.notifier)
         .setReferenceImage(File(picked.localPath!), referenceImageId: picked.id);
+    if (_placeFrames.every((f) => f.id != picked.id)) await _loadPlaceFrames(placeKey);
   }
 
   Future<String?> _resolvePlaceForFrame() async {

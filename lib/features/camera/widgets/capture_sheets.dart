@@ -239,6 +239,14 @@ class _Header extends StatelessWidget {
       );
 }
 
+/// [placeKey]'s anime frames that have a file on the device, in the order
+/// the place shows them: what [pickPlaceFrame] offers, and what the camera
+/// switches between.
+Future<List<NewReferenceImage>> placeFramesOnDevice(WidgetRef ref, String placeKey) async => [
+      for (final f in await ref.read(placeRepositoryProvider).getReferenceImagesForPlace(placeKey))
+        if (f.localPath?.isNotEmpty ?? false) f,
+    ];
+
 /// Sheet of [placeKey]'s anime frames. A place with a single frame skips the
 /// sheet. Returns the picked frame once its file is confirmed on the device;
 /// null when the sheet is dismissed or the place has none (with a snackbar).
@@ -247,10 +255,7 @@ Future<NewReferenceImage?> pickPlaceFrame(
   WidgetRef ref,
   String placeKey,
 ) async {
-  final frames = [
-    for (final f in await ref.read(placeRepositoryProvider).getReferenceImagesForPlace(placeKey))
-      if (f.localPath?.isNotEmpty ?? false) f,
-  ];
+  final frames = await placeFramesOnDevice(ref, placeKey);
   if (!context.mounted) return null;
   if (frames.isEmpty) {
     ScaffoldMessenger.of(context).showSnackBar(

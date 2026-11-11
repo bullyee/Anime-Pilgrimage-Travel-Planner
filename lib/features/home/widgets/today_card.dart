@@ -6,11 +6,13 @@ import 'package:intl/intl.dart';
 import '../../../core/utils/schedule_logic.dart';
 import '../../../shared/theme/app_theme.dart';
 import '../../camera/services/anime_camera_launcher.dart';
+import '../../library/providers/place_providers.dart';
 import '../../library/widgets/place_page_parts.dart';
 import '../../planner/models/planner_view.dart';
 import '../../planner/providers/planner_providers.dart';
 import '../../sharing/providers/group_sharing_providers.dart';
 import '../../trip/providers/trip_providers.dart';
+import '../../trip/screens/stop_screen.dart' show stopFrames;
 import '../providers/home_providers.dart';
 import 'home_mini_map.dart';
 
@@ -167,7 +169,11 @@ class _NextStop extends ConsumerWidget {
   Widget build(BuildContext context, WidgetRef ref) {
     final theme = Theme.of(context);
     final p = theme.trip;
-    final frames = ref.watch(stopReferenceImagesProvider(item.stop.id)).valueOrNull ?? const [];
+    // The frames as the stop page and the day map order them.
+    final frames = stopFrames(
+      place: ref.watch(placeReferenceImagesProvider(item.stop.placeKey)).valueOrNull ?? const [],
+      stop: ref.watch(stopReferenceImagesProvider(item.stop.id)).valueOrNull ?? const [],
+    );
     final details = [
       formatTimelineMinutes(item.startMinutes),
       if (frames.isNotEmpty) frames.length == 1 ? '1 frame' : '${frames.length} frames',
@@ -223,7 +229,12 @@ class _NextStop extends ConsumerWidget {
                 flex: 2,
                 child: FilledButton.icon(
                   style: FilledButton.styleFrom(minimumSize: const Size.fromHeight(48), backgroundColor: p.tea),
-                  onPressed: () => openAnimeCamera(context, ref, placeKey: item.stop.placeKey, tripId: tripId),
+                  // Straight to the camera on the frame shown here, with the
+                  // stop's other frames to switch to; without frames, the
+                  // usual choice of reference.
+                  onPressed: () => frames.isEmpty
+                      ? openAnimeCamera(context, ref, placeKey: item.stop.placeKey, tripId: tripId)
+                      : shootWithFrames(context, ref, placeKey: item.stop.placeKey, tripId: tripId, frames: frames),
                   icon: const Icon(Icons.photo_camera),
                   label: const Text('Take photo'),
                 ),

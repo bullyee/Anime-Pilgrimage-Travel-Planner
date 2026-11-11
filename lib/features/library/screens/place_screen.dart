@@ -177,7 +177,7 @@ class _PlaceScreenState extends ConsumerState<PlaceScreen> {
                 children: [
                   PageActions(
                     frame: current,
-                    onShoot: () => shootWithReference(context, ref, placeKey: _key, referencePath: current?.localPath, referenceImageId: current?.id),
+                    onShoot: () => shootWithFrames(context, ref, placeKey: _key, frames: framesOnDevice, index: _frame),
                     onFloat: current == null ? null : () => floatReferenceImage(context, current.localPath!),
                     onDirections: () => _directions(place),
                     last: (icon: Icons.playlist_add, label: 'Add to trip', onTap: () => _addToTrip(place)),
@@ -306,7 +306,7 @@ class _PlaceScreenState extends ConsumerState<PlaceScreen> {
         path: frame.localPath!,
         title: frameCaption(frame) ?? 'Anime frame',
         actions: [
-          ViewerAction('Take photo', () => shootWithReference(context, ref, placeKey: _key, referencePath: frame.localPath, referenceImageId: frame.id), primary: true),
+          ViewerAction('Take photo', () => shootWithFrames(context, ref, placeKey: _key, frames: frames, index: index), primary: true),
           ViewerAction('Use as cover', () async => _report(await _place.setCover(_key, frame.localPath!), 'This frame is now the cover.')),
           ViewerAction('Delete', () async {
             Navigator.of(context).pop();

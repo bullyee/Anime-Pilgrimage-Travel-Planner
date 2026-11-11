@@ -262,32 +262,20 @@ class _PilgrimageDayMapScreenState extends ConsumerState<PilgrimageDayMapScreen>
     }
   }
 
-  Future<void> _shootWithStop(Stop stop, NewReferenceImage? frame) async {
+  /// The camera on [frames]' [index], with the stop's other frames to switch to.
+  Future<void> _shootWithStop(Stop stop, List<NewReferenceImage> frames, int index) async {
     if (_launchingCamera) return;
     _launchingCamera = true;
     try {
-      String? path;
-      if (frame != null) {
-        path = await framePath(ref, frame);
-        if (path == null) {
-          if (mounted) {
-            ScaffoldMessenger.of(context).showSnackBar(
-              const SnackBar(content: Text("This frame isn't on this phone yet. Try again when you're online.")),
-            );
-          }
-          return;
-        }
-      }
-      if (!mounted) return;
       _stopLocationStream();
       try {
-        await shootWithReference(
+        await shootWithFrames(
           context,
           ref,
           placeKey: stop.placeKey,
           tripId: widget.tripId,
-          referencePath: path,
-          referenceImageId: frame?.id,
+          frames: frames,
+          index: index,
         );
       } finally {
         if (mounted) _startLocationService();
@@ -916,7 +904,7 @@ class _PilgrimageDayMapScreenState extends ConsumerState<PilgrimageDayMapScreen>
                 if (animeCameraSupported) ...[
                   Expanded(
                     child: FilledButton.icon(
-                      onPressed: () => _shootWithStop(stop, currentFrame),
+                      onPressed: () => _shootWithStop(stop, frames, _currentFrameIndex),
                       icon: const Icon(Icons.photo_camera, size: 18),
                       label: const Text('Take photo'),
                     ),

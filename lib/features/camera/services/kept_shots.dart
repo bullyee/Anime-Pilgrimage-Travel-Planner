@@ -19,7 +19,7 @@ class KeptShotsResult {
 /// Each one goes to the phone's gallery through [toGallery], when given, and,
 /// when the series is for a place, is recorded with
 /// [PilgrimageShootingService.recordShot]: a copy in the app, a row in the
-/// place's photos with its frame, and the day's visit to the place, logged
+/// place's photos with the frame it was taken with, and the day's visit to the place, logged
 /// once per place per day however many shots are kept. The photos are filed
 /// under the series' trip, else the trip that has the place on the day they
 /// were taken, else the trip on that day ([shotTrip]). Nothing in the plan
@@ -61,7 +61,8 @@ Future<KeptShotsResult> saveKeptShots({
         sourceImagePath: shot.path,
         placeKey: placeKey,
         tripId: tripId,
-        referenceImageId: series.referenceImageId,
+        // The frame floating when this shot was taken.
+        referenceImageId: series.frameOf(shot)?.imageId,
         takenAt: shot.takenAt,
       );
       toPlace++;
