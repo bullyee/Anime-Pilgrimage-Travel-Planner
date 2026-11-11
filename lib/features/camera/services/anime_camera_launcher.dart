@@ -382,11 +382,17 @@ Future<_ReferenceSource?> _askReferenceSource(
 }
 
 /// True opens the settings screen; false shoots without the floating
-/// reference (camera flow only); null means the dialog was dismissed.
+/// reference (camera flow only); null means the dialog was dismissed, or
+/// App info was opened instead.
 Future<bool?> _askOverlayPermission(
   BuildContext context, {
   bool floatOnly = false,
-}) {
+}) async {
+  // A downloaded APK on Android 13+ can't be given the permission until
+  // "Allow restricted settings" is on in App info; Android only says so with
+  // an "App access denied" dialog, so say what to do first.
+  final restricted = await CameraOverlay.mayBeRestricted();
+  if (!context.mounted) return null;
   return showDialog<bool>(
     context: context,
     builder: (ctx) => AlertDialog(
@@ -396,18 +402,35 @@ Future<bool?> _askOverlayPermission(
             : 'Float the reference over the camera?',
       ),
       content: Text(
-        floatOnly
-            ? 'Allow "Display over other apps" for Trip Planner, then try '
-                  'again.'
-            : 'Allow "Display over other apps" for Trip Planner, then open '
-                  'the camera again.\n\nWithout it you can still shoot — the '
-                  'reference opens in the editor.',
+        [
+          floatOnly
+              ? 'Allow "Display over other apps" for Trip Planner, then try '
+                    'again.'
+              : 'Allow "Display over other apps" for Trip Planner, then open '
+                    'the camera again.',
+          if (restricted)
+            'If Android says the setting is restricted ("App access denied"): '
+                'open App info, tap ⋮ at the top right, choose "Allow '
+                'restricted settings", then come back and allow it. Android '
+                'asks this of apps installed from a downloaded file.',
+          if (!floatOnly)
+            'Without it you can still shoot — the reference opens in the '
+                'editor.',
+        ].join('\n\n'),
       ),
       actions: [
         TextButton(
           onPressed: () => Navigator.pop(ctx, floatOnly ? null : false),
           child: Text(floatOnly ? 'Cancel' : 'Shoot without it'),
         ),
+        if (restricted)
+          TextButton(
+            onPressed: () {
+              Navigator.pop(ctx);
+              CameraOverlay.openAppInfo();
+            },
+            child: const Text('App info'),
+          ),
         FilledButton(
           onPressed: () => Navigator.pop(ctx, true),
           child: const Text('Open settings'),

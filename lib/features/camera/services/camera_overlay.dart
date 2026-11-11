@@ -29,6 +29,25 @@ class CameraOverlay {
     await _channel.invokeMethod<void>('requestPermission');
   }
 
+  /// Whether Android may block "Display over other apps" as a restricted
+  /// setting (Android 13+, installed from a downloaded APK rather than Google
+  /// Play), so the user first has to allow restricted settings in App info.
+  static Future<bool> mayBeRestricted() async {
+    if (!isSupported) return false;
+    try {
+      return await _channel.invokeMethod<bool>('mayBeRestricted') ?? false;
+    } on PlatformException {
+      return false;
+    }
+  }
+
+  /// Opens this app's App info screen, where its ⋮ menu has "Allow
+  /// restricted settings".
+  static Future<void> openAppInfo() async {
+    if (!isSupported) return;
+    await _channel.invokeMethod<void>('openAppInfo');
+  }
+
   /// Shows the image at [path] in the floating window at [opacity] (0..1).
   /// Returns false when it couldn't be shown (no permission, or an image
   /// that won't decode).
