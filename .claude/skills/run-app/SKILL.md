@@ -63,6 +63,15 @@ flutter build apk --debug          # ~2.5 min cold; run_in_background
 - A debug cold start shows the Flutter logo splash for ~10 s before the home screen. On a phone with 16 KB memory pages (Pixel 10a), a debug build also opens a system "16 KB" compatibility dialog at every cold start; tap OK (`確定` on a Chinese phone), not "Don't show again".
 - **Check that `adb install` printed `Success`** (don't pipe it through `tail -1`); a failed install leaves the old build running and silently invalidates the test. The debug APK is ~200 MB and Pixel_Test's 6 GB `/data` fills up — "Requested internal only, but not enough space" means run `"$ADB" shell pm trim-caches 64G`, and if `df -h /data` still shows < ~1 GB free, test with the ~93 MB release APK instead.
 
+## Scripted runs
+
+For anything repeatable, write a flow instead of tapping by hand:
+- `python -I ~/.claude/harness/uiflow.py tool/ui/flows/<flow>.json` runs one flow. It does the waits, taps, typing and screenshots, and checks logcat for Flutter exceptions. It writes a trajectory and report.html.
+- `python -I ~/.claude/harness/uiflow.py --dump` lists the labels on screen.
+- The `verify` skill runs every flow after a build.
+
+The manual commands below are for exploring and for what flows can't do: the floating window, the camera app, pinch.
+
 ## 3. Look at the screen
 
 ```bash
@@ -85,6 +94,9 @@ shot() { "$ADB" exec-out screencap -p > "$1"; }   # then Read the PNG
 ```bash
 "$ADB" shell input tap X Y
 "$ADB" shell input text "K-On"     # ASCII only; %s for a space
+# Pixel_Test's Gboard (Zhuyin) can mangle `input text` ("Smoke Trip" -> "smoke"). uiflow.py
+# switches the IME off for a run; by hand: ime disable com.google.android.inputmethod.latin/com.android.inputmethod.latin.LatinIME
+# ... then ime enable + ime set the same id afterwards.
 "$ADB" shell input keyevent 4      # back
 ```
 
@@ -101,10 +113,10 @@ Observed on Pixel_Test with a small database; positions move with content, so co
 
 | Goal | Path (tap centers) |
 |---|---|
-| Home cards | Library (540,682) · My Trips (540,934) · Anime Camera (540,1176) · Floating Reference (540,1427) · Edit Photo (540,1690) |
+| Home | Bottom bar **Trips** · **Shoot** (big middle button) · **Library**; app bar **More** (⋮). **Shoot** opens the "Shoot here" sheet (asks for location first; back closes it); **Library** pushes the library page (back returns). With no trips, the home card offers **Plan a trip** and **Import from Anitabi** (2026-11-11, Pixel_Test; `tool/ui/flows/smoke.json`) |
 | New place | Library → **Add a place** (empty library) or the **Add place** FAB → type `lat,lng` in the search box (parsed on the device, no Nominatim call) and press Enter → Name (540,1544) → **Save to library** |
 | Import from Anitabi | Library → **Import from Anitabi** (app bar, or the empty library's button) → search a title → tick spots → save. Confirm the labels with `ui`; the Anitabi rules in CLAUDE.md apply |
-| New trip | My Trips → **New trip** → title field (540,745) → **Decide later** opens the date picker → **Create trip** |
+| New trip | **Plan a trip** (empty home) → My Trips → **New trip** → a sheet with the name field focused (placeholder "Kyoto pilgrimage"), Description, Start date **Decide later**, Days −/+ → **Create trip** → the trip page (Plan / Stops / Members tabs). Scripted in `tool/ui/flows/create_trip.json` |
 | A stop's page | My Trips → a trip → **Stops** tab → **Add stops** → *From my library* → tick places → **Add N stops**; tap a stop to open its page |
 | Anime Camera (Android) | Home **Anime Camera**, or a place or stop page's **Take photo** → place and frame sheets (a place with one frame skips the second) → the camera app opens with the frame in a floating window → shutter (540,2238) → ✓ (539,2242) → the camera opens again for the next shot; back (`keyevent 4`) in the camera ends the series → the pick screen: `Shot i of n` (swipe, or tap a thumbnail), tap the shot to keep it, **Keep N** saves, **Take more** reopens the camera, ✕ discards. On a Pixel 10a's Pixel Camera, shutter and ✓ are both at (540,1799) |
 | Floating Reference (Android) | Home **Floating Reference**, or a place or stop page's **Float frame** → the window floats over every app until a double-tap; no camera opens |

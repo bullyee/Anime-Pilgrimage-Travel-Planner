@@ -45,9 +45,13 @@ app.*.map.json
 /android/app/release
 /android/build/
 
-# Claude Code local config (project skills are shared)
+# Claude Code local config (project skills, hooks and settings.json are shared;
+# settings.local.json stays personal)
 .claude/*
 !.claude/skills/
+!.claude/hooks/
+!.claude/settings.json
+!.claude/verify.json
 
 # Generated PRD screenshots
 prd_page*.png

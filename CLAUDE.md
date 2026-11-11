@@ -55,7 +55,12 @@ Source of truth: `lib/core/database/tables_v10.dart`; migrations live in `lib/co
 
 ## Workflows
 - Tests: `flutter test` (unit tests under `test/`), and the Firestore rules on the emulator: `firebase emulators:exec "python test/rules_v2_emulator_test.py" --only firestore --project trip-planner-2775c` (needs Java 21, e.g. Android Studio's `jbr`, as `JAVA_HOME`). CI (`.github/workflows/ci.yml`) runs both on every PR and on `master`.
-- Fast test verification: `powershell -File tool\verify.ps1` (runs unit tests with compact failure reporting; pass `-WithEmulator` to include Firestore rules; see `.claude/skills/verify/SKILL.md`).
+- Verify changes: `.claude/skills/verify/SKILL.md`.
+  - **Dev PC:** the general loop `~/.claude/harness/verify.py`, configured by `.claude/verify.json`. It runs the tests the change touches, build_runner, the rules tests when the rules change, and for UI changes the APK plus the emulator flows in `tool/ui/flows/`, with screenshots.
+  - **Elsewhere:** `powershell -File tool\verify.ps1`, with `-WithEmulator` for the rules.
+- Static analysis runs in CI only (`analyze + codegen` job, which also fails on stale `.g.dart`). Never run `flutter analyze` on the dev PC; it freezes it.
+- Ship and merge: `.claude/skills/ship/SKILL.md` (verify → commit → PR → CI → review) and `.claude/skills/land/SKILL.md` (merge the named PRs, rebase stacked ones, tick `docs/roadmap.md`).
+- Session context: `.claude/hooks/session-context.sh` runs at session start (wired in `.claude/settings.json`). It prints the branch, uncommitted files, PR and CI state, and the first open roadmap items.
 - Firebase deploys: from `master` only, and only what changed (`firebase deploy --only firestore:rules`, `--only hosting`).
 - Run and drive the app on Android: `.claude/skills/run-app/SKILL.md`.
 - Releases: `.claude/skills/release/SKILL.md` (Antigravity reaches it through `.agents/skills/release/`). GitHub pre-releases tagged `vX.Y.Z` with an APK; the `pubspec.yaml` version matches the tag; history in `CHANGELOG.md`. Pushing the tag runs `.github/workflows/release.yml`, which builds and signs the APK (keystore from the `ANDROID_DEBUG_KEYSTORE_B64` secret) and attaches it to a draft pre-release.
