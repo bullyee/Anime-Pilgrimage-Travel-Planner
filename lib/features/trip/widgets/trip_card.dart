@@ -28,10 +28,10 @@ String tripDateLine({
   return '$range$year';
 }
 
-/// A trip in the list: its first date and its title, plus who it's shared
-/// with, and a cloud while a shared trip isn't in sync. The section it's
-/// listed under says whether it's under way, coming up or over, so the card
-/// doesn't repeat that.
+/// A trip in the list: its first date and its title, its description when
+/// it has one, plus who it's shared with, and a cloud while a shared trip
+/// isn't in sync. The section it's listed under says whether it's under
+/// way, coming up or over, so the card doesn't repeat that.
 class TripCard extends StatelessWidget {
   final TripSummary summary;
   final VoidCallback onTap;
@@ -42,6 +42,7 @@ class TripCard extends StatelessWidget {
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
     final shared = summary.trip.sharing == 'group';
+    final description = summary.trip.description?.trim() ?? '';
     return Card(
       clipBehavior: Clip.antiAlias,
       child: InkWell(
@@ -72,6 +73,16 @@ class TripCard extends StatelessWidget {
                           TripSyncIcon(tripId: summary.trip.id, padding: const EdgeInsets.only(left: 8, top: 2)),
                       ],
                     ),
+                    if (description.isNotEmpty) ...[
+                      const SizedBox(height: 2),
+                      Text(
+                        description,
+                        key: const Key('tripCardDescription'),
+                        style: theme.textTheme.bodyMedium?.copyWith(color: theme.colorScheme.onSurfaceVariant),
+                        maxLines: 2,
+                        overflow: TextOverflow.ellipsis,
+                      ),
+                    ],
                     if (shared) ...[
                       const SizedBox(height: 6),
                       TripMembersLine(tripId: summary.trip.id),
@@ -222,31 +233,6 @@ class TripDateBadge extends StatelessWidget {
                     ),
                 ],
               ),
-      ),
-    );
-  }
-}
-
-class TripStatusChip extends StatelessWidget {
-  final TripStatus status;
-
-  const TripStatusChip({super.key, required this.status});
-
-  @override
-  Widget build(BuildContext context) {
-    final theme = Theme.of(context);
-    final (background, foreground) = tripStatusColors(theme, status);
-    final label = switch (status) {
-      TripStatus.ongoing => 'Ongoing',
-      TripStatus.planning => 'Planning',
-      TripStatus.finished => 'Finished',
-    };
-    return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 3),
-      decoration: BoxDecoration(color: background, borderRadius: BorderRadius.circular(999)),
-      child: Text(
-        label,
-        style: theme.textTheme.labelMedium?.copyWith(color: foreground, fontWeight: FontWeight.w700),
       ),
     );
   }

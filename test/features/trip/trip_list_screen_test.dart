@@ -24,7 +24,7 @@ void main() {
         GoRoute(path: '/trips', builder: (_, _) => const TripListScreen()),
         GoRoute(
           path: '/trips/:tripId',
-          builder: (_, state) => Scaffold(body: Text('overview of ${state.pathParameters['tripId']}')),
+          builder: (_, state) => Scaffold(body: Text('trip page of ${state.pathParameters['tripId']}')),
         ),
       ],
     );
@@ -78,6 +78,7 @@ void main() {
     expect(find.text('Give the trip a name.'), findsOneWidget);
 
     await tester.enterText(find.byKey(const Key('tripTitleField')), 'Kyoto pilgrimage');
+    await tester.enterText(find.byKey(const Key('tripDescriptionField')), ' Shrines from the show\n');
     await tester.tap(find.byTooltip('One more day'));
     await tester.pump();
     expect(find.text('4'), findsOneWidget);
@@ -87,7 +88,8 @@ void main() {
     final trips = await DriftTripRepository(db).getTrips();
     expect(trips.single.title, 'Kyoto pilgrimage');
     expect(trips.single.dayCount, 4);
-    expect(find.text('overview of ${trips.single.id}'), findsOneWidget);
+    expect(trips.single.description, 'Shrines from the show');
+    expect(find.text('trip page of ${trips.single.id}'), findsOneWidget);
     await disposeApp(tester);
   });
 
@@ -106,6 +108,30 @@ void main() {
     expect(find.textContaining(' days'), findsNothing, reason: 'cards leave out how long a trip is');
     expect(find.text('Finished'), findsNothing, reason: 'the section says it; the card has no status chip');
     expect(find.byType(FloatingActionButton), findsOneWidget);
+    await disposeApp(tester);
+  });
+
+  testWidgets('a card shows the description under the title, only when there is one', (tester) async {
+    tester.view.physicalSize = const Size(1080, 2400);
+    tester.view.devicePixelRatio = 3;
+    addTearDown(tester.view.reset);
+    final repo = DriftTripRepository(db);
+    await repo.createTrip(
+      title: 'Uji',
+      description: 'Tea, the bridge and the river walk from the show. ' * 6,
+      ownerId: 'u1',
+      dayCount: 1,
+    );
+    await repo.createTrip(title: 'Solo walk', description: '   ', ownerId: 'u1');
+
+    await pumpList(tester);
+    final shown = find.byKey(const Key('tripCardDescription'));
+    expect(shown, findsOneWidget);
+    final text = tester.widget<Text>(shown);
+    expect(text.data, startsWith('Tea, the bridge'));
+    expect(text.maxLines, 2);
+    expect(tester.getTopLeft(shown).dy, greaterThan(tester.getBottomLeft(find.text('Uji')).dy - 1));
+    expect(tester.takeException(), isNull);
     await disposeApp(tester);
   });
 

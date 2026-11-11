@@ -49,6 +49,25 @@ void main() {
     expect(await container.read(tripRepositoryProvider).getTrips(), isEmpty);
   });
 
+  test('a description is trimmed, kept when not given, cleared when blank, and capped', () async {
+    final repo = container.read(tripRepositoryProvider);
+    final trip = ((await controller().createTrip(title: 'Uji', description: '  Tea and bridges ', dayCount: 1))
+            as Success<Trip>)
+        .value;
+    expect(trip.description, 'Tea and bridges');
+
+    await controller().updateTrip(tripId: trip.id, title: 'Uji');
+    expect((await repo.getTrip(trip.id))!.description, 'Tea and bridges');
+
+    await controller().updateTrip(tripId: trip.id, title: 'Uji', description: '  ');
+    expect((await repo.getTrip(trip.id))!.description, isNull);
+
+    final long = 'x' * (TripsController.maxDescriptionLength + 1);
+    expect(await controller().updateTrip(tripId: trip.id, title: 'Uji', description: long), isA<Failure<void>>());
+    expect(await controller().createTrip(title: 'x', description: long, dayCount: 1), isA<Failure<Trip>>());
+    expect((await repo.getTrip(trip.id))!.description, isNull);
+  });
+
   test('editing renames the trip and sets or clears the start date', () async {
     final trip = ((await controller().createTrip(title: 'Old', dayCount: 2)) as Success<Trip>).value;
     expect(await controller().updateTrip(tripId: trip.id, title: 'New', startDate: DateTime(2027, 5, 1)),

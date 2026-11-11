@@ -102,8 +102,8 @@ My note, your visits and your photos are only yours, even on a shared trip.
 
 **My Trips** lists your trips under **Ongoing**, **Coming up**, **No dates yet** and **Finished**. Filter them by **All**, **Shared** or **Private**.
 
-1. Tap **New trip**, give it a name, a start date if you know it, and the number of days.
-2. Open the trip. It has four tabs: **Overview**, **Plan**, **Stops** and **Members**.
+1. Tap **New trip**, give it a name, a description if you like (it shows under the name in My Trips), a start date if you know it, and the number of days. The menu's **Edit trip** changes them later.
+2. Open the trip. It opens on **Plan**, next to **Stops** and **Members**.
 3. On **Stops**, tap **Add stops**: **From my library**, or **New spot** on the map. Places can come from your library, or from the import (**Save, and add them to a trip**).
 
 <br clear="right">
@@ -121,7 +121,7 @@ Tap the **pencil** to edit the plan:
 - **In the grid**, drop one day on another to swap them.
 - **Add Day** and **Add a backup day** come after the last day.
 
-While the trip is under way, the plan opens on today, and the Overview shows today's stops on top.
+While the trip is under way, the plan opens on today.
 
 <br clear="right">
 

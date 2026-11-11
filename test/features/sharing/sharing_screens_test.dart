@@ -387,8 +387,6 @@ void main() {
       expect(find.byTooltip('Invite people'), findsNothing);
       expect(await menuItems(tester), ['leave']);
 
-      await tester.tap(find.text('Plan'));
-      await tester.pumpAndSettle();
       expect(find.byTooltip('Edit the plan'), findsNothing);
 
       await tester.tap(find.text('Stops'));
@@ -408,8 +406,6 @@ void main() {
 
       expect(find.textContaining('View only'), findsNothing);
       expect(await menuItems(tester), ['edit', 'leave']);
-      await tester.tap(find.text('Plan'));
-      await tester.pumpAndSettle();
       expect(find.byTooltip('Edit the plan'), findsOneWidget);
       await done(tester);
     });
@@ -423,8 +419,6 @@ void main() {
 
       expect(find.textContaining('View only'), findsNothing, reason: "it isn't known to be view only either");
       expect(find.byType(PopupMenuButton<String>), findsNothing);
-      await tester.tap(find.text('Plan'));
-      await tester.pumpAndSettle();
       expect(find.byTooltip('Edit the plan'), findsNothing);
       await tester.tap(find.text('Stops'));
       await tester.pumpAndSettle();
