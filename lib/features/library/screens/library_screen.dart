@@ -13,6 +13,7 @@ import '../models/library_entry.dart';
 import '../providers/library_providers.dart';
 import '../providers/place_providers.dart';
 import '../widgets/label_widgets.dart';
+import '../widgets/library_backup_flow.dart';
 import '../widgets/spot_thumb.dart';
 import '../widgets/trip_picker.dart';
 
@@ -247,13 +248,29 @@ class _LibraryScreenState extends ConsumerState<LibraryScreen> {
                   icon: const Icon(Icons.label_outline),
                   onPressed: () => context.push('/library/labels'),
                 ),
+                PopupMenuButton<void Function()>(
+                  tooltip: 'More',
+                  onSelected: (action) => action(),
+                  itemBuilder: (context) => [
+                    PopupMenuItem(
+                      value: () => backUpLibrary(this.context, ref),
+                      child: const ListTile(leading: Icon(Icons.save_alt), title: Text('Back up to a file')),
+                    ),
+                    PopupMenuItem(
+                      value: () => restoreLibrary(this.context, ref),
+                      child: const ListTile(leading: Icon(Icons.restore), title: Text('Restore from a file')),
+                    ),
+                  ],
+                ),
               ],
             ),
       body: entriesAsync.when(
         loading: () => const Center(child: CircularProgressIndicator()),
         error: (e, _) => Center(child: Text("Couldn't load your library: $e")),
         data: (all) {
-          if (all.isEmpty) return _EmptyLibrary(onAdd: () => context.push('/library/new'));
+          if (all.isEmpty) {
+            return _EmptyLibrary(onAdd: () => context.push('/library/new'), onRestore: () => restoreLibrary(context, ref));
+          }
           final shown = filterLibrary(all, _filter, labels);
           return Column(
             children: [
@@ -696,7 +713,10 @@ class _LibraryMap extends StatelessWidget {
 class _EmptyLibrary extends StatelessWidget {
   final VoidCallback onAdd;
 
-  const _EmptyLibrary({required this.onAdd});
+  /// A new phone: bring the library over from a backup file.
+  final VoidCallback onRestore;
+
+  const _EmptyLibrary({required this.onAdd, required this.onRestore});
 
   @override
   Widget build(BuildContext context) {
@@ -728,6 +748,11 @@ class _EmptyLibrary extends StatelessWidget {
               onPressed: () => context.push('/library/import'),
               icon: const Icon(Icons.download_outlined),
               label: const Text('Import from Anitabi'),
+            ),
+            TextButton.icon(
+              onPressed: onRestore,
+              icon: const Icon(Icons.restore),
+              label: const Text('Restore from a backup file'),
             ),
           ],
         ),
