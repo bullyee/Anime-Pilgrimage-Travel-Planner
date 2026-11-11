@@ -6,6 +6,33 @@ import '../../../core/utils/app_result.dart';
 import '../../../core/utils/fractional_index.dart';
 import '../../trip/controllers/trips_controller.dart' show isoDate;
 import '../../trip/providers/trip_providers.dart';
+import '../../trip/repositories/trip_repository.dart';
+
+/// [n] sort keys for items put on a day before [beforeItemId], or at the end
+/// of the day when it's null or not among [ordered], the day's other items.
+List<String> keysBefore(List<ScheduleItem> ordered, String? beforeItemId, int n) {
+  final i = beforeItemId == null ? -1 : ordered.indexWhere((x) => x.id == beforeItemId);
+  if (i < 0) return FractionalIndexUtil.generateNKeysBetween(ordered.isEmpty ? null : ordered.last.sortKey, null, n);
+  return FractionalIndexUtil.generateNKeysBetween(i == 0 ? null : ordered[i - 1].sortKey, ordered[i].sortKey, n);
+}
+
+/// Moves scheduled items, in the order of [itemIds], together onto [dayId]:
+/// before [beforeItemId], or at the end of the day when it's null.
+Future<void> moveScheduleItemsTogether(
+  TripRepository repo, {
+  required List<String> itemIds,
+  required String dayId,
+  String? beforeItemId,
+}) async {
+  if (itemIds.isEmpty) return;
+  final moving = itemIds.toSet();
+  final others = (await repo.getScheduleItemsForDay(dayId)).where((i) => !moving.contains(i.id)).toList();
+  await repo.moveScheduleItems(
+    itemIds: itemIds,
+    newSortKeys: keysBefore(others, beforeItemId, itemIds.length),
+    targetDayId: dayId,
+  );
+}
 
 /// Everything the day planner changes: where stops go, how long they take,
 /// and the days themselves.
@@ -30,6 +57,40 @@ class DayPlannerController extends Notifier<AsyncValue<void>> {
         itemId: itemId,
         newSortKey: _keyBefore(others, beforeItemId),
         targetDayId: toDayId,
+      );
+    });
+  }
+
+  /// Moves several scheduled stops, such as a group's, to [toDayId] in the
+  /// order given, one after another, before [beforeItemId] or at the end.
+  Future<AppResult<void>> moveItems({
+    required List<String> itemIds,
+    required String toDayId,
+    String? beforeItemId,
+  }) =>
+      _run(() => moveScheduleItemsTogether(
+            ref.read(tripRepositoryProvider),
+            itemIds: itemIds,
+            dayId: toDayId,
+            beforeItemId: beforeItemId,
+          ));
+
+  /// Puts several stops from the backlog, such as a group's, on a day in the
+  /// order given, one after another, before [beforeItemId] or at the end.
+  Future<AppResult<void>> scheduleStops({
+    required String tripId,
+    required List<String> stopIds,
+    required String dayId,
+    String? beforeItemId,
+  }) {
+    return _run(() async {
+      final repo = ref.read(tripRepositoryProvider);
+      final others = await repo.getScheduleItemsForDay(dayId);
+      await repo.scheduleStops(
+        tripId: tripId,
+        dayId: dayId,
+        stopIds: stopIds,
+        sortKeys: keysBefore(others, beforeItemId, stopIds.length),
       );
     });
   }
@@ -61,6 +122,18 @@ class DayPlannerController extends Notifier<AsyncValue<void>> {
   Future<AppResult<void>> restoreItem(String itemId) => _run(() => ref
       .read(tripRepositoryProvider)
       .updateScheduleItem(ScheduleItemsCompanion(id: Value(itemId), deletedAt: const Value(null))));
+
+  /// Takes several stops off their days, such as a group's.
+  Future<AppResult<void>> unscheduleItems(List<String> itemIds) =>
+      _run(() => ref.read(tripRepositoryProvider).deleteScheduleItems(itemIds));
+
+  /// Undoes [unscheduleItems].
+  Future<AppResult<void>> restoreItems(List<String> itemIds) => _run(() async {
+        final repo = ref.read(tripRepositoryProvider);
+        for (final id in itemIds) {
+          await repo.updateScheduleItem(ScheduleItemsCompanion(id: Value(id), deletedAt: const Value(null)));
+        }
+      });
 
   Future<AppResult<void>> setStay(String itemId, int minutes) {
     if (minutes < 0) return Future.value(const Failure('A stay can\'t be negative.'));

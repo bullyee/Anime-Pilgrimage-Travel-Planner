@@ -11,10 +11,12 @@ import 'package:path_provider_platform_interface/path_provider_platform_interfac
 import 'package:plugin_platform_interface/plugin_platform_interface.dart';
 import 'package:trip_planner/core/database/database.dart';
 import 'package:trip_planner/core/providers/database_provider.dart';
+import 'package:trip_planner/features/auth/providers/auth_provider.dart';
 import 'package:trip_planner/features/camera/models/shot_series.dart';
 import 'package:trip_planner/features/camera/screens/shot_series_screen.dart';
 import 'package:trip_planner/features/camera/services/kept_shots.dart';
-import 'package:trip_planner/features/library/repositories/place_repository.dart';
+import 'package:trip_planner/features/sharing/providers/group_sharing_providers.dart';
+import 'package:trip_planner/features/trip/repositories/trip_repository.dart';
 
 class _FakePathProvider extends Fake with MockPlatformInterfaceMixin implements PathProviderPlatform {
   _FakePathProvider(this.docsPath);
@@ -209,7 +211,6 @@ void main() {
       final result = await saveKeptShots(
         series: series,
         kept: [b],
-        places: DriftPlaceRepository(db),
         db: db,
         toGallery: (path) async => gallery.add(path),
       );
@@ -227,6 +228,53 @@ void main() {
       expect(File(photos.single.localPath).existsSync(), isTrue);
     });
 
+    test("several shots kept on one day log the day's visit once, filed under the trip on that day", () async {
+      final trips = DriftTripRepository(db, null, 'me');
+      final kyoto = await trips.createTrip(title: 'Kyoto', ownerId: 'me', startDate: '2026-11-07', dayCount: 3);
+      final series = ShotSeries(
+        id: 's',
+        createdAt: DateTime(2026, 11, 8),
+        placeKey: 'uji',
+        shots: [shot('a.jpg', DateTime(2026, 11, 8, 10)), shot('b.jpg', DateTime(2026, 11, 8, 10, 5))],
+      );
+
+      final result = await saveKeptShots(series: series, kept: series.shots, db: db);
+
+      expect(result.toPlace, 2);
+      final photos = await db.select(db.photos).get();
+      expect(photos.map((p) => p.tripId), [kyoto.id, kyoto.id], reason: "the place isn't in the trip, but the day is");
+      final visits = await db.select(db.placeVisits).get();
+      expect(visits.map((v) => (v.placeKey, v.date, v.tripId)), [('uji', '2026-11-08', kyoto.id)]);
+      expect(await db.select(db.stops).get(), isEmpty, reason: 'a shot never changes the plan');
+
+      // Another series at the same place on the same day adds photos, not visits.
+      await saveKeptShots(series: series, kept: [series.shots.first], db: db);
+      expect(await db.select(db.placeVisits).get(), hasLength(1));
+      expect(await db.select(db.photos).get(), hasLength(3));
+    });
+
+    test("a stop of a joined trip whose place isn't in the library: the shot still reaches a place", () async {
+      final trips = DriftTripRepository(db, null, 'me');
+      final kyoto = await trips.createTrip(title: 'Kyoto', ownerId: 'ck', startDate: '2026-11-07', dayCount: 3);
+      // What a joined trip brings: a stop whose place key this library doesn't have.
+      final stop = await trips.createTripOnlySpot(tripId: kyoto.id, name: 'Asagiri Bridge', lat: 34.89, lng: 135.81, addedBy: 'ck');
+      await (db.delete(db.places)..where((p) => p.placeKey.equals(stop.placeKey))).go();
+      final series = ShotSeries(
+        id: 's',
+        createdAt: DateTime(2026, 11, 8),
+        placeKey: stop.placeKey,
+        shots: [shot('a.jpg', DateTime(2026, 11, 8, 10))],
+      );
+
+      final result = await saveKeptShots(series: series, kept: series.shots, db: db);
+
+      expect(result.toPlace, 1);
+      final place = await (db.select(db.places)..where((p) => p.placeKey.equals(stop.placeKey))).getSingle();
+      expect((place.name, place.visibility), ('Asagiri Bridge', 'trip_only'));
+      final photo = (await db.select(db.photos).get()).single;
+      expect((photo.placeKey, photo.tripId), (stop.placeKey, kyoto.id));
+    });
+
     test('a gallery refusal still saves every shot to the place', () async {
       final series = ShotSeries(
         id: 's',
@@ -237,7 +285,6 @@ void main() {
       final result = await saveKeptShots(
         series: series,
         kept: series.shots,
-        places: DriftPlaceRepository(db),
         db: db,
         toGallery: (path) async => throw StateError('no access to the gallery'),
       );
@@ -254,7 +301,6 @@ void main() {
       final result = await saveKeptShots(
         series: series,
         kept: series.shots,
-        places: DriftPlaceRepository(db),
         db: db,
         toGallery: (path) async => gallery.add(path),
       );
@@ -279,7 +325,12 @@ void main() {
 
     /// Opens the shots screen from a home page, with a camera that returns
     /// [shots] one by one and then backs out.
-    Future<void> open(WidgetTester tester, List<String> shots, {ShotSeriesArgs args = const ShotSeriesArgs()}) async {
+    Future<void> open(
+      WidgetTester tester,
+      List<String> shots, {
+      ShotSeriesArgs args = const ShotSeriesArgs(),
+      bool? canEdit,
+    }) async {
       final queue = [...shots];
       final router = GoRouter(
         routes: [
@@ -302,12 +353,199 @@ void main() {
         ],
       );
       await tester.pumpWidget(ProviderScope(
-        overrides: [databaseProvider.overrideWithValue(db), shotSeriesStoreProvider.overrideWithValue(store)],
+        overrides: [
+          databaseProvider.overrideWithValue(db),
+          shotSeriesStoreProvider.overrideWithValue(store),
+          currentUserIdProvider.overrideWithValue('me'),
+          if (canEdit != null) canEditTripProvider.overrideWith((ref, id) => canEdit),
+        ],
         child: MaterialApp.router(routerConfig: router),
       ));
       await tester.tap(find.text('home'));
       await tester.pumpAndSettle();
     }
+
+    /// A trip, Kyoto, from 2026-11-07 for three days; the memory store's
+    /// shots are taken on 2026-11-08, its Day 2. [onDay2] goes on Day 2.
+    Future<String> kyoto(WidgetTester tester, {String? onDay2}) async {
+      late String itemId;
+      await tester.runAsync(() async {
+        final trips = DriftTripRepository(db, null, 'me');
+        final trip = await trips.createTrip(title: 'Kyoto', ownerId: 'me', startDate: '2026-11-07', dayCount: 3);
+        if (onDay2 == null) return;
+        final days = await trips.getDaysForTrip(trip.id);
+        final stop = await trips.addPlaceToTrip(tripId: trip.id, placeKey: onDay2, addedBy: 'me');
+        itemId = (await trips.scheduleStop(tripId: trip.id, stopId: stop.id, dayId: days[1].id)).id;
+      });
+      return onDay2 == null ? '' : itemId;
+    }
+
+    Future<void> frame(WidgetTester tester, String id, String placeKey) => tester.runAsync(() => db
+        .into(db.newReferenceImages)
+        .insert(NewReferenceImagesCompanion.insert(id: id, placeKey: Value(placeKey), localPath: Value('/frames/$id.jpg'))));
+
+    /// Pumps until the shots screen has closed after Keep. Saving checks the
+    /// shot's file (real file I/O, which only completes outside the fake
+    /// clock), so real time runs between the frames.
+    Future<void> untilHome(WidgetTester tester) async {
+      for (var i = 0; i < 200 && find.text('home').evaluate().isEmpty; i++) {
+        await tester.runAsync(() => Future<void>.delayed(const Duration(milliseconds: 5)));
+        await tester.pump(const Duration(milliseconds: 20));
+      }
+      await tester.pumpAndSettle();
+      expect(find.text('home'), findsOneWidget);
+    }
+
+    /// Closes the screen and lets the database's streams wind down, so no
+    /// timer is left when the test ends.
+    Future<void> close(WidgetTester tester) async {
+      await tester.pumpWidget(const SizedBox());
+      await tester.pump(const Duration(seconds: 1));
+    }
+
+    Future<ScheduleItem> item(WidgetTester tester, String id) async =>
+        (await tester.runAsync(() => (db.select(db.scheduleItems)..where((s) => s.id.equals(id))).getSingle()))!;
+
+    testWidgets('a stop on the day: Mark done, ticked when every frame is shot, sets it done on Keep', (tester) async {
+      await tester.runAsync(() => _place(db, 'bench'));
+      await frame(tester, 'bench-1', 'bench');
+      final itemId = await kyoto(tester, onDay2: 'bench');
+
+      await open(tester, ['a.jpg'], args: const ShotSeriesArgs(placeKey: 'bench', referenceImageId: 'bench-1'));
+
+      expect(find.text('Mark bench done'), findsOneWidget);
+      expect(find.text('1 of 1 frame · Kyoto'), findsOneWidget);
+      CheckboxListTile tick() => tester.widget<CheckboxListTile>(find.byKey(const Key('shotPlanDone')));
+      expect(tick().value, isTrue, reason: 'its only frame now has a shot');
+      await tester.tap(find.byKey(const Key('shotPlanDone')));
+      await tester.pump();
+      expect(tick().value, isFalse);
+      await tester.tap(find.byKey(const Key('shotPlanDone')));
+      await tester.pump();
+
+      await tester.tap(find.text('Keep 1'));
+      await untilHome(tester);
+
+      expect((await item(tester, itemId)).status, 'done');
+      final (photos, visits) = (await tester.runAsync(
+        () async => (await db.select(db.photos).get(), await db.select(db.placeVisits).get()),
+      ))!;
+      expect(photos.single.referenceImageId, 'bench-1');
+      expect(visits.single.date, '2026-11-08');
+      await close(tester);
+    });
+
+    testWidgets('a big spot: progress, not ticked, and Keep leaves the stop planned', (tester) async {
+      await tester.runAsync(() => _place(db, 'bridge'));
+      for (final id in ['bridge-1', 'bridge-2', 'bridge-3']) {
+        await frame(tester, id, 'bridge');
+      }
+      final itemId = await kyoto(tester, onDay2: 'bridge');
+
+      await open(tester, ['a.jpg', 'b.jpg'], args: const ShotSeriesArgs(placeKey: 'bridge', referenceImageId: 'bridge-2'));
+
+      expect(find.text('1 of 3 frames · Kyoto'), findsOneWidget);
+      expect(tester.widget<CheckboxListTile>(find.byKey(const Key('shotPlanDone'))).value, isFalse);
+      await tester.tap(find.text('Shot 2 of 2'));
+      await tester.pump();
+      await tester.tap(find.text('Keep 1'));
+      await untilHome(tester);
+      expect((await item(tester, itemId)).status, 'planned');
+      await close(tester);
+    });
+
+    testWidgets('a stop planned for another day: done marks it on its own day', (tester) async {
+      await tester.runAsync(() => _place(db, 'bench'));
+      late String itemId;
+      await tester.runAsync(() async {
+        final trips = DriftTripRepository(db, null, 'me');
+        final trip = await trips.createTrip(title: 'Kyoto', ownerId: 'me', startDate: '2026-11-07', dayCount: 3);
+        final days = await trips.getDaysForTrip(trip.id);
+        final stop = await trips.addPlaceToTrip(tripId: trip.id, placeKey: 'bench', addedBy: 'me');
+        itemId = (await trips.scheduleStop(tripId: trip.id, stopId: stop.id, dayId: days[2].id)).id;
+      });
+
+      await open(tester, ['a.jpg'], args: const ShotSeriesArgs(placeKey: 'bench'));
+
+      expect(find.text('planned for Day 3 · Kyoto'), findsOneWidget);
+      await tester.tap(find.text('Keep 1'));
+      await untilHome(tester);
+      final done = await item(tester, itemId);
+      expect(done.status, 'done', reason: 'a spot with no frames is ticked already');
+      expect(await tester.runAsync(() => db.select(db.scheduleItems).get()), hasLength(1));
+      await close(tester);
+    });
+
+    testWidgets('a viewer sees the progress but no ticks, and the plan stays as it is', (tester) async {
+      await tester.runAsync(() => _place(db, 'bench'));
+      await frame(tester, 'bench-1', 'bench');
+      final itemId = await kyoto(tester, onDay2: 'bench');
+
+      await open(tester, ['a.jpg'],
+          args: const ShotSeriesArgs(placeKey: 'bench', referenceImageId: 'bench-1'), canEdit: false);
+
+      expect(find.byType(CheckboxListTile), findsNothing);
+      expect(find.text('bench · 1 of 1 frame'), findsOneWidget);
+      await tester.tap(find.text('Keep 1'));
+      await untilHome(tester);
+      expect((await item(tester, itemId)).status, 'planned');
+      await close(tester);
+    });
+
+    testWidgets('a place off the plan: Add to Day 2, unticked, then added on Keep when ticked', (tester) async {
+      await tester.runAsync(() => _place(db, 'shrine'));
+      await kyoto(tester);
+
+      await open(tester, ['a.jpg'], args: const ShotSeriesArgs(placeKey: 'shrine'));
+
+      expect(find.text('Add shrine to Day 2'), findsOneWidget);
+      expect(find.text('Kyoto · not in the trip yet'), findsOneWidget);
+      expect(tester.widget<CheckboxListTile>(find.byKey(const Key('shotPlanAdd'))).value, isFalse);
+      expect(find.byKey(const Key('shotPlanDone')), findsNothing);
+
+      await tester.tap(find.byKey(const Key('shotPlanAdd')));
+      await tester.pump();
+      expect(find.text('Mark it done'), findsOneWidget);
+      await tester.tap(find.byKey(const Key('shotPlanDone')));
+      await tester.pump();
+
+      await tester.tap(find.text('Keep 1'));
+      await untilHome(tester);
+      final (stops, items, photos) = (await tester.runAsync(() async => (
+            await db.select(db.stops).get(),
+            await db.select(db.scheduleItems).get(),
+            await db.select(db.photos).get(),
+          )))!;
+      expect(stops.single.placeKey, 'shrine');
+      expect((items.single.stopId, items.single.status), (stops.single.id, 'planned'));
+      expect(photos.single.tripId, stops.single.tripId, reason: 'filed under the trip of the day');
+      await close(tester);
+    });
+
+    testWidgets("a place off the plan, left alone: filed under the trip, and the plan doesn't change", (tester) async {
+      await tester.runAsync(() => _place(db, 'shrine'));
+      await kyoto(tester);
+
+      await open(tester, ['a.jpg'], args: const ShotSeriesArgs(placeKey: 'shrine'));
+      await tester.tap(find.text('Keep 1'));
+      await untilHome(tester);
+
+      final (stops, photos) =
+          (await tester.runAsync(() async => (await db.select(db.stops).get(), await db.select(db.photos).get())))!;
+      expect(stops, isEmpty);
+      expect(photos.single.tripId, isNotNull);
+      await close(tester);
+    });
+
+    testWidgets('no trip on the day: no ticks', (tester) async {
+      await tester.runAsync(() => _place(db, 'bench'));
+
+      await open(tester, ['a.jpg'], args: const ShotSeriesArgs(placeKey: 'bench'));
+
+      expect(find.byType(CheckboxListTile), findsNothing);
+      expect(find.byKey(const Key('shotPlanProgress')), findsNothing);
+      await close(tester);
+    });
 
     testWidgets('the camera reopens after each shot until the user backs out, then they pick', (tester) async {
       await open(tester, ['a.jpg', 'b.jpg', 'c.jpg']);

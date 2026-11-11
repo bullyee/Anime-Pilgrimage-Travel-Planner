@@ -23,6 +23,7 @@ import '../../planner/widgets/day_card.dart' show dayName, dayWithDate;
 import '../../planner/widgets/planner_sheets.dart' show pickStartTime;
 import '../../sharing/providers/group_sharing_providers.dart';
 import '../controllers/trip_stops_controller.dart';
+import '../models/stop_group.dart';
 import '../providers/trip_providers.dart';
 import '../../auth/providers/auth_provider.dart';
 
@@ -36,6 +37,15 @@ StopSlot? findStopSlot(PlannerView view, String stopId) {
     }
   }
   return null;
+}
+
+/// Whether [stop] is shown inside its group's block, on its day or in the
+/// backlog, and so moves only with the group (as in the planner's sheet).
+bool movesWithGroup(PlannerView view, Stop stop, StopSlot? slot) {
+  if (stopGroup(stop) == null) return false;
+  return slot != null
+      ? slot.day.blocks.any((b) => b.isGroup && b.items.any((it) => it.stop.id == stop.id))
+      : view.backlogEntries.any((e) => e.isGroup && e.stops.any((s) => s.id == stop.id));
 }
 
 /// The frames to shoot with on a stop: the user's own frames of the place
@@ -103,7 +113,7 @@ class _StopScreenState extends ConsumerState<StopScreen> {
       case Failure(:final error):
         messenger.showSnackBar(SnackBar(content: Text(error)));
       case Success():
-        if (ok != null) messenger.showSnackBar(SnackBar(content: Text(ok), action: action));
+        if (ok != null) messenger.showSnackBar(SnackBar(content: Text(ok), action: action, persist: false));
     }
   }
 
@@ -206,7 +216,8 @@ class _StopScreenState extends ConsumerState<StopScreen> {
     );
     if (_frame >= frames.length) _frame = 0;
     final current = frames.isEmpty ? null : frames[_frame];
-    final where = slot == null ? 'Not on a day yet' : dayName(slot.day);
+    final group = stopGroup(stop);
+    final where = [slot == null ? 'Not on a day yet' : dayName(slot.day), ?group].join(' · ');
     final draft = _draft;
     // A viewer's edit mode only reaches their own note.
     final canEdit = ref.watch(canEditTripProvider(_tripId));
@@ -245,8 +256,13 @@ class _StopScreenState extends ConsumerState<StopScreen> {
                 onSelected: (action) => _onMenu(action, stop, view, slot),
                 itemBuilder: (_) => [
                   const PopupMenuItem(value: 'rename', child: Text('Rename')),
-                  if (view != null) PopupMenuItem(value: 'day', child: Text(slot == null ? 'Add to a day' : 'Move to another day')),
-                  if (slot != null) const PopupMenuItem(value: 'backlog', child: Text('Back to the backlog')),
+                  // A stop in its group's block moves with the group, from
+                  // the plan; taken out of the group, it moves on its own.
+                  if (view != null && !movesWithGroup(view, stop, slot))
+                    PopupMenuItem(value: 'day', child: Text(slot == null ? 'Add to a day' : 'Move to another day')),
+                  if (slot != null && view != null && !movesWithGroup(view, stop, slot))
+                    const PopupMenuItem(value: 'backlog', child: Text('Back to the backlog')),
+                  if (stopGroup(stop) != null) const PopupMenuItem(value: 'ungroup', child: Text('Take out of the group')),
                   const PopupMenuItem(value: 'remove', child: Text('Remove from the trip')),
                 ],
               ),
@@ -288,7 +304,7 @@ class _StopScreenState extends ConsumerState<StopScreen> {
                       onClearStart: () => _planner.setFixedTime(slot!.item.item.id, null),
                       onStay: (m) => _planner.setStay(slot!.item.item.id, m),
                       onTransit: (m) => _planner.setTransit(slot!.item.item.id, m),
-                      onAddToDay: canEdit ? () => _pickDay(stop, view!, null) : null,
+                      onAddToDay: canEdit && !movesWithGroup(view!, stop, slot) ? () => _pickDay(stop, view, null) : null,
                     ),
                     if (tripDraft != null)
                       NoteField(
@@ -435,6 +451,9 @@ class _StopScreenState extends ConsumerState<StopScreen> {
         _report(await _stops.renameStop(stop.id, name), 'Renamed to $name. Your library keeps its own name.');
       case 'day':
         await _pickDay(stop, view!, slot);
+      case 'ungroup':
+        final group = stopGroup(stop);
+        _report(await _stops.ungroupStops(tripId: _tripId, stopIds: [stop.id]), 'Took ${stop.name} out of $group.');
       case 'backlog':
         final itemId = slot!.item.item.id;
         _report(

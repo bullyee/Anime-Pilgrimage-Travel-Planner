@@ -1,4 +1,4 @@
-import 'package:drift/drift.dart' show Value;
+import 'package:drift/drift.dart' show Value, BooleanExpressionOperators;
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:uuid/uuid.dart';
 
@@ -187,9 +187,12 @@ class LibraryController extends Notifier<AsyncValue<void>> {
   }
 
   /// Merges [others] into [keep], for the same spot saved twice. Their
-  /// labels, frames, photos and visits move to [keep], their notes are added
-  /// to its note, and trip stops that used them now point at [keep]. The
-  /// kept place's facts stay as they are, and the others are deleted.
+  /// labels, frames, photos and visits move to [keep], and their notes are
+  /// added to its note. The kept place's facts stay as they are. The others
+  /// leave the library the way [removeFromLibrary] takes a place out: hidden
+  /// while a trip has a stop at one, deleted otherwise. Trips are left as
+  /// they are: a stop is the trip's own copy, and the library is personal
+  /// while a trip may be shared.
   Future<AppResult<void>> mergePlaces({required String keep, required List<String> others}) {
     final rest = [for (final k in others) if (k != keep) k];
     if (rest.isEmpty) return Future.value(const Failure('Pick at least two places to merge.'));
@@ -202,6 +205,7 @@ class LibraryController extends Notifier<AsyncValue<void>> {
           var cover = kept.coverLocalPath;
           final visitDates = {for (final v in await repo.getVisitsForPlace(keep)) v.date};
           final merged = <String>[];
+          final inTrips = <String>{};
           for (final key in rest) {
             final other = await repo.getPlace(key);
             if (other == null) continue;
@@ -220,12 +224,11 @@ class LibraryController extends Notifier<AsyncValue<void>> {
                 await (db.update(db.placeVisits)..where((x) => x.id.equals(v.id))).write(PlaceVisitsCompanion(placeKey: Value(keep)));
               }
             }
-            // Through the trip repository, so each stop is stamped like any
-            // other edit of a shared row (updated at and by) and queued to sync.
-            final stops = await (db.select(db.stops)..where((s) => s.placeKey.equals(key))).get();
-            for (final s in stops) {
-              await ref.read(tripRepositoryProvider).updateStop(StopsCompanion(id: Value(s.id), placeKey: Value(keep)));
-            }
+            final inTrip = await (db.select(db.stops)
+                  ..where((s) => s.placeKey.equals(key) & s.deletedAt.isNull())
+                  ..limit(1))
+                .get();
+            if (inTrip.isNotEmpty) inTrips.add(key);
           }
           // The kept place takes over the cover before the others go, so its
           // file counts as still in use when they are deleted.
@@ -235,7 +238,11 @@ class LibraryController extends Notifier<AsyncValue<void>> {
             coverLocalPath: Value(cover),
           ));
           for (final key in merged) {
-            await repo.deletePlace(key);
+            if (inTrips.contains(key)) {
+              await repo.setPlaceVisibility(key, 'trip_only');
+            } else {
+              await repo.deletePlace(key);
+            }
           }
         }));
   }

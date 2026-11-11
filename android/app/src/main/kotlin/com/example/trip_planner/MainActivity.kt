@@ -49,6 +49,13 @@ class MainActivity : FlutterActivity() {
                         requestOverlayPermission()
                         result.success(null)
                     }
+                    "mayBeRestricted" -> result.success(mayBeRestricted())
+                    "openAppInfo" -> {
+                        startActivity(
+                            Intent(Settings.ACTION_APPLICATION_DETAILS_SETTINGS, Uri.parse("package:$packageName")),
+                        )
+                        result.success(null)
+                    }
                     "showOverlay" -> {
                         val path = call.argument<String>("path")
                         val opacity = (call.argument<Double>("opacity") ?: 0.6).toFloat()
@@ -101,6 +108,24 @@ class MainActivity : FlutterActivity() {
 
     private fun canDrawOverlays(): Boolean =
         Build.VERSION.SDK_INT < Build.VERSION_CODES.M || Settings.canDrawOverlays(this)
+
+    /**
+     * Whether Android may refuse "Display over other apps" as a restricted
+     * setting: from Android 13, an app installed from a downloaded APK rather
+     * than an app store needs "Allow restricted settings" in its App info
+     * first. Android doesn't say whether that was done, so this only tells
+     * when it could apply: Android 13 or later and not installed by Google
+     * Play.
+     */
+    private fun mayBeRestricted(): Boolean {
+        if (Build.VERSION.SDK_INT < Build.VERSION_CODES.TIRAMISU) return false
+        val installer = try {
+            packageManager.getInstallSourceInfo(packageName).installingPackageName
+        } catch (e: Exception) {
+            null
+        }
+        return installer != "com.android.vending"
+    }
 
     private fun requestOverlayPermission() {
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.M && !Settings.canDrawOverlays(this)) {

@@ -7,9 +7,11 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 import 'package:image_picker/image_picker.dart';
 
+import '../../library/widgets/place_page_parts.dart' show framePath;
 import '../models/shot_series.dart';
 import '../screens/shot_series_screen.dart';
 import '../widgets/capture_sheets.dart';
+import '../widgets/shoot_here_sheet.dart';
 import 'camera_overlay.dart';
 import 'photo_edit_route.dart';
 
@@ -28,6 +30,10 @@ bool get floatingReferenceSupported => CameraOverlay.isSupported;
 /// The photo is filed under [tripId] when given, or else under the trip that
 /// has the place today.
 ///
+/// Without a place it starts with Shoot here ([pickShootHere]): the frames
+/// of the places around the user, found with GPS, and the ways to shoot
+/// without a place.
+///
 /// - **Android:** the phone's own camera app (full HDR / night / white
 ///   balance processing) with the reference floating over it in a small
 ///   draggable window. See `docs/anime-camera-decision.md`.
@@ -40,6 +46,10 @@ Future<void> openAnimeCamera(
   String? tripId,
 }) async {
   if (!animeCameraSupported) return;
+  if (placeKey == null) {
+    await _shootHere(context, ref, tripId: tripId);
+    return;
+  }
   if (Platform.isAndroid) {
     await _shootWithPhoneCamera(context, ref, placeKey: placeKey, tripId: tripId);
   } else {
@@ -163,6 +173,50 @@ class _Reference {
   final String? placeKey;
 
   const _Reference(this.path, {this.imageId, this.placeKey});
+}
+
+/// Shoot here, then the camera for what the user picked.
+Future<void> _shootHere(BuildContext context, WidgetRef ref, {String? tripId}) async {
+  final android = Platform.isAndroid;
+  final choice = await pickShootHere(context, plainCameraOnly: !android);
+  if (choice == null || !context.mounted) return;
+  switch (choice) {
+    case ShootAtPlace(:final placeKey, :final frame):
+      final trip = tripId ?? choice.tripId;
+      if (!android) {
+        context.push(_inAppCameraLocation(placeKey, trip));
+        return;
+      }
+      _Reference? reference;
+      if (frame != null) {
+        final path = await framePath(ref, frame);
+        if (!context.mounted) return;
+        if (path == null) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            const SnackBar(content: Text("This frame isn't on this phone yet. Try again when you're online.")),
+          );
+          return;
+        }
+        reference = _Reference(path, imageId: frame.id, placeKey: placeKey);
+      }
+      await _shootWith(context, reference, placeKey: placeKey, tripId: trip);
+    case ShootWithoutPlace(:final kind):
+      if (!android) {
+        context.push(_inAppCameraLocation(null, tripId));
+        return;
+      }
+      final source = switch (kind) {
+        ShootHereOther.anotherPlace => _ReferenceSource.place,
+        ShootHereOther.gallery => _ReferenceSource.gallery,
+        ShootHereOther.noReference => _ReferenceSource.none,
+      };
+      _Reference? reference;
+      if (source != _ReferenceSource.none) {
+        reference = await _pickReference(context, ref, source);
+        if (reference == null || !context.mounted) return;
+      }
+      await _shootWith(context, reference, placeKey: reference?.placeKey, tripId: tripId);
+  }
 }
 
 Future<void> _shootWithPhoneCamera(
@@ -328,11 +382,17 @@ Future<_ReferenceSource?> _askReferenceSource(
 }
 
 /// True opens the settings screen; false shoots without the floating
-/// reference (camera flow only); null means the dialog was dismissed.
+/// reference (camera flow only); null means the dialog was dismissed, or
+/// App info was opened instead.
 Future<bool?> _askOverlayPermission(
   BuildContext context, {
   bool floatOnly = false,
-}) {
+}) async {
+  // A downloaded APK on Android 13+ can't be given the permission until
+  // "Allow restricted settings" is on in App info; Android only says so with
+  // an "App access denied" dialog, so say what to do first.
+  final restricted = await CameraOverlay.mayBeRestricted();
+  if (!context.mounted) return null;
   return showDialog<bool>(
     context: context,
     builder: (ctx) => AlertDialog(
@@ -342,18 +402,35 @@ Future<bool?> _askOverlayPermission(
             : 'Float the reference over the camera?',
       ),
       content: Text(
-        floatOnly
-            ? 'Allow "Display over other apps" for Trip Planner, then try '
-                  'again.'
-            : 'Allow "Display over other apps" for Trip Planner, then open '
-                  'the camera again.\n\nWithout it you can still shoot — the '
-                  'reference opens in the editor.',
+        [
+          floatOnly
+              ? 'Allow "Display over other apps" for Trip Planner, then try '
+                    'again.'
+              : 'Allow "Display over other apps" for Trip Planner, then open '
+                    'the camera again.',
+          if (restricted)
+            'If Android says the setting is restricted ("App access denied"): '
+                'open App info, tap ⋮ at the top right, choose "Allow '
+                'restricted settings", then come back and allow it. Android '
+                'asks this of apps installed from a downloaded file.',
+          if (!floatOnly)
+            'Without it you can still shoot — the reference opens in the '
+                'editor.',
+        ].join('\n\n'),
       ),
       actions: [
         TextButton(
           onPressed: () => Navigator.pop(ctx, floatOnly ? null : false),
           child: Text(floatOnly ? 'Cancel' : 'Shoot without it'),
         ),
+        if (restricted)
+          TextButton(
+            onPressed: () {
+              Navigator.pop(ctx);
+              CameraOverlay.openAppInfo();
+            },
+            child: const Text('App info'),
+          ),
         FilledButton(
           onPressed: () => Navigator.pop(ctx, true),
           child: const Text('Open settings'),

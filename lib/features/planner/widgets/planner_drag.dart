@@ -3,13 +3,11 @@ import 'package:flutter/widgets.dart';
 /// What is being dragged in the planner.
 sealed class PlannerDrag {
   const PlannerDrag();
-  String get stopId;
 }
 
 /// A stop that is already on a day.
 class ItemDrag extends PlannerDrag {
   final String itemId;
-  @override
   final String stopId;
   final String fromDayId;
 
@@ -18,10 +16,27 @@ class ItemDrag extends PlannerDrag {
 
 /// A stop from the backlog.
 class BacklogDrag extends PlannerDrag {
-  @override
   final String stopId;
 
   const BacklogDrag({required this.stopId});
+}
+
+/// A group's block on a day: its stops, which move together.
+class GroupDrag extends PlannerDrag {
+  /// In the day's order.
+  final List<String> itemIds;
+  final String group;
+  final String fromDayId;
+
+  const GroupDrag({required this.itemIds, required this.group, required this.fromDayId});
+}
+
+/// A group's stops in the backlog, which go onto a day together.
+class BacklogGroupDrag extends PlannerDrag {
+  final List<String> stopIds;
+  final String group;
+
+  const BacklogGroupDrag({required this.stopIds, required this.group});
 }
 
 /// Where a dragged stop would land: on [dayId], before [beforeItemId], or at

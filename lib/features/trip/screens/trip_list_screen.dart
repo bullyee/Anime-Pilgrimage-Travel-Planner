@@ -4,6 +4,8 @@ import 'package:go_router/go_router.dart';
 
 import '../../../core/utils/app_result.dart';
 import '../../../shared/theme/app_theme.dart';
+import '../../auth/providers/auth_provider.dart';
+import '../../sharing/providers/group_sharing_providers.dart' show guestUserId;
 import '../controllers/trips_controller.dart';
 import '../models/trip_summary.dart';
 import '../providers/trip_list_providers.dart';
@@ -22,6 +24,16 @@ class TripListScreen extends ConsumerStatefulWidget {
 class _TripListScreenState extends ConsumerState<TripListScreen> {
   TripFilter _filter = TripFilter.all;
 
+  Future<void> _signOut() async {
+    final messenger = ScaffoldMessenger.of(context);
+    try {
+      await ref.read(authControllerProvider.notifier).signOut();
+      messenger.showSnackBar(const SnackBar(content: Text('Signed out.')));
+    } catch (e) {
+      messenger.showSnackBar(SnackBar(content: Text("Couldn't sign out: $e")));
+    }
+  }
+
   @override
   Widget build(BuildContext context) {
     final summaries = ref.watch(tripSummariesProvider);
@@ -35,6 +47,23 @@ class _TripListScreenState extends ConsumerState<TripListScreen> {
             icon: const Icon(Icons.group_add_outlined),
             onPressed: () => context.push('/join'),
           ),
+          // Signing in is only for shared trips, and sharing, inviting and
+          // joining ask for it, so the account lives here, with the trips.
+          if (ref.watch(currentUserIdProvider) != guestUserId)
+            PopupMenuButton<String>(
+              key: const Key('tripListAccount'),
+              tooltip: 'Account',
+              icon: const Icon(Icons.account_circle_outlined),
+              onSelected: (_) => _signOut(),
+              itemBuilder: (_) {
+                final user = ref.read(authStateChangesProvider).valueOrNull;
+                final who = user?.email ?? user?.displayName;
+                return [
+                  if (who != null) PopupMenuItem<String>(enabled: false, child: Text('Signed in as $who')),
+                  const PopupMenuItem(value: 'signOut', child: Text('Sign out')),
+                ];
+              },
+            ),
         ],
       ),
       body: summaries.when(

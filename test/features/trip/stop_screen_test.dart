@@ -331,6 +331,32 @@ void main() {
       await disposeApp(tester);
     });
 
+    testWidgets('a stop in a group moves with it, until taken out of the group', (tester) async {
+      final (trip, stop) = await uji();
+      final day = (await trips.getDaysForTrip(trip.id)).single;
+      final other = await trips.createTripOnlySpot(tripId: trip.id, name: 'Bridge, west bank', lat: 0, lng: 0, addedBy: 'u1');
+      await trips.scheduleStop(tripId: trip.id, stopId: other.id, dayId: day.id);
+      await trips.setStopsArea([stop.id, other.id], 'Uji Bridge');
+      await pump(tester, '/trips/${trip.id}/stops/${stop.id}');
+
+      expect(find.text('Uji day trip · Day 1 · Uji Bridge'), findsOneWidget);
+      await tester.tap(find.byTooltip('More'));
+      await tester.pumpAndSettle();
+      expect(find.text('Move to another day'), findsNothing);
+      expect(find.text('Back to the backlog'), findsNothing);
+      await tester.tap(find.text('Take out of the group'));
+      await tester.pumpAndSettle();
+
+      expect((await trips.getStop(stop.id))!.area, isNull);
+      expect((await trips.getStop(other.id))!.area, isNull, reason: 'a group of one is no group');
+      expect(find.text('Uji day trip · Day 1'), findsOneWidget);
+      await tester.tap(find.byTooltip('More'));
+      await tester.pumpAndSettle();
+      expect(find.text('Move to another day'), findsOneWidget);
+      expect(find.text('Take out of the group'), findsNothing);
+      await disposeApp(tester);
+    });
+
     testWidgets('a stop in the backlog can be put on a day from its page', (tester) async {
       final (trip, stop) = await uji(planned: false);
       await pump(tester, '/trips/${trip.id}/stops/${stop.id}');
