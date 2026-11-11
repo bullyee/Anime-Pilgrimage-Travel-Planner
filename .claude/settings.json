@@ -1,0 +1,16 @@
+{
+  "hooks": {
+    "SessionStart": [
+      {
+        "hooks": [
+          {
+            "type": "command",
+            "command": "bash \"$CLAUDE_PROJECT_DIR/.claude/hooks/session-context.sh\"",
+            "timeout": 30,
+            "statusMessage": "Loading branch, PR and plan status"
+          }
+        ]
+      }
+    ]
+  }
+}
