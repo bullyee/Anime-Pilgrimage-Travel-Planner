@@ -21,6 +21,13 @@ Merge only when all of these hold:
 
 If the review isn't APPROVED, ask the user whether to merge anyway; it's their repo. Report anything else that fails and stop.
 
+**Before merging, note the PRs stacked on it.** Deleting the head branch makes GitHub retarget them to `master` on its own, so afterwards they can no longer be found by base:
+
+```bash
+gh pr list --state open --base <its head branch> --json number,headRefName
+git rev-parse origin/<its head branch>     # the old base: the stacked branches' commits start after it
+```
+
 ## 2. Merge
 
 ```bash
@@ -31,19 +38,7 @@ The repo uses merge commits ("Merge pull request #148 from …"), so never squas
 
 ## 3. Stacked PRs
 
-Find the PRs that were based on the merged branch:
-
-```bash
-gh pr list --state open --base <merged head branch> --json number,headRefName
-```
-
-For each one:
-
-```bash
-gh pr edit <m> --base master
-```
-
-Then rebase it in its own worktree (create one with `git worktree add` if needed):
+For each PR noted in step 1: GitHub has already moved its base to `master` (check with `gh pr view <m> --json baseRefName`; if not, `gh pr edit <m> --base master`). Its branch still carries the merged PR's commits, so rebase it in its own worktree (create one with `git worktree add` if needed), using the old base SHA from step 1:
 
 ```bash
 git fetch origin

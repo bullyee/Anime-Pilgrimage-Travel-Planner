@@ -13,8 +13,9 @@
     {"expect": "Smoke Trip \\(Kyoto\\) & co"},
     {"shot": "new-trip-sheet"},
     {"tap": "^Create trip$"},
-    {"wait": "Smoke Trip", "timeout": 10},
+    {"wait": "^Stops Tab", "timeout": 10, "note": "the trip page's tab; the sheet's own field also says Smoke Trip"},
     {"expect_not": "^Create trip$"},
+    {"expect": "Smoke Trip"},
     {"shot": "trip-created"}
   ]
 }

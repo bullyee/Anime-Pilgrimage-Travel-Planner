@@ -57,7 +57,7 @@ Stacked on another open PR: use `--base <that branch>` and say so at the top of 
 gh pr checks --watch --interval 30      # run_in_background; you get notified when it ends
 ```
 
-Jobs: `analyze + codegen` (stale `.g.dart` or analyzer warnings) and `flutter test` (unit tests plus Firestore rules on the emulator). On a failure, `gh run view --log-failed | tail -80`; fix, commit, push, and watch again. Don't stop at red.
+Jobs: `analyze + codegen` (stale `.g.dart` or analyzer warnings) and `flutter test` (unit tests plus Firestore rules on the emulator). On a failure, read the failing log (gh needs the run id when not interactive): `gh run view "$(gh run list --branch "$(git branch --show-current)" -L1 --json databaseId -q '.[0].databaseId')" --log-failed | tail -80`. Then fix, commit, push, and watch again. Don't stop at red.
 
 ## 6. Review
 

@@ -14,7 +14,7 @@ permissions:
 
 jobs:
   # `flutter analyze` freezes the dev PC (see CLAUDE.md), so static analysis
-  # runs here instead. Infos are reported but don't fail the job.
+  # runs here instead.
   analyze:
     name: analyze + codegen
     runs-on: ubuntu-latest
@@ -41,8 +41,10 @@ jobs:
             exit 1
           fi
 
+      # Errors fail the job; warnings and infos are listed. Master had 20
+      # warnings when this job was added; make them fatal once they're fixed.
       - name: flutter analyze
-        run: flutter analyze --no-fatal-infos
+        run: flutter analyze --no-fatal-infos --no-fatal-warnings
 
   test:
     name: flutter test
