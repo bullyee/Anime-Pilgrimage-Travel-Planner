@@ -7,7 +7,17 @@ import 'package:onnxruntime/onnxruntime.dart';
 import 'isnet_mask.dart';
 import 'isnet_model_store.dart';
 
-/// isnet-anime (rembg) on-device cutout via ONNX Runtime on native platforms.
+/// SPIKE — isnet-anime (rembg) on-device cutout via ONNX Runtime.
+///
+/// This is the *non-Google* path: an anime-tuned ISNet that auto-segments the
+/// foreground character/object (no prompt). It returns a single soft mask. We
+/// keep inference (slow, ~1–2 s) separate from edge refinement (fast) so the
+/// "修毛邊" sliders can re-composite without re-running the model.
+///
+/// Model: isnet-anime.onnx (~176 MB), fetched on first use by [IsnetModelStore]
+/// and cached in app storage — never bundled or committed. Input NCHW
+/// [1,3,1024,1024], RGB, value = x/255-0.5. Output [1,1,1024,1024] soft logits
+/// → min-max normalized to a 0..1 mask.
 class IsnetCutoutService {
   IsnetCutoutService({IsnetModelStore? store})
       : store = store ?? IsnetModelStore();
@@ -82,6 +92,9 @@ class IsnetCutoutService {
     img.compositeImage(canvas, fit, dstX: padX, dstY: padY);
 
     // Build NCHW float tensor (R,G,B planes), x/255 - 0.5. Capture luma too.
+    // Read the raw RGB byte buffer once — getPixel() per-pixel is an order of
+    // magnitude slower (allocates a Pixel view each call) and was freezing the
+    // UI. This loop is now sub-100ms for 1024².
     const plane = inputRes * inputRes;
     final rgb = canvas.getBytes(order: img.ChannelOrder.rgb);
     final input = Float32List(3 * plane);
@@ -104,6 +117,8 @@ class IsnetCutoutService {
     final runOptions = OrtRunOptions();
     List<OrtValue?>? outputs;
     try {
+      // runAsync runs the native inference on the plugin's own isolate, so the
+      // multi-second forward pass no longer blocks the UI thread.
       outputs = await session.runAsync(runOptions, {inputName: tensor});
       final mask = _readMask(outputs!.first!.value, plane);
       return IsnetMask(mask: mask, guideLuma: guideLuma, res: inputRes);
