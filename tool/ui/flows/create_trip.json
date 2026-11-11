@@ -1,0 +1,20 @@
+{
+  "name": "create_trip",
+  "description": "Fresh install: plan a trip from the empty state, name it, create it, land in the planner.",
+  "clean": true,
+  "steps": [
+    {"wait": "^Plan a trip$", "timeout": 40},
+    {"shot": "home-empty"},
+    {"tap": "^Plan a trip$"},
+    {"wait": "^No trips yet$"},
+    {"tap": "^New trip$"},
+    {"wait": "^Create trip$"},
+    {"type": "Smoke Trip (Kyoto) & co", "note": "spaces and shell characters"},
+    {"expect": "Smoke Trip \\(Kyoto\\) & co"},
+    {"shot": "new-trip-sheet"},
+    {"tap": "^Create trip$"},
+    {"wait": "Smoke Trip", "timeout": 10},
+    {"expect_not": "^Create trip$"},
+    {"shot": "trip-created"}
+  ]
+}

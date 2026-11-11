@@ -1,0 +1,19 @@
+{
+  "name": "smoke",
+  "description": "App starts; Shoot opens its sheet and Library its screen without a Flutter error. Keeps existing data.",
+  "grant": ["android.permission.ACCESS_FINE_LOCATION", "android.permission.ACCESS_COARSE_LOCATION"],
+  "steps": [
+    {"wait": "^Trips$", "timeout": 40},
+    {"shot": "home"},
+    {"tap": "^Shoot$"},
+    {"wait": "^Shoot here$", "note": "a bottom sheet, not a tab"},
+    {"shot": "shoot-sheet"},
+    {"key": "back"},
+    {"expect_not": "^Shoot here$"},
+    {"tap": "^Library$"},
+    {"wait": "^Add place$", "note": "a pushed page with its FAB, empty or not"},
+    {"shot": "library"},
+    {"key": "back"},
+    {"wait": "^Trips$"}
+  ]
+}

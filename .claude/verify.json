@@ -1,0 +1,16 @@
+{
+  "_comment": "Overrides for ~/.claude/harness/verify.py (Flutter defaults are detected). No `flutter analyze` here: it freezes the dev PC, CI runs it.",
+  "checks": [
+    {
+      "name": "firestore rules",
+      "cmd": "powershell -NoProfile -ExecutionPolicy Bypass -File tool/verify.ps1 -RulesOnly",
+      "when": "^firestore\\.rules$|^test/rules_"
+    }
+  ],
+  "ui": {
+    "flows": "tool/ui/flows",
+    "when": "^lib/.+\\.dart$",
+    "avd": "Pixel_Test",
+    "install_args": ["--reinstall"]
+  }
+}
