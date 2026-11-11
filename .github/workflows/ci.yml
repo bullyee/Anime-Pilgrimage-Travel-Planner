@@ -13,6 +13,37 @@ permissions:
   contents: read
 
 jobs:
+  # `flutter analyze` freezes the dev PC (see CLAUDE.md), so static analysis
+  # runs here instead. Infos are reported but don't fail the job.
+  analyze:
+    name: analyze + codegen
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: subosito/flutter-action@v2
+        with:
+          channel: stable
+          flutter-version: 3.44.1
+          cache: true
+
+      - run: flutter pub get
+
+      - name: Generated code is up to date
+        run: |
+          dart run build_runner build --delete-conflicting-outputs
+          stale=$(git status --porcelain -- '*.g.dart')
+          if [ -n "$stale" ]; then
+            echo "$stale"
+            git diff --stat -- '*.g.dart'
+            echo "::error::Generated files are stale. Run: dart run build_runner build --delete-conflicting-outputs"
+            exit 1
+          fi
+
+      - name: flutter analyze
+        run: flutter analyze --no-fatal-infos
+
   test:
     name: flutter test
     runs-on: ubuntu-latest
