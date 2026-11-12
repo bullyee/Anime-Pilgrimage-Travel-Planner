@@ -465,5 +465,33 @@ void main() {
       await tester.pumpWidget(const SizedBox());
       await tester.pump(const Duration(seconds: 1));
     });
+
+    testWidgets("a group's stops are one pin, and its card steps through them", (tester) async {
+      final (trip, days, stops) = await setupTestTrip();
+      // Day 1's two stops are one group.
+      await (db.update(db.stops)..where((s) => s.id.isIn([stops[0].id, stops[1].id])))
+          .write(const StopsCompanion(area: Value('Uji')));
+      await pumpMapScreen(tester, tripId: trip.id, dayId: days[0].id);
+
+      expect(find.byKey(ValueKey('pin:${stops[0].id}')), findsOneWidget);
+      expect(find.byKey(ValueKey('pin:${stops[1].id}')), findsNothing);
+      expect(find.text('1'), findsOneWidget, reason: 'one number for the group');
+      expect(find.text('2'), findsOneWidget, reason: 'its badge: two stops');
+
+      // Tapping it picks the stop not visited yet.
+      await tester.tap(find.text('1'));
+      await tester.pumpAndSettle();
+      expect(find.text('Byodoin Temple'), findsOneWidget);
+      expect(find.text('Uji · 2 of 2'), findsOneWidget);
+
+      await tester.tap(find.byTooltip('Previous stop in the group'));
+      await tester.pumpAndSettle();
+      expect(find.text('Uji Bridge'), findsOneWidget);
+      expect(find.text('Uji · 1 of 2'), findsOneWidget);
+
+      // Unmount here, so drift's stream-closing timers run inside the test.
+      await tester.pumpWidget(const SizedBox());
+      await tester.pump(const Duration(seconds: 1));
+    });
   });
 }

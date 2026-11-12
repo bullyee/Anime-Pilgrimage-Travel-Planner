@@ -21,6 +21,33 @@ bool isRemoteOrMemoryUri(String path) {
 String encodeDataUrl(Uint8List bytes, {String mimeType = 'image/jpeg'}) =>
     'data:$mimeType;base64,${base64Encode(bytes)}';
 
+/// Reads [file] into a `data:` URI for browser persistence.
+Future<String> encodePickedMediaAsDataUrl(XFile file) async {
+  final bytes = await file.readAsBytes();
+  final mime = file.mimeType ?? 'image/jpeg';
+  return encodeDataUrl(bytes, mimeType: mime);
+}
+
+/// Rewrites Google Drive file links (`drive.google.com/uc?export=download&id=...`
+/// or `/file/d/...`) to `lh3.googleusercontent.com`, which includes CORS headers
+/// (`Access-Control-Allow-Origin: *`) required by Flutter Web CanvasKit `fetch()`.
+String webSafeRemoteImageUrl(String url) {
+  final uri = Uri.tryParse(url.trim());
+  if (uri != null && uri.host == 'drive.google.com') {
+    var id = uri.queryParameters['id'];
+    if (id == null || id.isEmpty) {
+      final idx = uri.pathSegments.indexOf('d');
+      if (idx >= 0 && idx + 1 < uri.pathSegments.length) {
+        id = uri.pathSegments[idx + 1];
+      }
+    }
+    if (id != null && id.isNotEmpty) {
+      return 'https://lh3.googleusercontent.com/d/$id=w1280';
+    }
+  }
+  return url;
+}
+
 /// Whether [pathOrUrl] exists as a usable media source on the current platform.
 Future<bool> mediaExists(String? pathOrUrl) async {
   if (pathOrUrl == null || pathOrUrl.isEmpty) return false;
@@ -39,11 +66,12 @@ Future<Uint8List> readMediaBytes(
     return UriData.parse(pathOrUrl).contentAsBytes();
   }
   if (lower.startsWith('http://') || lower.startsWith('https://')) {
+    final targetUrl = kIsWeb ? webSafeRemoteImageUrl(pathOrUrl) : pathOrUrl;
     final httpClient = client ?? http.Client();
     final ownsClient = client == null;
     try {
       final response = await httpClient
-          .get(Uri.parse(pathOrUrl))
+          .get(Uri.parse(targetUrl))
           .timeout(const Duration(seconds: 20));
       if (response.statusCode != 200) {
         throw StateError('Failed to fetch media (HTTP ${response.statusCode})');
@@ -157,8 +185,9 @@ class _PlatformImageState extends State<PlatformImage> {
     }
 
     if (isRemoteOrMemoryUri(widget.pathOrUrl)) {
+      final resolvedUrl = kIsWeb ? webSafeRemoteImageUrl(widget.pathOrUrl) : widget.pathOrUrl;
       return Image.network(
-        widget.pathOrUrl,
+        resolvedUrl,
         width: widget.width,
         height: widget.height,
         fit: widget.fit,

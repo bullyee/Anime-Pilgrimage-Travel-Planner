@@ -15,6 +15,7 @@ import '../../../core/utils/app_result.dart';
 import '../../../core/utils/platform_media.dart';
 import '../../poi/services/background_photo_save.dart' show galleryAlbum;
 import '../../trip/controllers/trips_controller.dart' show isoDate;
+import '../models/frames.dart';
 import '../providers/place_providers.dart';
 import '../services/photo_trip.dart';
 
@@ -73,9 +74,13 @@ class PlaceController extends Notifier<AsyncValue<void>> {
       .updatePlace(PlacesCompanion(placeKey: Value(placeKey), lat: Value(lat), lng: Value(lng))));
 
   /// Uses an anime frame (or any image on the device) as the place's cover.
-  Future<AppResult<void>> setCover(String placeKey, String localPath) => _run(() => ref
+  Future<AppResult<void>> setCover(String placeKey, String? localPath, {String? remoteUrl}) => _run(() => ref
       .read(placeRepositoryProvider)
-      .updatePlace(PlacesCompanion(placeKey: Value(placeKey), coverLocalPath: Value(localPath))));
+      .updatePlace(PlacesCompanion(
+        placeKey: Value(placeKey),
+        coverLocalPath: localPath != null ? Value(localPath) : const Value.absent(),
+        coverRemoteUrl: remoteUrl != null ? Value(remoteUrl) : const Value.absent(),
+      )));
 
   /// Records that the user is at the place today, unless that's on record already.
   Future<AppResult<bool>> addVisitToday(String placeKey, {String? tripId}) {
@@ -112,6 +117,33 @@ class PlaceController extends Notifier<AsyncValue<void>> {
         await repo.addReferenceImage(placeKey: placeKey, localPath: path, source: 'You');
       }
       return picked.length;
+    });
+  }
+
+  /// Adds an anime reference frame backed by an external HTTP/HTTPS [url].
+  /// Because it has a `remoteUrl`, it copies cleanly into stops and syncs across
+  /// shared trips without uploading image files to cloud storage.
+  Future<AppResult<NewReferenceImage>> addFrameFromUrl(
+    String placeKey, {
+    required String url,
+    String? episode,
+  }) {
+    final check = validateFrameImageUrl(url);
+    if (check.error != null) return Future.value(Failure(check.error!));
+    final validUrl = check.url!;
+    return _run(() async {
+      final repo = ref.read(placeRepositoryProvider);
+      final existing = await repo.getReferenceImagesForPlace(placeKey);
+      if (existing.any((f) => f.remoteUrl == validUrl)) {
+        throw StateError('This place already has that image link.');
+      }
+      return repo.addReferenceImage(
+        placeKey: placeKey,
+        remoteUrl: validUrl,
+        episode: _clean(episode),
+        source: 'Link',
+        sourceUrl: validUrl,
+      );
     });
   }
 

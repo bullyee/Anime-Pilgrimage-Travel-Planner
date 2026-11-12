@@ -1,7 +1,6 @@
 import 'package:flutter/foundation.dart' show kIsWeb;
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
-import 'package:flutter_map/flutter_map.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 import 'package:intl/intl.dart';
@@ -11,6 +10,7 @@ import '../../../core/database/database.dart';
 import '../../../core/providers/thumbnail_cache_provider.dart';
 import '../../../core/utils/app_result.dart';
 import '../../../core/utils/platform_media.dart';
+import '../../../shared/map/app_map.dart';
 import '../../../shared/theme/app_theme.dart';
 import '../../camera/services/anime_camera_launcher.dart';
 import '../../camera/services/photo_edit_route.dart';
@@ -833,24 +833,13 @@ class LocationCard extends StatelessWidget {
             child: SizedBox(
               height: 140,
               child: IgnorePointer(
-                child: FlutterMap(
-                  key: ValueKey(at),
-                  options: MapOptions(initialCenter: at, initialZoom: 16),
-                  children: [
-                    TileLayer(
-                      urlTemplate: 'https://tile.openstreetmap.org/{z}/{x}/{y}.png',
-                      userAgentPackageName: 'com.example.trip_planner',
-                    ),
-                    MarkerLayer(markers: [
-                      Marker(
-                        point: at,
-                        width: 36,
-                        height: 36,
-                        alignment: Alignment.topCenter,
-                        child: Icon(Icons.location_on, size: 36, color: theme.trip.wisteria),
-                      ),
-                    ]),
-                  ],
+                child: AppMap(
+                  pins: [MapPin(id: 'here', point: at, name: 'This place', color: theme.trip.wisteria)],
+                  interactive: false,
+                  cluster: false,
+                  attribution: false,
+                  // A moved pin centres the map on its new spot.
+                  fitKey: at,
                 ),
               ),
             ),
@@ -916,6 +905,225 @@ class ImageViewer extends StatelessWidget {
               ),
             ),
           ),
+        ],
+      ),
+    );
+  }
+}
+
+/// Source chosen when adding a reference frame to a place.
+enum AddFrameMethod { gallery, link }
+
+/// Asks whether to pick reference frames from the device's gallery (local-only)
+/// or paste an external image link (syncs to shared trips).
+Future<AddFrameMethod?> showAddPlaceFrameSheet(BuildContext context) {
+  return showModalBottomSheet<AddFrameMethod>(
+    context: context,
+    showDragHandle: true,
+    useSafeArea: true,
+    builder: (sheetContext) => SafeArea(
+      child: ListView(
+        shrinkWrap: true,
+        padding: const EdgeInsets.fromLTRB(8, 0, 8, 12),
+        children: [
+          Padding(
+            padding: const EdgeInsets.fromLTRB(16, 0, 16, 8),
+            child: Text('Add anime frame', style: Theme.of(sheetContext).textTheme.titleLarge),
+          ),
+          ListTile(
+            leading: const Icon(Icons.photo_library_outlined),
+            title: const Text('Choose from photos'),
+            subtitle: const Text('Saved on this phone only — gallery frames do not auto-sync to shared trips.'),
+            onTap: () => Navigator.pop(sheetContext, AddFrameMethod.gallery),
+          ),
+          ListTile(
+            leading: const Icon(Icons.link_outlined),
+            title: const Text('Add image link'),
+            subtitle: const Text('Paste an https:// image URL — syncs with everyone in a shared trip.'),
+            onTap: () => Navigator.pop(sheetContext, AddFrameMethod.link),
+          ),
+        ],
+      ),
+    ),
+  );
+}
+
+/// Prompts for an external image URL (and optional episode label) and returns
+/// the validated input, or null when cancelled.
+Future<({String url, String? episode})?> askFrameImageUrl(BuildContext context) {
+  return showDialog<({String url, String? episode})>(
+    context: context,
+    builder: (dialogContext) => const _FrameUrlDialog(),
+  );
+}
+
+class _FrameUrlDialog extends StatefulWidget {
+  const _FrameUrlDialog();
+
+  @override
+  State<_FrameUrlDialog> createState() => _FrameUrlDialogState();
+}
+
+class _FrameUrlDialogState extends State<_FrameUrlDialog> {
+  final _url = TextEditingController();
+  final _episode = TextEditingController();
+  String? _error;
+
+  @override
+  void dispose() {
+    _url.dispose();
+    _episode.dispose();
+    super.dispose();
+  }
+
+  void _submit() {
+    final check = validateFrameImageUrl(_url.text);
+    if (check.error != null) {
+      setState(() => _error = check.error);
+      return;
+    }
+    final ep = _episode.text.trim();
+    Navigator.pop(context, (url: check.url!, episode: ep.isEmpty ? null : ep));
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    return AlertDialog(
+      title: const Text('Add image link'),
+      content: Column(
+        mainAxisSize: MainAxisSize.min,
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          TextField(
+            controller: _url,
+            autofocus: true,
+            keyboardType: TextInputType.url,
+            decoration: InputDecoration(
+              labelText: 'Image URL',
+              hintText: 'https://example.com/frame.jpg',
+              errorText: _error,
+              border: const OutlineInputBorder(),
+            ),
+            onChanged: (_) {
+              if (_error != null) setState(() => _error = null);
+            },
+            onSubmitted: (_) => _submit(),
+          ),
+          const SizedBox(height: 12),
+          TextField(
+            controller: _episode,
+            decoration: const InputDecoration(
+              labelText: 'Episode (optional)',
+              hintText: 'e.g. 5',
+              border: OutlineInputBorder(),
+            ),
+            onSubmitted: (_) => _submit(),
+          ),
+          const SizedBox(height: 10),
+          Text(
+            'Image links sync automatically across trip members. No image file is uploaded to our server.',
+            style: theme.textTheme.bodySmall?.copyWith(color: theme.colorScheme.onSurfaceVariant),
+          ),
+        ],
+      ),
+      actions: [
+        TextButton(onPressed: () => Navigator.pop(context), child: const Text('Cancel')),
+        FilledButton(onPressed: _submit, child: const Text('Add')),
+      ],
+    );
+  }
+}
+
+/// Source chosen when adding a reference frame to a shared trip stop.
+enum AddStopFrameMethod { driveUpload, link, localGallery }
+
+/// Asks whether an editor wants to upload photos via their Google Drive (`drive.file`),
+/// paste an external image link, or pick a local-only photo onto a shared stop.
+Future<AddStopFrameMethod?> showAddStopFrameSheet(BuildContext context) {
+  return showModalBottomSheet<AddStopFrameMethod>(
+    context: context,
+    showDragHandle: true,
+    useSafeArea: true,
+    builder: (sheetContext) => SafeArea(
+      child: ListView(
+        shrinkWrap: true,
+        padding: const EdgeInsets.fromLTRB(8, 0, 8, 12),
+        children: [
+          Padding(
+            padding: const EdgeInsets.fromLTRB(16, 0, 16, 8),
+            child: Text('Add anime frame to stop', style: Theme.of(sheetContext).textTheme.titleLarge),
+          ),
+          ListTile(
+            leading: const Icon(Icons.cloud_upload_outlined),
+            title: const Text('Upload photo via Google Drive'),
+            subtitle: const Text('Uploads to your Google Drive (drive.file) with an "anyone with the link" URL so trip members see it.'),
+            onTap: () => Navigator.pop(sheetContext, AddStopFrameMethod.driveUpload),
+          ),
+          ListTile(
+            leading: const Icon(Icons.link_outlined),
+            title: const Text('Add image link'),
+            subtitle: const Text('Paste an https:// image URL — syncs with everyone in this trip.'),
+            onTap: () => Navigator.pop(sheetContext, AddStopFrameMethod.link),
+          ),
+          ListTile(
+            leading: const Icon(Icons.photo_library_outlined),
+            title: const Text('Choose from photos (this device only)'),
+            subtitle: const Text('Stays on this phone and does not upload or auto-sync.'),
+            onTap: () => Navigator.pop(sheetContext, AddStopFrameMethod.localGallery),
+          ),
+        ],
+      ),
+    ),
+  );
+}
+
+/// Subtle callout on a shared trip stop when one or more frames live only on
+/// this device and won't sync automatically to collaborators.
+class LocalFramesSyncNote extends StatelessWidget {
+  final int count;
+  final VoidCallback? onSyncViaDrive;
+
+  const LocalFramesSyncNote({super.key, required this.count, this.onSyncViaDrive});
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    final label = count == 1 ? '1 frame is' : '$count frames are';
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+      decoration: BoxDecoration(
+        color: theme.colorScheme.surfaceContainerHighest.withValues(alpha: 0.6),
+        borderRadius: BorderRadius.circular(14),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Icon(Icons.devices_outlined, size: 18, color: theme.colorScheme.onSurfaceVariant),
+              const SizedBox(width: 10),
+              Expanded(
+                child: Text(
+                  '$label saved on this phone only and will not auto-sync to trip members. '
+                  'Sync via your Google Drive, Share local frames in the Members tab, or add an image link.',
+                  style: theme.textTheme.bodySmall?.copyWith(color: theme.colorScheme.onSurfaceVariant),
+                ),
+              ),
+            ],
+          ),
+          if (onSyncViaDrive != null) ...[
+            const SizedBox(height: 6),
+            Align(
+              alignment: Alignment.centerRight,
+              child: TextButton.icon(
+                onPressed: onSyncViaDrive,
+                icon: const Icon(Icons.cloud_upload_outlined, size: 18),
+                label: const Text('Sync via Google Drive'),
+              ),
+            ),
+          ],
         ],
       ),
     );

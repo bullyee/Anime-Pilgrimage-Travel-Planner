@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:latlong2/latlong.dart';
+import 'package:trip_planner/shared/map/app_map.dart';
 import 'package:trip_planner/core/database/database.dart';
 import 'package:trip_planner/core/utils/schedule_logic.dart';
 import 'package:trip_planner/features/auth/providers/auth_provider.dart';
@@ -187,7 +188,7 @@ void main() {
       await tester.pumpWidget(ProviderScope(
         overrides: [
           homeClockProvider.overrideWithValue(() => now),
-          homeMapTilesProvider.overrideWithValue(false),
+          mapTilesProvider.overrideWithValue(false),
           homeWhereProvider.overrideWith((ref) async => (allowed: false, at: null)),
           libraryEntriesProvider.overrideWith((ref) => const AsyncData(<LibraryEntry>[])),
           tripSummariesProvider.overrideWith((ref) => AsyncData(trips)),
@@ -279,14 +280,12 @@ void main() {
 
       expect(find.text('Plan a trip'), findsOneWidget);
       expect(find.text('Import from Anitabi'), findsOneWidget);
-      expect(find.text('Trips'), findsOneWidget);
-      expect(find.text('Library'), findsOneWidget);
       expect(find.byKey(const Key('homeNearYou')), findsNothing, reason: 'an empty library has nothing near');
 
       // Signing in is for shared trips only: sharing and joining ask for it.
-      await tester.tap(find.byTooltip('More'));
-      await tester.pumpAndSettle();
-      expect(find.text('Edit a photo from the gallery'), findsOneWidget);
+      // Editing a photo from the gallery moved to the Photos tab, and the
+      // floating window's button is Android only, so there's no menu here.
+      expect(find.byTooltip('More'), findsNothing);
       expect(find.text('Sign in'), findsNothing);
       expect(find.text('Sign out'), findsNothing);
     });

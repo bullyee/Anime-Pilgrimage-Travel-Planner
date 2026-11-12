@@ -25,6 +25,7 @@ import '../../sharing/providers/group_sharing_providers.dart';
 import '../controllers/trip_stops_controller.dart';
 import '../models/stop_group.dart';
 import '../providers/trip_providers.dart';
+import '../widgets/trip_frames_pack_flow.dart';
 import '../../auth/providers/auth_provider.dart';
 
 /// Where a stop sits in the plan: its day and its item there.
@@ -210,10 +211,10 @@ class _StopScreenState extends ConsumerState<StopScreen> {
     final slot = view == null ? null : findStopSlot(view, stop.id);
     // Stops someone else added may be of a place that isn't in this library.
     final place = ref.watch(placeDetailProvider(stop.placeKey)).valueOrNull;
-    final frames = stopFrames(
-      place: place == null ? const [] : ref.watch(placeReferenceImagesProvider(stop.placeKey)).valueOrNull ?? const [],
-      stop: ref.watch(stopReferenceImagesProvider(stop.id)).valueOrNull ?? const [],
-    );
+    final placeRefImages =
+        place == null ? const <NewReferenceImage>[] : ref.watch(placeReferenceImagesProvider(stop.placeKey)).valueOrNull ?? const [];
+    final stopRefImages = ref.watch(stopReferenceImagesProvider(stop.id)).valueOrNull ?? const <NewReferenceImage>[];
+    final frames = stopFrames(place: placeRefImages, stop: stopRefImages);
     if (_frame >= frames.length) _frame = 0;
     final current = frames.isEmpty ? null : frames[_frame];
     final group = stopGroup(stop);
@@ -221,10 +222,18 @@ class _StopScreenState extends ConsumerState<StopScreen> {
     final draft = _draft;
     // A viewer's edit mode only reaches their own note.
     final canEdit = ref.watch(canEditTripProvider(_tripId));
+    final isShared = trip.sharing == 'group';
     final tripDraft = canEdit ? draft : null;
     final facts = stopFacts(stop);
     final tripNote = stop.note?.trim() ?? '';
     final myNote = place?.privateNote?.trim() ?? '';
+    final syncedStopPaths = {
+      for (final f in stopRefImages)
+        if ((f.localPath?.isNotEmpty ?? false) && (f.remoteUrl?.isNotEmpty ?? false)) f.localPath!,
+    };
+    final localOnlyCount = isShared
+        ? frames.where((f) => isLocalOnlyFrame(f) && !syncedStopPaths.contains(f.localPath)).length
+        : 0;
 
     return PopScope(
       // Back leaves edit mode first, asking before it drops changes.
@@ -253,8 +262,11 @@ class _StopScreenState extends ConsumerState<StopScreen> {
             if (draft == null && canEdit)
               PopupMenuButton<String>(
                 tooltip: 'More',
-                onSelected: (action) => _onMenu(action, stop, view, slot),
+                onSelected: (action) => _onMenu(action, stop, trip, view, slot),
                 itemBuilder: (_) => [
+                  if (isShared) const PopupMenuItem(value: 'frame_drive', child: Text('Upload photo via Google Drive')),
+                  if (isShared) const PopupMenuItem(value: 'frame_url', child: Text('Add frame link')),
+                  const PopupMenuItem(value: 'frame_local', child: Text('Add local frame')),
                   const PopupMenuItem(value: 'rename', child: Text('Rename')),
                   // A stop in its group's block moves with the group, from
                   // the plan; taken out of the group, it moves on its own.
@@ -275,7 +287,12 @@ class _StopScreenState extends ConsumerState<StopScreen> {
               frames: frames,
               index: _frame,
               onPage: (i) => setState(() => _frame = i),
-              onOpen: (i) => _openFrame(stop, frames, i),
+              onAdd: !canEdit
+                  ? null
+                  : isShared
+                      ? () => _addFrameToStop(stop, trip)
+                      : () => _addLocalFrameToStop(stop),
+              onOpen: (i) => _openFrame(stop, trip, canEdit, frames, i),
             ),
             Padding(
               padding: const EdgeInsets.fromLTRB(16, 12, 16, 0),
@@ -295,6 +312,11 @@ class _StopScreenState extends ConsumerState<StopScreen> {
                   _StopTitle(stop: stop, draft: tripDraft, nameError: _nameError),
                   const SizedBox(height: 14),
                   ...spaced([
+                    if (localOnlyCount > 0)
+                      LocalFramesSyncNote(
+                        count: localOnlyCount,
+                        onSyncViaDrive: canEdit ? () => syncTripLocalFramesViaDrive(context, ref, trip) : null,
+                      ),
                     _PlanCard(
                       slot: slot,
                       loading: view == null,
@@ -390,7 +412,65 @@ class _StopScreenState extends ConsumerState<StopScreen> {
     await floatReferenceImage(context, path);
   }
 
-  Future<void> _openFrame(Stop stop, List<NewReferenceImage> frames, int index) async {
+  bool _ensureSignedInForShared(Trip? trip) {
+    final currentUid = ref.read(currentUserIdProvider);
+    if (trip != null && trip.sharing == 'group' && currentUid == guestUserId) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Please sign in to make changes to a shared trip.')),
+      );
+      return false;
+    }
+    return true;
+  }
+
+  Future<void> _addFrameToStop(Stop stop, Trip trip) async {
+    if (trip.sharing != 'group') {
+      await _addLocalFrameToStop(stop);
+      return;
+    }
+    if (!_ensureSignedInForShared(trip)) return;
+    final method = await showAddStopFrameSheet(context);
+    if (method == null || !mounted) return;
+    switch (method) {
+      case AddStopFrameMethod.driveUpload:
+        await _addFrameViaDrive(stop, trip);
+      case AddStopFrameMethod.link:
+        await _addFrameLink(stop, trip);
+      case AddStopFrameMethod.localGallery:
+        await _addLocalFrameToStop(stop);
+    }
+  }
+
+  Future<void> _addLocalFrameToStop(Stop stop) async {
+    final count = await addLocalStopFrames(context, ref, stopId: stop.id);
+    if (count > 0 && mounted) {
+      _report(
+        const Success(null),
+        'Added $count ${count == 1 ? 'frame' : 'frames'} (saved on this phone only).',
+      );
+    }
+  }
+
+  Future<void> _addFrameViaDrive(Stop stop, Trip trip) async {
+    if (trip.sharing != 'group' || !_ensureSignedInForShared(trip)) return;
+    final count = await uploadStopGalleryFramesViaDrive(context, ref, trip: trip, stopId: stop.id);
+    if (count > 0 && mounted) {
+      _report(
+        const Success(null),
+        'Uploading $count ${count == 1 ? 'frame' : 'frames'} to Google Drive in the background.',
+      );
+    }
+  }
+
+  Future<void> _addFrameLink(Stop stop, Trip trip) async {
+    if (trip.sharing != 'group' || !_ensureSignedInForShared(trip)) return;
+    final input = await askFrameImageUrl(context);
+    if (input == null || !mounted) return;
+    final result = await _stops.addFrameFromUrl(stop.id, url: input.url, episode: input.episode);
+    _report(result, 'Added image link to this stop.');
+  }
+
+  Future<void> _openFrame(Stop stop, Trip trip, bool canEdit, List<NewReferenceImage> frames, int index) async {
     final frame = frames[index];
     final path = await _framePath(frame);
     if (path == null || !mounted) return;
@@ -401,6 +481,12 @@ class _StopScreenState extends ConsumerState<StopScreen> {
         actions: [
           if (animeCameraSupported) ViewerAction('Take photo', () => _shoot(stop, frames, index), primary: true),
           if (floatingReferenceSupported) ViewerAction('Float frame', () => floatReferenceImage(context, path)),
+          if (canEdit && frame.stopId == stop.id)
+            ViewerAction('Remove from stop', () async {
+              if (!_ensureSignedInForShared(trip)) return;
+              Navigator.of(context).pop();
+              _report(await _stops.removeFrame(stop.id, frame), 'Removed frame from stop.');
+            }),
         ],
       ),
     ));
@@ -442,8 +528,14 @@ class _StopScreenState extends ConsumerState<StopScreen> {
     if (minutes != null) _report(await _planner.setFixedTime(slot.item.item.id, minutes));
   }
 
-  Future<void> _onMenu(String action, Stop stop, PlannerView? view, StopSlot? slot) async {
+  Future<void> _onMenu(String action, Stop stop, Trip trip, PlannerView? view, StopSlot? slot) async {
     switch (action) {
+      case 'frame_drive':
+        await _addFrameViaDrive(stop, trip);
+      case 'frame_url':
+        await _addFrameLink(stop, trip);
+      case 'frame_local':
+        await _addLocalFrameToStop(stop);
       case 'rename':
         final name = await askName(context, title: 'Rename this stop', action: 'Rename', initial: stop.name);
         if (name == null || name == stop.name) return;

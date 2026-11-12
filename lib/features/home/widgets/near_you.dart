@@ -25,7 +25,7 @@ class NearYou extends ConsumerWidget {
     final header = Row(
       children: [
         Expanded(child: Text('Near you', style: theme.textTheme.titleMedium?.copyWith(fontWeight: FontWeight.w700))),
-        TextButton(onPressed: () => context.push('/library'), child: const Text('Library')),
+        TextButton(onPressed: () => context.go('/library'), child: const Text('Library')),
       ],
     );
 

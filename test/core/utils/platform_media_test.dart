@@ -57,6 +57,25 @@ void main() {
     expect(await mediaExists('${tmp.path}/missing.jpg'), isFalse);
   });
 
+  test('webSafeRemoteImageUrl converts Google Drive links to CORS-friendly lh3 host', () {
+    expect(
+      webSafeRemoteImageUrl('https://drive.google.com/uc?export=download&id=abc123XYZ'),
+      'https://lh3.googleusercontent.com/d/abc123XYZ=w1280',
+    );
+    expect(
+      webSafeRemoteImageUrl('https://drive.google.com/file/d/abc123XYZ/view?usp=sharing'),
+      'https://lh3.googleusercontent.com/d/abc123XYZ=w1280',
+    );
+    expect(
+      webSafeRemoteImageUrl('https://lh3.googleusercontent.com/d/abc123XYZ=w1280'),
+      'https://lh3.googleusercontent.com/d/abc123XYZ=w1280',
+    );
+    expect(
+      webSafeRemoteImageUrl('https://example.com/image.jpg'),
+      'https://example.com/image.jpg',
+    );
+  });
+
   testWidgets('PlatformImage renders valid data URI and calls errorBuilder on malformed data URI', (tester) async {
     // Minimal 1x1 transparent PNG.
     const png1x1 =

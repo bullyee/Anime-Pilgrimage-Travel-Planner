@@ -1,4 +1,6 @@
+import 'dart:io' show Platform;
 import 'dart:ui'; // Added for PlatformDispatcher
+import 'package:flutter/foundation.dart' show kIsWeb;
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:firebase_core/firebase_core.dart';
@@ -6,12 +8,15 @@ import 'firebase_options.dart';
 
 import 'core/router/app_router.dart';
 import 'features/poi/services/background_photo_save.dart';
+import 'features/sync/providers/frame_transfer_providers.dart';
 import 'features/sync/providers/sync_v2_providers.dart';
+import 'features/sync/widgets/frame_transfer_widgets.dart';
 import 'shared/theme/app_theme.dart';
 // Added for custom error monitoring
 import 'core/utils/app_logger.dart';
 import 'core/utils/web_url_strategy.dart';
 import 'core/providers/app_provider_observer.dart';
+import 'shared/map/app_map.dart';
 
 
 void main() async {
@@ -54,6 +59,9 @@ void main() async {
     );
   }
 
+  // Map tiles you've seen stay on the phone (needs the support folder first).
+  await setUpMapTileCache();
+
   // 3. Inject AppProviderObserver into ProviderScope to monitor Riverpod state
   runApp(
     ProviderScope(
@@ -70,6 +78,12 @@ class TripPlannerApp extends ConsumerWidget {
   Widget build(BuildContext context, WidgetRef ref) {
     final goRouter = ref.watch(routerProvider);
     ref.watch(syncEngineServiceV2Provider);
+    // Background frame transfers on phones: offer to resume what the system
+    // cut short, and fetch frames teammates put on Drive for offline.
+    if (!kIsWeb && (Platform.isAndroid || Platform.isIOS)) {
+      ref.watch(frameTransferResumeProvider);
+      ref.watch(frameAutoDownloaderProvider);
+    }
 
     return MaterialApp.router(
       title: 'Trip Planner',
@@ -78,6 +92,8 @@ class TripPlannerApp extends ConsumerWidget {
       darkTheme: AppTheme.dark,
       themeMode: ThemeMode.system,
       routerConfig: goRouter,
+      // The running frame upload/download, with Cancel, under every screen.
+      builder: (context, child) => TransferStatusOverlay(child: child ?? const SizedBox.shrink()),
       // Background photo saves report back here after their editor closed.
       scaffoldMessengerKey: rootMessengerKey,
     );

@@ -9,6 +9,8 @@ import '../../planner/models/planner_view.dart';
 import '../../planner/providers/planner_providers.dart';
 import '../../trip/models/trip_summary.dart';
 import '../providers/home_providers.dart';
+import '../../../shared/map/app_map.dart';
+import '../../trip/widgets/day_map_pins.dart';
 import 'home_mini_map.dart';
 
 /// Home's top card on a day without a trip: the next trip on a small map,
@@ -103,13 +105,21 @@ class _NextTrip extends ConsumerWidget {
               const SizedBox(height: 12),
               HomeMiniMap(
                 key: const Key('homeTripMap'),
-                color: p.wisteria,
-                doneColor: theme.colorScheme.outline,
                 openLabel: 'Open map',
                 onOpen: () => context.push('/trips/$tripId/map?day=${Uri.encodeQueryComponent(firstPlanned!.day.id)}'),
+                // One pin per block of each day, numbered by its day.
                 pins: [
                   for (final d in days)
-                    for (final it in d.items) MiniPin(lat: it.stop.lat, lng: it.stop.lng, label: '${d.index + 1}', done: it.done),
+                    for (final b in planBlocks(d.items))
+                      MapPin(
+                        id: b.first.stop.id,
+                        point: blockPoint(b),
+                        name: b.group ?? b.first.stop.name,
+                        label: '${d.index + 1}',
+                        color: p.wisteria,
+                        done: b.items.every((it) => it.done),
+                        count: b.items.length,
+                      ),
                 ],
               ),
             ],
@@ -169,7 +179,7 @@ class _NoTrip extends StatelessWidget {
               style: theme.textTheme.bodyMedium?.copyWith(color: theme.colorScheme.onSurfaceVariant),
             ),
             const SizedBox(height: 12),
-            FilledButton(onPressed: () => context.push('/trips'), child: const Text('Plan a trip')),
+            FilledButton(onPressed: () => context.go('/trips'), child: const Text('Plan a trip')),
             const SizedBox(height: 4),
             TextButton(onPressed: () => context.push('/library/import'), child: const Text('Import from Anitabi')),
           ],

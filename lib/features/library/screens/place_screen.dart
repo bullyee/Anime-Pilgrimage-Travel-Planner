@@ -124,9 +124,9 @@ class _PlaceScreenState extends ConsumerState<PlaceScreen> {
       );
     }
     final frames = ref.watch(placeReferenceImagesProvider(_key)).valueOrNull ?? const <NewReferenceImage>[];
-    final framesOnDevice = [for (final f in frames) if (f.localPath?.isNotEmpty ?? false) f];
-    if (_frame >= framesOnDevice.length) _frame = 0;
-    final current = framesOnDevice.isEmpty ? null : framesOnDevice[_frame];
+    final visibleFrames = [for (final f in frames) if (frameHasImage(f)) f];
+    if (_frame >= visibleFrames.length) _frame = 0;
+    final current = visibleFrames.isEmpty ? null : visibleFrames[_frame];
     final draft = _draft;
     final facts = placeFacts(place);
     final entry = ref.watch(libraryEntriesProvider).valueOrNull?.where((e) => e.place.placeKey == _key).firstOrNull;
@@ -164,11 +164,11 @@ class _PlaceScreenState extends ConsumerState<PlaceScreen> {
           padding: const EdgeInsets.only(bottom: 32),
           children: [
             FrameHero(
-              frames: framesOnDevice,
+              frames: visibleFrames,
               index: _frame,
               onPage: (i) => setState(() => _frame = i),
-              onAdd: () async => _report(await _place.addFramesFromGallery(_key)),
-              onOpen: (i) => _openFrame(framesOnDevice, i, place),
+              onAdd: _addFrame,
+              onOpen: (i) => _openFrame(visibleFrames, i, place),
             ),
             Padding(
               padding: const EdgeInsets.fromLTRB(16, 12, 16, 0),
@@ -177,8 +177,8 @@ class _PlaceScreenState extends ConsumerState<PlaceScreen> {
                 children: [
                   PageActions(
                     frame: current,
-                    onShoot: () => shootWithFrames(context, ref, placeKey: _key, frames: framesOnDevice, index: _frame),
-                    onFloat: current == null ? null : () => floatReferenceImage(context, current.localPath!),
+                    onShoot: () => shootWithFrames(context, ref, placeKey: _key, frames: visibleFrames, index: _frame),
+                    onFloat: current == null ? null : () => _float(current),
                     onDirections: () => _directions(place),
                     last: (icon: Icons.playlist_add, label: 'Add to trip', onTap: () => _addToTrip(place)),
                   ),
@@ -230,12 +230,61 @@ class _PlaceScreenState extends ConsumerState<PlaceScreen> {
     );
   }
 
+  Future<String?> _resolveFramePath(NewReferenceImage frame) async {
+    final path = await framePath(ref, frame);
+    if (path == null) {
+      _report(const Failure("This frame isn't on this phone yet. Try again when you're online."));
+    }
+    return path;
+  }
+
+  Future<void> _addFrame() async {
+    final method = await showAddPlaceFrameSheet(context);
+    if (method == null || !mounted) return;
+    switch (method) {
+      case AddFrameMethod.gallery:
+        final result = await _place.addFramesFromGallery(_key);
+        if (!mounted) return;
+        if (result case Success(:final value) when value > 0) {
+          _report(
+            result,
+            'Added $value ${value == 1 ? 'frame' : 'frames'} (saved on this phone only — gallery frames do not auto-sync).',
+          );
+        } else if (result is Failure) {
+          _report(result);
+        }
+      case AddFrameMethod.link:
+        final input = await askFrameImageUrl(context);
+        if (input == null || !mounted) return;
+        final result = await _place.addFrameFromUrl(_key, url: input.url, episode: input.episode);
+        _report(result, 'Added image link.');
+    }
+  }
+
+  Future<void> _float(NewReferenceImage frame) async {
+    final path = await _resolveFramePath(frame);
+    if (path == null || !mounted) return;
+    await floatReferenceImage(context, path);
+  }
+
+  Future<void> _setCover(NewReferenceImage frame) async {
+    final path = frame.localPath ?? (frame.remoteUrl != null ? await framePath(ref, frame) : null);
+    if (path == null && frame.remoteUrl == null) {
+      _report(const Failure("This frame isn't on this phone yet. Try again when you're online."));
+      return;
+    }
+    _report(
+      await _place.setCover(_key, path, remoteUrl: frame.remoteUrl),
+      'This frame is now the cover.',
+    );
+  }
+
   Future<void> _onMenu(String action, Place place, NewReferenceImage? current) async {
     switch (action) {
       case 'frames':
-        _report(await _place.addFramesFromGallery(_key));
+        await _addFrame();
       case 'cover':
-        _report(await _place.setCover(_key, current!.localPath!), 'This frame is now the cover.');
+        if (current != null) await _setCover(current);
       case 'remove':
         if (place.visibility != 'saved') {
           _report(await ref.read(libraryControllerProvider.notifier).saveToLibrary(_key), 'Saved to your library.');
@@ -301,13 +350,15 @@ class _PlaceScreenState extends ConsumerState<PlaceScreen> {
 
   Future<void> _openFrame(List<NewReferenceImage> frames, int index, Place place) async {
     final frame = frames[index];
+    final path = await _resolveFramePath(frame);
+    if (path == null || !mounted) return;
     await Navigator.of(context).push(MaterialPageRoute<void>(
       builder: (_) => ImageViewer(
-        path: frame.localPath!,
+        path: path,
         title: frameCaption(frame) ?? 'Anime frame',
         actions: [
           ViewerAction('Take photo', () => shootWithFrames(context, ref, placeKey: _key, frames: frames, index: index), primary: true),
-          ViewerAction('Use as cover', () async => _report(await _place.setCover(_key, frame.localPath!), 'This frame is now the cover.')),
+          ViewerAction('Use as cover', () async => _setCover(frame)),
           ViewerAction('Delete', () async {
             Navigator.of(context).pop();
             _report(await _place.deleteFrame(frame), 'Deleted the frame.');

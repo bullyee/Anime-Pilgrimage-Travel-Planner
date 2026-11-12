@@ -1,11 +1,11 @@
 import 'package:flutter/material.dart';
-import 'package:flutter_map/flutter_map.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 import 'package:latlong2/latlong.dart';
 
 import '../../../core/database/database.dart';
 import '../../../core/utils/app_result.dart';
+import '../../../shared/map/app_map.dart';
 import '../../../shared/theme/app_theme.dart';
 import '../../trip/controllers/trip_stops_controller.dart';
 import '../controllers/library_controller.dart';
@@ -13,6 +13,7 @@ import '../models/library_entry.dart';
 import '../providers/library_providers.dart';
 import '../providers/place_providers.dart';
 import '../widgets/label_widgets.dart';
+import '../widgets/library_backup_flow.dart';
 import '../widgets/spot_thumb.dart';
 import '../widgets/trip_picker.dart';
 
@@ -247,13 +248,29 @@ class _LibraryScreenState extends ConsumerState<LibraryScreen> {
                   icon: const Icon(Icons.label_outline),
                   onPressed: () => context.push('/library/labels'),
                 ),
+                PopupMenuButton<void Function()>(
+                  tooltip: 'More',
+                  onSelected: (action) => action(),
+                  itemBuilder: (context) => [
+                    PopupMenuItem(
+                      value: () => backUpLibrary(this.context, ref),
+                      child: const ListTile(leading: Icon(Icons.save_alt), title: Text('Back up to a file')),
+                    ),
+                    PopupMenuItem(
+                      value: () => restoreLibrary(this.context, ref),
+                      child: const ListTile(leading: Icon(Icons.restore), title: Text('Restore from a file')),
+                    ),
+                  ],
+                ),
               ],
             ),
       body: entriesAsync.when(
         loading: () => const Center(child: CircularProgressIndicator()),
         error: (e, _) => Center(child: Text("Couldn't load your library: $e")),
         data: (all) {
-          if (all.isEmpty) return _EmptyLibrary(onAdd: () => context.push('/library/new'));
+          if (all.isEmpty) {
+            return _EmptyLibrary(onAdd: () => context.push('/library/new'), onRestore: () => restoreLibrary(context, ref));
+          }
           final shown = filterLibrary(all, _filter, labels);
           return Column(
             children: [
@@ -642,53 +659,133 @@ class PlaceThumb extends StatelessWidget {
   }
 }
 
-class _LibraryMap extends StatelessWidget {
+/// The library on a map: a pin per place, coloured by its anime so works tell
+/// apart, merged into bubbles where they crowd. Tapping a pin shows its name
+/// and a card to open it, rather than leaving the map.
+class _LibraryMap extends StatefulWidget {
   final List<LibraryEntry> entries;
 
   const _LibraryMap({required this.entries});
 
   @override
+  State<_LibraryMap> createState() => _LibraryMapState();
+}
+
+class _LibraryMapState extends State<_LibraryMap> {
+  String? _selected;
+
+  @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
-    final points = [for (final e in entries) LatLng(e.place.lat, e.place.lng)];
-    return FlutterMap(
-      // A new set of places fits the map to them again.
-      key: ValueKey(Object.hashAll(entries.map((e) => e.place.placeKey))),
-      options: MapOptions(
-        initialCenter: points.first,
-        initialZoom: 15,
-        initialCameraFit: points.length < 2
-            ? null
-            : CameraFit.coordinates(coordinates: points, padding: const EdgeInsets.all(48), maxZoom: 16),
-        interactionOptions: const InteractionOptions(flags: InteractiveFlag.all & ~InteractiveFlag.rotate),
-      ),
-      children: [
-        TileLayer(
-          urlTemplate: 'https://tile.openstreetmap.org/{z}/{x}/{y}.png',
-          userAgentPackageName: 'com.example.trip_planner',
+    final byKey = {for (final e in widget.entries) e.place.placeKey: e};
+    final selected = byKey[_selected];
+    final pins = [
+      for (final e in widget.entries)
+        MapPin(
+          id: e.place.placeKey,
+          point: LatLng(e.place.lat, e.place.lng),
+          name: e.place.name,
+          color: animeColor(e.labelsOf('anime').firstOrNull?.id, none: theme.trip.tea),
+          selected: e.place.placeKey == _selected,
         ),
-        MarkerLayer(
-          markers: [
+    ];
+    return Stack(
+      children: [
+        AppMap(
+          pins: pins,
+          // A new filter or search fits the map to what's left.
+          fitKey: Object.hashAll(widget.entries.map((e) => e.place.placeKey)),
+          onPinTap: (pin) => setState(() => _selected = pin.id),
+          onClusterOpen: (pins) => _pickFrom(context, [for (final p in pins) byKey[p.id]!]),
+          onTap: (_) {
+            if (_selected != null) setState(() => _selected = null);
+          },
+        ),
+        if (selected != null)
+          Positioned(
+            left: 12,
+            right: 12,
+            // Above the Add place button.
+            bottom: 96,
+            child: _MapPlaceCard(entry: selected, onClose: () => setState(() => _selected = null)),
+          ),
+      ],
+    );
+  }
+
+  /// Places at one spot that zooming can't split: pick one from a list.
+  Future<void> _pickFrom(BuildContext context, List<LibraryEntry> entries) async {
+    final key = await showModalBottomSheet<String>(
+      context: context,
+      showDragHandle: true,
+      builder: (context) => SafeArea(
+        child: ListView(
+          shrinkWrap: true,
+          children: [
             for (final e in entries)
-              Marker(
-                point: LatLng(e.place.lat, e.place.lng),
-                width: 40,
-                height: 40,
-                alignment: Alignment.topCenter,
-                child: GestureDetector(
-                  onTap: () => openPlace(context, e.place.placeKey),
-                  child: Icon(
-                    Icons.location_on,
-                    size: 40,
-                    color: e.labels.any((l) => l.kind == 'anime') ? theme.trip.wisteria : theme.trip.tea,
-                    semanticLabel: e.place.name,
-                  ),
-                ),
+              ListTile(
+                leading: PlaceThumb(entry: e),
+                title: Text(e.place.name, maxLines: 1, overflow: TextOverflow.ellipsis),
+                subtitle: _animeLine(e) == null ? null : Text(_animeLine(e)!, maxLines: 1, overflow: TextOverflow.ellipsis),
+                onTap: () => Navigator.pop(context, e.place.placeKey),
               ),
           ],
         ),
-        const SimpleAttributionWidget(source: Text('OpenStreetMap contributors')),
-      ],
+      ),
+    );
+    if (key != null && mounted) setState(() => _selected = key);
+  }
+}
+
+String? _animeLine(LibraryEntry e) {
+  final anime = e.labelsOf('anime').map((l) => l.name).toList();
+  return anime.isEmpty ? null : anime.join(' · ');
+}
+
+class _MapPlaceCard extends StatelessWidget {
+  final LibraryEntry entry;
+  final VoidCallback onClose;
+
+  const _MapPlaceCard({required this.entry, required this.onClose});
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    final anime = _animeLine(entry);
+    return Card(
+      key: const Key('libraryMapCard'),
+      elevation: 6,
+      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+      child: InkWell(
+        borderRadius: BorderRadius.circular(16),
+        onTap: () => openPlace(context, entry.place.placeKey),
+        child: Padding(
+          padding: const EdgeInsets.fromLTRB(12, 10, 4, 10),
+          child: Row(
+            children: [
+              PlaceThumb(entry: entry),
+              const SizedBox(width: 12),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    Text(entry.place.name,
+                        maxLines: 1, overflow: TextOverflow.ellipsis, style: theme.textTheme.titleSmall?.copyWith(fontWeight: FontWeight.w700)),
+                    if (anime != null)
+                      Text(anime,
+                          maxLines: 1,
+                          overflow: TextOverflow.ellipsis,
+                          style: theme.textTheme.bodySmall?.copyWith(color: theme.colorScheme.onSurfaceVariant)),
+                  ],
+                ),
+              ),
+              TextButton(onPressed: () => openPlace(context, entry.place.placeKey), child: const Text('Open')),
+              IconButton(tooltip: 'Close', icon: const Icon(Icons.close), onPressed: onClose),
+            ],
+          ),
+        ),
+      ),
     );
   }
 }
@@ -696,7 +793,10 @@ class _LibraryMap extends StatelessWidget {
 class _EmptyLibrary extends StatelessWidget {
   final VoidCallback onAdd;
 
-  const _EmptyLibrary({required this.onAdd});
+  /// A new phone: bring the library over from a backup file.
+  final VoidCallback onRestore;
+
+  const _EmptyLibrary({required this.onAdd, required this.onRestore});
 
   @override
   Widget build(BuildContext context) {
@@ -728,6 +828,11 @@ class _EmptyLibrary extends StatelessWidget {
               onPressed: () => context.push('/library/import'),
               icon: const Icon(Icons.download_outlined),
               label: const Text('Import from Anitabi'),
+            ),
+            TextButton.icon(
+              onPressed: onRestore,
+              icon: const Icon(Icons.restore),
+              label: const Text('Restore from a backup file'),
             ),
           ],
         ),

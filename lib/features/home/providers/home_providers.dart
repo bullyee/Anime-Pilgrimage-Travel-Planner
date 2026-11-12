@@ -106,5 +106,3 @@ List<NearbyPlace> nearbyPlaces(List<LibraryEntry> entries, LatLng at, {double wi
 String formatMeters(double meters) =>
     meters < 1000 ? '${(meters / 10).round() * 10} m' : '${(meters / 1000).toStringAsFixed(1)} km';
 
-/// Whether Home's small maps load map tiles; widget tests turn it off.
-final homeMapTilesProvider = Provider<bool>((ref) => true);

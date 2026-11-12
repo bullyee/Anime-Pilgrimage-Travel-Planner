@@ -146,7 +146,7 @@ abstract class PlaceRepository {
     String? sourceUrl,
   });
   Future<void> upsertReferenceImage(NewReferenceImagesCompanion image);
-  Future<void> deleteReferenceImage(String id);
+  Future<void> deleteReferenceImage(String id, {String? expectedStopId});
 
   // ==========================================================================
   // Place Visits (place_visits)
@@ -690,6 +690,14 @@ class DriftPlaceRepository implements PlaceRepository {
     String? sourceUrl,
   }) async {
     return _db.transaction(() async {
+      if (stopId != null) {
+        final stop = await (_db.select(_db.stops)
+              ..where((tbl) => tbl.id.equals(stopId) & tbl.deletedAt.isNull()))
+            .getSingleOrNull();
+        if (stop == null) {
+          throw StateError('Stop not found or deleted: $stopId');
+        }
+      }
       final id = _uuid.v4();
       await _db.into(_db.newReferenceImages).insert(
             NewReferenceImagesCompanion.insert(
@@ -705,6 +713,9 @@ class DriftPlaceRepository implements PlaceRepository {
               sourceUrl: Value(sourceUrl),
             ),
           );
+      if (stopId != null) {
+        await _markStopsDirty([stopId]);
+      }
       return (await getReferenceImage(id))!;
     });
   }
@@ -715,20 +726,24 @@ class DriftPlaceRepository implements PlaceRepository {
   }
 
   @override
-  Future<void> deleteReferenceImage(String id) async {
+  Future<void> deleteReferenceImage(String id, {String? expectedStopId}) async {
     final img = await getReferenceImage(id);
+    if (img == null) return;
+    if (expectedStopId != null && img.stopId != expectedStopId) {
+      throw StateError('Frame $id does not belong to stop $expectedStopId');
+    }
     await _db.transaction(() async {
       await (_db.update(_db.photos)
             ..where((tbl) => tbl.referenceImageId.equals(id)))
           .write(const PhotosCompanion(referenceImageId: Value(null)));
-      if (img?.stopId != null) {
-        await _markStopsDirty([img!.stopId!]);
+      if (img.stopId != null) {
+        await _markStopsDirty([img.stopId!]);
       }
       await (_db.delete(_db.newReferenceImages)
             ..where((tbl) => tbl.id.equals(id)))
           .go();
     });
-    if (img?.localPath != null && img!.localPath!.isNotEmpty) {
+    if (img.localPath != null && img.localPath!.isNotEmpty) {
       await _deleteFileIfUnreferenced(img.localPath!);
     }
   }

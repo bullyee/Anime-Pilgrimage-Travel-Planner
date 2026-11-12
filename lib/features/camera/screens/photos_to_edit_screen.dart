@@ -1,5 +1,3 @@
-import 'dart:io';
-
 import 'package:drift/drift.dart' show Value;
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
@@ -8,6 +6,7 @@ import 'package:intl/intl.dart';
 
 import '../../../core/database/database.dart';
 import '../../../core/providers/database_provider.dart';
+import '../../../core/utils/platform_media.dart';
 import '../../../shared/theme/app_theme.dart';
 import '../../library/providers/place_providers.dart';
 import '../../library/widgets/place_page_parts.dart' show framePath;
@@ -34,8 +33,14 @@ List<(DateTime, List<PhotoToEditItem>)> groupPhotosByDay(List<PhotoToEditItem> i
 /// shot, waiting to be edited at home. Tapping one opens the editor; once an
 /// edit of it is saved it leaves the list. "Keep as it is" takes a photo off
 /// the list without editing; a long press selects several to keep at once.
+///
+/// Since v0.4.0 it's the Photos tab's **To edit** filter, which passes its
+/// [title] and its filter chips as [header].
 class PhotosToEditScreen extends ConsumerStatefulWidget {
-  const PhotosToEditScreen({super.key});
+  final String title;
+  final Widget? header;
+
+  const PhotosToEditScreen({super.key, this.title = 'Photos to edit', this.header});
 
   @override
   ConsumerState<PhotosToEditScreen> createState() => _PhotosToEditScreenState();
@@ -125,11 +130,18 @@ class _PhotosToEditScreenState extends ConsumerState<PhotosToEditScreen> {
                   ),
                 ],
               )
-            : AppBar(title: const Text('Photos to edit')),
-        body: photos.when(
-          loading: () => const Center(child: CircularProgressIndicator()),
-          error: (e, _) => Center(child: Text("Couldn't load the photos: $e")),
-          data: (items) => items.isEmpty ? const _Empty() : _list(context, items),
+            : AppBar(title: Text(widget.title)),
+        body: Column(
+          children: [
+            ?widget.header,
+            Expanded(
+              child: photos.when(
+                loading: () => const Center(child: CircularProgressIndicator()),
+                error: (e, _) => Center(child: Text("Couldn't load the photos: $e")),
+                data: (items) => items.isEmpty ? const _Empty() : _list(context, items),
+              ),
+            ),
+          ],
         ),
       ),
     );
@@ -234,8 +246,8 @@ class _PhotoTile extends StatelessWidget {
       child: SizedBox(
         width: 72,
         height: 72,
-        child: Image.file(
-          File(photo.localPath),
+        child: PlatformImage(
+          photo.localPath,
           fit: BoxFit.cover,
           cacheWidth: 216,
           errorBuilder: (_, _, _) => ColoredBox(

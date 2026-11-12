@@ -1,3 +1,4 @@
+import 'package:flutter/foundation.dart' show kIsWeb;
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:intl/intl.dart';
@@ -12,6 +13,10 @@ import '../../sharing/providers/group_sharing_providers.dart';
 import '../../sharing/sharing_text.dart';
 import '../../sharing/widgets/invite_sheet.dart';
 import '../../sharing/widgets/member_avatar.dart';
+import '../../sync/providers/frame_transfer_providers.dart';
+import '../../sync/services/frame_transfer_queue.dart';
+import '../../sync/widgets/frame_transfer_widgets.dart';
+import '../widgets/trip_frames_pack_flow.dart';
 
 /// Who the trip is shared with. Before it's shared: what sharing sends and
 /// what stays private, and a button to invite people. Once it is: who's in
@@ -121,7 +126,7 @@ class _WhatIsShared extends StatelessWidget {
               icon: Icons.lock_outline,
               color: p.wisteria,
               title: 'Only you',
-              items: const ['Your library', 'My notes', 'Photos and visits'],
+              items: const ['Your library', 'My notes', 'Photos, visits & gallery frames'],
             ),
           ),
         ],
@@ -209,6 +214,10 @@ class _Shared extends ConsumerWidget {
             for (final member in sorted)
               _MemberTile(trip: trip, member: member, isMe: member.userId == me, canChange: owner),
             if (canInvite) _Invites(trip: trip),
+            if (role != null) ...[
+              const SizedBox(height: 16),
+              _LocalFramesCard(trip: trip, canEdit: owner || role == TripMemberRole.editor),
+            ],
             if (owner) ...[
               const SizedBox(height: 24),
               OutlinedButton.icon(
@@ -261,6 +270,107 @@ class _Shared extends ConsumerWidget {
       }
       await service.unshareTrip(trip.id);
     });
+  }
+}
+
+class _LocalFramesCard extends ConsumerWidget {
+  final Trip trip;
+  final bool canEdit;
+
+  const _LocalFramesCard({required this.trip, required this.canEdit});
+
+  @override
+  Widget build(BuildContext context, WidgetRef ref) {
+    final theme = Theme.of(context);
+    final muted = theme.colorScheme.onSurfaceVariant;
+    final transfers = ref.watch(frameTransferQueueProvider);
+    final jobs = transfers.jobsForTrip(trip.id);
+    final notices = [for (final n in transfers.notices) if (n.tripId == trip.id) n];
+    final uploading = transfers.jobFor(trip.id, TransferKind.driveUpload) != null;
+    final downloading = transfers.jobFor(trip.id, TransferKind.download) != null;
+    final toUpload = canEdit ? (ref.watch(pendingDriveUploadCountProvider(trip.id)).valueOrNull ?? 0) : 0;
+    final toDownload = ref.watch(pendingFrameDownloadCountProvider(trip.id)).valueOrNull ?? 0;
+    return Container(
+      padding: const EdgeInsets.all(16),
+      decoration: BoxDecoration(
+        border: Border.all(color: theme.colorScheme.outlineVariant),
+        borderRadius: BorderRadius.circular(16),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          Row(
+            children: [
+              Icon(Icons.photo_library_outlined, size: 18, color: theme.colorScheme.onSurfaceVariant),
+              const SizedBox(width: 8),
+              Expanded(child: Text('Custom gallery frames', style: theme.textTheme.titleSmall)),
+            ],
+          ),
+          const SizedBox(height: 6),
+          Text(
+            canEdit
+                ? 'Gallery frames stay on each phone to avoid Firebase Storage egress fees. '
+                    'Sync them through your own Google Drive, or share a compact frames file offline.'
+                : 'Gallery frames stay on each phone. Import a frames file shared by another trip member, '
+                    'or share your own local frames offline.',
+            style: theme.textTheme.bodySmall?.copyWith(color: muted),
+          ),
+          const SizedBox(height: 12),
+          // Transfers run in the background; this is where they show.
+          for (final job in jobs) TransferJobStrip(job: job, queued: job.id != transfers.current?.id),
+          for (final notice in notices)
+            TransferNoticeTile(
+              notice: notice,
+              onResume: canEdit && notice.kind == TransferKind.driveUpload
+                  ? () => syncTripLocalFramesViaDrive(context, ref, trip, confirm: false)
+                  : null,
+            ),
+          if (canEdit) ...[
+            if (toUpload > 0 && !uploading) ...[
+              Text(
+                '$toUpload ${toUpload == 1 ? 'frame' : 'frames'} on this phone ${toUpload == 1 ? "isn't" : "aren't"} on Google Drive yet.',
+                style: theme.textTheme.bodySmall?.copyWith(color: muted),
+              ),
+              const SizedBox(height: 6),
+            ],
+            FilledButton.tonalIcon(
+              onPressed: uploading ? null : () => syncTripLocalFramesViaDrive(context, ref, trip),
+              icon: const Icon(Icons.cloud_upload_outlined, size: 18),
+              label: const Text('Sync via my Google Drive'),
+            ),
+            const SizedBox(height: 8),
+          ],
+          if (!kIsWeb) ...[
+            OutlinedButton.icon(
+              onPressed: downloading ? null : () => downloadTripFramesForOffline(context, ref, trip),
+              icon: const Icon(Icons.cloud_download_outlined, size: 18),
+              label: Text(
+                toDownload > 0 && !downloading
+                    ? 'Download $toDownload ${toDownload == 1 ? 'frame' : 'frames'} for offline'
+                    : 'Download frames for offline',
+              ),
+            ),
+            const SizedBox(height: 8),
+          ],
+          Wrap(
+            spacing: 8,
+            runSpacing: 8,
+            children: [
+              OutlinedButton.icon(
+                onPressed: () => shareTripLocalFrames(context, ref, trip),
+                icon: const Icon(Icons.ios_share_outlined, size: 18),
+                label: const Text('Share local frames'),
+              ),
+              OutlinedButton.icon(
+                onPressed: () => importTripLocalFrames(context, ref, trip),
+                icon: const Icon(Icons.file_download_outlined, size: 18),
+                label: const Text('Import local frames'),
+              ),
+            ],
+          ),
+        ],
+      ),
+    );
   }
 }
 

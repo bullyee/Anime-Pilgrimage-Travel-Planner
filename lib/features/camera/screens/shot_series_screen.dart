@@ -1,5 +1,5 @@
 import 'dart:async';
-import 'dart:io';
+import 'dart:io' show Platform;
 
 import 'package:flutter/foundation.dart' show kIsWeb;
 import 'package:flutter/material.dart';
@@ -10,6 +10,7 @@ import 'package:go_router/go_router.dart';
 import 'package:image_picker/image_picker.dart';
 
 import '../../../core/providers/database_provider.dart';
+import '../../../core/utils/platform_media.dart';
 import '../../auth/providers/auth_provider.dart';
 import '../../library/providers/place_providers.dart';
 import '../../poi/services/background_photo_save.dart' show galleryAlbum, rootMessengerKey;
@@ -674,11 +675,10 @@ class _Photo extends StatelessWidget {
   Widget build(BuildContext context) {
     final media = MediaQuery.of(context);
     final decodeWidth = width ?? (media.size.width * media.devicePixelRatio).round();
-    return Image.file(
-      File(path),
+    return PlatformImage(
+      path,
       fit: fit,
       cacheWidth: decodeWidth,
-      gaplessPlayback: true,
       errorBuilder: (context, error, stack) =>
           const Center(child: Icon(Icons.broken_image_outlined, color: Colors.white38, size: 40)),
     );

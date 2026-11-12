@@ -313,6 +313,14 @@ packages:
       url: "https://pub.dev"
     source: hosted
     version: "1.2.0"
+  dart_polylabel2:
+    dependency: transitive
+    description:
+      name: dart_polylabel2
+      sha256: "7eeab15ce72894e4bdba6a8765712231fc81be0bd95247de4ad9966abc57adc6"
+      url: "https://pub.dev"
+    source: hosted
+    version: "1.0.0"
   dart_style:
     dependency: transitive
     description:
@@ -361,6 +369,30 @@ packages:
       url: "https://pub.dev"
     source: hosted
     version: "7.0.1"
+  file_selector:
+    dependency: "direct main"
+    description:
+      name: file_selector
+      sha256: bd15e43e9268db636b53eeaca9f56324d1622af30e5c34d6e267649758c84d9a
+      url: "https://pub.dev"
+    source: hosted
+    version: "1.1.0"
+  file_selector_android:
+    dependency: transitive
+    description:
+      name: file_selector_android
+      sha256: d670cd0ce77a2e785b18d8b4d0a8d6a222d6a813ec9b7ddf2790a1b4fb6fa92c
+      url: "https://pub.dev"
+    source: hosted
+    version: "0.5.2+11"
+  file_selector_ios:
+    dependency: transitive
+    description:
+      name: file_selector_ios
+      sha256: "97269e5307a0ab813b1fa2430bada0a96e0afb74848417f8676f64ba5de0051c"
+      url: "https://pub.dev"
+    source: hosted
+    version: "0.5.3+6"
   file_selector_linux:
     dependency: transitive
     description:
@@ -385,6 +417,14 @@ packages:
       url: "https://pub.dev"
     source: hosted
     version: "2.7.0"
+  file_selector_web:
+    dependency: transitive
+    description:
+      name: file_selector_web
+      sha256: "73181fbc5257776d8ecaa6a94ab3c8e920ad143b9132a6d984a9271dfc6928d3"
+      url: "https://pub.dev"
+    source: hosted
+    version: "0.9.5"
   file_selector_windows:
     dependency: transitive
     description:
@@ -495,10 +535,10 @@ packages:
     dependency: "direct main"
     description:
       name: flutter_map
-      sha256: "2ecb34619a4be19df6f40c2f8dce1591675b4eff7a6857bd8f533706977385da"
+      sha256: "9bbe5472f66ae648d2ca2efbce97fcaa04e71261fabd3e062f26728222d7f767"
       url: "https://pub.dev"
     source: hosted
-    version: "7.0.2"
+    version: "8.3.2"
   flutter_plugin_android_lifecycle:
     dependency: transitive
     description:
@@ -883,10 +923,10 @@ packages:
     dependency: "direct main"
     description:
       name: latlong2
-      sha256: "98227922caf49e6056f91b6c56945ea1c7b166f28ffcd5fb8e72fc0b453cc8fe"
+      sha256: "84b776b100a84a684a0aaa3fa4dc2c9b1931c658de533701ee4e09bfa991f8dc"
       url: "https://pub.dev"
     source: hosted
-    version: "0.9.1"
+    version: "0.10.1"
   leak_tracker:
     dependency: transitive
     description:
@@ -927,14 +967,6 @@ packages:
       url: "https://pub.dev"
     source: hosted
     version: "1.0.1"
-  logger:
-    dependency: transitive
-    description:
-      name: logger
-      sha256: "25aee487596a6257655a1e091ec2ae66bc30e7af663592cc3a27e6591e05035c"
-      url: "https://pub.dev"
-    source: hosted
-    version: "2.7.0"
   logging:
     dependency: transitive
     description:
@@ -1087,14 +1119,6 @@ packages:
       url: "https://pub.dev"
     source: hosted
     version: "2.1.8"
-  polylabel:
-    dependency: transitive
-    description:
-      name: polylabel
-      sha256: "41b9099afb2aa6c1730bdd8a0fab1400d287694ec7615dd8516935fa3144214b"
-      url: "https://pub.dev"
-    source: hosted
-    version: "1.0.1"
   pool:
     dependency: transitive
     description:
