@@ -103,7 +103,8 @@ class _InviteSheetState extends ConsumerState<InviteSheet> {
           const _Note(
             icon: Icons.cloud_upload_outlined,
             text: "This is the trip's first invite, so its days, stops and trip notes go to the cloud now. "
-                'Your library, notes and photos stay on this phone.',
+                'Your library, notes, photos and gallery frames stay on this phone '
+                '(use Share local frames in the Members tab to send custom frames).',
           ),
         ],
         ..._errorLine(context),

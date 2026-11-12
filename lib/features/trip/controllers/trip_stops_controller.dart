@@ -5,6 +5,8 @@ import '../../../core/database/database.dart';
 import '../../../core/utils/app_result.dart';
 import '../../auth/providers/auth_provider.dart';
 import '../../library/controllers/place_controller.dart' show PlaceFacts;
+import '../../library/models/frames.dart' show validateFrameImageUrl;
+import '../../library/providers/place_providers.dart' show placeRepositoryProvider;
 import '../../planner/controllers/day_planner_controller.dart' show moveScheduleItemsTogether;
 import '../models/stop_group.dart';
 import '../providers/trip_providers.dart';
@@ -143,6 +145,46 @@ class TripStopsController extends Notifier<AsyncValue<void>> {
   /// Removes the stop from the trip, together with its place in the schedule.
   Future<AppResult<void>> removeStop(String stopId) =>
       _run(() => ref.read(tripRepositoryProvider).deleteStop(stopId));
+
+  /// Adds an anime reference frame backed by an external HTTP/HTTPS [url] to
+  /// [stopId] and marks the stop dirty so collaborators receive it.
+  Future<AppResult<NewReferenceImage>> addFrameFromUrl(
+    String stopId, {
+    required String url,
+    String? episode,
+  }) {
+    final check = validateFrameImageUrl(url);
+    if (check.error != null) return Future.value(Failure(check.error!));
+    final validUrl = check.url!;
+    final cleanEpisode = episode == null || episode.trim().isEmpty ? null : episode.trim();
+    return _run(() async {
+      final tripRepo = ref.read(tripRepositoryProvider);
+      final stop = await tripRepo.getStop(stopId);
+      if (stop == null || stop.deletedAt != null) {
+        throw const _Refusal('This stop is no longer in the trip.');
+      }
+      final existing = await tripRepo.getReferenceImagesForStop(stopId);
+      if (existing.any((f) => f.remoteUrl == validUrl)) {
+        throw const _Refusal('This stop already has that image link.');
+      }
+      return ref.read(placeRepositoryProvider).addReferenceImage(
+            stopId: stopId,
+            remoteUrl: validUrl,
+            episode: cleanEpisode,
+            source: 'Link',
+            sourceUrl: validUrl,
+          );
+    });
+  }
+
+  /// Removes a stop-owned reference frame from [stopId] and marks the stop
+  /// dirty so collaborators see the removal.
+  Future<AppResult<void>> removeFrame(String stopId, NewReferenceImage frame) {
+    if (frame.stopId != stopId) {
+      return Future.value(const Failure('Only frames attached to this stop can be removed here.'));
+    }
+    return _run(() => ref.read(placeRepositoryProvider).deleteReferenceImage(frame.id, expectedStopId: stopId));
+  }
 
   /// Groups [stopIds] as [name]. Stops in another group move into this one,
   /// and a group of that name already in the trip takes them in. On every day

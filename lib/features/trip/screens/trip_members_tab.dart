@@ -12,6 +12,7 @@ import '../../sharing/providers/group_sharing_providers.dart';
 import '../../sharing/sharing_text.dart';
 import '../../sharing/widgets/invite_sheet.dart';
 import '../../sharing/widgets/member_avatar.dart';
+import '../widgets/trip_frames_pack_flow.dart';
 
 /// Who the trip is shared with. Before it's shared: what sharing sends and
 /// what stays private, and a button to invite people. Once it is: who's in
@@ -121,7 +122,7 @@ class _WhatIsShared extends StatelessWidget {
               icon: Icons.lock_outline,
               color: p.wisteria,
               title: 'Only you',
-              items: const ['Your library', 'My notes', 'Photos and visits'],
+              items: const ['Your library', 'My notes', 'Photos, visits & gallery frames'],
             ),
           ),
         ],
@@ -209,6 +210,10 @@ class _Shared extends ConsumerWidget {
             for (final member in sorted)
               _MemberTile(trip: trip, member: member, isMe: member.userId == me, canChange: owner),
             if (canInvite) _Invites(trip: trip),
+            if (role != null) ...[
+              const SizedBox(height: 16),
+              _LocalFramesCard(trip: trip, canEdit: owner || role == TripMemberRole.editor),
+            ],
             if (owner) ...[
               const SizedBox(height: 24),
               OutlinedButton.icon(
@@ -261,6 +266,71 @@ class _Shared extends ConsumerWidget {
       }
       await service.unshareTrip(trip.id);
     });
+  }
+}
+
+class _LocalFramesCard extends ConsumerWidget {
+  final Trip trip;
+  final bool canEdit;
+
+  const _LocalFramesCard({required this.trip, required this.canEdit});
+
+  @override
+  Widget build(BuildContext context, WidgetRef ref) {
+    final theme = Theme.of(context);
+    return Container(
+      padding: const EdgeInsets.all(16),
+      decoration: BoxDecoration(
+        border: Border.all(color: theme.colorScheme.outlineVariant),
+        borderRadius: BorderRadius.circular(16),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          Row(
+            children: [
+              Icon(Icons.photo_library_outlined, size: 18, color: theme.colorScheme.onSurfaceVariant),
+              const SizedBox(width: 8),
+              Expanded(child: Text('Custom gallery frames', style: theme.textTheme.titleSmall)),
+            ],
+          ),
+          const SizedBox(height: 6),
+          Text(
+            canEdit
+                ? 'Gallery frames stay on each phone to avoid Firebase Storage egress fees. '
+                    'Sync them through your own Google Drive, or share a compact frames file offline.'
+                : 'Gallery frames stay on each phone. Import a frames file shared by another trip member, '
+                    'or share your own local frames offline.',
+            style: theme.textTheme.bodySmall?.copyWith(color: theme.colorScheme.onSurfaceVariant),
+          ),
+          const SizedBox(height: 12),
+          if (canEdit) ...[
+            FilledButton.tonalIcon(
+              onPressed: () => syncTripLocalFramesViaDrive(context, ref, trip),
+              icon: const Icon(Icons.cloud_upload_outlined, size: 18),
+              label: const Text('Sync via my Google Drive'),
+            ),
+            const SizedBox(height: 8),
+          ],
+          Wrap(
+            spacing: 8,
+            runSpacing: 8,
+            children: [
+              OutlinedButton.icon(
+                onPressed: () => shareTripLocalFrames(context, ref, trip),
+                icon: const Icon(Icons.ios_share_outlined, size: 18),
+                label: const Text('Share local frames'),
+              ),
+              OutlinedButton.icon(
+                onPressed: () => importTripLocalFrames(context, ref, trip),
+                icon: const Icon(Icons.file_download_outlined, size: 18),
+                label: const Text('Import local frames'),
+              ),
+            ],
+          ),
+        ],
+      ),
+    );
   }
 }
 

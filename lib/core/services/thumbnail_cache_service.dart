@@ -97,19 +97,29 @@ class ThumbnailCacheService {
 
   Future<String?> _downloadAndSave(String url, File targetFile) async {
     for (final candidate in _imageCandidates(url)) {
-      if (_isRateLimitedOrBlocked) return null;
+      final isAnitabi = candidate.contains('anitabi.cn');
+      if (isAnitabi && _isRateLimitedOrBlocked) return null;
       try {
         final response = await _client
             .get(Uri.parse(candidate), headers: _headers)
-            .timeout(const Duration(seconds: 10));
+            .timeout(const Duration(seconds: 15));
 
-        // Never retry on 403 or 429 per CLAUDE.md
+        // Never retry on 403 or 429 for Anitabi endpoints per CLAUDE.md
         if (response.statusCode == 403 || response.statusCode == 429) {
-          _isRateLimitedOrBlocked = true;
-          debugPrint(
-            '[ThumbnailCacheService] Received HTTP ${response.statusCode} for $candidate; halting further thumbnail downloads.',
-          );
-          return null;
+          if (isAnitabi) {
+            _isRateLimitedOrBlocked = true;
+            debugPrint(
+              '[ThumbnailCacheService] Received HTTP ${response.statusCode} for $candidate; halting Anitabi thumbnail downloads.',
+            );
+            return null;
+          }
+          continue;
+        }
+
+        final contentType = response.headers['content-type']?.toLowerCase() ?? '';
+        if (contentType.startsWith('text/html')) {
+          debugPrint('[ThumbnailCacheService] Skipping non-image HTML response for $candidate');
+          continue;
         }
 
         if (response.statusCode == 200 && response.bodyBytes.isNotEmpty) {
@@ -131,7 +141,35 @@ class ThumbnailCacheService {
     if (url.startsWith(primary)) {
       return [url, mirror + url.substring(primary.length)];
     }
+    final driveId = extractGoogleDriveFileId(url);
+    if (driveId != null) {
+      return [
+        'https://drive.google.com/uc?export=download&id=$driveId',
+        'https://lh3.googleusercontent.com/d/$driveId=w1280',
+      ];
+    }
     return [url];
+  }
+
+  /// Extracts a Google Drive file ID from supported share/download URLs, or null.
+  static String? extractGoogleDriveFileId(String url) {
+    final uri = Uri.tryParse(url.trim());
+    if (uri == null) return null;
+    if (uri.host == 'drive.google.com') {
+      final qId = uri.queryParameters['id'];
+      if (qId != null && qId.isNotEmpty) return qId;
+      final segs = uri.pathSegments;
+      final dIndex = segs.indexOf('d');
+      if (dIndex >= 0 && dIndex + 1 < segs.length && segs[dIndex + 1].isNotEmpty) {
+        return segs[dIndex + 1];
+      }
+    }
+    if (uri.host == 'lh3.googleusercontent.com' && uri.pathSegments.length >= 2 && uri.pathSegments.first == 'd') {
+      final raw = uri.pathSegments[1];
+      final eq = raw.indexOf('=');
+      return eq > 0 ? raw.substring(0, eq) : raw;
+    }
+    return null;
   }
 
   /// Prefetch multiple thumbnails sequentially by default (concurrency = 1)
