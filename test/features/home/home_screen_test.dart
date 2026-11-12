@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:latlong2/latlong.dart';
+import 'package:trip_planner/shared/map/app_map.dart';
 import 'package:trip_planner/core/database/database.dart';
 import 'package:trip_planner/core/utils/schedule_logic.dart';
 import 'package:trip_planner/features/auth/providers/auth_provider.dart';
@@ -187,7 +188,7 @@ void main() {
       await tester.pumpWidget(ProviderScope(
         overrides: [
           homeClockProvider.overrideWithValue(() => now),
-          homeMapTilesProvider.overrideWithValue(false),
+          mapTilesProvider.overrideWithValue(false),
           homeWhereProvider.overrideWith((ref) async => (allowed: false, at: null)),
           libraryEntriesProvider.overrideWith((ref) => const AsyncData(<LibraryEntry>[])),
           tripSummariesProvider.overrideWith((ref) => AsyncData(trips)),

@@ -13,6 +13,7 @@ import '../../planner/providers/planner_providers.dart';
 import '../../sharing/providers/group_sharing_providers.dart';
 import '../../trip/providers/trip_providers.dart';
 import '../../trip/screens/stop_screen.dart' show stopFrames;
+import '../../trip/widgets/day_map_pins.dart';
 import '../providers/home_providers.dart';
 import 'home_mini_map.dart';
 
@@ -111,14 +112,9 @@ class TodayCard extends ConsumerWidget {
         ] else ...[
           HomeMiniMap(
             key: const Key('homeTodayMap'),
-            color: p.tea,
-            doneColor: theme.colorScheme.outline,
             openLabel: 'Open map',
             onOpen: openMap,
-            pins: [
-              for (final (i, it) in items.indexed)
-                MiniPin(lat: it.stop.lat, lng: it.stop.lng, label: '${i + 1}', done: it.done, next: i == nextIndex),
-            ],
+            pins: dayMapPins(items, color: p.tea, nextStopId: nextIndex < 0 ? null : items[nextIndex].stop.id),
           ),
           const SizedBox(height: 12),
           if (nextIndex < 0)
@@ -130,7 +126,7 @@ class TodayCard extends ConsumerWidget {
               ],
             )
           else
-            _NextStop(tripId: tripId, number: nextIndex + 1, item: items[nextIndex], canEdit: canEdit),
+            _NextStop(tripId: tripId, number: _blockNumber(items, items[nextIndex].stop.id), item: items[nextIndex], canEdit: canEdit),
         ],
       ],
     );
@@ -254,3 +250,8 @@ class _NextStop extends ConsumerWidget {
     );
   }
 }
+
+/// The number [stopId]'s pin has on the day's map: groups of stops count as
+/// one, as in the plan.
+int _blockNumber(List<PlannerItem> items, String stopId) =>
+    planBlocks(items).indexWhere((b) => b.items.any((it) => it.stop.id == stopId)) + 1;

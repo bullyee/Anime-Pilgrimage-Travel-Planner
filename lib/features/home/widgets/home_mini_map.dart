@@ -1,36 +1,19 @@
 import 'package:flutter/material.dart';
-import 'package:flutter_map/flutter_map.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
-import 'package:latlong2/latlong.dart';
 
-import '../providers/home_providers.dart';
+import '../../../shared/map/app_map.dart';
 
-/// A pin on Home's small map: [label] inside it, a check when [done], and a
-/// ring when it's the one to go to next.
-class MiniPin {
-  final double lat;
-  final double lng;
-  final String label;
-  final bool done;
-  final bool next;
-
-  const MiniPin({required this.lat, required this.lng, required this.label, this.done = false, this.next = false});
-}
-
-/// The small map in Home's top card: the pins, fitted, and nothing to drag.
-/// Tapping it opens the big map.
+/// The small map in Home's top card: the pins, fitted, clustered when they
+/// crowd, and nothing to drag. Tapping it opens the big map. Built on the same
+/// [AppMap] as the day map, so its pins look the same.
 class HomeMiniMap extends ConsumerWidget {
-  final List<MiniPin> pins;
-  final Color color;
-  final Color doneColor;
+  final List<MapPin> pins;
   final VoidCallback onOpen;
   final String openLabel;
 
   const HomeMiniMap({
     super.key,
     required this.pins,
-    required this.color,
-    required this.doneColor,
     required this.onOpen,
     this.openLabel = 'Open map',
   });
@@ -38,11 +21,8 @@ class HomeMiniMap extends ConsumerWidget {
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     final theme = Theme.of(context);
-    final tiles = ref.watch(homeMapTilesProvider);
-    final points = [for (final p in pins) LatLng(p.lat, p.lng)];
-    final fit = points.length < 2
-        ? null
-        : CameraFit.coordinates(coordinates: points, padding: const EdgeInsets.all(28), maxZoom: 16);
+    final tiles = ref.watch(mapTilesProvider);
+    final points = [for (final p in pins) p.point];
 
     return Semantics(
       button: true,
@@ -57,30 +37,13 @@ class HomeMiniMap extends ConsumerWidget {
                 child: IgnorePointer(
                   child: points.isEmpty
                       ? ColoredBox(color: theme.colorScheme.surfaceContainerHighest)
-                      : FlutterMap(
-                          key: ValueKey(Object.hashAll(points)),
-                          options: MapOptions(
-                            initialCenter: points.first,
-                            initialZoom: 15,
-                            initialCameraFit: fit,
-                            backgroundColor: theme.colorScheme.surfaceContainerHighest,
-                          ),
-                          children: [
-                            if (tiles)
-                              TileLayer(
-                                urlTemplate: 'https://tile.openstreetmap.org/{z}/{x}/{y}.png',
-                                userAgentPackageName: 'com.example.trip_planner',
-                              ),
-                            MarkerLayer(markers: [
-                              for (final (i, pin) in pins.indexed)
-                                Marker(
-                                  point: points[i],
-                                  width: pin.next ? 34 : 26,
-                                  height: pin.next ? 34 : 26,
-                                  child: _Pin(pin: pin, color: pin.done ? doneColor : color),
-                                ),
-                            ]),
-                          ],
+                      : AppMap(
+                          pins: pins,
+                          interactive: false,
+                          attribution: false,
+                          fitPadding: const EdgeInsets.all(28),
+                          // New pins (another day, a stop added) fit the map again.
+                          fitKey: Object.hashAll(points),
                         ),
                 ),
               ),
@@ -125,36 +88,6 @@ class HomeMiniMap extends ConsumerWidget {
             ],
           ),
         ),
-      ),
-    );
-  }
-}
-
-class _Pin extends StatelessWidget {
-  final MiniPin pin;
-  final Color color;
-
-  const _Pin({required this.pin, required this.color});
-
-  @override
-  Widget build(BuildContext context) {
-    return DecoratedBox(
-      decoration: BoxDecoration(
-        color: color,
-        shape: BoxShape.circle,
-        border: Border.all(color: Colors.white, width: 2.5),
-        boxShadow: [
-          if (pin.next) BoxShadow(color: color.withValues(alpha: 0.35), spreadRadius: 4),
-          const BoxShadow(color: Color(0x40000000), blurRadius: 4, offset: Offset(0, 1)),
-        ],
-      ),
-      child: Center(
-        child: pin.done
-            ? const Icon(Icons.check, size: 14, color: Colors.white)
-            : Text(
-                pin.label,
-                style: TextStyle(color: Colors.white, fontSize: pin.next ? 13 : 11, fontWeight: FontWeight.w700),
-              ),
       ),
     );
   }
