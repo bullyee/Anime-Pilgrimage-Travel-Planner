@@ -38,7 +38,7 @@ Source of truth: `lib/core/database/tables_v10.dart`; migrations live in `lib/co
 - Local DB: Drift (SQLite)
 - AI Integration: Gemini API (VLM) — planned
 - On-device ML: ONNX Runtime (isnet-anime cutout; model fetched at runtime, ~176 MB), ML Kit subject segmentation
-- Cloud: Firebase Auth (Google Sign-In), Firestore (`firestore.rules`), Hosting (`public/`: the invite page, App Links for `/join`, privacy policy, terms). `firebase_storage` is a dependency but unused so far.
+- Cloud: Firebase Auth (Google Sign-In), Firestore (`firestore.rules`), Hosting (`public/`: the invite page, App Links for `/join`, privacy policy, terms). `firebase_storage` is a dependency kept unused on Spark (`storage.rules` deny-all) to avoid Blaze egress costs; custom frames use local frames packs or external image URLs (#152), with user-owned Google Drive storage via `googleapis_auth` noted as a future zero-server-cost option.
 - Camera: the phone's camera app via `image_picker` + a native floating reference window (Android); Flutter camera package (iOS)
 - Navigation: Go Router
 

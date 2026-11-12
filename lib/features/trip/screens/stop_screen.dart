@@ -225,6 +225,7 @@ class _StopScreenState extends ConsumerState<StopScreen> {
     final facts = stopFacts(stop);
     final tripNote = stop.note?.trim() ?? '';
     final myNote = place?.privateNote?.trim() ?? '';
+    final localOnlyCount = trip.sharing == 'group' ? frames.where(isLocalOnlyFrame).length : 0;
 
     return PopScope(
       // Back leaves edit mode first, asking before it drops changes.
@@ -253,8 +254,9 @@ class _StopScreenState extends ConsumerState<StopScreen> {
             if (draft == null && canEdit)
               PopupMenuButton<String>(
                 tooltip: 'More',
-                onSelected: (action) => _onMenu(action, stop, view, slot),
+                onSelected: (action) => _onMenu(action, stop, trip, view, slot),
                 itemBuilder: (_) => [
+                  const PopupMenuItem(value: 'frame_url', child: Text('Add frame link')),
                   const PopupMenuItem(value: 'rename', child: Text('Rename')),
                   // A stop in its group's block moves with the group, from
                   // the plan; taken out of the group, it moves on its own.
@@ -275,7 +277,8 @@ class _StopScreenState extends ConsumerState<StopScreen> {
               frames: frames,
               index: _frame,
               onPage: (i) => setState(() => _frame = i),
-              onOpen: (i) => _openFrame(stop, frames, i),
+              onAdd: canEdit ? () => _addFrameLink(stop, trip) : null,
+              onOpen: (i) => _openFrame(stop, trip, canEdit, frames, i),
             ),
             Padding(
               padding: const EdgeInsets.fromLTRB(16, 12, 16, 0),
@@ -295,6 +298,7 @@ class _StopScreenState extends ConsumerState<StopScreen> {
                   _StopTitle(stop: stop, draft: tripDraft, nameError: _nameError),
                   const SizedBox(height: 14),
                   ...spaced([
+                    if (localOnlyCount > 0) LocalFramesSyncNote(count: localOnlyCount),
                     _PlanCard(
                       slot: slot,
                       loading: view == null,
@@ -390,7 +394,26 @@ class _StopScreenState extends ConsumerState<StopScreen> {
     await floatReferenceImage(context, path);
   }
 
-  Future<void> _openFrame(Stop stop, List<NewReferenceImage> frames, int index) async {
+  bool _ensureSignedInForShared(Trip? trip) {
+    final currentUid = ref.read(currentUserIdProvider);
+    if (trip != null && trip.sharing == 'group' && currentUid == guestUserId) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Please sign in to make changes to a shared trip.')),
+      );
+      return false;
+    }
+    return true;
+  }
+
+  Future<void> _addFrameLink(Stop stop, Trip trip) async {
+    if (!_ensureSignedInForShared(trip)) return;
+    final input = await askFrameImageUrl(context);
+    if (input == null || !mounted) return;
+    final result = await _stops.addFrameFromUrl(stop.id, url: input.url, episode: input.episode);
+    _report(result, 'Added image link to this stop.');
+  }
+
+  Future<void> _openFrame(Stop stop, Trip trip, bool canEdit, List<NewReferenceImage> frames, int index) async {
     final frame = frames[index];
     final path = await _framePath(frame);
     if (path == null || !mounted) return;
@@ -401,6 +424,12 @@ class _StopScreenState extends ConsumerState<StopScreen> {
         actions: [
           if (animeCameraSupported) ViewerAction('Take photo', () => _shoot(stop, frames, index), primary: true),
           if (floatingReferenceSupported) ViewerAction('Float frame', () => floatReferenceImage(context, path)),
+          if (canEdit && frame.stopId == stop.id)
+            ViewerAction('Remove from stop', () async {
+              if (!_ensureSignedInForShared(trip)) return;
+              Navigator.of(context).pop();
+              _report(await _stops.removeFrame(stop.id, frame), 'Removed frame from stop.');
+            }),
         ],
       ),
     ));
@@ -442,8 +471,10 @@ class _StopScreenState extends ConsumerState<StopScreen> {
     if (minutes != null) _report(await _planner.setFixedTime(slot.item.item.id, minutes));
   }
 
-  Future<void> _onMenu(String action, Stop stop, PlannerView? view, StopSlot? slot) async {
+  Future<void> _onMenu(String action, Stop stop, Trip trip, PlannerView? view, StopSlot? slot) async {
     switch (action) {
+      case 'frame_url':
+        await _addFrameLink(stop, trip);
       case 'rename':
         final name = await askName(context, title: 'Rename this stop', action: 'Rename', initial: stop.name);
         if (name == null || name == stop.name) return;
