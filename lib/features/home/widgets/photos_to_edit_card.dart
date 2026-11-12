@@ -33,7 +33,7 @@ class PhotosToEditCard extends ConsumerWidget {
           ),
           subtitle: const Text('Kept as shot on the spot'),
           trailing: const Icon(Icons.chevron_right),
-          onTap: () => context.push('/photos-to-edit'),
+          onTap: () => context.go('/photos?filter=edit'),
         ),
       ),
     );
