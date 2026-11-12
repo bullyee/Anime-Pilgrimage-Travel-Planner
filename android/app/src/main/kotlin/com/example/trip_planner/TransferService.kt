@@ -36,6 +36,11 @@ class TransferService : Service() {
                 TransferBridge.sendCancel()
                 // Show that it was heard; Dart stops the service once the
                 // frame in flight is done.
+                if (!running) {
+                    // A stale notification: nothing to cancel here.
+                    stopSelf()
+                    return START_NOT_STICKY
+                }
                 current = current.copy(text = "Cancelling…", cancelling = true)
                 notifyProgress(this)
                 return START_NOT_STICKY
@@ -46,6 +51,12 @@ class TransferService : Service() {
                     return START_NOT_STICKY
                 }
                 running = true
+                // Dart was done before Android got here (a very short job):
+                // stop now that startForeground has been called.
+                if (pendingStop) {
+                    pendingStop = false
+                    stopSelfNow()
+                }
             }
         }
         // Not sticky: if Android kills the process anyway, the Dart work is
@@ -120,9 +131,17 @@ class TransferService : Service() {
         @Volatile
         private var current = Progress()
 
+        // stop() came before onStartCommand; stopping then would break the
+        // startForegroundService contract, so the service stops itself.
+        @Volatile
+        private var pendingStop = false
+
         /** Starts the service (or refreshes it) showing [progress]. */
         fun start(context: Context, progress: Progress): Boolean {
             current = progress
+            pendingStop = false
+            // A new transfer replaces the last one's outcome.
+            clearDone(context)
             return try {
                 val intent = Intent(context, TransferService::class.java).setAction(ACTION_START)
                 if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
@@ -152,7 +171,11 @@ class TransferService : Service() {
          */
         fun stop(context: Context, title: String?, text: String?) {
             current = Progress()
-            context.stopService(Intent(context, TransferService::class.java))
+            if (running) {
+                context.stopService(Intent(context, TransferService::class.java))
+            } else {
+                pendingStop = true
+            }
             running = false
             val manager = context.getSystemService(NotificationManager::class.java) ?: return
             if (title != null) {
