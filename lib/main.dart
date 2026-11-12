@@ -11,6 +11,7 @@ import 'shared/theme/app_theme.dart';
 // Added for custom error monitoring
 import 'core/utils/app_logger.dart';
 import 'core/providers/app_provider_observer.dart';
+import 'shared/map/app_map.dart';
 
 
 void main() async {
@@ -51,6 +52,9 @@ void main() async {
       name: 'FirebaseInit',
     );
   }
+
+  // Map tiles you've seen stay on the phone (needs the support folder first).
+  await setUpMapTileCache();
 
   // 3. Inject AppProviderObserver into ProviderScope to monitor Riverpod state
   runApp(

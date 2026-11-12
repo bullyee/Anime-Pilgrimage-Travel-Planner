@@ -1,6 +1,5 @@
 import 'dart:async';
 import 'dart:io';
-import 'dart:math' as math;
 
 import 'package:flutter/material.dart';
 import 'package:flutter_map/flutter_map.dart';
@@ -12,6 +11,7 @@ import 'package:latlong2/latlong.dart';
 import '../../../core/database/database.dart';
 import '../../../core/utils/app_result.dart';
 import '../../../core/utils/schedule_logic.dart';
+import '../../../shared/map/app_map.dart';
 import '../../../shared/theme/app_theme.dart';
 import '../../auth/providers/auth_provider.dart';
 import '../../camera/models/shooting_core_models.dart';
@@ -27,6 +27,7 @@ import '../../planner/providers/planner_providers.dart';
 import '../../planner/widgets/day_card.dart' show dayName;
 import '../../sharing/providers/group_sharing_providers.dart';
 import '../providers/trip_providers.dart';
+import '../widgets/day_map_pins.dart';
 import 'stop_screen.dart' show stopFrames;
 
 /// Pilgrimage mode's main screen: the day's stops on a map with the user's
@@ -55,7 +56,6 @@ class _PilgrimageDayMapScreenState extends ConsumerState<PilgrimageDayMapScreen>
   bool _locating = false;
   bool _togglingVisited = false;
   bool _launchingCamera = false;
-  bool _initialCameraFitted = false;
   int _currentFrameIndex = 0;
 
   @override
@@ -173,8 +173,11 @@ class _PilgrimageDayMapScreenState extends ConsumerState<PilgrimageDayMapScreen>
     }
   }
 
+  /// Clear of the header at the top and a stop's card at the bottom.
+  static const _fitPadding = EdgeInsets.only(top: 200, bottom: 280, left: 40, right: 40);
+
   void _fitStops(List<PlannerItem> items) {
-    final points = [for (final it in items) LatLng(it.stop.lat, it.stop.lng)];
+    final points = [for (final b in planBlocks(items)) blockPoint(b)];
     if (points.isEmpty) {
       if (_currentPosition != null) {
         _mapController.move(LatLng(_currentPosition!.latitude, _currentPosition!.longitude), 16);
@@ -188,24 +191,56 @@ class _PilgrimageDayMapScreenState extends ConsumerState<PilgrimageDayMapScreen>
     _mapController.fitCamera(
       CameraFit.coordinates(
         coordinates: points,
-        padding: const EdgeInsets.only(top: 140, bottom: 280, left: 40, right: 40),
+        padding: _fitPadding,
         maxZoom: 16,
       ),
     );
   }
 
-  void _selectStop(PlannerItem item) {
+  /// Picks [item] and brings its pin into view above the card. A group's pin
+  /// picks its first stop not visited yet.
+  void _selectStop(PlannerItem item, {bool move = true}) {
     setState(() {
       _selectedStopId = item.stop.id;
       _currentFrameIndex = 0;
     });
-    // Pan slightly with a zoom-proportional offset so the selected pin sits above the bottom card.
-    final targetZoom = _mapController.camera.zoom < 15 ? 16.0 : _mapController.camera.zoom;
-    final latOffset = 0.0018 * math.pow(2.0, 16.0 - targetZoom);
-    _mapController.move(
-      LatLng(item.stop.lat - latOffset, item.stop.lng),
-      targetZoom,
+    if (!move) return;
+    final zoom = _mapController.camera.zoom < 15 ? 16.0 : _mapController.camera.zoom;
+    // The pin sits 120 px above the middle, clear of the card.
+    _mapController.move(LatLng(item.stop.lat, item.stop.lng), zoom, offset: const Offset(0, -120));
+  }
+
+  /// Stops on one spot that zooming can't part: pick one from a list.
+  Future<void> _pickPin(List<PlannerItem> items, List<MapPin> pins) async {
+    final picked = await showModalBottomSheet<MapPin>(
+      context: context,
+      showDragHandle: true,
+      builder: (context) => SafeArea(
+        child: ListView(
+          shrinkWrap: true,
+          children: [
+            for (final pin in pins)
+              ListTile(
+                leading: CircleAvatar(
+                  backgroundColor: pin.done ? pinDoneColor : pin.color,
+                  foregroundColor: Colors.white,
+                  child: pin.done ? const Icon(Icons.check, size: 18) : Text(pin.label ?? ''),
+                ),
+                title: Text(pin.name, maxLines: 1, overflow: TextOverflow.ellipsis),
+                subtitle: pin.count > 1 ? Text('${pin.count} stops') : null,
+                onTap: () => Navigator.pop(context, pin),
+              ),
+          ],
+        ),
+      ),
     );
+    if (picked != null && mounted) _selectPin(items, picked);
+  }
+
+  void _selectPin(List<PlannerItem> items, MapPin pin) {
+    final block = blockOfStop(items, pin.id);
+    if (block == null) return;
+    _selectStop(block.items.firstWhere((it) => !it.done, orElse: () => block.first));
   }
 
   Future<void> _toggleVisited(PlannerItem item) async {
@@ -342,15 +377,6 @@ class _PilgrimageDayMapScreenState extends ConsumerState<PilgrimageDayMapScreen>
     final totalCount = items.length;
     final leftCount = totalCount - doneCount;
 
-    // Initial camera positioning
-    final points = [for (final it in items) LatLng(it.stop.lat, it.stop.lng)];
-    if (!_initialCameraFitted && points.isNotEmpty) {
-      _initialCameraFitted = true;
-      WidgetsBinding.instance.addPostFrameCallback((_) {
-        if (mounted) _fitStops(items);
-      });
-    }
-
     final selectedItem = _selectedStopId == null
         ? null
         : items.where((it) => it.stop.id == _selectedStopId).firstOrNull;
@@ -358,56 +384,42 @@ class _PilgrimageDayMapScreenState extends ConsumerState<PilgrimageDayMapScreen>
     return Stack(
       children: [
         // 1. Fullscreen Interactive Map
-        FlutterMap(
-          mapController: _mapController,
-          options: MapOptions(
-            initialCenter: points.isNotEmpty
-                ? points.first
-                : (_currentPosition != null
-                    ? LatLng(_currentPosition!.latitude, _currentPosition!.longitude)
-                    : const LatLng(35.6812, 139.7671)),
-            initialZoom: 15,
-            interactionOptions: const InteractionOptions(
-              flags: InteractiveFlag.all & ~InteractiveFlag.rotate,
-            ),
-            onTap: (_, __) {
-              if (_selectedStopId != null) {
-                setState(() => _selectedStopId = null);
-              }
-            },
-          ),
-          children: [
-            TileLayer(
-              urlTemplate: 'https://tile.openstreetmap.org/{z}/{x}/{y}.png',
-              userAgentPackageName: 'com.example.trip_planner',
-            ),
-            if (points.length >= 2)
+        AppMap(
+          controller: _mapController,
+          pins: dayMapPins(items, color: p.wisteria, selectedStopId: _selectedStopId),
+          fitPadding: _fitPadding,
+          // The stop's card says its name.
+          nameUnderSelected: false,
+          center: _currentPosition != null
+              ? LatLng(_currentPosition!.latitude, _currentPosition!.longitude)
+              : const LatLng(35.6812, 139.7671),
+          onPinTap: (pin) => _selectPin(items, pin),
+          onClusterOpen: (pins) => _pickPin(items, pins),
+          onTap: (_) {
+            if (_selectedStopId != null) setState(() => _selectedStopId = null);
+          },
+          underPins: [
+            if (items.length >= 2)
               PolylineLayer(
                 polylines: [
                   Polyline(
-                    points: points,
+                    points: [for (final b in planBlocks(items)) blockPoint(b)],
                     color: p.wisteria.withValues(alpha: 0.65),
                     strokeWidth: 4,
                     pattern: StrokePattern.dashed(segments: const [9, 7]),
                   ),
                 ],
               ),
-            MarkerLayer(
-              markers: [
-                // Stop Markers
-                for (var i = 0; i < items.length; i++)
-                  _buildStopMarker(context, items[i], i + 1, isSelected: items[i].stop.id == _selectedStopId),
-                // Current User Location Marker
-                if (_currentPosition != null)
-                  Marker(
-                    point: LatLng(_currentPosition!.latitude, _currentPosition!.longitude),
-                    width: 36,
-                    height: 36,
-                    alignment: Alignment.center,
-                    child: _buildUserLocationMarker(context),
-                  ),
-              ],
-            ),
+          ],
+          overPins: [
+            if (_currentPosition != null)
+              Marker(
+                key: const ValueKey('me'),
+                point: LatLng(_currentPosition!.latitude, _currentPosition!.longitude),
+                width: 36,
+                height: 36,
+                child: _buildUserLocationMarker(context),
+              ),
           ],
         ),
 
@@ -458,7 +470,7 @@ class _PilgrimageDayMapScreenState extends ConsumerState<PilgrimageDayMapScreen>
             left: 12,
             right: 12,
             bottom: 16,
-            child: _buildStopBottomCard(context, selectedItem),
+            child: _buildStopBottomCard(context, selectedItem, items),
           ),
 
         // 5. Empty Day State Overlay
@@ -491,58 +503,6 @@ class _PilgrimageDayMapScreenState extends ConsumerState<PilgrimageDayMapScreen>
             ),
           ),
       ],
-    );
-  }
-
-  Marker _buildStopMarker(BuildContext context, PlannerItem item, int index, {required bool isSelected}) {
-    final theme = Theme.of(context);
-    final p = theme.trip;
-    final isDone = item.done;
-
-    return Marker(
-      point: LatLng(item.stop.lat, item.stop.lng),
-      width: isSelected ? 48 : 40,
-      height: isSelected ? 56 : 48,
-      alignment: Alignment.topCenter,
-      child: GestureDetector(
-        onTap: () => _selectStop(item),
-        child: AnimatedScale(
-          scale: isSelected ? 1.15 : 1.0,
-          duration: const Duration(milliseconds: 200),
-          child: Stack(
-            alignment: Alignment.center,
-            children: [
-              Icon(
-                Icons.location_on,
-                size: isSelected ? 54 : 44,
-                color: isDone
-                    ? p.tea
-                    : (isSelected ? theme.colorScheme.primary : p.wisteria),
-                shadows: [
-                  BoxShadow(
-                    color: Colors.black.withValues(alpha: 0.28),
-                    blurRadius: 6,
-                    offset: const Offset(0, 3),
-                  ),
-                ],
-              ),
-              Positioned(
-                top: isSelected ? 11 : 8,
-                child: isDone
-                    ? const Icon(Icons.check, size: 16, color: Colors.white)
-                    : Text(
-                        '$index',
-                        style: TextStyle(
-                          color: Colors.white,
-                          fontSize: isSelected ? 14 : 12,
-                          fontWeight: FontWeight.bold,
-                        ),
-                      ),
-              ),
-            ],
-          ),
-        ),
-      ),
     );
   }
 
@@ -696,7 +656,7 @@ class _PilgrimageDayMapScreenState extends ConsumerState<PilgrimageDayMapScreen>
     );
   }
 
-  Widget _buildStopBottomCard(BuildContext context, PlannerItem item) {
+  Widget _buildStopBottomCard(BuildContext context, PlannerItem item, List<PlannerItem> dayItems) {
     final theme = Theme.of(context);
     final p = theme.trip;
     final stop = item.stop;
@@ -726,6 +686,11 @@ class _PilgrimageDayMapScreenState extends ConsumerState<PilgrimageDayMapScreen>
       );
     }
 
+    // A group is one pin; its card steps through the group's stops.
+    final block = blockOfStop(dayItems, stop.id);
+    final group = block != null && block.isGroup ? block : null;
+    final at = group?.items.indexWhere((it) => it.stop.id == stop.id) ?? -1;
+
     return Card(
       elevation: 8,
       shadowColor: Colors.black.withValues(alpha: 0.3),
@@ -737,6 +702,34 @@ class _PilgrimageDayMapScreenState extends ConsumerState<PilgrimageDayMapScreen>
           mainAxisSize: MainAxisSize.min,
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
+            if (group != null)
+              Row(
+                key: const Key('dayMapGroupStrip'),
+                children: [
+                  Icon(Icons.layers_outlined, size: 16, color: p.wisteria),
+                  const SizedBox(width: 6),
+                  Expanded(
+                    child: Text(
+                      '${group.group} · ${at + 1} of ${group.items.length}',
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                      style: theme.textTheme.labelMedium?.copyWith(color: p.wisteria, fontWeight: FontWeight.w700),
+                    ),
+                  ),
+                  IconButton(
+                    tooltip: 'Previous stop in the group',
+                    visualDensity: VisualDensity.compact,
+                    icon: const Icon(Icons.chevron_left),
+                    onPressed: at > 0 ? () => _selectStop(group.items[at - 1], move: false) : null,
+                  ),
+                  IconButton(
+                    tooltip: 'Next stop in the group',
+                    visualDensity: VisualDensity.compact,
+                    icon: const Icon(Icons.chevron_right),
+                    onPressed: at < group.items.length - 1 ? () => _selectStop(group.items[at + 1], move: false) : null,
+                  ),
+                ],
+              ),
             // Top Row: Title, Distance/Bearing, and Close Button
             Row(
               crossAxisAlignment: CrossAxisAlignment.start,

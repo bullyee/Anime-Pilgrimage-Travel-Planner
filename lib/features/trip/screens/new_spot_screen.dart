@@ -7,6 +7,7 @@ import 'package:latlong2/latlong.dart';
 import '../../../core/database/database.dart';
 import '../../../core/services/locate.dart';
 import '../../../core/utils/app_result.dart';
+import '../../../shared/map/app_map.dart';
 import '../../library/controllers/library_controller.dart';
 import '../../library/controllers/place_controller.dart';
 import '../../library/models/duplicates.dart';
@@ -324,23 +325,11 @@ class _NewSpotScreenState extends ConsumerState<NewSpotScreen> {
             flex: _moving ? 1 : 5,
             child: Stack(
               children: [
-                FlutterMap(
-                  mapController: _map,
-                  options: MapOptions(
-                    initialCenter: _initialCenter,
-                    initialZoom: _initialZoom,
-                    interactionOptions: const InteractionOptions(
-                      flags: InteractiveFlag.all & ~InteractiveFlag.rotate,
-                    ),
-                    onPositionChanged: (camera, _) => _center.value = camera.center,
-                  ),
-                  children: [
-                    TileLayer(
-                      urlTemplate: 'https://tile.openstreetmap.org/{z}/{x}/{y}.png',
-                      userAgentPackageName: 'com.example.trip_planner',
-                    ),
-                    const SimpleAttributionWidget(source: Text('OpenStreetMap contributors')),
-                  ],
+                AppMap(
+                  controller: _map,
+                  center: _initialCenter,
+                  zoom: _initialZoom,
+                  onPositionChanged: (camera, _) => _center.value = camera.center,
                 ),
                 // The pin's tip marks the map's center.
                 IgnorePointer(

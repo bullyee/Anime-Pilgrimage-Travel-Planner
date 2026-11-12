@@ -2,7 +2,6 @@ import 'dart:io';
 
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
-import 'package:flutter_map/flutter_map.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 import 'package:intl/intl.dart';
@@ -11,6 +10,7 @@ import 'package:latlong2/latlong.dart';
 import '../../../core/database/database.dart';
 import '../../../core/providers/thumbnail_cache_provider.dart';
 import '../../../core/utils/app_result.dart';
+import '../../../shared/map/app_map.dart';
 import '../../../shared/theme/app_theme.dart';
 import '../../camera/services/anime_camera_launcher.dart';
 import '../../camera/services/photo_edit_route.dart';
@@ -825,24 +825,13 @@ class LocationCard extends StatelessWidget {
             child: SizedBox(
               height: 140,
               child: IgnorePointer(
-                child: FlutterMap(
-                  key: ValueKey(at),
-                  options: MapOptions(initialCenter: at, initialZoom: 16),
-                  children: [
-                    TileLayer(
-                      urlTemplate: 'https://tile.openstreetmap.org/{z}/{x}/{y}.png',
-                      userAgentPackageName: 'com.example.trip_planner',
-                    ),
-                    MarkerLayer(markers: [
-                      Marker(
-                        point: at,
-                        width: 36,
-                        height: 36,
-                        alignment: Alignment.topCenter,
-                        child: Icon(Icons.location_on, size: 36, color: theme.trip.wisteria),
-                      ),
-                    ]),
-                  ],
+                child: AppMap(
+                  pins: [MapPin(id: 'here', point: at, name: 'This place', color: theme.trip.wisteria)],
+                  interactive: false,
+                  cluster: false,
+                  attribution: false,
+                  // A moved pin centres the map on its new spot.
+                  fitKey: at,
                 ),
               ),
             ),
