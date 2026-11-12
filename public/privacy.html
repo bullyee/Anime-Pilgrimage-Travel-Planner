@@ -55,6 +55,10 @@
     ul {
       padding-left: 20px;
     }
+    li ul {
+      margin-top: 6px;
+      margin-bottom: 6px;
+    }
     a {
       color: var(--primary);
       text-decoration: none;
@@ -67,7 +71,7 @@
 <body>
   <div class="container">
     <h1>Trip Planner 隱私權政策</h1>
-    <div class="last-updated">最後更新日期：2026 年 11 月 4 日</div>
+    <div class="last-updated">最後更新日期：2026 年 11 月 7 日</div>
 
     <p>歡迎使用 Trip Planner（以下簡稱「本應用程式」）。我們非常重視您的個人隱私與資料安全，本隱私權政策旨在說明我們如何收集、使用、儲存及保護您的資訊。</p>
 
@@ -75,28 +79,40 @@
     <ul>
       <li><strong>Google 帳戶基本資料</strong>：當您選擇透過 Google 登入時，我們僅讀取您的基本公開檔案（名稱、電子郵件地址及個人頭像），用於識別您的使用者身分並在群組協作行程中顯示成員資訊。</li>
       <li><strong>行程與景點資料</strong>：您建立或規劃的聖地巡禮景點、每日時程、個人標籤及拍照編輯紀錄。</li>
-      <li><strong>相機與檔案權限</strong>：本應用程式之相機疊圖與照片編輯功能僅於本機端執行，未經您的明確分享操作，個人照片絕不會自動上傳至雲端。</li>
+      <li><strong>相機與檔案權限</strong>：本應用程式之相機疊圖與照片編輯功能預設於本機端執行。未經您的明確分享操作，個人照片絕不會自動上傳至雲端。</li>
+      <li><strong>群組共享照片與範本</strong>：當您主動在群組行程中上傳巡禮照片，或選擇發布公開行程範本時，我們會處理您主動提交的影像檔案與巡禮內容。</li>
+      <li><strong>應用程式統計與診斷數據</strong>：為維持應用程式穩定度與提升巡禮體驗，我們會收集匿名化的功能使用事件（如景點匯入次數、排程操作、畫面導覽）與技術崩潰日誌。我們<strong>嚴格禁用任何廣告識別碼（如 Android AAID）</strong>，絕不進行跨應用程式廣告追蹤。</li>
     </ul>
 
     <h2>二、資訊之儲存與使用方式</h2>
     <ul>
-      <li><strong>本地優先（Local-First）</strong>：您的私人收藏庫、景點備註及巡禮照片預設儲存於您的本機裝置 SQLite 資料庫中。</li>
-      <li><strong>雲端雙向同步</strong>：僅當您明確開啟「群組分享行程」或透過邀請碼加入共用行程時，該行程之景點排程資料方會透過 Google Firebase 進行傳輸與多裝置同步。</li>
-      <li><strong>絕不出售資料</strong>：我們絕不會將您的個人資訊販售、出租或轉讓給任何第三方廣告商。</li>
+      <li><strong>本地優先（Local-First）</strong>：您的私人收藏庫、景點備註及巡禮照片預設儲存於您的本機裝置 SQLite 資料庫中，未開啟同步前完全保留於裝置本機。</li>
+      <li><strong>群組雙向同步</strong>：僅當您明確開啟「群組分享行程」或透過邀請碼加入共用行程時，該行程之景點排程與成員資料方會透過 Google Firebase 進行傳輸與多裝置同步。</li>
+      <li><strong>共享照片雲端儲存</strong>：群組行程中上傳之巡禮照片儲存於 Google Cloud Storage，並受到嚴格的安全存取規則（RBAC）保護，僅限該行程之擁有者與協作成員存取。</li>
+      <li><strong>個人雲端備份（選用項目）</strong>：若您主動啟用個人層雲端備份，您的私人地點清單將以私密方式備份至個人專屬雲端空間，僅供您登入之帳戶於換機或重新安裝時還原，絕不對外公開。</li>
+      <li><strong>公開範本去識別化</strong>：當您發布公開行程範本時，系統會自動剔除所有私人日期、個人備忘錄、個人照片及帳戶資訊，僅保留景點座標與推薦路線供社群參考。</li>
+      <li><strong>絕不出售資料與零廣告承諾</strong>：本應用程式致力於非商業性聖地巡禮體驗，絕無內嵌廣告，且絕不將您的個人資訊販售、出租或轉讓給任何第三方廣告商。</li>
     </ul>
 
     <h2>三、第三方服務提供商</h2>
     <p>本應用程式使用受信任的第三方服務以維持基本營運：</p>
     <ul>
-      <li><strong>Google Firebase</strong>：用於使用者驗證（Authentication）與行程雲端資料庫（Firestore）。</li>
-      <li><strong>Bangumi 與 Anitabi</strong>：提供公開的動畫資料與聖地座標資訊檢索。</li>
+      <li><strong>Google Firebase</strong>：
+        <ul>
+          <li><strong>Firebase Authentication</strong>：使用者身分驗證。</li>
+          <li><strong>Cloud Firestore</strong>：共用行程資料庫與即時同步。</li>
+          <li><strong>Cloud Storage for Firebase</strong>：共用行程照片儲存。</li>
+          <li><strong>Google Analytics for Firebase</strong>：匿名化應用程式使用統計與診斷（已完全關閉廣告追蹤與個人化廣告功能）。</li>
+        </ul>
+      </li>
+      <li><strong>Bangumi 與 Anitabi</strong>：提供公開的動畫作品與聖地座標資訊檢索。</li>
       <li><strong>OpenStreetMap</strong>：搜尋地點時，您輸入的文字會傳送至 OpenStreetMap 的 Nominatim 服務以查詢座標；地圖畫面的圖磚亦由 OpenStreetMap 提供。</li>
       <li><strong>Google 地圖</strong>：當您貼上 Google 地圖短網址時，本應用程式會開啟該網址以讀取其中的座標。</li>
       <li><strong>GitHub</strong>：首次使用去背功能時，會從 GitHub 下載去背模型檔，此請求不包含您的個人資料。</li>
     </ul>
 
     <h2>四、資料刪除與權利行使</h2>
-    <p>您隨時可於應用程式內刪除行程資料或登出帳號。如欲請求徹底刪除您在雲端的帳戶相關資料，請透過下方聯絡信箱與我們聯繫，我們將於收到請求後儘速處理。</p>
+    <p>您隨時可於應用程式內刪除行程資料、登出帳號或透過 30 天垃圾桶機制復原／清除資料。如欲請求徹底刪除您在雲端的帳戶相關資料，請透過下方聯絡信箱與我們聯繫，我們將於收到請求後儘速處理。</p>
 
     <h2>五、聯絡我們</h2>
     <p>若您對本隱私權政策有任何疑問或建議，歡迎透過以下電子郵件聯絡開發團隊：<br>
