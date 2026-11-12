@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'dart:convert';
 import 'dart:io';
 import 'dart:isolate';
@@ -23,6 +24,18 @@ class GoogleDriveUploadException implements Exception {
 
   @override
   String toString() => message;
+}
+
+/// Thrown when Google Drive needs the user again: the access token expired
+/// and could not be refreshed without showing Google's sign-in, which only
+/// works while the app is on screen.
+class DriveAuthRequiredException implements Exception {
+  final Object? cause;
+
+  const DriveAuthRequiredException([this.cause]);
+
+  @override
+  String toString() => 'Google Drive needs you to sign in again${cause == null ? '' : ' ($cause)'}.';
 }
 
 /// Result of uploading a reference image to the user's Google Drive (`drive.file`).
@@ -54,6 +67,7 @@ class DriveSyncSummary {
 typedef DriveTokenFetcher = Future<String> Function({bool interactive});
 typedef DriveImageCompressor = Future<Uint8List> Function(Uint8List rawBytes);
 typedef DriveFileReader = Future<Uint8List?> Function(String path);
+typedef DriveSleep = Future<void> Function(Duration delay);
 
 /// Uploads local-only anime reference frames to the signed-in user's own Google
 /// Drive using the non-sensitive `drive.file` scope, grants link-read access so
@@ -71,6 +85,12 @@ class GoogleDriveFrameService {
   final DriveTokenFetcher _getToken;
   final DriveImageCompressor _compress;
   final DriveFileReader _readFile;
+  final DriveSleep _sleep;
+
+  /// Waits between attempts when a Google endpoint drops the connection or
+  /// answers 429/5xx; one retry per entry. (Google only: never applied to
+  /// Anitabi.)
+  final List<Duration> retryDelays;
 
   String? _cachedToken;
   String? _cachedFolderId;
@@ -80,10 +100,13 @@ class GoogleDriveFrameService {
     required DriveTokenFetcher getToken,
     DriveImageCompressor? compress,
     DriveFileReader? readFile,
+    DriveSleep? sleep,
+    this.retryDelays = const [Duration(seconds: 2), Duration(seconds: 6), Duration(seconds: 15)],
   })  : _client = client ?? http.Client(),
         _getToken = getToken,
         _compress = compress ?? compressForDriveUpload,
-        _readFile = readFile ?? _defaultReadFile;
+        _readFile = readFile ?? _defaultReadFile,
+        _sleep = sleep ?? Future<void>.delayed;
 
   /// Canonical direct-download URL stored on synced `NewReferenceImages.remoteUrl`.
   static String downloadUrlForFileId(String fileId) =>
@@ -125,9 +148,14 @@ class GoogleDriveFrameService {
   /// Counts local-only frames on [tripId]'s live stops (including place frames not
   /// yet copied with a URL) that have not been synced with a `remoteUrl` yet.
   Future<int> countTripLocalFrames(AppDatabase db, String tripId) async {
-    final plan = await _buildSyncPlan(db, tripId);
+    final plan = await _buildSyncPlan(db, tripId, hashSynced: false);
     return plan.pendingCount;
   }
+
+  /// Gets a Drive access token now, showing Google's consent if needed. Call
+  /// it while the app is on screen before queueing a background upload, so
+  /// the upload itself never has to prompt.
+  Future<void> prepareToken() => _ensureToken(interactive: true);
 
   /// Uploads [rawBytes] into the app's Google Drive folder, shares it read-only by
   /// link so trip collaborators can download it, and returns the resulting file metadata.
@@ -136,12 +164,24 @@ class GoogleDriveFrameService {
     required String frameId,
     String? tripId,
     String? stopId,
+    bool interactive = true,
+    BackupCancel? cancel,
   }) async {
     final jpegBytes = await _compress(rawBytes);
-    final token = await _ensureToken(interactive: true);
+    final String token;
+    if (interactive) {
+      token = await _ensureToken(interactive: true);
+    } else {
+      try {
+        token = await _ensureToken(interactive: false);
+      } catch (e) {
+        throw DriveAuthRequiredException(e);
+      }
+    }
     return _runWithAuthRetry(token, (activeToken) async {
-      final folderId = await _ensureFolderId(activeToken);
+      final folderId = await _ensureFolderId(activeToken, cancel: cancel);
       final fileId = await _multipartUpload(
+        cancel: cancel,
         token: activeToken,
         folderId: folderId,
         fileName: 'frame_$frameId.jpg',
@@ -153,7 +193,7 @@ class GoogleDriveFrameService {
         },
       );
       try {
-        await _grantAnyoneReaderPermission(activeToken, fileId);
+        await _grantAnyoneReaderPermission(activeToken, fileId, cancel: cancel);
       } catch (e) {
         // Avoid leaving private unshareable orphan files in Drive on permission failure.
         await _deleteDriveFileQuietly(activeToken, fileId);
@@ -174,6 +214,7 @@ class GoogleDriveFrameService {
     required String stopId,
     required String localPath,
     String? episode,
+    bool interactive = true,
   }) async {
     final initialStop = await (db.select(db.stops)
           ..where((s) => s.id.equals(stopId) & s.tripId.equals(tripId) & s.deletedAt.isNull()))
@@ -192,6 +233,7 @@ class GoogleDriveFrameService {
       frameId: frameId,
       tripId: tripId,
       stopId: stopId,
+      interactive: interactive,
     );
 
     final now = DateTime.now();
@@ -241,11 +283,16 @@ class GoogleDriveFrameService {
   /// the Drive link. Frames backed by identical image bytes upload once and reuse
   /// the link within the trip. Each finished stop commits before checking cancel
   /// for the next upload so already-uploaded Drive files are never orphaned.
+  ///
+  /// With [interactive] false (a background run, token fetched beforehand with
+  /// [prepareToken]) it never shows Google's sign-in: an expired token that
+  /// can't be refreshed silently throws [DriveAuthRequiredException].
   Future<DriveSyncSummary> syncTripLocalFrames(
     AppDatabase db, {
     required String tripId,
     BackupProgress? onProgress,
     BackupCancel? cancel,
+    bool interactive = true,
   }) async {
     final plan = await _buildSyncPlan(db, tripId);
     if (plan.pendingCount == 0) {
@@ -253,7 +300,15 @@ class GoogleDriveFrameService {
     }
 
     // Request Drive OAuth consent upfront before starting progress work.
-    await _ensureToken(interactive: true);
+    if (interactive) {
+      await _ensureToken(interactive: true);
+    } else {
+      try {
+        await _ensureToken(interactive: false);
+      } catch (e) {
+        throw DriveAuthRequiredException(e);
+      }
+    }
 
     var uploaded = 0;
     var reused = 0;
@@ -299,6 +354,8 @@ class GoogleDriveFrameService {
             frameId: task.frame.id,
             tripId: tripId,
             stopId: task.stop.id,
+            interactive: interactive,
+            cancel: cancel,
           );
           url = res.downloadUrl;
           newlyUploadedFileId = res.fileId;
@@ -384,7 +441,9 @@ class GoogleDriveFrameService {
     );
   }
 
-  Future<_TripDriveSyncPlan> _buildSyncPlan(AppDatabase db, String tripId) async {
+  /// [hashSynced] reads every already-synced file to find identical bytes;
+  /// counting doesn't need that.
+  Future<_TripDriveSyncPlan> _buildSyncPlan(AppDatabase db, String tripId, {bool hashSynced = true}) async {
     final liveStops = await (db.select(db.stops)
           ..where((s) => s.tripId.equals(tripId) & s.deletedAt.isNull()))
         .get();
@@ -406,7 +465,7 @@ class GoogleDriveFrameService {
       final url = f.remoteUrl;
       if (path != null && path.isNotEmpty && url != null && url.isNotEmpty) {
         existingUrlByPath.putIfAbsent(path, () => url);
-        if (hashedPaths.add(path)) {
+        if (hashSynced && hashedPaths.add(path)) {
           final bytes = await _readFile(path);
           if (bytes != null && bytes.isNotEmpty) {
             final hash = md5.convert(bytes).toString();
@@ -466,13 +525,50 @@ class GoogleDriveFrameService {
       if (e.statusCode != 401) rethrow;
       _cachedToken = null;
       _cachedFolderId = null;
-      final refreshed = await _getToken(interactive: false);
+      final String refreshed;
+      try {
+        refreshed = await _getToken(interactive: false);
+      } catch (refreshError) {
+        throw DriveAuthRequiredException(refreshError);
+      }
       _cachedToken = refreshed;
-      return op(refreshed);
+      try {
+        return await op(refreshed);
+      } on GoogleDriveUploadException catch (again) {
+        if (again.statusCode == 401) {
+          _cachedToken = null;
+          throw DriveAuthRequiredException(again);
+        }
+        rethrow;
+      }
     }
   }
 
-  Future<String> _ensureFolderId(String token) async {
+  static bool _isRetryableStatus(int code) => code == 429 || code == 500 || code == 502 || code == 503 || code == 504;
+
+  static bool _isNetworkError(Object e) => e is IOException || e is http.ClientException || e is TimeoutException;
+
+  /// Sends a request to a Google endpoint, retrying after [retryDelays] when
+  /// the connection drops (e.g. "Software caused connection abort" as the
+  /// phone sleeps) or Google answers 429/5xx.
+  Future<http.Response> _sendWithRetry(Future<http.Response> Function() send, {BackupCancel? cancel}) async {
+    for (var attempt = 0;; attempt++) {
+      final canRetry = attempt < retryDelays.length;
+      try {
+        final res = await send();
+        if (!canRetry || !_isRetryableStatus(res.statusCode)) return res;
+        debugPrint('[GoogleDriveFrameService] HTTP ${res.statusCode}; retrying');
+      } catch (e) {
+        if (!canRetry || !_isNetworkError(e)) rethrow;
+        debugPrint('[GoogleDriveFrameService] $e; retrying');
+      }
+      if (cancel?.isCancelled ?? false) throw const BackupCancelled();
+      await _sleep(retryDelays[attempt]);
+      if (cancel?.isCancelled ?? false) throw const BackupCancelled();
+    }
+  }
+
+  Future<String> _ensureFolderId(String token, {BackupCancel? cancel}) async {
     if (_cachedFolderId != null) return _cachedFolderId!;
     const query =
         "name = '$appFolderName' and mimeType = 'application/vnd.google-apps.folder' and trashed = false";
@@ -484,9 +580,10 @@ class GoogleDriveFrameService {
         'pageSize': '1',
       },
     );
-    final searchRes = await _client
-        .get(searchUri, headers: {'Authorization': 'Bearer $token'})
-        .timeout(const Duration(seconds: 15));
+    final searchRes = await _sendWithRetry(
+      () => _client.get(searchUri, headers: {'Authorization': 'Bearer $token'}).timeout(const Duration(seconds: 15)),
+      cancel: cancel,
+    );
     _throwIfError(searchRes, 'Failed to look up Google Drive folder');
     final searchJson = jsonDecode(searchRes.body) as Map<String, dynamic>;
     final files = (searchJson['files'] as List?) ?? const [];
@@ -498,19 +595,22 @@ class GoogleDriveFrameService {
       }
     }
 
-    final createRes = await _client
-        .post(
-          Uri.parse('$_driveApi/files?fields=id'),
-          headers: {
-            'Authorization': 'Bearer $token',
-            'Content-Type': 'application/json; charset=UTF-8',
-          },
-          body: jsonEncode({
-            'name': appFolderName,
-            'mimeType': 'application/vnd.google-apps.folder',
-          }),
-        )
-        .timeout(const Duration(seconds: 15));
+    final createRes = await _sendWithRetry(
+      () => _client
+          .post(
+            Uri.parse('$_driveApi/files?fields=id'),
+            headers: {
+              'Authorization': 'Bearer $token',
+              'Content-Type': 'application/json; charset=UTF-8',
+            },
+            body: jsonEncode({
+              'name': appFolderName,
+              'mimeType': 'application/vnd.google-apps.folder',
+            }),
+          )
+          .timeout(const Duration(seconds: 15)),
+      cancel: cancel,
+    );
     _throwIfError(createRes, 'Failed to create Google Drive folder');
     final createJson = jsonDecode(createRes.body) as Map<String, dynamic>;
     final folderId = createJson['id'] as String?;
@@ -522,6 +622,7 @@ class GoogleDriveFrameService {
   }
 
   Future<String> _multipartUpload({
+    BackupCancel? cancel,
     required String token,
     required String folderId,
     required String fileName,
@@ -541,17 +642,21 @@ class GoogleDriveFrameService {
       ..add(utf8.encode('\r\n--$boundary\r\nContent-Type: image/jpeg\r\n\r\n'))
       ..add(bytes)
       ..add(utf8.encode('\r\n--$boundary--\r\n'));
+    final payload = builder.takeBytes();
 
-    final res = await _client
-        .post(
-          Uri.parse('$_driveUploadApi/files?uploadType=multipart&fields=id'),
-          headers: {
-            'Authorization': 'Bearer $token',
-            'Content-Type': 'multipart/related; boundary=$boundary',
-          },
-          body: builder.takeBytes(),
-        )
-        .timeout(const Duration(seconds: 30));
+    final res = await _sendWithRetry(
+      () => _client
+          .post(
+            Uri.parse('$_driveUploadApi/files?uploadType=multipart&fields=id'),
+            headers: {
+              'Authorization': 'Bearer $token',
+              'Content-Type': 'multipart/related; boundary=$boundary',
+            },
+            body: payload,
+          )
+          .timeout(const Duration(seconds: 30)),
+      cancel: cancel,
+    );
     _throwIfError(res, 'Failed to upload frame image to Google Drive');
     final body = jsonDecode(res.body) as Map<String, dynamic>;
     final id = body['id'] as String?;
@@ -561,17 +666,20 @@ class GoogleDriveFrameService {
     return id;
   }
 
-  Future<void> _grantAnyoneReaderPermission(String token, String fileId) async {
-    final res = await _client
-        .post(
-          Uri.parse('$_driveApi/files/$fileId/permissions'),
-          headers: {
-            'Authorization': 'Bearer $token',
-            'Content-Type': 'application/json; charset=UTF-8',
-          },
-          body: jsonEncode({'role': 'reader', 'type': 'anyone'}),
-        )
-        .timeout(const Duration(seconds: 15));
+  Future<void> _grantAnyoneReaderPermission(String token, String fileId, {BackupCancel? cancel}) async {
+    final res = await _sendWithRetry(
+      () => _client
+          .post(
+            Uri.parse('$_driveApi/files/$fileId/permissions'),
+            headers: {
+              'Authorization': 'Bearer $token',
+              'Content-Type': 'application/json; charset=UTF-8',
+            },
+            body: jsonEncode({'role': 'reader', 'type': 'anyone'}),
+          )
+          .timeout(const Duration(seconds: 15)),
+      cancel: cancel,
+    );
     _throwIfError(res, 'Uploaded file, but failed to create a shareable link in Google Drive');
   }
 

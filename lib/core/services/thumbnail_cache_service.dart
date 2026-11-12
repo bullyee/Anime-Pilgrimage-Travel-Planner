@@ -75,7 +75,9 @@ class ThumbnailCacheService {
       return targetFile.path;
     }
 
-    if (_isRateLimitedOrBlocked) {
+    // Anitabi refused (403/429): no more Anitabi requests this session. Other
+    // hosts (a teammate's Google Drive frames) are not Anitabi's to block.
+    if (_isRateLimitedOrBlocked && url.contains('anitabi.cn')) {
       return null;
     }
 
