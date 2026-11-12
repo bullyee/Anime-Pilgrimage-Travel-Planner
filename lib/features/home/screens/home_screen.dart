@@ -1,6 +1,5 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
-import 'package:go_router/go_router.dart';
 
 import 'package:trip_planner/features/camera/services/anime_camera_launcher.dart';
 
@@ -14,8 +13,8 @@ import '../widgets/today_card.dart';
 /// one follows the date. On a day of a trip it is today, with a small map
 /// that opens the trip's day map; on other days it is the next trip. Under
 /// it, the photos to edit when there are any; Near you is the same every
-/// day. Shoot sits in the middle of the bottom bar, with Trips and Library
-/// either side. There's no Sign in here: the app works without an account,
+/// day. Shoot, Trips, Library and Photos are in the app's bottom bar
+/// ([AppFrame]). There's no Sign in here: the app works without an account,
 /// and sharing, inviting and joining a trip ask for one when they need it
 /// (sign-out is in My Trips).
 class HomeScreen extends ConsumerStatefulWidget {
@@ -24,8 +23,6 @@ class HomeScreen extends ConsumerStatefulWidget {
   @override
   ConsumerState<HomeScreen> createState() => _HomeScreenState();
 }
-
-enum _More { floatReference, editPhoto }
 
 class _HomeScreenState extends ConsumerState<HomeScreen> {
   @override
@@ -37,15 +34,6 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
     });
   }
 
-  Future<void> _more(_More choice) async {
-    switch (choice) {
-      case _More.floatReference:
-        await floatReference(context, ref);
-      case _More.editPhoto:
-        await editPhotoFromGallery(context, ref);
-    }
-  }
-
   @override
   Widget build(BuildContext context) {
     final focus = ref.watch(homeFocusProvider);
@@ -54,15 +42,14 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
       appBar: AppBar(
         title: const Text('Trip Planner'),
         actions: [
-          PopupMenuButton<_More>(
-            tooltip: 'More',
-            onSelected: _more,
-            itemBuilder: (context) => [
-              if (floatingReferenceSupported)
-                const PopupMenuItem(value: _More.floatReference, child: Text('Float a frame over any app')),
-              const PopupMenuItem(value: _More.editPhoto, child: Text('Edit a photo from the gallery')),
-            ],
-          ),
+          // The floating window (Android). Editing a photo from the gallery
+          // is in the Photos tab.
+          if (floatingReferenceSupported)
+            IconButton(
+              tooltip: 'Float a frame over any app',
+              icon: const Icon(Icons.picture_in_picture_alt_outlined),
+              onPressed: () => floatReference(context, ref),
+            ),
         ],
       ),
       body: Align(
@@ -70,7 +57,7 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
         child: ConstrainedBox(
           constraints: const BoxConstraints(maxWidth: 800),
           child: ListView(
-            padding: const EdgeInsets.fromLTRB(16, 8, 16, 112),
+            padding: const EdgeInsets.fromLTRB(16, 8, 16, 24),
             children: [
               focus.when(
                 loading: () => const SizedBox(height: 160, child: Center(child: CircularProgressIndicator())),
@@ -86,55 +73,6 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
             ],
           ),
         ),
-      ),
-      floatingActionButtonLocation: FloatingActionButtonLocation.centerDocked,
-      floatingActionButton: animeCameraSupported
-          ? FloatingActionButton.large(
-              tooltip: 'Shoot',
-              onPressed: () => openAnimeCamera(context, ref),
-              child: const Icon(Icons.photo_camera),
-            )
-          : null,
-      bottomNavigationBar: BottomAppBar(
-        shape: animeCameraSupported ? const CircularNotchedRectangle() : null,
-        child: Row(
-          children: [
-            Expanded(
-              child: _BarButton(icon: Icons.flight_takeoff, label: 'Trips', onPressed: () => context.push('/trips')),
-            ),
-            if (animeCameraSupported) const SizedBox(width: 96),
-            Expanded(
-              child: _BarButton(
-                icon: Icons.bookmarks_outlined,
-                label: 'Library',
-                onPressed: () => context.push('/library'),
-              ),
-            ),
-          ],
-        ),
-      ),
-    );
-  }
-}
-
-class _BarButton extends StatelessWidget {
-  final IconData icon;
-  final String label;
-  final VoidCallback onPressed;
-
-  const _BarButton({required this.icon, required this.label, required this.onPressed});
-
-  @override
-  Widget build(BuildContext context) {
-    return TextButton(
-      onPressed: onPressed,
-      style: TextButton.styleFrom(
-        foregroundColor: Theme.of(context).colorScheme.onSurface,
-        minimumSize: const Size(64, 56),
-      ),
-      child: Column(
-        mainAxisSize: MainAxisSize.min,
-        children: [Icon(icon), const SizedBox(height: 2), Text(label)],
       ),
     );
   }

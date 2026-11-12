@@ -7,9 +7,10 @@ import 'package:trip_planner/features/auth/providers/auth_provider.dart'; // Add
 import 'package:trip_planner/features/auth/screens/login_screen.dart'; // Add this
 
 import '../../features/home/screens/home_screen.dart';
+import '../../features/photos/screens/photo_screen.dart';
+import '../../features/photos/screens/photos_screen.dart';
 import '../../features/poi/screens/photo_edit_screen.dart';
 import '../../features/camera/screens/camera_screen.dart';
-import '../../features/camera/screens/photos_to_edit_screen.dart';
 import '../../features/camera/screens/shot_series_screen.dart';
 import '../../features/camera/services/photo_edit_route.dart';
 import '../../features/library/screens/anitabi_import_screen.dart';
@@ -24,6 +25,8 @@ import '../../features/trip/screens/pilgrimage_day_map_screen.dart';
 import '../../features/trip/screens/stop_screen.dart';
 import '../../features/trip/screens/trip_list_screen.dart';
 import '../../features/trip/screens/trip_screen.dart';
+
+import 'app_frame.dart';
 
 part 'app_router.g.dart';
 
@@ -79,13 +82,27 @@ GoRouter router(RouterRef ref) {
       ),
 
       // --- Your Existing Routes Start Here ---
-      GoRoute(
-        path: '/',
-        builder: (context, state) => const HomeScreen(),
-      ),
-      GoRoute(
-        path: '/trips',
-        builder: (context, state) => const TripListScreen(),
+      // The main tabs, inside the app's frame (its bottom bar). Every other
+      // route opens full screen over the frame.
+      StatefulShellRoute.indexedStack(
+        builder: (context, state, shell) => AppFrame(shell: shell),
+        branches: [
+          StatefulShellBranch(routes: [
+            GoRoute(path: '/', builder: (context, state) => const HomeScreen()),
+          ]),
+          StatefulShellBranch(routes: [
+            GoRoute(path: '/trips', builder: (context, state) => const TripListScreen()),
+          ]),
+          StatefulShellBranch(routes: [
+            GoRoute(path: '/library', builder: (context, state) => const LibraryScreen()),
+          ]),
+          StatefulShellBranch(routes: [
+            GoRoute(
+              path: '/photos',
+              builder: (context, state) => PhotosScreen(filter: PhotosFilter.fromQuery(state.uri.queryParameters['filter'])),
+            ),
+          ]),
+        ],
       ),
       GoRoute(
         path: '/trips/:tripId',
@@ -141,10 +158,6 @@ GoRouter router(RouterRef ref) {
         ),
       ),
       GoRoute(
-        path: '/library',
-        builder: (context, state) => const LibraryScreen(),
-      ),
-      GoRoute(
         path: '/library/labels',
         builder: (context, state) => const LabelsScreen(),
       ),
@@ -172,9 +185,15 @@ GoRouter router(RouterRef ref) {
         builder: (context, state) => _photoEditScreen(state),
       ),
       GoRoute(
-        // The photos kept on the spot, waiting to be edited at home.
+        // The photos kept on the spot, waiting to be edited at home: now a
+        // filter of the Photos tab.
         path: '/photos-to-edit',
-        builder: (context, state) => const PhotosToEditScreen(),
+        redirect: (context, state) => '/photos?filter=edit',
+      ),
+      GoRoute(
+        // One photo next to its frame.
+        path: '/photo/:photoId',
+        builder: (context, state) => PhotoScreen(photoId: state.pathParameters['photoId']!),
       ),
       GoRoute(
         // Several shots at a spot, against its frames, then keep the ones you want.

@@ -169,7 +169,7 @@ class _NoTrip extends StatelessWidget {
               style: theme.textTheme.bodyMedium?.copyWith(color: theme.colorScheme.onSurfaceVariant),
             ),
             const SizedBox(height: 12),
-            FilledButton(onPressed: () => context.push('/trips'), child: const Text('Plan a trip')),
+            FilledButton(onPressed: () => context.go('/trips'), child: const Text('Plan a trip')),
             const SizedBox(height: 4),
             TextButton(onPressed: () => context.push('/library/import'), child: const Text('Import from Anitabi')),
           ],
