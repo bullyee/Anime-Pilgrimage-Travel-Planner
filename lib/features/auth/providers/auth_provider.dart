@@ -96,6 +96,7 @@ final driveAccessTokenProvider =
 class AuthController extends Notifier<AsyncValue<User?>> {
   Future<void> Function()? _cancelDesktopSignIn;
   AccessCredentials? _desktopDriveCredentials;
+  String? _desktopDriveUid;
 
   @override
   AsyncValue<User?> build() {
@@ -211,6 +212,7 @@ class AuthController extends Notifier<AsyncValue<User?>> {
     if (!kIsWeb && (Platform.isWindows || Platform.isMacOS || Platform.isLinux)) {
       final cached = _desktopDriveCredentials;
       if (cached != null &&
+          _desktopDriveUid == user.uid &&
           cached.accessToken.expiry.isAfter(DateTime.now().toUtc().add(const Duration(minutes: 1))) &&
           cached.scopes.contains(googleDriveFileScope)) {
         return cached.accessToken.data;
@@ -229,6 +231,7 @@ class AuthController extends Notifier<AsyncValue<User?>> {
         testBrowserLauncher: testBrowserLauncher,
       );
       _desktopDriveCredentials = fresh;
+      _desktopDriveUid = user.uid;
       return fresh.accessToken.data;
     }
 
@@ -257,8 +260,15 @@ class AuthController extends Notifier<AsyncValue<User?>> {
     // Mobile (Android / iOS) incremental scope authorization via google_sign_in v7.
     final googleSignIn = GoogleSignIn.instance;
     await googleSignIn.initialize();
+    final expectedEmail = user.email?.toLowerCase();
     try {
       var googleUser = await googleSignIn.attemptLightweightAuthentication();
+      if (googleUser != null &&
+          expectedEmail != null &&
+          googleUser.email.toLowerCase() != expectedEmail) {
+        await googleSignIn.signOut();
+        googleUser = null;
+      }
       if (googleUser == null) {
         if (!interactive) {
           throw const AuthConfigurationException(
@@ -267,6 +277,11 @@ class AuthController extends Notifier<AsyncValue<User?>> {
         }
         googleUser = await googleSignIn.authenticate(
           scopeHint: const [googleDriveFileScope],
+        );
+      }
+      if (expectedEmail != null && googleUser.email.toLowerCase() != expectedEmail) {
+        throw AuthConfigurationException(
+          'Signed-in Google account (${googleUser.email}) does not match $expectedEmail.',
         );
       }
       final authClient = googleUser.authorizationClient;
@@ -412,6 +427,7 @@ class AuthController extends Notifier<AsyncValue<User?>> {
   /// Handles the Sign-Out flow.
   Future<void> signOut() async {
       _desktopDriveCredentials = null;
+      _desktopDriveUid = null;
       try {
         // Retrieve the FirebaseAuth instance from your provider
         final firebaseAuth = ref.read(firebaseAuthProvider);

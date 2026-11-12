@@ -175,6 +175,13 @@ class GoogleDriveFrameService {
     required String localPath,
     String? episode,
   }) async {
+    final initialStop = await (db.select(db.stops)
+          ..where((s) => s.id.equals(stopId) & s.tripId.equals(tripId) & s.deletedAt.isNull()))
+        .getSingleOrNull();
+    if (initialStop == null) {
+      throw StateError('Stop not found or deleted: $stopId');
+    }
+
     final bytes = await _readFile(localPath);
     if (bytes == null || bytes.isEmpty) {
       throw const GoogleDriveUploadException('Could not read the selected image file.');
@@ -188,32 +195,40 @@ class GoogleDriveFrameService {
     );
 
     final now = DateTime.now();
-    await db.transaction(() async {
-      final stop = await (db.select(db.stops)
-            ..where((s) => s.id.equals(stopId) & s.tripId.equals(tripId) & s.deletedAt.isNull()))
-          .getSingleOrNull();
-      if (stop == null) {
-        throw StateError('Stop not found or deleted: $stopId');
+    try {
+      await db.transaction(() async {
+        final stop = await (db.select(db.stops)
+              ..where((s) => s.id.equals(stopId) & s.tripId.equals(tripId) & s.deletedAt.isNull()))
+            .getSingleOrNull();
+        if (stop == null) {
+          throw StateError('Stop not found or deleted: $stopId');
+        }
+        await db.into(db.newReferenceImages).insert(
+              NewReferenceImagesCompanion.insert(
+                id: frameId,
+                placeKey: const Value(null),
+                stopId: Value(stopId),
+                localPath: Value(localPath),
+                remoteUrl: Value(uploaded.downloadUrl),
+                episode: Value(episode),
+                source: const Value('Google Drive'),
+                sourceUrl: Value(uploaded.downloadUrl),
+              ),
+            );
+        await (db.update(db.stops)..where((s) => s.id.equals(stopId) & s.tripId.equals(tripId))).write(
+          StopsCompanion(
+            updatedAt: Value(now),
+            syncStatus: const Value(1),
+          ),
+        );
+      });
+    } catch (_) {
+      final tok = _cachedToken;
+      if (tok != null) {
+        await _deleteDriveFileQuietly(tok, uploaded.fileId);
       }
-      await db.into(db.newReferenceImages).insert(
-            NewReferenceImagesCompanion.insert(
-              id: frameId,
-              placeKey: const Value(null),
-              stopId: Value(stopId),
-              localPath: Value(localPath),
-              remoteUrl: Value(uploaded.downloadUrl),
-              episode: Value(episode),
-              source: const Value('Google Drive'),
-              sourceUrl: Value(uploaded.downloadUrl),
-            ),
-          );
-      await (db.update(db.stops)..where((s) => s.id.equals(stopId) & s.tripId.equals(tripId))).write(
-        StopsCompanion(
-          updatedAt: Value(now),
-          syncStatus: const Value(1),
-        ),
-      );
-    });
+      rethrow;
+    }
     return (await (db.select(db.newReferenceImages)..where((r) => r.id.equals(frameId))).getSingle());
   }
 
@@ -221,9 +236,11 @@ class GoogleDriveFrameService {
   /// Google Drive, writes back `remoteUrl`, and marks affected stops dirty so
   /// collaborators receive them on Firestore sync.
   ///
-  /// Frames backed by identical image bytes are uploaded once and reused across
-  /// matching rows. Each finished stop commits incrementally so cancelling mid-way
-  /// preserves completed uploads.
+  /// When a local frame originates from a library place (`stopId == null`), the
+  /// personal library row is left untouched and only a stop-scoped copy receives
+  /// the Drive link. Frames backed by identical image bytes upload once and reuse
+  /// the link within the trip. Each finished stop commits before checking cancel
+  /// for the next upload so already-uploaded Drive files are never orphaned.
   Future<DriveSyncSummary> syncTripLocalFrames(
     AppDatabase db, {
     required String tripId,
@@ -253,6 +270,8 @@ class GoogleDriveFrameService {
 
       final localPath = task.frame.localPath!;
       String? url = pathToUrl[localPath];
+      String? newlyUploadedFileId;
+      var countedAsUpload = false;
 
       if (url == null) {
         final bytes = await _readFile(localPath);
@@ -267,6 +286,14 @@ class GoogleDriveFrameService {
         if (url != null) {
           reused++;
         } else {
+          final stopBeforeUpload = await (db.select(db.stops)
+                ..where((s) => s.id.equals(task.stop.id) & s.tripId.equals(tripId) & s.deletedAt.isNull()))
+              .getSingleOrNull();
+          if (stopBeforeUpload == null) {
+            done++;
+            onProgress?.call(done, plan.pendingCount);
+            continue;
+          }
           final res = await uploadImageBytes(
             rawBytes: bytes,
             frameId: task.frame.id,
@@ -274,7 +301,9 @@ class GoogleDriveFrameService {
             stopId: task.stop.id,
           );
           url = res.downloadUrl;
+          newlyUploadedFileId = res.fileId;
           hashToUrl[hash] = url;
+          countedAsUpload = true;
           uploaded++;
         }
         pathToUrl[localPath] = url;
@@ -282,24 +311,22 @@ class GoogleDriveFrameService {
         reused++;
       }
 
-      if (cancel?.isCancelled ?? false) throw const BackupCancelled();
-
       final remoteUrl = url;
       final now = DateTime.now();
-      await db.transaction(() async {
+      final committed = await db.transaction(() async {
         final stopStillLive = await (db.select(db.stops)
               ..where((s) => s.id.equals(task.stop.id) & s.tripId.equals(tripId) & s.deletedAt.isNull()))
             .getSingleOrNull();
-        if (stopStillLive == null) return;
+        if (stopStillLive == null) return false;
 
-        // Targeted update preserves all other columns (localPath, episode, timestamps, etc.).
-        await (db.update(db.newReferenceImages)..where((r) => r.id.equals(task.frame.id))).write(
-          NewReferenceImagesCompanion(remoteUrl: Value(remoteUrl)),
-        );
-
-        // If this frame originated only on the user's Place, also ensure the stop owns a
-        // URL-backed row so Firestore pushes it to collaborators.
-        if (task.frame.stopId == null) {
+        if (task.frame.stopId != null) {
+          // Stop-owned frame: targeted update preserves localPath and metadata.
+          await (db.update(db.newReferenceImages)..where((r) => r.id.equals(task.frame.id))).write(
+            NewReferenceImagesCompanion(remoteUrl: Value(remoteUrl)),
+          );
+        } else {
+          // Place-owned frame: leave the personal library row untouched; insert
+          // a URL-backed copy scoped strictly to this trip stop.
           final stopRows = await (db.select(db.newReferenceImages)
                 ..where((r) => r.stopId.equals(task.stop.id)))
               .get();
@@ -330,7 +357,19 @@ class GoogleDriveFrameService {
             syncStatus: const Value(1),
           ),
         );
+        return true;
       });
+
+      if (!committed) {
+        if (newlyUploadedFileId != null) {
+          final tok = _cachedToken;
+          if (tok != null) await _deleteDriveFileQuietly(tok, newlyUploadedFileId);
+          if (countedAsUpload) uploaded--;
+        }
+        done++;
+        onProgress?.call(done, plan.pendingCount);
+        continue;
+      }
 
       touchedStopIds.add(task.stop.id);
       done++;
@@ -361,19 +400,20 @@ class GoogleDriveFrameService {
 
     final existingUrlByPath = <String, String>{};
     final existingUrlByHash = <String, String>{};
-    void recordKnownUrl(NewReferenceImage f) {
+    final hashedPaths = <String>{};
+    for (final f in stopFrames) {
       final path = f.localPath;
       final url = f.remoteUrl;
       if (path != null && path.isNotEmpty && url != null && url.isNotEmpty) {
         existingUrlByPath.putIfAbsent(path, () => url);
+        if (hashedPaths.add(path)) {
+          final bytes = await _readFile(path);
+          if (bytes != null && bytes.isNotEmpty) {
+            final hash = md5.convert(bytes).toString();
+            existingUrlByHash.putIfAbsent(hash, () => url);
+          }
+        }
       }
-    }
-
-    for (final f in stopFrames) {
-      recordKnownUrl(f);
-    }
-    for (final f in placeFrames) {
-      recordKnownUrl(f);
     }
 
     final framesByStop = <String, List<NewReferenceImage>>{};

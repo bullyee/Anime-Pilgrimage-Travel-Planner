@@ -223,6 +223,91 @@ void main() {
       await tester.pumpAndSettle();
       expect(find.byType(LocalFramesSyncNote), findsNothing);
 
+      // Finding #4: place-owned local frame with a URL-backed stop copy at same localPath
+      // must NOT keep showing the local-only warning banner.
+      await placeRepo.addReferenceImage(
+        placeKey: 'p1',
+        localPath: '/tmp/shared_place_frame.jpg',
+        source: 'You',
+      );
+      await tester.pumpAndSettle();
+      expect(find.byType(LocalFramesSyncNote), findsOneWidget);
+
+      await placeRepo.addReferenceImage(
+        stopId: stop.id,
+        localPath: '/tmp/shared_place_frame.jpg',
+        remoteUrl: 'https://drive.google.com/uc?export=download&id=abc',
+        source: 'Google Drive',
+      );
+      await tester.pumpAndSettle();
+      expect(find.byType(LocalFramesSyncNote), findsNothing);
+
+      await disposeApp(tester);
+    });
+
+    testWidgets('StopScreen hides Drive upload and link actions on private trips', (tester) async {
+      await db.into(db.places).insert(PlacesCompanion.insert(placeKey: 'p1', name: 'Private Spot', lat: 34.9, lng: 135.8));
+      final trip = await tripRepo.createTrip(title: 'My Private Trip', ownerId: 'u1', dayCount: 1);
+      final stop = await tripRepo.addPlaceToTrip(tripId: trip.id, placeKey: 'p1', addedBy: 'u1');
+
+      final router = GoRouter(
+        initialLocation: '/t',
+        routes: [
+          GoRoute(path: '/t', builder: (_, _) => StopScreen(tripId: trip.id, stopId: stop.id)),
+        ],
+      );
+
+      await tester.pumpWidget(
+        ProviderScope(
+          overrides: [
+            databaseProvider.overrideWithValue(db),
+            placeRepositoryProvider.overrideWithValue(placeRepo),
+            tripRepositoryProvider.overrideWithValue(tripRepo),
+            currentUserIdProvider.overrideWithValue('u1'),
+            myTripRoleProvider(trip.id).overrideWithValue(TripMemberRole.owner),
+          ],
+          child: MaterialApp.router(theme: AppTheme.light, routerConfig: router),
+        ),
+      );
+      await tester.pumpAndSettle();
+
+      await tester.tap(find.byTooltip('More'));
+      await tester.pumpAndSettle();
+
+      expect(find.text('Upload photo via Google Drive'), findsNothing);
+      expect(find.text('Add frame link'), findsNothing);
+      expect(find.text('Add local frame'), findsOneWidget);
+      await disposeApp(tester);
+    });
+
+    testWidgets('TripScreen Members tab hides Sync via my Google Drive for viewers', (tester) async {
+      final trip = await tripRepo.createTrip(title: 'Kansai', ownerId: 'aki', dayCount: 1);
+      await (db.update(db.trips)..where((t) => t.id.equals(trip.id)))
+          .write(const TripsCompanion(sharing: Value('group')));
+
+      await tester.pumpWidget(
+        ProviderScope(
+          overrides: [
+            databaseProvider.overrideWithValue(db),
+            placeRepositoryProvider.overrideWithValue(placeRepo),
+            tripRepositoryProvider.overrideWithValue(tripRepo),
+            currentUserIdProvider.overrideWithValue('u1'),
+            myTripRoleProvider(trip.id).overrideWithValue(TripMemberRole.viewer),
+            tripMembersProvider(trip.id).overrideWith(
+              (_) => Stream.value([
+                TripMember(userId: 'aki', tripId: trip.id, role: TripMemberRole.owner, displayName: 'Aki', joinedAt: DateTime(2026)),
+                TripMember(userId: 'u1', tripId: trip.id, role: TripMemberRole.viewer, displayName: 'Bea', joinedAt: DateTime(2026)),
+              ]),
+            ),
+          ],
+          child: MaterialApp(theme: AppTheme.light, home: TripScreen(tripId: trip.id, initialTab: TripTab.members)),
+        ),
+      );
+      await tester.pumpAndSettle();
+
+      expect(find.text('Sync via my Google Drive'), findsNothing);
+      expect(find.text('Share local frames'), findsOneWidget);
+      expect(find.text('Import local frames'), findsOneWidget);
       await disposeApp(tester);
     });
 

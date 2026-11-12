@@ -1038,11 +1038,11 @@ class _FrameUrlDialogState extends State<_FrameUrlDialog> {
   }
 }
 
-/// Source chosen when adding a reference frame to a trip stop.
-enum AddStopFrameMethod { driveUpload, link }
+/// Source chosen when adding a reference frame to a shared trip stop.
+enum AddStopFrameMethod { driveUpload, link, localGallery }
 
-/// Asks whether an editor wants to upload photos via their Google Drive (`drive.file`)
-/// or paste an external image link onto a stop.
+/// Asks whether an editor wants to upload photos via their Google Drive (`drive.file`),
+/// paste an external image link, or pick a local-only photo onto a shared stop.
 Future<AddStopFrameMethod?> showAddStopFrameSheet(BuildContext context) {
   return showModalBottomSheet<AddStopFrameMethod>(
     context: context,
@@ -1060,7 +1060,7 @@ Future<AddStopFrameMethod?> showAddStopFrameSheet(BuildContext context) {
           ListTile(
             leading: const Icon(Icons.cloud_upload_outlined),
             title: const Text('Upload photo via Google Drive'),
-            subtitle: const Text('Uploads to your own Google Drive (drive.file) and syncs with trip members.'),
+            subtitle: const Text('Uploads to your Google Drive (drive.file) with an "anyone with the link" URL so trip members see it.'),
             onTap: () => Navigator.pop(sheetContext, AddStopFrameMethod.driveUpload),
           ),
           ListTile(
@@ -1068,6 +1068,12 @@ Future<AddStopFrameMethod?> showAddStopFrameSheet(BuildContext context) {
             title: const Text('Add image link'),
             subtitle: const Text('Paste an https:// image URL — syncs with everyone in this trip.'),
             onTap: () => Navigator.pop(sheetContext, AddStopFrameMethod.link),
+          ),
+          ListTile(
+            leading: const Icon(Icons.photo_library_outlined),
+            title: const Text('Choose from photos (this device only)'),
+            subtitle: const Text('Stays on this phone and does not upload or auto-sync.'),
+            onTap: () => Navigator.pop(sheetContext, AddStopFrameMethod.localGallery),
           ),
         ],
       ),

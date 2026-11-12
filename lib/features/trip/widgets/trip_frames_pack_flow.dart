@@ -11,14 +11,16 @@ import '../../../core/database/database.dart';
 import '../../../core/providers/database_provider.dart';
 import '../../../core/utils/archive_isolate.dart';
 import '../../auth/providers/auth_provider.dart';
+import '../../library/providers/place_providers.dart' show placeRepositoryProvider;
 import '../../library/widgets/library_backup_flow.dart';
-import '../../sharing/providers/group_sharing_providers.dart' show guestUserId;
+import '../../sharing/providers/group_sharing_providers.dart' show canEditTripProvider, guestUserId;
 import '../../sync/services/google_drive_frame_service.dart';
 import '../services/trip_frames_pack_service.dart';
 
 final tripFramesPackServiceProvider = Provider<TripFramesPackService>((ref) => const TripFramesPackService());
 
 final googleDriveFrameServiceProvider = Provider<GoogleDriveFrameService>((ref) {
+  ref.watch(currentUserIdProvider);
   return GoogleDriveFrameService(
     getToken: ref.watch(driveAccessTokenProvider),
   );
@@ -158,6 +160,14 @@ String tripFramesImportSummaryText(TripFramesImportSummary s) {
 /// Syncs all local-only frames on [trip] through the signed-in user's Google Drive
 /// (`drive.file`), writes back `remoteUrl`, and marks stops dirty for Firestore sync.
 Future<void> syncTripLocalFramesViaDrive(BuildContext context, WidgetRef ref, Trip trip) async {
+  if (trip.sharing != 'group' || !ref.read(canEditTripProvider(trip.id))) {
+    await tellArchiveMessage(
+      context,
+      'Cannot sync to trip',
+      'Only owners and editors of a shared trip can sync frames via Google Drive.',
+    );
+    return;
+  }
   if (ref.read(currentUserIdProvider) == guestUserId) {
     await tellArchiveMessage(
       context,
@@ -185,9 +195,9 @@ Future<void> syncTripLocalFramesViaDrive(BuildContext context, WidgetRef ref, Tr
       title: const Text('Sync via my Google Drive'),
       content: Text(
         '$count local ${count == 1 ? 'frame' : 'frames'} in "${trip.title}" will be resized (max 1280px JPEG) '
-        'and uploaded to "${GoogleDriveFrameService.appFolderName}" in your own Google Drive with read-only link '
-        'sharing so trip members can load them.\n\n'
-        'Trip Planner uses the drive.file permission and only accesses files it creates.',
+        'and uploaded to "${GoogleDriveFrameService.appFolderName}" in your own Google Drive with '
+        '"anyone with the link can view" permission so trip members can load them.\n\n'
+        'Anyone holding the URL can view the image. Trip Planner uses the drive.file permission and only accesses files it creates.',
       ),
       actions: [
         TextButton(onPressed: () => Navigator.pop(context, false), child: const Text('Cancel')),
@@ -218,14 +228,51 @@ Future<void> syncTripLocalFramesViaDrive(BuildContext context, WidgetRef ref, Tr
   await tellArchiveMessage(context, 'Google Drive sync complete', driveSyncSummaryText(summary));
 }
 
+/// Picks gallery photos and stores copies locally on [stopId] without uploading
+/// to the cloud. Returns how many frames were added.
+Future<int> addLocalStopFrames(BuildContext context, WidgetRef ref, {required String stopId}) async {
+  final picked = await ImagePicker().pickMultiImage();
+  if (picked.isEmpty) return 0;
+  final repo = ref.read(placeRepositoryProvider);
+  final docsDir = await getApplicationDocumentsDirectory();
+  final refDir = Directory(p.join(docsDir.path, 'reference_images'));
+  if (!await refDir.exists()) await refDir.create(recursive: true);
+
+  const uuid = Uuid();
+  var count = 0;
+  for (final file in picked) {
+    final ext = p.extension(file.path).isEmpty ? '.jpg' : p.extension(file.path);
+    final targetPath = p.join(refDir.path, 'ref_${uuid.v4()}$ext');
+    await File(file.path).copy(targetPath);
+    try {
+      await repo.addReferenceImage(stopId: stopId, localPath: targetPath, source: 'You');
+    } catch (_) {
+      try {
+        await File(targetPath).delete();
+      } catch (_) {}
+      rethrow;
+    }
+    count++;
+  }
+  return count;
+}
+
 /// Picks gallery photos and uploads them to the user's Google Drive, attaching synced
-/// frames onto [stopId]. Returns how many frames were uploaded (0 if cancelled).
+/// frames onto [stopId] of a shared trip. Returns how many frames were uploaded (0 if cancelled).
 Future<int> uploadStopGalleryFramesViaDrive(
   BuildContext context,
   WidgetRef ref, {
-  required String tripId,
+  required Trip trip,
   required String stopId,
 }) async {
+  if (trip.sharing != 'group' || !ref.read(canEditTripProvider(trip.id))) {
+    await tellArchiveMessage(
+      context,
+      'Cannot upload to trip',
+      'Only owners and editors of a shared trip can upload frames via Google Drive.',
+    );
+    return 0;
+  }
   if (ref.read(currentUserIdProvider) == guestUserId) {
     await tellArchiveMessage(
       context,
@@ -234,6 +281,23 @@ Future<int> uploadStopGalleryFramesViaDrive(
     );
     return 0;
   }
+  final confirmed = await showDialog<bool>(
+    context: context,
+    builder: (context) => AlertDialog(
+      title: const Text('Upload via my Google Drive'),
+      content: const Text(
+        'Selected photos will be resized (max 1280px JPEG) and uploaded to "${GoogleDriveFrameService.appFolderName}" '
+        'in your own Google Drive with "anyone with the link can view" permission so trip members can see them.\n\n'
+        'Anyone holding the URL can view the uploaded image. Trip Planner uses drive.file and only accesses files it creates.',
+      ),
+      actions: [
+        TextButton(onPressed: () => Navigator.pop(context, false), child: const Text('Cancel')),
+        FilledButton(onPressed: () => Navigator.pop(context, true), child: const Text('Choose photos')),
+      ],
+    ),
+  );
+  if (confirmed != true || !context.mounted) return 0;
+
   final picked = await ImagePicker().pickMultiImage();
   if (picked.isEmpty || !context.mounted) return 0;
 
@@ -259,7 +323,7 @@ Future<int> uploadStopGalleryFramesViaDrive(
         await File(file.path).copy(targetPath);
         try {
           try {
-            await svc.uploadNewStopFrame(db, tripId: tripId, stopId: stopId, localPath: targetPath);
+            await svc.uploadNewStopFrame(db, tripId: trip.id, stopId: stopId, localPath: targetPath);
           } on AuthCancelledException {
             throw const BackupCancelled();
           }

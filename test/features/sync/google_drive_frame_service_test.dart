@@ -10,6 +10,7 @@ import 'package:image/image.dart' as img;
 import 'package:path/path.dart' as p;
 import 'package:trip_planner/core/database/database.dart';
 import 'package:trip_planner/core/services/thumbnail_cache_service.dart';
+import 'package:trip_planner/core/utils/archive_isolate.dart';
 import 'package:trip_planner/features/library/repositories/place_repository.dart';
 import 'package:trip_planner/features/sync/services/google_drive_frame_service.dart';
 import 'package:trip_planner/features/trip/repositories/trip_repository.dart';
@@ -285,9 +286,102 @@ void main() {
       expect((await tripRepo.getStop(stop1.id))!.syncStatus, 1);
       expect((await tripRepo.getStop(stop2.id))!.syncStatus, 1);
 
+      // Finding #3: personal library place row must stay untouched (no Drive remoteUrl written)
+      final placeLater =
+          await (db.select(db.newReferenceImages)..where((r) => r.id.equals('f_place_later'))).getSingle();
+      expect(placeLater.remoteUrl, isNull);
+
       final otherFrame = await (db.select(db.newReferenceImages)..where((r) => r.id.equals('f_other'))).getSingle();
       expect(otherFrame.remoteUrl, isNull);
       expect(await svc.countTripLocalFrames(db, trip.id), 0);
+
+      // Finding #8: a subsequent session reuses existing Drive URL for identical bytes at a different path
+      final pSecondSessionSameBytes = await writeJpeg('later_copy.jpg', bytesUnique);
+      await db.into(db.newReferenceImages).insert(NewReferenceImagesCompanion.insert(
+            id: 'f_session2',
+            stopId: Value(stop2.id),
+            localPath: Value(pSecondSessionSameBytes),
+          ));
+      final secondSummary = await svc.syncTripLocalFrames(db, tripId: trip.id);
+      expect(secondSummary.uploaded, 0);
+      expect(secondSummary.reused, 1);
+      final fSession2 = await (db.select(db.newReferenceImages)..where((r) => r.id.equals('f_session2'))).getSingle();
+      expect(fSession2.remoteUrl, 'https://drive.google.com/uc?export=download&id=drv_2');
+    });
+
+    test('mid-sync cancel preserves already-uploaded row and uploadNewStopFrame rejects deleted stops', () async {
+      final b1 = makeJpeg(200, 150, r: 10);
+      final b2 = makeJpeg(200, 150, r: 90);
+      final p1 = await writeJpeg('m1.jpg', b1);
+      final p2 = await writeJpeg('m2.jpg', b2);
+
+      await db.into(db.places).insert(PlacesCompanion.insert(placeKey: 'pl1', name: 'Obaku', lat: 34.9, lng: 135.8));
+      final trip = await tripRepo.createTrip(title: 'Kansai', ownerId: 'owner', dayCount: 1);
+      final stop = await tripRepo.addPlaceToTrip(tripId: trip.id, placeKey: 'pl1', addedBy: 'owner');
+
+      await db.into(db.newReferenceImages).insert(NewReferenceImagesCompanion.insert(
+            id: 'c1',
+            stopId: Value(stop.id),
+            localPath: Value(p1),
+          ));
+      await db.into(db.newReferenceImages).insert(NewReferenceImagesCompanion.insert(
+            id: 'c2',
+            stopId: Value(stop.id),
+            localPath: Value(p2),
+          ));
+
+      final cancel = BackupCancel();
+      var uploads = 0;
+      final mockClient = MockClient((req) async {
+        if (req.method == 'GET' && req.url.path == '/drive/v3/files') {
+          return http.Response(
+            jsonEncode({
+              'files': [
+                {'id': 'folder_1'}
+              ]
+            }),
+            200,
+          );
+        }
+        if (req.method == 'POST' && req.url.path == '/upload/drive/v3/files') {
+          uploads++;
+          cancel.cancel(); // Cancel arrives during upload #1
+          return http.Response(jsonEncode({'id': 'drv_u$uploads'}), 200);
+        }
+        if (req.method == 'POST' && req.url.path.endsWith('/permissions')) {
+          return http.Response('{}', 200);
+        }
+        return http.Response('', 404);
+      });
+
+      final svc = GoogleDriveFrameService(
+        client: mockClient,
+        getToken: ({bool interactive = true}) async => 'tok',
+      );
+
+      await expectLater(
+        svc.syncTripLocalFrames(db, tripId: trip.id, cancel: cancel),
+        throwsA(isA<BackupCancelled>()),
+      );
+
+      // Upload #1 must still be committed so it isn't orphaned in Drive; upload #2 must not run.
+      expect(uploads, 1);
+      expect(
+        (await (db.select(db.newReferenceImages)..where((r) => r.id.equals('c1'))).getSingle()).remoteUrl,
+        'https://drive.google.com/uc?export=download&id=drv_u1',
+      );
+      expect(
+        (await (db.select(db.newReferenceImages)..where((r) => r.id.equals('c2'))).getSingle()).remoteUrl,
+        isNull,
+      );
+
+      // Deleted stop must refuse BEFORE calling Drive API
+      await tripRepo.deleteStop(stop.id);
+      await expectLater(
+        svc.uploadNewStopFrame(db, tripId: trip.id, stopId: stop.id, localPath: p2),
+        throwsStateError,
+      );
+      expect(uploads, 1);
     });
 
     test('ThumbnailCacheService rejects HTML error responses and falls back to lh3 for Drive URLs', () async {

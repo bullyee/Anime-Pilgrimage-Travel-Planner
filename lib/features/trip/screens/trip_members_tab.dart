@@ -212,7 +212,7 @@ class _Shared extends ConsumerWidget {
             if (canInvite) _Invites(trip: trip),
             if (role != null) ...[
               const SizedBox(height: 16),
-              _LocalFramesCard(trip: trip),
+              _LocalFramesCard(trip: trip, canEdit: owner || role == TripMemberRole.editor),
             ],
             if (owner) ...[
               const SizedBox(height: 24),
@@ -271,8 +271,9 @@ class _Shared extends ConsumerWidget {
 
 class _LocalFramesCard extends ConsumerWidget {
   final Trip trip;
+  final bool canEdit;
 
-  const _LocalFramesCard({required this.trip});
+  const _LocalFramesCard({required this.trip, required this.canEdit});
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
@@ -295,17 +296,22 @@ class _LocalFramesCard extends ConsumerWidget {
           ),
           const SizedBox(height: 6),
           Text(
-            'Gallery frames stay on each phone to avoid Firebase Storage egress fees. '
-            'Sync them through your own Google Drive, or share a compact frames file offline.',
+            canEdit
+                ? 'Gallery frames stay on each phone to avoid Firebase Storage egress fees. '
+                    'Sync them through your own Google Drive, or share a compact frames file offline.'
+                : 'Gallery frames stay on each phone. Import a frames file shared by another trip member, '
+                    'or share your own local frames offline.',
             style: theme.textTheme.bodySmall?.copyWith(color: theme.colorScheme.onSurfaceVariant),
           ),
           const SizedBox(height: 12),
-          FilledButton.tonalIcon(
-            onPressed: () => syncTripLocalFramesViaDrive(context, ref, trip),
-            icon: const Icon(Icons.cloud_upload_outlined, size: 18),
-            label: const Text('Sync via my Google Drive'),
-          ),
-          const SizedBox(height: 8),
+          if (canEdit) ...[
+            FilledButton.tonalIcon(
+              onPressed: () => syncTripLocalFramesViaDrive(context, ref, trip),
+              icon: const Icon(Icons.cloud_upload_outlined, size: 18),
+              label: const Text('Sync via my Google Drive'),
+            ),
+            const SizedBox(height: 8),
+          ],
           Wrap(
             spacing: 8,
             runSpacing: 8,
