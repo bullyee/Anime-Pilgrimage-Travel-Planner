@@ -1,14 +1,16 @@
 import 'dart:async';
 import 'dart:convert';
 import 'dart:io';
-import 'dart:isolate';
 
-import 'package:archive/archive_io.dart';
 import 'package:drift/drift.dart';
 import 'package:path/path.dart' as p;
 import 'package:path_provider/path_provider.dart';
 
 import '../../../core/database/database.dart';
+import '../../../core/utils/archive_isolate.dart';
+
+export '../../../core/utils/archive_isolate.dart'
+    show BackupCancel, BackupCancelled, BackupFormatException, BackupProgress;
 
 /// What a backup file holds, from its manifest: shown before exporting and
 /// before importing.
@@ -74,38 +76,6 @@ class LibraryImportSummary {
   });
 }
 
-/// A file that isn't a backup this app can read. [message] is for the user.
-class BackupFormatException implements Exception {
-  final String message;
-  const BackupFormatException(this.message);
-  @override
-  String toString() => message;
-}
-
-/// Thrown by an export or import stopped with [BackupCancel.cancel].
-class BackupCancelled implements Exception {
-  const BackupCancelled();
-}
-
-/// Lets the screen stop an export or import while its files are copied.
-class BackupCancel {
-  final _listeners = <void Function()>[];
-  bool _cancelled = false;
-  bool get isCancelled => _cancelled;
-
-  void cancel() {
-    if (_cancelled) return;
-    _cancelled = true;
-    for (final l in List.of(_listeners)) {
-      l();
-    }
-  }
-
-  void _onCancel(void Function() l) => _listeners.add(l);
-}
-
-typedef BackupProgress = void Function(int done, int total);
-
 /// Exports and imports everything on this phone that isn't in the cloud, as
 /// one `.pilgrimage` file (a zip), to move to another phone (#78).
 ///
@@ -154,9 +124,13 @@ class LibraryBackupService {
     final out = File(targetPath);
     await out.parent.create(recursive: true);
     try {
-      await _runInIsolate(
-        _exportWorker,
-        [targetPath, jsonEncode(manifest), jsonEncode(snap.payload), snap.files],
+      await runArchiveIsolate(
+        zipStreamWorker,
+        [
+          targetPath,
+          {'manifest.json': jsonEncode(manifest), 'library.json': jsonEncode(snap.payload)},
+          snap.files,
+        ],
         onProgress: onProgress,
         cancel: cancel,
       );
@@ -169,7 +143,7 @@ class LibraryBackupService {
 
   /// Reads a backup's manifest, refusing a file this app can't import.
   Future<BackupContents> readContents(File zip) async {
-    final manifest = await _readInIsolate(zip.path, const ['manifest.json']);
+    final manifest = await readZipEntriesInIsolate(zip.path, const ['manifest.json']);
     return BackupContents.fromManifest(_checkManifest(manifest['manifest.json']));
   }
 
@@ -184,7 +158,7 @@ class LibraryBackupService {
     BackupProgress? onProgress,
     BackupCancel? cancel,
   }) async {
-    final entries = await _readInIsolate(zip.path, const ['manifest.json', 'library.json']);
+    final entries = await readZipEntriesInIsolate(zip.path, const ['manifest.json', 'library.json']);
     _checkManifest(entries['manifest.json']);
     final library = entries['library.json'];
     if (library == null) throw const BackupFormatException('This backup is damaged: its list of places is missing.');
@@ -249,15 +223,15 @@ class LibraryBackupService {
     final taken = <String>{};
     for (final original in usedPaths) {
       final dir = Directory(p.join(docs.path, photoPaths.contains(original) ? 'app_photos' : 'reference_images'));
-      final target = _freePath(dir, p.basename(original), taken);
+      final target = freeArchivePath(dir, p.basename(original), taken);
       taken.add(target);
       restored[original] = target;
       jobs.add([files[original]!, target]);
     }
     try {
-      await _runInIsolate(_extractWorker, [zip.path, jobs], onProgress: onProgress, cancel: cancel);
+      await runArchiveIsolate(unzipStreamWorker, [zip.path, jobs], onProgress: onProgress, cancel: cancel);
     } catch (_) {
-      await _deleteAll(restored.values);
+      await deleteFilesQuietly(restored.values);
       rethrow;
     }
     String? moved(String? path) => path == null ? null : restored[path];
@@ -354,7 +328,7 @@ class LibraryBackupService {
         );
       });
     } catch (_) {
-      await _deleteAll(restored.values);
+      await deleteFilesQuietly(restored.values);
       rethrow;
     }
   }
@@ -475,24 +449,6 @@ class LibraryBackupService {
     return manifest;
   }
 
-  static String _freePath(Directory dir, String name, Set<String> taken) {
-    var candidate = p.join(dir.path, name);
-    final stem = p.basenameWithoutExtension(name);
-    final ext = p.extension(name);
-    for (var n = 1; taken.contains(candidate) || File(candidate).existsSync(); n++) {
-      candidate = p.join(dir.path, '${stem}_$n$ext');
-    }
-    return candidate;
-  }
-
-  static Future<void> _deleteAll(Iterable<String> paths) async {
-    for (final path in paths) {
-      try {
-        await File(path).delete();
-      } catch (_) {}
-    }
-  }
-
   Future<Directory> _docsDir() async {
     try {
       return await getApplicationDocumentsDirectory();
@@ -510,150 +466,4 @@ class _Snapshot {
   final List<List<String>> files;
 
   const _Snapshot({required this.contents, required this.payload, required this.files});
-}
-
-/// Runs [worker] in an isolate. The worker first sends a port that takes
-/// `'cancel'`, then `[done, total]` for progress, then `'done'`,
-/// `'cancelled'` or `['error', message]`. The isolate's exit (null) comes on
-/// the same port, so it's always last. Cancelling asks the worker to stop
-/// between files, so it closes what it has open before the caller cleans up.
-Future<void> _runInIsolate(
-  Future<void> Function(List<Object?>) worker,
-  List<Object?> args, {
-  BackupProgress? onProgress,
-  BackupCancel? cancel,
-}) async {
-  if (cancel?.isCancelled ?? false) throw const BackupCancelled();
-  final port = ReceivePort();
-  final done = Completer<void>();
-  SendPort? control;
-  var cancelRequested = false;
-  await Isolate.spawn(worker, [...args, port.sendPort], onExit: port.sendPort);
-  port.listen((msg) {
-    if (done.isCompleted) return;
-    switch (msg) {
-      case final SendPort p:
-        control = p;
-        if (cancelRequested) p.send('cancel');
-      case [final int n, final int total]:
-        onProgress?.call(n, total);
-      case 'done':
-        done.complete();
-      case 'cancelled':
-        done.completeError(const BackupCancelled());
-      case ['error', final String message]:
-        done.completeError(Exception(message));
-      default: // exited without saying why
-        done.completeError(Exception('The backup stopped unexpectedly.'));
-    }
-  });
-  cancel?._onCancel(() {
-    cancelRequested = true;
-    control?.send('cancel');
-  });
-  try {
-    await done.future;
-  } finally {
-    port.close();
-  }
-}
-
-/// Gives a worker its control port and tells it, between files, whether to stop.
-Future<bool Function()> _listenForCancel(SendPort send) async {
-  final control = ReceivePort();
-  var cancelled = false;
-  control.listen((msg) {
-    if (msg == 'cancel') cancelled = true;
-  });
-  send.send(control.sendPort);
-  return () => cancelled;
-}
-
-Future<void> _exportWorker(List<Object?> args) async {
-  final [targetPath as String, manifest as String, payload as String, files as List, send as SendPort] = args;
-  final cancelled = await _listenForCancel(send);
-  ZipFileEncoder? zip;
-  try {
-    zip = ZipFileEncoder()..create(targetPath);
-    zip.addArchiveFile(ArchiveFile.string('manifest.json', manifest));
-    zip.addArchiveFile(ArchiveFile.string('library.json', payload));
-    for (var i = 0; i < files.length; i++) {
-      await Future<void>.delayed(Duration.zero); // let a cancel in
-      if (cancelled()) {
-        zip.closeSync();
-        send.send('cancelled');
-        Isolate.exit();
-      }
-      final [source as String, entry as String] = files[i] as List;
-      final input = InputFileStream(source);
-      // Photos and frames are JPEGs already: store them as they are.
-      zip.addArchiveFile(ArchiveFile.stream(entry, input)..compression = CompressionType.none);
-      input.closeSync();
-      send.send([i + 1, files.length]);
-    }
-    zip.closeSync();
-    send.send('done');
-  } catch (e) {
-    try {
-      zip?.closeSync();
-    } catch (_) {}
-    send.send(['error', '$e']);
-  }
-  Isolate.exit();
-}
-
-Future<void> _extractWorker(List<Object?> args) async {
-  final [zipPath as String, jobs as List, send as SendPort] = args;
-  final cancelled = await _listenForCancel(send);
-  final input = InputFileStream(zipPath);
-  try {
-    final archive = ZipDecoder().decodeStream(input);
-    final byName = {for (final f in archive.files) f.name: f};
-    for (var i = 0; i < jobs.length; i++) {
-      await Future<void>.delayed(Duration.zero);
-      if (cancelled()) {
-        send.send('cancelled');
-        return;
-      }
-      final [entry as String, target as String] = jobs[i] as List;
-      final file = byName[entry];
-      if (file == null) throw 'The backup is missing $entry';
-      Directory(p.dirname(target)).createSync(recursive: true);
-      final out = OutputFileStream(target);
-      try {
-        file.writeContent(out);
-      } finally {
-        out.closeSync();
-      }
-      send.send([i + 1, jobs.length]);
-    }
-    send.send('done');
-  } catch (e) {
-    send.send(['error', '$e']);
-  } finally {
-    input.closeSync();
-    Isolate.exit();
-  }
-}
-
-Future<Map<String, String>> _readInIsolate(String zipPath, List<String> names) =>
-    Isolate.run(() => _readEntries(zipPath, names));
-
-/// Reads small text entries ([names]) without loading the rest of the zip.
-Map<String, String> _readEntries(String zipPath, List<String> names) {
-  final input = InputFileStream(zipPath);
-  try {
-    final Archive archive;
-    try {
-      archive = ZipDecoder().decodeStream(input);
-    } catch (_) {
-      throw const BackupFormatException("This file isn't a backup from this app.");
-    }
-    return {
-      for (final f in archive.files)
-        if (names.contains(f.name)) f.name: utf8.decode(f.readBytes() ?? const []),
-    };
-  } finally {
-    input.closeSync();
-  }
 }

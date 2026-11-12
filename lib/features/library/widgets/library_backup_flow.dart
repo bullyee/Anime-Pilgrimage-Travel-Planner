@@ -68,7 +68,7 @@ Future<void> backUpLibrary(BuildContext context, WidgetRef ref) async {
   String two(int n) => n.toString().padLeft(2, '0');
   final name = 'pilgrimage-backup-${now.year}-${two(now.month)}-${two(now.day)}.${LibraryBackupService.fileExtension}';
   if (!context.mounted) return;
-  final file = await _runWithProgress<File>(
+  final file = await runArchiveWithProgress<File>(
     context,
     title: 'Backing up',
     failure: "Couldn't back up",
@@ -88,7 +88,7 @@ Future<void> restoreLibrary(BuildContext context, WidgetRef ref) async {
   try {
     contents = await svc.readContents(File(path));
   } on BackupFormatException catch (e) {
-    if (context.mounted) await _tell(context, "Can't restore this file", e.message);
+    if (context.mounted) await tellArchiveMessage(context, "Can't restore this file", e.message);
     return;
   }
   if (!context.mounted) return;
@@ -110,14 +110,14 @@ Future<void> restoreLibrary(BuildContext context, WidgetRef ref) async {
   );
   if (go != true || !context.mounted) return;
   final db = ref.read(databaseProvider);
-  final summary = await _runWithProgress<LibraryImportSummary>(
+  final summary = await runArchiveWithProgress<LibraryImportSummary>(
     context,
     title: 'Restoring',
     failure: "Couldn't restore",
     run: (onProgress, cancel) => svc.importLibraryArchive(db, File(path), onProgress: onProgress, cancel: cancel),
   );
   if (summary == null || !context.mounted) return;
-  await _tell(context, 'Restored', restoreSummaryText(summary));
+  await tellArchiveMessage(context, 'Restored', restoreSummaryText(summary));
 }
 
 /// "312 places, 2 private trips, 86 photos and 2,800 frames".
@@ -154,7 +154,7 @@ String _count(int n, String noun) => '${_thousands(n)} $noun${n == 1 ? '' : 's'}
 String _list(List<String> parts) =>
     parts.length < 2 ? parts.join() : '${parts.sublist(0, parts.length - 1).join(', ')} and ${parts.last}';
 
-Future<void> _tell(BuildContext context, String title, String message) => showDialog<void>(
+Future<void> tellArchiveMessage(BuildContext context, String title, String message) => showDialog<void>(
       context: context,
       builder: (context) => AlertDialog(
         title: Text(title),
@@ -165,7 +165,7 @@ Future<void> _tell(BuildContext context, String title, String message) => showDi
 
 /// Shows a progress dialog while [run] works; null when cancelled or failed
 /// (a failure is shown to the user).
-Future<T?> _runWithProgress<T>(
+Future<T?> runArchiveWithProgress<T>(
   BuildContext context, {
   required String title,
   required String failure,
@@ -179,7 +179,7 @@ Future<T?> _runWithProgress<T>(
   if (outcome == null) return null;
   final (value, error) = outcome;
   if (error != null && error is! BackupCancelled && context.mounted) {
-    await _tell(context, failure, error is BackupFormatException ? error.message : '$error');
+    await tellArchiveMessage(context, failure, error is BackupFormatException ? error.message : '$error');
   }
   return value;
 }
