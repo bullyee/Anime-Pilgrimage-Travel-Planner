@@ -295,11 +295,17 @@ class _LocalFramesCard extends ConsumerWidget {
           ),
           const SizedBox(height: 6),
           Text(
-            'Gallery frames stay on each phone to avoid cloud image uploads. '
-            'Send a compact frames file to share custom frames with trip members.',
+            'Gallery frames stay on each phone to avoid Firebase Storage egress fees. '
+            'Sync them through your own Google Drive, or share a compact frames file offline.',
             style: theme.textTheme.bodySmall?.copyWith(color: theme.colorScheme.onSurfaceVariant),
           ),
           const SizedBox(height: 12),
+          FilledButton.tonalIcon(
+            onPressed: () => syncTripLocalFramesViaDrive(context, ref, trip),
+            icon: const Icon(Icons.cloud_upload_outlined, size: 18),
+            label: const Text('Sync via my Google Drive'),
+          ),
+          const SizedBox(height: 8),
           Wrap(
             spacing: 8,
             runSpacing: 8,

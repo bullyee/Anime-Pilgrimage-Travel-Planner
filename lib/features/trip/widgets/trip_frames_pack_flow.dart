@@ -2,15 +2,27 @@ import 'dart:io';
 
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:image_picker/image_picker.dart';
 import 'package:path/path.dart' as p;
+import 'package:path_provider/path_provider.dart';
+import 'package:uuid/uuid.dart';
 
 import '../../../core/database/database.dart';
 import '../../../core/providers/database_provider.dart';
 import '../../../core/utils/archive_isolate.dart';
+import '../../auth/providers/auth_provider.dart';
 import '../../library/widgets/library_backup_flow.dart';
+import '../../sharing/providers/group_sharing_providers.dart' show guestUserId;
+import '../../sync/services/google_drive_frame_service.dart';
 import '../services/trip_frames_pack_service.dart';
 
 final tripFramesPackServiceProvider = Provider<TripFramesPackService>((ref) => const TripFramesPackService());
+
+final googleDriveFrameServiceProvider = Provider<GoogleDriveFrameService>((ref) {
+  return GoogleDriveFrameService(
+    getToken: ref.watch(driveAccessTokenProvider),
+  );
+});
 
 /// Members tab → Share local frames: exports only the local-only stop frames in [trip]
 /// into a `.pilgrimage-frames` file and hands it to the system share sheet.
@@ -141,6 +153,142 @@ String tripFramesImportSummaryText(TripFramesImportSummary s) {
       '${s.unmatchedStops} ${s.unmatchedStops == 1 ? 'entry' : 'entries'} skipped because the stop is not in this trip.',
   ];
   return parts.join(' ');
+}
+
+/// Syncs all local-only frames on [trip] through the signed-in user's Google Drive
+/// (`drive.file`), writes back `remoteUrl`, and marks stops dirty for Firestore sync.
+Future<void> syncTripLocalFramesViaDrive(BuildContext context, WidgetRef ref, Trip trip) async {
+  if (ref.read(currentUserIdProvider) == guestUserId) {
+    await tellArchiveMessage(
+      context,
+      'Sign in required',
+      'Please sign in with Google before syncing frames through Google Drive.',
+    );
+    return;
+  }
+  final db = ref.read(databaseProvider);
+  final svc = ref.read(googleDriveFrameServiceProvider);
+  final count = await svc.countTripLocalFrames(db, trip.id);
+  if (!context.mounted) return;
+  if (count == 0) {
+    await tellArchiveMessage(
+      context,
+      'All frames synced',
+      'Every frame in "${trip.title}" already has an image link or is not on this device.',
+    );
+    return;
+  }
+
+  final go = await showDialog<bool>(
+    context: context,
+    builder: (context) => AlertDialog(
+      title: const Text('Sync via my Google Drive'),
+      content: Text(
+        '$count local ${count == 1 ? 'frame' : 'frames'} in "${trip.title}" will be resized (max 1280px JPEG) '
+        'and uploaded to "${GoogleDriveFrameService.appFolderName}" in your own Google Drive with read-only link '
+        'sharing so trip members can load them.\n\n'
+        'Trip Planner uses the drive.file permission and only accesses files it creates.',
+      ),
+      actions: [
+        TextButton(onPressed: () => Navigator.pop(context, false), child: const Text('Cancel')),
+        FilledButton(onPressed: () => Navigator.pop(context, true), child: const Text('Upload & sync')),
+      ],
+    ),
+  );
+  if (go != true || !context.mounted) return;
+
+  final summary = await runArchiveWithProgress<DriveSyncSummary>(
+    context,
+    title: 'Uploading to Google Drive',
+    failure: "Couldn't upload frames to Google Drive",
+    run: (onProgress, cancel) async {
+      try {
+        return await svc.syncTripLocalFrames(
+          db,
+          tripId: trip.id,
+          onProgress: onProgress,
+          cancel: cancel,
+        );
+      } on AuthCancelledException {
+        throw const BackupCancelled();
+      }
+    },
+  );
+  if (summary == null || !context.mounted) return;
+  await tellArchiveMessage(context, 'Google Drive sync complete', driveSyncSummaryText(summary));
+}
+
+/// Picks gallery photos and uploads them to the user's Google Drive, attaching synced
+/// frames onto [stopId]. Returns how many frames were uploaded (0 if cancelled).
+Future<int> uploadStopGalleryFramesViaDrive(
+  BuildContext context,
+  WidgetRef ref, {
+  required String tripId,
+  required String stopId,
+}) async {
+  if (ref.read(currentUserIdProvider) == guestUserId) {
+    await tellArchiveMessage(
+      context,
+      'Sign in required',
+      'Please sign in with Google before uploading frames to Google Drive.',
+    );
+    return 0;
+  }
+  final picked = await ImagePicker().pickMultiImage();
+  if (picked.isEmpty || !context.mounted) return 0;
+
+  final db = ref.read(databaseProvider);
+  final svc = ref.read(googleDriveFrameServiceProvider);
+  final docsDir = await getApplicationDocumentsDirectory();
+  final refDir = Directory(p.join(docsDir.path, 'reference_images'));
+  if (!await refDir.exists()) await refDir.create(recursive: true);
+
+  if (!context.mounted) return 0;
+  final uploadedCount = await runArchiveWithProgress<int>(
+    context,
+    title: 'Uploading to Google Drive',
+    failure: "Couldn't upload frame",
+    run: (onProgress, cancel) async {
+      const uuid = Uuid();
+      var count = 0;
+      onProgress(0, picked.length);
+      for (final file in picked) {
+        if (cancel.isCancelled) throw const BackupCancelled();
+        final ext = p.extension(file.path).isEmpty ? '.jpg' : p.extension(file.path);
+        final targetPath = p.join(refDir.path, 'ref_${uuid.v4()}$ext');
+        await File(file.path).copy(targetPath);
+        try {
+          try {
+            await svc.uploadNewStopFrame(db, tripId: tripId, stopId: stopId, localPath: targetPath);
+          } on AuthCancelledException {
+            throw const BackupCancelled();
+          }
+        } catch (_) {
+          // Clean up local copy if DB row wasn't persisted.
+          try {
+            await File(targetPath).delete();
+          } catch (_) {}
+          rethrow;
+        }
+        count++;
+        onProgress(count, picked.length);
+      }
+      return count;
+    },
+  );
+  return uploadedCount ?? 0;
+}
+
+String driveSyncSummaryText(DriveSyncSummary s) {
+  final parts = <String>[
+    if (s.uploaded > 0) 'Uploaded ${s.uploaded} ${s.uploaded == 1 ? 'frame' : 'frames'} to Google Drive.',
+    if (s.reused > 0) 'Reused ${s.reused} already-uploaded ${s.reused == 1 ? 'image' : 'images'}.',
+    if (s.updatedStops > 0)
+      'Updated ${s.updatedStops} ${s.updatedStops == 1 ? 'stop' : 'stops'} for group sync.',
+    if (s.skippedMissing > 0)
+      '${s.skippedMissing} ${s.skippedMissing == 1 ? 'frame was' : 'frames were'} skipped because the file is missing on this phone.',
+  ];
+  return parts.isEmpty ? 'No frames needed uploading.' : parts.join(' ');
 }
 
 String _safeFileSlug(String raw) {

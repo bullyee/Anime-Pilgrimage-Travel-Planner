@@ -25,6 +25,7 @@ import '../../sharing/providers/group_sharing_providers.dart';
 import '../controllers/trip_stops_controller.dart';
 import '../models/stop_group.dart';
 import '../providers/trip_providers.dart';
+import '../widgets/trip_frames_pack_flow.dart';
 import '../../auth/providers/auth_provider.dart';
 
 /// Where a stop sits in the plan: its day and its item there.
@@ -256,6 +257,7 @@ class _StopScreenState extends ConsumerState<StopScreen> {
                 tooltip: 'More',
                 onSelected: (action) => _onMenu(action, stop, trip, view, slot),
                 itemBuilder: (_) => [
+                  const PopupMenuItem(value: 'frame_drive', child: Text('Upload photo via Google Drive')),
                   const PopupMenuItem(value: 'frame_url', child: Text('Add frame link')),
                   const PopupMenuItem(value: 'rename', child: Text('Rename')),
                   // A stop in its group's block moves with the group, from
@@ -277,7 +279,7 @@ class _StopScreenState extends ConsumerState<StopScreen> {
               frames: frames,
               index: _frame,
               onPage: (i) => setState(() => _frame = i),
-              onAdd: canEdit ? () => _addFrameLink(stop, trip) : null,
+              onAdd: canEdit ? () => _addFrameToStop(stop, trip) : null,
               onOpen: (i) => _openFrame(stop, trip, canEdit, frames, i),
             ),
             Padding(
@@ -298,7 +300,11 @@ class _StopScreenState extends ConsumerState<StopScreen> {
                   _StopTitle(stop: stop, draft: tripDraft, nameError: _nameError),
                   const SizedBox(height: 14),
                   ...spaced([
-                    if (localOnlyCount > 0) LocalFramesSyncNote(count: localOnlyCount),
+                    if (localOnlyCount > 0)
+                      LocalFramesSyncNote(
+                        count: localOnlyCount,
+                        onSyncViaDrive: canEdit ? () => syncTripLocalFramesViaDrive(context, ref, trip) : null,
+                      ),
                     _PlanCard(
                       slot: slot,
                       loading: view == null,
@@ -405,6 +411,29 @@ class _StopScreenState extends ConsumerState<StopScreen> {
     return true;
   }
 
+  Future<void> _addFrameToStop(Stop stop, Trip trip) async {
+    if (!_ensureSignedInForShared(trip)) return;
+    final method = await showAddStopFrameSheet(context);
+    if (method == null || !mounted) return;
+    switch (method) {
+      case AddStopFrameMethod.driveUpload:
+        await _addFrameViaDrive(stop, trip);
+      case AddStopFrameMethod.link:
+        await _addFrameLink(stop, trip);
+    }
+  }
+
+  Future<void> _addFrameViaDrive(Stop stop, Trip trip) async {
+    if (!_ensureSignedInForShared(trip)) return;
+    final count = await uploadStopGalleryFramesViaDrive(context, ref, tripId: trip.id, stopId: stop.id);
+    if (count > 0 && mounted) {
+      _report(
+        const Success(null),
+        'Uploaded $count ${count == 1 ? 'frame' : 'frames'} to Google Drive and queued for sync.',
+      );
+    }
+  }
+
   Future<void> _addFrameLink(Stop stop, Trip trip) async {
     if (!_ensureSignedInForShared(trip)) return;
     final input = await askFrameImageUrl(context);
@@ -473,6 +502,8 @@ class _StopScreenState extends ConsumerState<StopScreen> {
 
   Future<void> _onMenu(String action, Stop stop, Trip trip, PlannerView? view, StopSlot? slot) async {
     switch (action) {
+      case 'frame_drive':
+        await _addFrameViaDrive(stop, trip);
       case 'frame_url':
         await _addFrameLink(stop, trip);
       case 'rename':

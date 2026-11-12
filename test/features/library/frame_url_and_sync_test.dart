@@ -215,6 +215,7 @@ void main() {
 
       expect(find.byType(LocalFramesSyncNote), findsOneWidget);
       expect(find.textContaining('saved on this phone only'), findsOneWidget);
+      expect(find.text('Sync via Google Drive'), findsOneWidget);
 
       // Replacing local-only frame with URL-backed frame removes the warning
       await (db.delete(db.newReferenceImages)..where((r) => r.id.equals('local_only_1'))).go();
@@ -249,6 +250,7 @@ void main() {
       );
       await tester.pumpAndSettle();
 
+      expect(find.text('Sync via my Google Drive'), findsOneWidget);
       expect(find.text('Share local frames'), findsOneWidget);
       expect(find.text('Import local frames'), findsOneWidget);
       await disposeApp(tester);

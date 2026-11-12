@@ -1038,12 +1038,50 @@ class _FrameUrlDialogState extends State<_FrameUrlDialog> {
   }
 }
 
+/// Source chosen when adding a reference frame to a trip stop.
+enum AddStopFrameMethod { driveUpload, link }
+
+/// Asks whether an editor wants to upload photos via their Google Drive (`drive.file`)
+/// or paste an external image link onto a stop.
+Future<AddStopFrameMethod?> showAddStopFrameSheet(BuildContext context) {
+  return showModalBottomSheet<AddStopFrameMethod>(
+    context: context,
+    showDragHandle: true,
+    useSafeArea: true,
+    builder: (sheetContext) => SafeArea(
+      child: ListView(
+        shrinkWrap: true,
+        padding: const EdgeInsets.fromLTRB(8, 0, 8, 12),
+        children: [
+          Padding(
+            padding: const EdgeInsets.fromLTRB(16, 0, 16, 8),
+            child: Text('Add anime frame to stop', style: Theme.of(sheetContext).textTheme.titleLarge),
+          ),
+          ListTile(
+            leading: const Icon(Icons.cloud_upload_outlined),
+            title: const Text('Upload photo via Google Drive'),
+            subtitle: const Text('Uploads to your own Google Drive (drive.file) and syncs with trip members.'),
+            onTap: () => Navigator.pop(sheetContext, AddStopFrameMethod.driveUpload),
+          ),
+          ListTile(
+            leading: const Icon(Icons.link_outlined),
+            title: const Text('Add image link'),
+            subtitle: const Text('Paste an https:// image URL — syncs with everyone in this trip.'),
+            onTap: () => Navigator.pop(sheetContext, AddStopFrameMethod.link),
+          ),
+        ],
+      ),
+    ),
+  );
+}
+
 /// Subtle callout on a shared trip stop when one or more frames live only on
 /// this device and won't sync automatically to collaborators.
 class LocalFramesSyncNote extends StatelessWidget {
   final int count;
+  final VoidCallback? onSyncViaDrive;
 
-  const LocalFramesSyncNote({super.key, required this.count});
+  const LocalFramesSyncNote({super.key, required this.count, this.onSyncViaDrive});
 
   @override
   Widget build(BuildContext context) {
@@ -1055,18 +1093,34 @@ class LocalFramesSyncNote extends StatelessWidget {
         color: theme.colorScheme.surfaceContainerHighest.withValues(alpha: 0.6),
         borderRadius: BorderRadius.circular(14),
       ),
-      child: Row(
+      child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          Icon(Icons.devices_outlined, size: 18, color: theme.colorScheme.onSurfaceVariant),
-          const SizedBox(width: 10),
-          Expanded(
-            child: Text(
-              '$label saved on this phone only and will not auto-sync to trip members. '
-              'Use Share local frames in the Members tab to send them, or add an image link instead.',
-              style: theme.textTheme.bodySmall?.copyWith(color: theme.colorScheme.onSurfaceVariant),
-            ),
+          Row(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Icon(Icons.devices_outlined, size: 18, color: theme.colorScheme.onSurfaceVariant),
+              const SizedBox(width: 10),
+              Expanded(
+                child: Text(
+                  '$label saved on this phone only and will not auto-sync to trip members. '
+                  'Sync via your Google Drive, Share local frames in the Members tab, or add an image link.',
+                  style: theme.textTheme.bodySmall?.copyWith(color: theme.colorScheme.onSurfaceVariant),
+                ),
+              ),
+            ],
           ),
+          if (onSyncViaDrive != null) ...[
+            const SizedBox(height: 6),
+            Align(
+              alignment: Alignment.centerRight,
+              child: TextButton.icon(
+                onPressed: onSyncViaDrive,
+                icon: const Icon(Icons.cloud_upload_outlined, size: 18),
+                label: const Text('Sync via Google Drive'),
+              ),
+            ),
+          ],
         ],
       ),
     );
