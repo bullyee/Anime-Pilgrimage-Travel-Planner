@@ -12,6 +12,9 @@ import '../../sharing/providers/group_sharing_providers.dart';
 import '../../sharing/sharing_text.dart';
 import '../../sharing/widgets/invite_sheet.dart';
 import '../../sharing/widgets/member_avatar.dart';
+import '../../sync/providers/frame_transfer_providers.dart';
+import '../../sync/services/frame_transfer_queue.dart';
+import '../../sync/widgets/frame_transfer_widgets.dart';
 import '../widgets/trip_frames_pack_flow.dart';
 
 /// Who the trip is shared with. Before it's shared: what sharing sends and
@@ -278,6 +281,14 @@ class _LocalFramesCard extends ConsumerWidget {
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     final theme = Theme.of(context);
+    final muted = theme.colorScheme.onSurfaceVariant;
+    final transfers = ref.watch(frameTransferQueueProvider);
+    final jobs = transfers.jobsForTrip(trip.id);
+    final notices = [for (final n in transfers.notices) if (n.tripId == trip.id) n];
+    final uploading = transfers.jobFor(trip.id, TransferKind.driveUpload) != null;
+    final downloading = transfers.jobFor(trip.id, TransferKind.download) != null;
+    final toUpload = canEdit ? (ref.watch(pendingDriveUploadCountProvider(trip.id)).valueOrNull ?? 0) : 0;
+    final toDownload = ref.watch(pendingFrameDownloadCountProvider(trip.id)).valueOrNull ?? 0;
     return Container(
       padding: const EdgeInsets.all(16),
       decoration: BoxDecoration(
@@ -301,17 +312,43 @@ class _LocalFramesCard extends ConsumerWidget {
                     'Sync them through your own Google Drive, or share a compact frames file offline.'
                 : 'Gallery frames stay on each phone. Import a frames file shared by another trip member, '
                     'or share your own local frames offline.',
-            style: theme.textTheme.bodySmall?.copyWith(color: theme.colorScheme.onSurfaceVariant),
+            style: theme.textTheme.bodySmall?.copyWith(color: muted),
           ),
           const SizedBox(height: 12),
+          // Transfers run in the background; this is where they show.
+          for (final job in jobs) TransferJobStrip(job: job, queued: job.id != transfers.current?.id),
+          for (final notice in notices)
+            TransferNoticeTile(
+              notice: notice,
+              onResume: canEdit && notice.kind == TransferKind.driveUpload
+                  ? () => syncTripLocalFramesViaDrive(context, ref, trip, confirm: false)
+                  : null,
+            ),
           if (canEdit) ...[
+            if (toUpload > 0 && !uploading) ...[
+              Text(
+                '$toUpload ${toUpload == 1 ? 'frame' : 'frames'} on this phone ${toUpload == 1 ? "isn't" : "aren't"} on Google Drive yet.',
+                style: theme.textTheme.bodySmall?.copyWith(color: muted),
+              ),
+              const SizedBox(height: 6),
+            ],
             FilledButton.tonalIcon(
-              onPressed: () => syncTripLocalFramesViaDrive(context, ref, trip),
+              onPressed: uploading ? null : () => syncTripLocalFramesViaDrive(context, ref, trip),
               icon: const Icon(Icons.cloud_upload_outlined, size: 18),
               label: const Text('Sync via my Google Drive'),
             ),
             const SizedBox(height: 8),
           ],
+          OutlinedButton.icon(
+            onPressed: downloading ? null : () => downloadTripFramesForOffline(context, ref, trip),
+            icon: const Icon(Icons.cloud_download_outlined, size: 18),
+            label: Text(
+              toDownload > 0 && !downloading
+                  ? 'Download $toDownload ${toDownload == 1 ? 'frame' : 'frames'} for offline'
+                  : 'Download frames for offline',
+            ),
+          ),
+          const SizedBox(height: 8),
           Wrap(
             spacing: 8,
             runSpacing: 8,

@@ -14,17 +14,20 @@ import '../../auth/providers/auth_provider.dart';
 import '../../library/providers/place_providers.dart' show placeRepositoryProvider;
 import '../../library/widgets/library_backup_flow.dart';
 import '../../sharing/providers/group_sharing_providers.dart' show canEditTripProvider, guestUserId;
+import '../../sync/providers/frame_transfer_providers.dart';
+import '../../sync/services/frame_transfer_jobs.dart';
+import '../../sync/services/frame_transfer_queue.dart';
 import '../../sync/services/google_drive_frame_service.dart';
 import '../services/trip_frames_pack_service.dart';
 
-final tripFramesPackServiceProvider = Provider<TripFramesPackService>((ref) => const TripFramesPackService());
+export '../../sync/providers/frame_transfer_providers.dart'
+    show googleDriveFrameServiceProvider, tripFramesPackServiceProvider;
+export '../../sync/services/frame_transfer_jobs.dart' show driveSyncSummaryText, tripFramesImportSummaryText;
 
-final googleDriveFrameServiceProvider = Provider<GoogleDriveFrameService>((ref) {
-  ref.watch(currentUserIdProvider);
-  return GoogleDriveFrameService(
-    getToken: ref.watch(driveAccessTokenProvider),
-  );
-});
+/// Says that a transfer went to the background, where the user can see it.
+void _tellQueued(BuildContext context, String text) {
+  ScaffoldMessenger.maybeOf(context)?.showSnackBar(SnackBar(content: Text(text)));
+}
 
 /// Members tab → Share local frames: exports only the local-only stop frames in [trip]
 /// into a `.pilgrimage-frames` file and hands it to the system share sheet.
@@ -128,39 +131,21 @@ Future<void> importTripLocalFrames(BuildContext context, WidgetRef ref, Trip tri
   if (go != true || !context.mounted) return;
 
   final db = ref.read(databaseProvider);
-  final summary = await runArchiveWithProgress<TripFramesImportSummary>(
-    context,
-    title: 'Importing frames',
-    failure: "Couldn't import frames",
-    run: (onProgress, cancel) => svc.importFramesPack(
-      db,
-      tripId: trip.id,
-      zip: File(path),
-      onProgress: onProgress,
-      cancel: cancel,
-    ),
-  );
-  if (summary == null || !context.mounted) return;
-  await tellArchiveMessage(context, 'Frames imported', tripFramesImportSummaryText(summary));
+  ref.read(frameTransferQueueProvider.notifier).enqueue(
+        framesPackImportJob(db: db, packs: svc, trip: trip, zip: File(path)),
+      );
+  _tellQueued(context, 'Importing ${contents.frames} ${contents.frames == 1 ? 'frame' : 'frames'} in the background.');
 }
 
-String tripFramesImportSummaryText(TripFramesImportSummary s) {
-  final parts = <String>[
-    s.framesAdded == 0
-        ? 'No new frames added.'
-        : 'Added ${s.framesAdded} ${s.framesAdded == 1 ? 'frame' : 'frames'} to this trip.',
-    if (s.alreadyPresent > 0)
-      '${s.alreadyPresent} ${s.alreadyPresent == 1 ? 'frame was' : 'frames were'} already here.',
-    if (s.unmatchedStops > 0)
-      '${s.unmatchedStops} ${s.unmatchedStops == 1 ? 'entry' : 'entries'} skipped because the stop is not in this trip.',
-  ];
-  return parts.join(' ');
-}
-
-/// Syncs all local-only frames on [trip] through the signed-in user's Google Drive
-/// (`drive.file`), writes back `remoteUrl`, and marks stops dirty for Firestore sync.
-Future<void> syncTripLocalFramesViaDrive(BuildContext context, WidgetRef ref, Trip trip) async {
-  if (trip.sharing != 'group' || !ref.read(canEditTripProvider(trip.id))) {
+/// Uploads all local-only frames on [trip] through the signed-in user's Google
+/// Drive (`drive.file`) in the background: writes back `remoteUrl` and marks
+/// stops dirty for Firestore sync. The Drive token is fetched here, while the
+/// screen is up, so the background run never has to show Google's sign-in.
+///
+/// [confirm] false skips the explanation (Resume after an interrupted run).
+Future<void> syncTripLocalFramesViaDrive(BuildContext context, WidgetRef ref, Trip trip, {bool confirm = true}) async {
+  final canEdit = ref.read(canEditTripProvider(trip.id));
+  if (!canUploadTripFramesToDrive(trip, canEdit: canEdit)) {
     await tellArchiveMessage(
       context,
       'Cannot sync to trip',
@@ -176,6 +161,10 @@ Future<void> syncTripLocalFramesViaDrive(BuildContext context, WidgetRef ref, Tr
     );
     return;
   }
+  if (ref.read(frameTransferQueueProvider).jobFor(trip.id, TransferKind.driveUpload) != null) {
+    _tellQueued(context, 'Already uploading the frames of "${trip.title}".');
+    return;
+  }
   final db = ref.read(databaseProvider);
   final svc = ref.read(googleDriveFrameServiceProvider);
   final count = await svc.countTripLocalFrames(db, trip.id);
@@ -189,43 +178,61 @@ Future<void> syncTripLocalFramesViaDrive(BuildContext context, WidgetRef ref, Tr
     return;
   }
 
-  final go = await showDialog<bool>(
-    context: context,
-    builder: (context) => AlertDialog(
-      title: const Text('Sync via my Google Drive'),
-      content: Text(
-        '$count local ${count == 1 ? 'frame' : 'frames'} in "${trip.title}" will be resized (max 1280px JPEG) '
-        'and uploaded to "${GoogleDriveFrameService.appFolderName}" in your own Google Drive with '
-        '"anyone with the link can view" permission so trip members can load them.\n\n'
-        'Anyone holding the URL can view the image. Trip Planner uses the drive.file permission and only accesses files it creates.',
+  if (confirm) {
+    final go = await showDialog<bool>(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: const Text('Sync via my Google Drive'),
+        content: Text(
+          '$count local ${count == 1 ? 'frame' : 'frames'} in "${trip.title}" will be resized (max 1280px JPEG) '
+          'and uploaded to "${GoogleDriveFrameService.appFolderName}" in your own Google Drive with '
+          '"anyone with the link can view" permission so trip members can load them.\n\n'
+          'Anyone holding the URL can view the image. Trip Planner uses the drive.file permission and only accesses files it creates.\n\n'
+          'The upload runs in the background: you can keep using the app, switch apps or turn the screen off.',
+        ),
+        actions: [
+          TextButton(onPressed: () => Navigator.pop(context, false), child: const Text('Cancel')),
+          FilledButton(onPressed: () => Navigator.pop(context, true), child: const Text('Upload & sync')),
+        ],
       ),
-      actions: [
-        TextButton(onPressed: () => Navigator.pop(context, false), child: const Text('Cancel')),
-        FilledButton(onPressed: () => Navigator.pop(context, true), child: const Text('Upload & sync')),
-      ],
-    ),
-  );
-  if (go != true || !context.mounted) return;
+    );
+    if (go != true || !context.mounted) return;
+  }
 
-  final summary = await runArchiveWithProgress<DriveSyncSummary>(
-    context,
-    title: 'Uploading to Google Drive',
-    failure: "Couldn't upload frames to Google Drive",
-    run: (onProgress, cancel) async {
-      try {
-        return await svc.syncTripLocalFrames(
-          db,
-          tripId: trip.id,
-          onProgress: onProgress,
-          cancel: cancel,
-        );
-      } on AuthCancelledException {
-        throw const BackupCancelled();
-      }
-    },
-  );
-  if (summary == null || !context.mounted) return;
-  await tellArchiveMessage(context, 'Google Drive sync complete', driveSyncSummaryText(summary));
+  // Google's consent (if any) has to happen now, with the app on screen.
+  try {
+    await svc.prepareToken();
+  } on AuthCancelledException {
+    return;
+  } catch (e) {
+    if (context.mounted) await tellArchiveMessage(context, "Couldn't connect to Google Drive", '$e');
+    return;
+  }
+  if (!context.mounted) return;
+  ref.read(frameTransferQueueProvider.notifier).enqueue(
+        driveUploadJob(db: db, drive: svc, trip: trip, canEdit: canEdit),
+      );
+  _tellQueued(context, 'Uploading $count ${count == 1 ? 'frame' : 'frames'} to Google Drive in the background.');
+}
+
+/// Members tab → Download frames for offline: brings every linked frame of
+/// [trip] that isn't on this phone into the cache, in the background.
+Future<void> downloadTripFramesForOffline(BuildContext context, WidgetRef ref, Trip trip) async {
+  final queue = ref.read(frameTransferQueueProvider.notifier);
+  if (ref.read(frameTransferQueueProvider).jobFor(trip.id, TransferKind.download) != null) {
+    _tellQueued(context, 'Already downloading the frames of "${trip.title}".');
+    return;
+  }
+  final db = ref.read(databaseProvider);
+  final downloader = ref.read(tripFrameDownloaderProvider);
+  final urls = await downloader.pendingUrls(db, trip.id);
+  if (!context.mounted) return;
+  if (urls.isEmpty) {
+    _tellQueued(context, 'Every frame in "${trip.title}" is already on this phone.');
+    return;
+  }
+  queue.enqueue(frameDownloadJob(db: db, downloader: downloader, tripId: trip.id, tripTitle: trip.title));
+  _tellQueued(context, 'Downloading ${urls.length} ${urls.length == 1 ? 'frame' : 'frames'} in the background.');
 }
 
 /// Picks gallery photos and stores copies locally on [stopId] without uploading
@@ -257,15 +264,17 @@ Future<int> addLocalStopFrames(BuildContext context, WidgetRef ref, {required St
   return count;
 }
 
-/// Picks gallery photos and uploads them to the user's Google Drive, attaching synced
-/// frames onto [stopId] of a shared trip. Returns how many frames were uploaded (0 if cancelled).
+/// Picks gallery photos and uploads them to the user's Google Drive in the
+/// background, attaching synced frames onto [stopId] of a shared trip.
+/// Returns how many photos were queued (0 if cancelled).
 Future<int> uploadStopGalleryFramesViaDrive(
   BuildContext context,
   WidgetRef ref, {
   required Trip trip,
   required String stopId,
 }) async {
-  if (trip.sharing != 'group' || !ref.read(canEditTripProvider(trip.id))) {
+  final canEdit = ref.read(canEditTripProvider(trip.id));
+  if (!canUploadTripFramesToDrive(trip, canEdit: canEdit)) {
     await tellArchiveMessage(
       context,
       'Cannot upload to trip',
@@ -303,56 +312,38 @@ Future<int> uploadStopGalleryFramesViaDrive(
 
   final db = ref.read(databaseProvider);
   final svc = ref.read(googleDriveFrameServiceProvider);
+  try {
+    await svc.prepareToken();
+  } on AuthCancelledException {
+    return 0;
+  } catch (e) {
+    if (context.mounted) await tellArchiveMessage(context, "Couldn't connect to Google Drive", '$e');
+    return 0;
+  }
+
   final docsDir = await getApplicationDocumentsDirectory();
   final refDir = Directory(p.join(docsDir.path, 'reference_images'));
   if (!await refDir.exists()) await refDir.create(recursive: true);
-
-  if (!context.mounted) return 0;
-  final uploadedCount = await runArchiveWithProgress<int>(
-    context,
-    title: 'Uploading to Google Drive',
-    failure: "Couldn't upload frame",
-    run: (onProgress, cancel) async {
-      const uuid = Uuid();
-      var count = 0;
-      onProgress(0, picked.length);
-      for (final file in picked) {
-        if (cancel.isCancelled) throw const BackupCancelled();
-        final ext = p.extension(file.path).isEmpty ? '.jpg' : p.extension(file.path);
-        final targetPath = p.join(refDir.path, 'ref_${uuid.v4()}$ext');
-        await File(file.path).copy(targetPath);
-        try {
-          try {
-            await svc.uploadNewStopFrame(db, tripId: trip.id, stopId: stopId, localPath: targetPath);
-          } on AuthCancelledException {
-            throw const BackupCancelled();
-          }
-        } catch (_) {
-          // Clean up local copy if DB row wasn't persisted.
-          try {
-            await File(targetPath).delete();
-          } catch (_) {}
-          rethrow;
-        }
-        count++;
-        onProgress(count, picked.length);
-      }
-      return count;
-    },
-  );
-  return uploadedCount ?? 0;
-}
-
-String driveSyncSummaryText(DriveSyncSummary s) {
-  final parts = <String>[
-    if (s.uploaded > 0) 'Uploaded ${s.uploaded} ${s.uploaded == 1 ? 'frame' : 'frames'} to Google Drive.',
-    if (s.reused > 0) 'Reused ${s.reused} already-uploaded ${s.reused == 1 ? 'image' : 'images'}.',
-    if (s.updatedStops > 0)
-      'Updated ${s.updatedStops} ${s.updatedStops == 1 ? 'stop' : 'stops'} for group sync.',
-    if (s.skippedMissing > 0)
-      '${s.skippedMissing} ${s.skippedMissing == 1 ? 'frame was' : 'frames were'} skipped because the file is missing on this phone.',
-  ];
-  return parts.isEmpty ? 'No frames needed uploading.' : parts.join(' ');
+  const uuid = Uuid();
+  final paths = <String>[];
+  for (final file in picked) {
+    final ext = p.extension(file.path).isEmpty ? '.jpg' : p.extension(file.path);
+    final targetPath = p.join(refDir.path, 'ref_${uuid.v4()}$ext');
+    await File(file.path).copy(targetPath);
+    paths.add(targetPath);
+  }
+  if (!context.mounted) {
+    for (final path in paths) {
+      try {
+        await File(path).delete();
+      } catch (_) {}
+    }
+    return 0;
+  }
+  ref.read(frameTransferQueueProvider.notifier).enqueue(
+        stopUploadJob(db: db, drive: svc, trip: trip, canEdit: canEdit, stopId: stopId, localPaths: paths),
+      );
+  return paths.length;
 }
 
 String _safeFileSlug(String raw) {

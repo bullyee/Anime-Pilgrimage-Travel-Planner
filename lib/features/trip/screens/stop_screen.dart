@@ -457,7 +457,7 @@ class _StopScreenState extends ConsumerState<StopScreen> {
     if (count > 0 && mounted) {
       _report(
         const Success(null),
-        'Uploaded $count ${count == 1 ? 'frame' : 'frames'} to Google Drive and queued for sync.',
+        'Uploading $count ${count == 1 ? 'frame' : 'frames'} to Google Drive in the background.',
       );
     }
   }
