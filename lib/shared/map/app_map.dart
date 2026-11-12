@@ -212,7 +212,9 @@ class _AppMapState extends ConsumerState<AppMap> {
       coordinates: points,
       padding: widget.fitPadding,
       maxZoom: clusterUntilZoom,
-      minZoom: _controller.camera.zoom + 1,
+      // At least one level in, but never past where pins stop merging, or
+      // clamp() throws (min > max) between zoom 16 and 17.
+      minZoom: math.min(_controller.camera.zoom + 1, clusterUntilZoom),
     ));
   }
 

@@ -96,4 +96,25 @@ void main() {
     expect(keys, contains('cluster:a'));
     expect(keys.indexOf('pin:n'), greaterThan(keys.indexOf('cluster:a')), reason: 'painted later, so on top');
   });
+
+  testWidgets('tapping a bubble between zoom 16 and 17 zooms in without throwing', (tester) async {
+    final controller = MapController();
+    addTearDown(controller.dispose);
+    await pumpMap(
+      tester,
+      AppMap(
+        controller: controller,
+        pins: [pin('a', 34.8890, 135.8077), pin('b', 34.8892, 135.8079), pin('c', 34.8894, 135.8075), pin('far', 34.95, 135.90)],
+      ),
+    );
+    controller.move(const LatLng(34.8892, 135.8077), 16.3);
+    await tester.pumpAndSettle();
+    expect(find.byKey(const ValueKey('cluster:a')), findsOneWidget);
+
+    await tester.tap(find.byKey(const ValueKey('cluster:a')));
+    await tester.pumpAndSettle();
+    expect(tester.takeException(), isNull);
+    expect(controller.camera.zoom, closeTo(clusterUntilZoom, 0.01));
+    expect(find.byKey(const ValueKey('pin:a')), findsOneWidget);
+  });
 }
