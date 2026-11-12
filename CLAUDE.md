@@ -8,21 +8,22 @@ Built with Flutter (Dart). SQLite via Drift for local storage. Riverpod for stat
 - **Mobile App (Flutter)**: Primary execution environment. Offline-first, GPS, camera, AR.
 - **PC Web (Next.js/React)**: Deep planning environment (future phase).
 - **Sync Model**: two-way Firestore sync for shared trips (`lib/features/sync/`): personal library (`places`, `labels`, `photos`) remains private on device; shared trips (`tripsV2`) with day blocks, stops, and schedule items sync across group members (`lib/features/sharing/`): people join through an invite link, QR code or 6-letter code, and the owner, editor and viewer roles are enforced in `firestore.rules` and the screens.
-- **Data model**: unified `places` library and `trips` planner (schemaVersion 13).
+- **Data model**: unified `places` library and `trips` planner (schemaVersion 14).
 
 ## Core Modules
-1. **Library (`places`, `labels`, `photos`)**: Personal library of pilgrimage spots, anime & region labels, user photos and comparison frames.
-2. **Trip Planner (`trips`, `trip_days`, `stops`, `schedule_items`)**: Multi-day trip itineraries, day blocks, sequenced stops, and schedule items.
-3. **Anime Camera**: shoot against an anime reference. Android opens the phone's own camera app with the reference in a small draggable floating window (`ReferenceOverlay.kt`, `SYSTEM_ALERT_WINDOW`) and reopens it after every shot; the user then keeps the shots they want, saved as shot (`shot_series_screen.dart`; the series lives on disk in case Android kills the app). iOS uses the in-app camera (`camera_screen.dart`) and goes on to the editor; desktop/web have none. A photo editor (filters, rotate, crop) with a Compose/cutout flow edits photos afterwards. Entry point: `openAnimeCamera`. Why: `docs/anime-camera-decision.md`
+1. **Library (`places`, `labels`, `photos`)**: Personal library of pilgrimage spots, anime & region labels, user photos and comparison frames. The library and trips don't change each other: a stop is the trip's own copy, so merging or removing library places never touches trip stops (a place a stop still uses is hidden as `trip_only`). `LibraryBackupService` exports and imports the library as a `.pilgrimage` zip; no screen uses it yet (#155).
+2. **Trip Planner (`trips`, `trip_days`, `stops`, `schedule_items`)**: Multi-day trip itineraries, day blocks, sequenced stops, and schedule items. A trip's page has the tabs Plan, Stops and Members. Stop groups are the stops of a trip sharing one trimmed `stops.area` (no table): made with Group/Merge on the Stops tab (`TripRepository.mergeStops`), shown as one block in Plan. The day map is `/trips/:tripId/map?day=` (`pilgrimage_day_map_screen.dart`).
+3. **Anime Camera**: shoot against an anime reference. Android opens the phone's own camera app with the reference in a small draggable floating window (`ReferenceOverlay.kt`, `SYSTEM_ALERT_WINDOW`) and reopens it after every shot; the user then keeps the shots they want, saved as shot (`shot_series_screen.dart`; the series lives on disk in case Android kills the app). iOS uses the in-app camera (`camera_screen.dart`) and goes on to the editor; desktop/web have none. With several frames, the window's bar switches between them (`‹ ›` in `ReferenceOverlay.kt`, reported as `frameChanged` on the `trip_planner/overlay` channel; iOS does the same in `camera_screen.dart`), and each shot keeps its frame. Keeping shots goes through `PilgrimageShootingService.recordShot` (photo, trip, one visit per place per day; it marks nothing done); the pick screen then offers Mark done or Add to Day N to editors (`shot_plan.dart`). Without a place, `openAnimeCamera` opens Shoot here (`shoot_here_sheet.dart`: places within ~150 m, the day's stops first). Kept photos wait in Photos to edit (`photos_to_edit_screen.dart`, `/photos-to-edit`). A photo editor (filters, rotate, crop) with a Compose/cutout flow edits photos afterwards. Entry point: `openAnimeCamera`. Why: `docs/anime-camera-decision.md`
 4. **Labels**: Anime, tag, and region labels (`labels` table with kind `anime`/`tag`/`region`) linked to places and stops via `place_labels` and `stop_labels`; anime can be imported from Bangumi + Anitabi.
-5. **VLM Pipeline**: planned, not implemented — Gemini API for parsing screenshots into POI data via share extension.
+5. **Home (`lib/features/home/`)**: a column of cards. The top card follows the date: today on a trip day (small map, next stop, Mark done), else the next trip, else Plan a pilgrimage. Then Photos to edit and Near you (library places within 3 km); Shoot sits in the bottom bar between Trips and Library. There's no sign-in on Home: sharing, inviting and joining ask for it, and sign-out is in My Trips.
+6. **VLM Pipeline**: planned, not implemented — Gemini API for parsing screenshots into POI data via share extension.
 
-## Database Schema (SQLite via Drift, schemaVersion 13)
+## Database Schema (SQLite via Drift, schemaVersion 14)
 Source of truth: `lib/core/database/tables_v10.dart`; migrations live in `lib/core/database/database.dart`, and the one-time copy from the v9 model (v0.1.x) in `lib/core/database/migrations/migration_v9_to_v10.dart`.
-- `places`: personal pilgrimage spot library (anitabi imports & custom user spots)
+- `places`: personal pilgrimage spot library (anitabi imports & custom user spots); `chinese_name` (v14) is filled from Anitabi on import, not shown yet
 - `labels`: unified tags, regions, and animes
 - `place_labels`: many-to-many junction between places and labels
-- `photos`: user-taken photos and edits
+- `photos`: user-taken photos and edits; `keep_as_is` (v14) takes a photo off Photos to edit
 - `place_visits`: visit history for places
 - `v10_reference_images`: scene reference frames and metadata
 - `trips`: multi-day travel plans (private or group-shared)
@@ -56,6 +57,6 @@ Source of truth: `lib/core/database/tables_v10.dart`; migrations live in `lib/co
 ## Workflows
 - Tests: `flutter test` (unit tests under `test/`), and the Firestore rules on the emulator: `firebase emulators:exec "python test/rules_v2_emulator_test.py" --only firestore --project trip-planner-2775c` (needs Java 21, e.g. Android Studio's `jbr`, as `JAVA_HOME`). CI (`.github/workflows/ci.yml`) runs both on every PR and on `master`.
 - Fast test verification: `powershell -File tool\verify.ps1` (runs unit tests with compact failure reporting; pass `-WithEmulator` to include Firestore rules; see `.claude/skills/verify/SKILL.md`).
-- Firebase deploys: from `master` only, and only what changed (`firebase deploy --only firestore:rules`, `--only hosting`).
+- Firebase deploys: from `master` only, and only what changed (`firebase deploy --only firestore:rules,storage`, `--only hosting`).
 - Run and drive the app on Android: `.claude/skills/run-app/SKILL.md`.
 - Releases: `.claude/skills/release/SKILL.md` (Antigravity reaches it through `.agents/skills/release/`). GitHub pre-releases tagged `vX.Y.Z` with an APK; the `pubspec.yaml` version matches the tag; history in `CHANGELOG.md`. Pushing the tag runs `.github/workflows/release.yml`, which builds and signs the APK (keystore from the `ANDROID_DEBUG_KEYSTORE_B64` secret) and attaches it to a draft pre-release.

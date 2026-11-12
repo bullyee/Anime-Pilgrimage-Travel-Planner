@@ -57,11 +57,11 @@ A small window shows the reference on top of the phone's camera app. Only the wi
 
 ## Floating reference only
 
-A second Android entry point: the home card **Floating Reference**, or **Float reference** on a POI page. It floats the reference without opening a camera.
+A second Android entry point: **Float a frame over any app** in Home's ⋮ menu (a home card until v0.3.0), or **Float frame** on a place page. It floats the reference without opening a camera.
 
-Unlike the camera flow, the window stays up when the user leaves Trip Planner. That lets them shoot as many photos as they like with any camera app, and then edit the keeper with the home screen's **Edit Photo** or the POI page's Add image. It stays until it's closed with the bar's ✕. A double-tap shrinks it to a small dot of the frame, which a tap opens again (2026-11-10: closing on a double-tap was too easy to do by accident; the ✕, dropped on 2026-11-08 when the double-tap closed it, came back).
+Unlike the camera flow, the window stays up when the user leaves Trip Planner. That lets them shoot as many photos as they like with any camera app, and then edit the keeper with **Edit a photo from the gallery** in Home's ⋮ menu or the place page's Add photos. It stays until it's closed with the bar's ✕. A double-tap shrinks it to a small dot of the frame, which a tap opens again (2026-11-10: closing on a double-tap was too easy to do by accident; the ✕, dropped on 2026-11-08 when the double-tap closed it, came back).
 
-**Edit Photo** follows anime_camera_studio's Edit:
+**Edit a photo from the gallery** follows anime_camera_studio's Edit:
 - pick a photo, then go straight to the editor
 - add a reference there, from a POI's references or the gallery
 - the result goes to the phone's gallery, and to the POI's media when the reference came from one

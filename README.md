@@ -28,26 +28,25 @@ Your library and your trips live on your phone. **No account is needed, and ever
 - 📚 **Keep a library of places** with their anime frames, labels, facts, your own note, your visits and your photos.
 - ⬇️ **Import spots from Anitabi** by searching an anime: pick the spots you want, with their frames and coordinates.
 - 🗺️ **See your places on a map**, and find new ones by name, by a Google Maps link or by coordinates.
-- 🗓️ **Plan trips day by day**: drag stops between days, set times, keep backup days for rain, and pin a day to a date.
+- 🗓️ **Plan trips day by day**: drag stops between days, set times, keep backup days for rain, and pin a day to a date. Group stops that are close together, or merge ones that are the same spot.
 - 👥 **Share a trip** with friends who can edit it or only view it, and see it sync as they change it.
+- 📍 **Shoot where you stand**: **Shoot** offers the frames of your places within about 150 m, and the day map shows the day's stops around you.
 - 📸 **Recreate scenes with the Anime Camera**, with the frame floating over your camera. On Android it opens your phone's own camera app, so you keep its HDR and night mode.
-- 🎨 **Touch up your shots** in the photo editor: match the colors to the frame, adjust brightness and sharpness, rotate, straighten, crop, or paste a character from the frame into your photo.
+- 🎨 **Touch up your shots later**: the photos you keep wait under **Photos to edit**. The photo editor matches the colors to the frame, adjusts brightness and sharpness, rotates, straightens and crops, or pastes a character from the frame into your photo.
 
 ---
 
 ## Getting around
 
-The **home screen** has five cards:
+The **home screen** is a column of cards. Only the top one changes with the date:
+- **On a day of a trip**, it's today: the day's stops on a small map (tap it for the day map) and the next stop with **Take photo** and **Mark done**.
+- **On other days**, it's your next trip, with **Continue planning**. With no trip, **Plan a pilgrimage**.
 
-| Card | What it's for |
-|------|---------------|
-| **Library** | Your saved places, by anime, tag and region |
-| **My Trips** | Your trips, and joining someone else's |
-| **Anime Camera** | Shoot with an anime frame over the camera *(Android and iOS)* |
-| **Floating Reference** | Float a frame over any app and shoot with any camera *(Android)* |
-| **Edit Photo** | Open a photo from your gallery in the photo editor |
+Under it, **Photos to edit** shows while there are any, and **Near you** lists up to 3 of your places within 3 km. It asks for your location only when you tap it.
 
-**Sign In** at the top right signs you in with Google. You only need it to share trips.
+The bar at the bottom has **Trips**, **Shoot** *(Android and iOS)* and **Library**. The **⋮** menu has **Float a frame over any app** *(Android)* and **Edit a photo from the gallery**.
+
+There's no sign-in on the home screen. Sharing, inviting and joining a trip ask you to sign in with Google; **Sign out** is in My Trips' account menu.
 
 ---
 
@@ -75,7 +74,7 @@ The frames download after you save. If you close the app before they finish, imp
 
 **Find your places:** search names, addresses and labels, filter by anime, tag or region, or switch to the map.
 
-**Change several at once:** hold a place to start picking, then add a label to all of them, add them to a trip, merge them, or remove them from your library.
+**Change several at once:** hold a place to start picking, then add a label to all of them, add them to a trip, merge them, or remove them from your library. Merging and removing change only your library: your trips keep their stops.
 
 **Labels** (the label button at the top of the Library) lists your anime, tag and region labels. Rename one, merge two, or delete the ones nothing uses.
 
@@ -106,6 +105,12 @@ My note, your visits and your photos are only yours, even on a shared trip.
 2. Open the trip. It opens on **Plan**, next to **Stops** and **Members**.
 3. On **Stops**, tap **Add stops**: **From my library**, or **New spot** on the map. Places can come from your library, or from the import (**Save, and add them to a trip**).
 
+**Tidy the stops:** Anitabi has one spot per scene, so one café can come in as several stops. On **Stops**, hold a stop to pick several, then:
+- **Group** stops that are close together, and name the group. A group shows as one row; open it to rename it or **Ungroup**.
+- **Merge** stops that are the same spot. Pick the one to keep; it takes the others' notes, labels, frames and days.
+
+The **map** button at the top of a trip opens its day map (see [On the day](#5-on-the-day)).
+
 <br clear="right">
 
 ### The Plan tab
@@ -116,7 +121,8 @@ The plan shows one day at a time; swipe between days. The grid button shows ever
 
 Tap the **pencil** to edit the plan:
 - **Hold a stop and drag it** within the day, onto another day (hold it at the screen's edge), or onto the backlog. Undo brings it back.
-- **Tap a stop** to set its start time, its stay, and the travel time to the next stop. The rest of the day moves with it, and a stop that would start before the one before it ends is marked. Times after midnight read 25:30 and so on.
+- **A group** is one block on its day, such as "11:00–13:00 Café Rose · 3 stops", that opens to its stops. Drag its header to move the whole group. To move one stop on its own, tap it and choose **Take out of the group**.
+- **Tap a stop** to set its start time, its stay, and the travel time to the next stop, or to **Remove from the trip**. The rest of the day moves with it, and a stop that would start before the one before it ends is marked. Times after midnight read 25:30 and so on.
 - **A day's menu** names it ("Uji", "Rainy day"), pins it to a date, moves it to the backup days, or removes it.
 - **In the grid**, drop one day on another to swap them.
 - **Add Day** and **Add a backup day** come after the last day.
@@ -135,7 +141,7 @@ Tap a stop to open its page. It looks like a place's page, with the trip's parts
 - **About this spot**: the trip's own copy of the facts. Editing it changes the trip, not your library.
 - Then your own note, visits and photos, from your library place.
 
-The **⋮** menu renames the stop, moves it to another day or the backlog, or removes it from the trip.
+The **⋮** menu renames the stop, moves it to another day or the backlog, takes it out of its group, or removes it from the trip.
 
 <br clear="right">
 
@@ -168,25 +174,37 @@ Sharing needs a Google sign-in, for you and for the friends you invite.
 
 <br clear="right">
 
-## 5. Recreate the scene (Anime Camera)
+## 5. On the day
+
+**The day map** shows a day's stops on a map with your location, the route between them, and how many are visited. Open it from the **map** button at the top of a trip, or from the small map on the home screen. Switch days along the top. Tap a stop for its frame, how far it is and which way, the photos you took there, **Take photo** and **Mark visited**.
+
+**On the home screen**, today's card shows the next stop with **Take photo** and **Mark done**. Undo takes it back. View-only members don't get Mark done.
+
+A shot never marks a stop done: that's always your call.
+
+> 🌐 The map's tiles need a connection. The day's stops and the camera work offline.
+
+## 6. Recreate the scene (Anime Camera)
 
 *Available on Android and iOS.*
 
-1. Tap **Take photo** on a place's or a stop's page, or open **Anime Camera** from the home screen and pick a place and one of its frames. Places on today's trip come first.
+1. Tap **Take photo** on a place's or a stop's page, on the day map, or on the home screen's next stop. Or tap **Shoot** on the home screen: it finds where you are and offers the frames of your places within about 150 m, nearest first. On a trip day the day's stops come first, and the rest wait under **Other places nearby**. With one place nearby that has one frame or none, the camera opens after 2 seconds unless you tap **Not this place**. You can also shoot with another place's frames, a picture from your gallery, or no frame.
 2. Line it up:
-   - **On Android**, your phone's own camera app opens, with the frame floating in a small window. **Drag** the window to move it and **pinch** to resize it. **Tap** it for opacity **−** / **+** and **✕** to close it, which fade away once you leave them. **Double-tap** it to shrink it to a small dot out of the way; tap the dot to bring it back. The camera's shutter, focus and zoom work everywhere else on the screen.
+   - **On Android**, your phone's own camera app opens, with the frame floating in a small window. **Drag** the window to move it and **pinch** to resize it. **Tap** it for opacity **−** / **+** and **✕** to close it, which fade away once you leave them. When the spot has several frames, **‹** and **›** switch between them, as in **‹ 3/14 ›**. **Double-tap** it to shrink it to a small dot out of the way; tap the dot to bring it back. The camera's shutter, focus and zoom work everywhere else on the screen.
 
-     The first time, Android asks you to allow Trip Planner to **display over other apps**. If you'd rather not, you can still shoot without the window.
-   - **On iOS**, the frame floats over the in-app camera. Drag it, pinch to resize it, use the **opacity slider**, and switch **flash**, the **native or fill** framing, **zoom** or the **front camera** as needed.
+     The first time, Android asks you to allow Trip Planner to **display over other apps**. If you'd rather not, you can still shoot without the window. On Android 13 and later, if you installed the app from a downloaded APK, Android may only say "App access denied": first turn on **Allow restricted settings** in the app's App info (**⋮** menu). The app's dialog has an **App info** button that opens it.
+   - **On iOS**, the frame floats over the in-app camera. Drag it, pinch to resize it, use the **opacity slider**, switch frames with **‹ ›**, and switch **flash**, the **native or fill** framing, **zoom** or the **front camera** as needed.
 3. Take the shot.
-   - **On Android**, the camera opens again with the frame still where you left it, so you can take a few. Press back in the camera when you're done. Your shots then show under the frame: tap the ones to keep, then **Keep**. They're saved as shot to the place's **My photos**, under the trip you were on that day, and to a **Trip Planner** album on your phone; the others are deleted. **Take more** opens the camera again. If Android closes Trip Planner while the camera is open, your shots come back the next time you open it.
+   - **On Android**, the camera opens again with the frame still where you left it, so you can take a few. Press back in the camera when you're done. Your shots then show beside the frame each was taken with: tap the ones to keep, then **Keep**. They're saved as shot to the place's **My photos**, under the trip you were on that day, and to a **Trip Planner** album on your phone, and wait under **Photos to edit**; the others are deleted. If you can edit the trip, **Mark X done** is offered for a stop on a day (already ticked when every frame of the stop has a shot), or **Add X to Day N** for a place that isn't on one. Each stop shows its progress, such as "2 of 5 frames". **Take more** opens the camera again. If Android closes Trip Planner while the camera is open, your shots come back the next time you open it.
    - **On iOS**, the shot opens in the photo editor with the frame attached.
 
-> 💡 **Floating Reference** *(Android)*, on the home screen, or **Float frame** on a page, floats a frame over every app until you close it, so you can take as many shots as you like with any camera app.
+> 💡 **Float a frame over any app** *(Android)*, in the home screen's **⋮** menu, or **Float frame** on a page, floats a frame over every app until you close it, so you can take as many shots as you like with any camera app.
 
-## 6. Edit your photos
+## 7. Edit your photos
 
-To edit a photo, tap **Edit** on it in a place's page, or **Edit Photo** on the home screen for one from your gallery. On iOS the editor also opens after every shot.
+**Photos to edit** (from its card on the home screen) holds the photos you kept as shot and haven't edited yet, by day. Tap one to edit it. **Keep as it is** takes it off the list, with Undo; hold one to pick several.
+
+You can also tap **Edit** on a photo in a place's page, or **Edit a photo from the gallery** in the home screen's **⋮** menu. On iOS the editor also opens after every shot.
 
 - **Tools** run along the bottom; swipe the strip to see them all:
   - **Reference**: add or swap the frame you're matching.
@@ -198,9 +216,9 @@ To edit a photo, tap **Edit** on it in a place's page, or **Edit Photo** on the 
 - **The place button** at the top shows which library place the photo is saved to. Tap it to choose another place or make a new one; **No place** saves the photo only to your phone's gallery.
 - **Save** closes the editor right away and finishes in the background. Photos go to the place's **My photos**, under the trip you were on that day, and to a **Trip Planner** album on your phone. Your edits never overwrite the original.
 
-## 7. Coming from v0.1.x
+## 8. Coming from v0.1.x
 
-The first time you open v0.2.0, your data moves to the new library:
+The first time you open v0.2.0 or later, your data moves to the new library:
 - **Places (POIs)** become library places, with their notes, reference images, photos and visits.
 - **Regions, anime and tags** become labels on those places.
 - **The Trip Calendar's schedule isn't carried over**, and regions don't become trips. Make a trip in **My Trips** and add your places to it.
@@ -213,7 +231,7 @@ The first time you open v0.2.0, your data moves to the new library:
 - **It's yours, and it works offline.** Your library, trips and photos are stored on your phone. No account and no connection needed, except for the things below.
 - **What goes online:**
   - importing from Anitabi and searching anime on Bangumi;
-  - the map's tiles and searching it by name (OpenStreetMap);
+  - the maps' tiles (the library's, the day map's and the home screen's) and searching by name (OpenStreetMap);
   - signing in and shared trips (Google Firebase);
   - the photo editor's **Compose**, which downloads its AI model (~176 MB) the first time; use Wi-Fi for that one.
 - **One copy of your library.** Shared trips are kept in the cloud, but your places, notes and photos live only on this phone. Keep that in mind before switching phones or clearing app data.
@@ -223,11 +241,12 @@ The first time you open v0.2.0, your data moves to the new library:
   |---------|:-------:|:---:|:-------:|
   | Library, trips, planner, sharing | ✅ | ✅ | ✅ |
   | Opening invite links in the app | ✅ | — | — |
-  | Anime Camera (frame overlay) | ✅ | ✅ | — |
+  | Anime Camera (frame overlay) and Shoot here | ✅ | ✅ | — |
+  | Several shots, then pick | ✅ | — | — |
   | Floating Reference | ✅ | — | — |
   | Photo editor | ✅ | ✅ | ✅ (no Compose) |
 
-  On Android, the camera asks once for permission to display over other apps, which the floating frame needs.
+  On Android, the camera asks once for permission to display over other apps, which the floating frame needs. With an APK you downloaded, turn on **Allow restricted settings** in the app's App info first.
 
 ---
 
@@ -258,7 +277,7 @@ firebase emulators:exec "python test/rules_v2_emulator_test.py" --only firestore
 
 Source is organized feature-first under `lib/features/` (`library`, `trip`, `planner`, `sharing`, `sync`, `camera`, `anime`, `poi`, `auth`, `home`), with shared infrastructure under `lib/core/` (`database`, `router`, `providers`, `services`). `firestore.rules` holds the cloud rules, and `public/` is the Firebase Hosting site (the invite page, App Links, privacy policy and terms). See `CLAUDE.md` for the architecture and conventions, and `CHANGELOG.md` for release history. GitHub Actions runs the tests and the rules tests on every pull request and builds the APK when a version tag is pushed.
 
-Contributors using Claude Code get two project skills: `run-app` (build, launch, and drive the app on the Android emulator) and `release` (version, docs, build, smoke test, and a confirmation checklist before anything is published).
+Contributors using Claude Code get three project skills: `run-app` (build, launch, and drive the app on the Android emulator), `verify` (`tool/verify.ps1`: the unit tests with compact output, and the rules tests with `-WithEmulator`), and `release` (version, docs, build, smoke test, and a confirmation checklist before anything is published).
 
 </details>
 
