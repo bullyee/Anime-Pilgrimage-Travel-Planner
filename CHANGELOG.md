@@ -28,6 +28,9 @@ Pilgrimage mode: the app is now built for the day you're out at the spots. Home 
   - **In the plan**, a group is one block on its day ("11:00–13:00 Café Rose · 3 stops · 1 visited") that opens to its stops, each marked visited on its own. In edit mode it drags as one, to another day or to the backlog, where it's also one entry. **Take out of the group** moves a stop on its own.
 - **Remove from the trip** on a stop's sheet in the planner's edit mode ([#144](https://github.com/bullyee/trip_planner/pull/144)), so a stop in the backlog can go without opening its page.
 - **A trip description** ([#148](https://github.com/bullyee/trip_planner/pull/148)), up to 500 characters, set when you make the trip or with **Edit trip** (was "Edit name and dates"). It shows in two lines under the trip's name in My Trips.
+- **Back up to a file** ([#155](https://github.com/bullyee/trip_planner/pull/155), [#78](https://github.com/bullyee/trip_planner/issues/78)): the Library's **⋮** menu saves everything that isn't in the cloud as one `.pilgrimage` file, then opens the share sheet so you can keep it in Drive or send it to yourself. The file holds your library (places, labels, visits, photos and frames), your private trips in full, and the frames you added yourself to shared trips. Shared trips aren't in it: they come back when you sign in.
+  - **Restore from a file** (also on an empty library) adds what this phone is missing and leaves the rest as it is, so an old backup never overwrites newer edits.
+  - Both show their progress and can be cancelled, and a big library doesn't freeze the app.
 
 ### Changed
 - **Home's cards are gone**: Library and My Trips are in the bottom bar, and **Float a frame over any app** and **Edit a photo from the gallery** are in the **⋮** menu ([#139](https://github.com/bullyee/trip_planner/pull/139)).
@@ -48,9 +51,9 @@ Pilgrimage mode: the app is now built for the day you're out at the spots. Home 
 
 ### Known issues
 - **The maps** can leave ghost pins behind when you move them, are slow to load, and pile many pins into one blob. Their tiles need a connection; the day's stops and the camera work offline.
-- **Your library lives only on your phone.** Shared trips are in the cloud, but your places, notes and photos aren't backed up anywhere. Exporting the library to a file comes in v0.4.0 ([#155](https://github.com/bullyee/trip_planner/pull/155)).
+- **Nothing backs up by itself.** Shared trips are in the cloud; your library, private trips and photos are only on your phone until you use **Back up to a file**.
 - **Photos you take stay on your phone.** Others in a shared trip don't see them.
-- **Frames you add yourself don't reach the others in a shared trip** ([#152](https://github.com/bullyee/trip_planner/issues/152)). Only Anitabi's frames do.
+- **Frames you add yourself don't reach the others in a shared trip** ([#152](https://github.com/bullyee/trip_planner/issues/152)). Only Anitabi's frames do. A backup file carries them to your next phone.
 - **Merging stops has no Undo yet.**
 - **Links in some in-app browsers** (LINE, Discord) may not open the app. Copy the 6-letter code from the page and enter it under **Join a trip**.
 - **Searching an anime in Traditional Chinese or English finds little.** The search uses Bangumi, which knows Japanese and Simplified Chinese titles; search with one of those.
@@ -59,7 +62,7 @@ Pilgrimage mode: the app is now built for the day you're out at the spots. Home 
 ### Developer
 - Database schema v14 ([#135](https://github.com/bullyee/trip_planner/pull/135)): `places.chinese_name`, filled from Anitabi's data on import but not shown yet, and `photos.keep_as_is`, set for every photo that was already there.
 - `PilgrimageShootingService` ([#135](https://github.com/bullyee/trip_planner/pull/135), [#136](https://github.com/bullyee/trip_planner/pull/136)): nearby places, today's trip, `recordShot` (the photo, its trip and one visit per place per day, marking nothing done), Photos to edit, the day's feed with compass bearings, and a check-in without a photo (no screen uses it yet).
-- `LibraryBackupService` ([#135](https://github.com/bullyee/trip_planner/pull/135)) exports and imports the library as a `.pilgrimage` zip. No screen uses it yet ([#155](https://github.com/bullyee/trip_planner/pull/155)).
+- `LibraryBackupService` ([#135](https://github.com/bullyee/trip_planner/pull/135), [#155](https://github.com/bullyee/trip_planner/pull/155)) exports and imports a `.pilgrimage` zip, one file at a time in a background isolate. Import checks the manifest and only adds rows the phone doesn't have.
 - `TripRepository` can restore deleted stops, days and trips with their schedule items ([#103](https://github.com/bullyee/trip_planner/pull/103)). No screen uses it yet, and there's no TTL or purge.
 - `firestore.rules` and `storage.rules` drop the unused `users/{userId}` paths ([#135](https://github.com/bullyee/trip_planner/pull/135)); only trips go to the cloud.
 - `tool/verify.ps1` runs the unit tests with compact output, and the rules tests with `-WithEmulator` or `-RulesOnly` ([#119](https://github.com/bullyee/trip_planner/pull/119)).

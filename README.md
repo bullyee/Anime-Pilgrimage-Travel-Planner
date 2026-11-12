@@ -32,6 +32,7 @@ Your library and your trips live on your phone. **No account is needed, and ever
 - 👥 **Share a trip** with friends who can edit it or only view it, and see it sync as they change it.
 - 📍 **Shoot where you stand**: **Shoot** offers the frames of your places within about 150 m, and the day map shows the day's stops around you.
 - 📸 **Recreate scenes with the Anime Camera**, with the frame floating over your camera. On Android it opens your phone's own camera app, so you keep its HDR and night mode.
+- 💾 **Back up to a file** and restore it on a new phone: your library, private trips and photos.
 - 🎨 **Touch up your shots later**: the photos you keep wait under **Photos to edit**. The photo editor matches the colors to the frame, adjusts brightness and sharpness, rotates, straightens and crops, or pastes a character from the frame into your photo.
 
 ---
@@ -77,6 +78,8 @@ The frames download after you save. If you close the app before they finish, imp
 **Change several at once:** hold a place to start picking, then add a label to all of them, add them to a trip, merge them, or remove them from your library. Merging and removing change only your library: your trips keep their stops.
 
 **Labels** (the label button at the top of the Library) lists your anime, tag and region labels. Rename one, merge two, or delete the ones nothing uses.
+
+**Back up to a file:** the Library's **⋮** menu saves your library, private trips and photos as one `.pilgrimage` file and opens the share sheet, so you can keep it in Drive or send it to yourself. On the new phone, install the app, then **⋮** → **Restore from a file** (an empty library offers it too). Restoring only adds what's missing, so it never overwrites newer edits. Shared trips aren't in the file: sign in and they come back.
 
 <br clear="right">
 
@@ -234,7 +237,7 @@ The first time you open v0.2.0 or later, your data moves to the new library:
   - the maps' tiles (the library's, the day map's and the home screen's) and searching by name (OpenStreetMap);
   - signing in and shared trips (Google Firebase);
   - the photo editor's **Compose**, which downloads its AI model (~176 MB) the first time; use Wi-Fi for that one.
-- **One copy of your library.** Shared trips are kept in the cloud, but your places, notes and photos live only on this phone. Keep that in mind before switching phones or clearing app data.
+- **Back up before you switch phones.** Shared trips are kept in the cloud, but your library, private trips and photos live only on this phone. Nothing backs up by itself: use **Back up to a file** before switching phones or clearing app data.
 - **Where features work:**
 
   | Feature | Android | iOS | Desktop |
