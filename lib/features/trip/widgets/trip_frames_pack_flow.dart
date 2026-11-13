@@ -14,10 +14,13 @@ import '../../auth/providers/auth_provider.dart';
 import '../../library/providers/place_providers.dart' show placeRepositoryProvider;
 import '../../library/widgets/library_backup_flow.dart';
 import '../../sharing/providers/group_sharing_providers.dart' show canEditTripProvider, guestUserId;
+import '../../sync/providers/drive_cleanup_providers.dart';
 import '../../sync/providers/frame_transfer_providers.dart';
 import '../../sync/services/frame_transfer_jobs.dart';
 import '../../sync/services/frame_transfer_queue.dart';
 import '../../sync/services/google_drive_frame_service.dart';
+import '../../sync/widgets/drive_cleanup_flow.dart' show driveRemovalHint;
+import '../../sync/widgets/drive_upload_quality_picker.dart';
 import '../services/trip_frames_pack_service.dart';
 
 export '../../sync/providers/frame_transfer_providers.dart'
@@ -167,6 +170,8 @@ Future<void> syncTripLocalFramesViaDrive(BuildContext context, WidgetRef ref, Tr
   }
   final db = ref.read(databaseProvider);
   final svc = ref.read(googleDriveFrameServiceProvider);
+  final relinked = await _resetGoneLinks(context, ref, db, trip);
+  if (!context.mounted) return;
   final count = await svc.countTripLocalFrames(db, trip.id);
   if (!context.mounted) return;
   if (count == 0) {
@@ -183,12 +188,28 @@ Future<void> syncTripLocalFramesViaDrive(BuildContext context, WidgetRef ref, Tr
       context: context,
       builder: (context) => AlertDialog(
         title: const Text('Sync via my Google Drive'),
-        content: Text(
-          '$count local ${count == 1 ? 'frame' : 'frames'} in "${trip.title}" will be resized (max 1280px JPEG) '
-          'and uploaded to "${GoogleDriveFrameService.appFolderName}" in your own Google Drive with '
-          '"anyone with the link can view" permission so trip members can load them.\n\n'
-          'Anyone holding the URL can view the image. Trip Planner uses the drive.file permission and only accesses files it creates.\n\n'
-          'The upload runs in the background: you can keep using the app, switch apps or turn the screen off.',
+        content: SingleChildScrollView(
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Text(
+                '${relinked > 0 ? '$relinked ${relinked == 1 ? "frame's Drive link no longer works, so it is" : "frames' Drive links no longer work, so they are"} uploaded again. ' : ''}'
+                '$count local ${count == 1 ? 'frame' : 'frames'} in "${trip.title}" will be shared with trip members. '
+                'A small frame (up to 800 px) that is the same image as an Anitabi scene already on this phone '
+                'uses that Anitabi link. The rest are uploaded to a folder for this trip in '
+                '"${GoogleDriveFrameService.appFolderName}" in your own Google Drive, shared as '
+                '"anyone with the link can view" so trip members can load them.\n\n'
+                "Anyone holding a link can view that image (or, with the folder's link, the trip's folder). "
+                'Trip Planner uses the drive.file permission and only accesses files it creates.\n\n'
+                '$driveRemovalHint\n\n'
+                'The upload runs in the background: you can keep using the app, switch apps or turn the screen off.',
+              ),
+              const SizedBox(height: 12),
+              Text('Upload quality', style: Theme.of(context).textTheme.titleSmall),
+              const DriveUploadQualityOptions(),
+            ],
+          ),
         ),
         actions: [
           TextButton(onPressed: () => Navigator.pop(context, false), child: const Text('Cancel')),
@@ -213,6 +234,54 @@ Future<void> syncTripLocalFramesViaDrive(BuildContext context, WidgetRef ref, Tr
         driveUploadJob(db: db, drive: svc, trip: trip, canEdit: canEdit),
       );
   _tellQueued(context, 'Uploading $count ${count == 1 ? 'frame' : 'frames'} to Google Drive in the background.');
+}
+
+/// Before an upload: frames of [trip] whose Drive link is gone (the file was
+/// deleted in Drive) but whose image is on this phone go back to local-only,
+/// so they are uploaded again. Shows a progress dialog while links are
+/// checked; returns how many frames were reset.
+Future<int> _resetGoneLinks(BuildContext context, WidgetRef ref, AppDatabase db, Trip trip) async {
+  final cleanup = ref.read(driveFrameCleanupProvider);
+  final Set<String> ids;
+  try {
+    ids = await cleanup.linksToCheck(db, trip.id);
+  } catch (e) {
+    // Never in the way of the upload itself.
+    debugPrint('[DriveFrameCleanup] could not list links to check: $e');
+    return 0;
+  }
+  if (ids.isEmpty || !context.mounted) return 0;
+  final progress = ValueNotifier<int>(0);
+  final navigator = Navigator.of(context, rootNavigator: true);
+  showDialog<void>(
+    context: context,
+    barrierDismissible: false,
+    builder: (context) => PopScope(
+      canPop: false,
+      child: AlertDialog(
+        title: const Text('Checking shared links'),
+        content: ValueListenableBuilder<int>(
+          valueListenable: progress,
+          builder: (context, done, _) => Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              LinearProgressIndicator(value: ids.isEmpty ? null : done / ids.length),
+              const SizedBox(height: 12),
+              Text('Checked $done of ${ids.length} Drive links. Frames whose file is gone from Drive will be uploaded again.'),
+            ],
+          ),
+        ),
+      ),
+    ),
+  );
+  try {
+    return await cleanup.resetGoneLinks(db, ids, onProgress: (done, _) => progress.value = done);
+  } catch (_) {
+    return 0;
+  } finally {
+    navigator.pop();
+  }
 }
 
 /// Members tab → Download frames for offline: brings every linked frame of
@@ -294,10 +363,24 @@ Future<int> uploadStopGalleryFramesViaDrive(
     context: context,
     builder: (context) => AlertDialog(
       title: const Text('Upload via my Google Drive'),
-      content: const Text(
-        'Selected photos will be resized (max 1280px JPEG) and uploaded to "${GoogleDriveFrameService.appFolderName}" '
-        'in your own Google Drive with "anyone with the link can view" permission so trip members can see them.\n\n'
-        'Anyone holding the URL can view the uploaded image. Trip Planner uses drive.file and only accesses files it creates.',
+      content: SingleChildScrollView(
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            const Text(
+              'Selected photos will be uploaded to a folder for this trip in '
+              '"${GoogleDriveFrameService.appFolderName}" in your own Google Drive, shared as "anyone with the link can view" '
+              'so trip members can see them.\n\n'
+              "Anyone holding a link can view that image (or, with the folder's link, the trip's folder). "
+              'Trip Planner uses drive.file and only accesses files it creates.\n\n'
+              '$driveRemovalHint',
+            ),
+            const SizedBox(height: 12),
+            Text('Upload quality', style: Theme.of(context).textTheme.titleSmall),
+            const DriveUploadQualityOptions(),
+          ],
+        ),
       ),
       actions: [
         TextButton(onPressed: () => Navigator.pop(context, false), child: const Text('Cancel')),

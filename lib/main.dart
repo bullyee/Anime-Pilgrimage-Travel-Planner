@@ -8,6 +8,7 @@ import 'firebase_options.dart';
 
 import 'core/router/app_router.dart';
 import 'features/poi/services/background_photo_save.dart';
+import 'features/sync/providers/drive_cleanup_providers.dart';
 import 'features/sync/providers/frame_transfer_providers.dart';
 import 'features/sync/providers/sync_v2_providers.dart';
 import 'features/sync/widgets/frame_transfer_widgets.dart';
@@ -82,6 +83,9 @@ class TripPlannerApp extends ConsumerWidget {
       ref.watch(frameTransferResumeProvider);
       ref.watch(frameAutoDownloaderProvider);
     }
+    // Takes Drive uploads back when a trip is deleted, unshared or left, or a
+    // stop or frame is removed (and retries removals that had to wait).
+    if (!kIsWeb) ref.watch(driveCleanupRunnerProvider);
 
     return MaterialApp.router(
       title: 'Trip Planner',

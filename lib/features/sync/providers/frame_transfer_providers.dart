@@ -14,12 +14,18 @@ import '../services/frame_transfer_queue.dart';
 import '../services/google_drive_frame_service.dart';
 import '../services/transfer_foreground_service.dart';
 import '../services/trip_frame_downloader.dart';
+import 'drive_cleanup_providers.dart';
+import 'drive_upload_quality_provider.dart';
 
 final tripFramesPackServiceProvider = Provider<TripFramesPackService>((ref) => const TripFramesPackService());
 
 final googleDriveFrameServiceProvider = Provider<GoogleDriveFrameService>((ref) {
   ref.watch(currentUserIdProvider);
-  return GoogleDriveFrameService(getToken: ref.watch(driveAccessTokenProvider));
+  return GoogleDriveFrameService(
+    getToken: ref.watch(driveAccessTokenProvider),
+    journal: ref.watch(driveCleanupJournalProvider),
+    uploadQuality: () => ref.read(driveUploadQualityProvider.notifier).current(),
+  );
 });
 
 final tripFrameDownloaderProvider = Provider<TripFrameDownloader>(

@@ -310,6 +310,7 @@ class FrameTransferQueue extends Notifier<FrameTransferState> {
   final _specs = <String, TransferJobSpec>{};
   final _pending = <String>[];
   BackupCancel? _currentCancel;
+  Completer<void>? _currentEnded;
   var _pumping = false;
   var _serviceUp = false;
   var _askedForNotifications = false;
@@ -397,6 +398,22 @@ class FrameTransferQueue extends Notifier<FrameTransferState> {
     state = state.copyWith(current: c.copyWith(cancelling: true));
   }
 
+  /// Cancels the uploads of [tripId] (every trip's when null), queued and
+  /// running, and completes once the running one has stopped (after the
+  /// frames in flight are committed), so its files can be removed safely.
+  Future<void> cancelUploads({String? tripId}) async {
+    bool matches(TransferJobView j) => j.kind.isUpload && (tripId == null || j.tripId == tripId);
+    for (final q in List.of(state.queued)) {
+      if (matches(q)) cancel(q.id);
+    }
+    final c = state.current;
+    if (c != null && matches(c)) {
+      final ended = _currentEnded;
+      cancelCurrent();
+      await ended?.future;
+    }
+  }
+
   /// Cancels everything: the running job and the queue.
   void cancelAll() {
     for (final id in List.of(_pending)) {
@@ -469,10 +486,13 @@ class FrameTransferQueue extends Notifier<FrameTransferState> {
         );
         final cancel = BackupCancel();
         _currentCancel = cancel;
+        final ended = _currentEnded = Completer<void>();
         await _showProgress(view, force: true);
 
         final outcome = await _runOne(id, spec, cancel);
         _currentCancel = null;
+        _currentEnded = null;
+        ended.complete();
         if (!spec.quiet) lastOutcome = outcome;
         state = state.copyWith(clearCurrent: true, notices: [...state.notices, if (!spec.quiet) outcome]);
       }
