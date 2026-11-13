@@ -12,6 +12,8 @@ import 'package:trip_planner/features/auth/providers/auth_provider.dart';
 import 'package:trip_planner/features/library/screens/library_screen.dart';
 import 'package:trip_planner/features/library/services/library_backup_service.dart';
 import 'package:trip_planner/features/library/widgets/library_backup_flow.dart';
+import 'package:trip_planner/features/settings/screens/settings_screen.dart';
+import 'package:trip_planner/features/settings/services/storage_usage.dart';
 
 const _contents = BackupContents(places: 312, privateTrips: 2, photos: 1, frames: 2800, bytes: 600 * 1024 * 1024);
 
@@ -70,17 +72,21 @@ void main() {
   });
   tearDown(() => db.close());
 
-  Future<void> pump(WidgetTester tester) async {
+  /// Settings by default, where Back up and Restore are; the library for its empty state.
+  Future<void> pump(WidgetTester tester, {String at = '/settings'}) async {
     tester.view.physicalSize = const Size(1080, 2400);
     tester.view.devicePixelRatio = 3;
     addTearDown(tester.view.reset);
-    final router = GoRouter(initialLocation: '/library', routes: [
+    final router = GoRouter(initialLocation: at, routes: [
       GoRoute(path: '/library', builder: (_, _) => const LibraryScreen()),
+      GoRoute(path: '/settings', builder: (_, _) => const SettingsScreen()),
     ]);
     await tester.pumpWidget(ProviderScope(
       overrides: [
         databaseProvider.overrideWithValue(db),
         currentUserIdProvider.overrideWithValue('u1'),
+        authStateChangesProvider.overrideWith((ref) => Stream.value(null)),
+        storageUsageProvider.overrideWith((ref) async => const StorageUsage(total: 0, mapTiles: 0, cutoutModel: 0)),
         libraryBackupServiceProvider.overrideWithValue(backup),
         backupFolderProvider.overrideWithValue(() async => Directory.systemTemp.createTempSync('backup_flow_')),
         shareBackupFileProvider.overrideWithValue((path) async => shared.add(path)),
@@ -105,8 +111,6 @@ void main() {
   }
 
   Future<void> openMenu(WidgetTester tester, String item) async {
-    await tester.tap(find.byTooltip('More'));
-    await tester.pumpAndSettle();
     await tester.tap(find.text(item));
     await tester.pumpAndSettle();
   }
@@ -160,7 +164,7 @@ void main() {
   });
 
   testWidgets('restore from the empty library: what the file has, the rule, then what was added', (tester) async {
-    await pump(tester);
+    await pump(tester, at: '/library');
     expect(find.text('Your library is empty'), findsOneWidget);
     await tester.tap(find.text('Restore from a backup file'));
     await settle(tester);

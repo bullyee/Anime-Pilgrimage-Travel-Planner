@@ -47,7 +47,9 @@ Under it, **Photos to edit** shows while there are any, and **Near you** lists u
 
 The bar at the bottom has **Trips**, **Shoot** *(Android and iOS)* and **Library**. The **⋮** menu has **Float a frame over any app** *(Android)* and **Edit a photo from the gallery**.
 
-There's no sign-in on the home screen. Sharing, inviting and joining a trip ask you to sign in with Google; **Sign out** is in My Trips' account menu.
+There's no sign-in on the home screen. Sharing, inviting and joining a trip ask you to sign in with Google.
+
+**Settings** (the gear at the top of Home, or the account button in My Trips once you're signed in) has your account and **Sign out**, **Back up to a file** and **Restore from a file**, how much space the app takes with **Clear map tiles**, and About: the version, the credits, the privacy policy and the open-source licences.
 
 ---
 
@@ -79,7 +81,7 @@ The frames download after you save. If you close the app before they finish, imp
 
 **Labels** (the label button at the top of the Library) lists your anime, tag and region labels. Rename one, merge two, or delete the ones nothing uses.
 
-**Back up to a file:** the Library's **⋮** menu saves your library, private trips and photos as one `.pilgrimage` file and opens the share sheet, so you can keep it in Drive or send it to yourself. On the new phone, install the app, then **⋮** → **Restore from a file** (an empty library offers it too). Restoring only adds what's missing, so it never overwrites newer edits. Shared trips aren't in the file: sign in and they come back.
+**Back up to a file**, in Settings, saves your library, private trips and photos as one `.pilgrimage` file and opens the share sheet, so you can keep it in Drive or send it to yourself. On the new phone, install the app, then **Settings** → **Restore from a file** (an empty library offers it too). Restoring only adds what's missing, so it never overwrites newer edits. Shared trips aren't in the file: sign in and they come back.
 
 <br clear="right">
 

@@ -117,4 +117,22 @@ void main() {
     expect(controller.camera.zoom, closeTo(clusterUntilZoom, 0.01));
     expect(find.byKey(const ValueKey('pin:a')), findsOneWidget);
   });
+
+  testWidgets('a new tile cache (after Clear map tiles) gives the map a new tile layer', (tester) async {
+    addTearDown(() => mapTileCache.value = null);
+    // Zoomed past the layer's last level, so it asks for no tiles.
+    await tester.pumpWidget(MaterialApp(
+      home: FlutterMap(
+        options: const MapOptions(initialCenter: LatLng(35, 135), initialZoom: 25),
+        children: const [AppTileLayer()],
+      ),
+    ));
+    final before = tester.widget<TileLayer>(find.byType(TileLayer));
+
+    mapTileCache.value = const DisabledMapCachingProvider();
+    await tester.pump();
+    final after = tester.widget<TileLayer>(find.byType(TileLayer));
+    expect(after.key, isNot(before.key));
+    expect(identical(after.tileProvider, before.tileProvider), isFalse);
+  });
 }
