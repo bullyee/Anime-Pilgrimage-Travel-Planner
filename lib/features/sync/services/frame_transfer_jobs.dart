@@ -188,6 +188,8 @@ String tripFramesImportSummaryText(TripFramesImportSummary s) {
 String driveSyncSummaryText(DriveSyncSummary s) {
   final parts = <String>[
     if (s.uploaded > 0) 'Uploaded ${s.uploaded} ${s.uploaded == 1 ? 'frame' : 'frames'} to Google Drive.',
+    if (s.linkedOnline > 0)
+      '${s.linkedOnline} ${s.linkedOnline == 1 ? 'frame is' : 'frames are'} already on Anitabi, so ${s.linkedOnline == 1 ? 'it uses' : 'they use'} that link instead.',
     if (s.reused > 0) 'Reused ${s.reused} already-uploaded ${s.reused == 1 ? 'image' : 'images'}.',
     if (s.updatedStops > 0) 'Updated ${s.updatedStops} ${s.updatedStops == 1 ? 'stop' : 'stops'} for group sync.',
     if (s.skippedMissing > 0)
