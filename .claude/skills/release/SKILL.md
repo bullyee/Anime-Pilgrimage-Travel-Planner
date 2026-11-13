@@ -44,6 +44,7 @@ git switch -c release/vX.Y.Z origin/master       # local only until the gate
 
 - Pre-1.0 semver: PATCH for fixes only, MINOR for new user-visible features.
 - `pubspec.yaml` → `version: X.Y.Z+N`. The name matches the tag. `N` is Android's versionCode: previous `N` + 1, never lower, or the APK won't install over the last one. (v0.1.0 and v0.1.1 shipped as `1.0.0+1`; v0.1.2 aligned it to `0.1.2+3`.)
+- `lib/core/app_version.dart` → `appVersion = 'X.Y.Z+N'`, the same string; Settings → About shows it, and `test/core/app_version_test.dart` fails until it matches `pubspec.yaml`.
 
 ## 3. Update the static docs
 

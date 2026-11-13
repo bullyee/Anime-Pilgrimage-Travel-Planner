@@ -22,6 +22,7 @@ void main() {
       initialLocation: '/trips',
       routes: [
         GoRoute(path: '/trips', builder: (_, _) => const TripListScreen()),
+        GoRoute(path: '/settings', builder: (_, _) => const Scaffold(body: Text('settings page'))),
         GoRoute(
           path: '/trips/:tripId',
           builder: (_, state) => Scaffold(body: Text('trip page of ${state.pathParameters['tripId']}')),
@@ -52,15 +53,15 @@ void main() {
     await disposeApp(tester);
   });
 
-  testWidgets('signed in: the account menu has Sign out', (tester) async {
+  testWidgets('signed in: the account button opens Settings, where Sign out is', (tester) async {
     await pumpList(tester);
     await tester.tap(find.byTooltip('Account'));
     await tester.pumpAndSettle();
-    expect(find.text('Sign out'), findsOneWidget);
+    expect(find.text('settings page'), findsOneWidget);
     await disposeApp(tester);
   });
 
-  testWidgets('signed out: no account menu, since sharing and joining ask to sign in', (tester) async {
+  testWidgets('signed out: no account button, since sharing and joining ask to sign in', (tester) async {
     await pumpList(tester, userId: 'guest_local_user');
     expect(find.byTooltip('Account'), findsNothing);
     expect(find.text('Sign in'), findsNothing);

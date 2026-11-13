@@ -248,20 +248,6 @@ class _LibraryScreenState extends ConsumerState<LibraryScreen> {
                   icon: const Icon(Icons.label_outline),
                   onPressed: () => context.push('/library/labels'),
                 ),
-                PopupMenuButton<void Function()>(
-                  tooltip: 'More',
-                  onSelected: (action) => action(),
-                  itemBuilder: (context) => [
-                    PopupMenuItem(
-                      value: () => backUpLibrary(this.context, ref),
-                      child: const ListTile(leading: Icon(Icons.save_alt), title: Text('Back up to a file')),
-                    ),
-                    PopupMenuItem(
-                      value: () => restoreLibrary(this.context, ref),
-                      child: const ListTile(leading: Icon(Icons.restore), title: Text('Restore from a file')),
-                    ),
-                  ],
-                ),
               ],
             ),
       body: entriesAsync.when(

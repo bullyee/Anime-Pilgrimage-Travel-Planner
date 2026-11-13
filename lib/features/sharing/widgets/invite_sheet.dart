@@ -6,7 +6,6 @@ import 'package:qr_flutter/qr_flutter.dart';
 import 'package:share_plus/share_plus.dart';
 
 import '../../../core/database/database.dart';
-import '../../../core/router/app_router.dart';
 import '../../../shared/theme/app_theme.dart';
 import '../../auth/providers/auth_provider.dart';
 import '../invite_links.dart';
@@ -319,15 +318,11 @@ class _InviteSheetState extends ConsumerState<InviteSheet> {
     ));
   }
 
-  /// Signing in rebuilds the router, so it's told to come back to this
-  /// trip's members afterwards.
+  /// Signing in keeps this sheet open, which then offers the invite.
   Future<void> _signInNow() async {
-    final returnTo = ref.read(signInReturnProvider.notifier);
-    returnTo.state = '/trips/${widget.trip.id}?tab=members';
     try {
       await ref.read(authControllerProvider.notifier).signInWithGoogle();
     } catch (e) {
-      returnTo.state = null;
       if (mounted) setState(() => _error = "Couldn't sign in: $e");
     }
   }
