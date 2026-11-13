@@ -143,6 +143,17 @@ class GoogleDriveFrameService {
   /// Anitabi.)
   final List<Duration> retryDelays;
 
+  final Duration Function(int bytes) _uploadTimeout;
+
+  /// How long one upload of [bytes] may take before it is aborted and tried
+  /// again: 30 s, plus the time to send it at 128 kbit/s (a weak mobile
+  /// connection). An original frame of a few MB gets minutes, not 30 s.
+  static Duration uploadTimeoutFor(int bytes) => Duration(seconds: 30 + bytes ~/ 16000);
+
+  /// A token without showing anything gives up after this long, so a
+  /// background upload can't hang on it.
+  final Duration silentTokenTimeout;
+
   String? _cachedToken;
   Future<String>? _refreshingToken;
 
@@ -160,10 +171,13 @@ class GoogleDriveFrameService {
     FrameHasher? hashFrames,
     DriveCleanupJournal? journal,
     Future<DriveUploadQuality> Function()? uploadQuality,
+    Duration Function(int bytes)? uploadTimeout,
+    this.silentTokenTimeout = const Duration(seconds: 30),
     this.retryDelays = const [Duration(seconds: 2), Duration(seconds: 6), Duration(seconds: 15)],
   })  : _client = client ?? http.Client(),
         _getToken = getToken,
         _compress = compress ?? _compressAt(uploadQuality),
+        _uploadTimeout = uploadTimeout ?? uploadTimeoutFor,
         _readFile = readFile ?? _defaultReadFile,
         _sleep = sleep ?? Future<void>.delayed,
         _hashFrames = hashFrames ?? FrameHash.computeAll,
@@ -815,10 +829,13 @@ class GoogleDriveFrameService {
   Future<String> _ensureToken({required bool interactive}) async {
     final refreshing = _refreshingToken;
     if (refreshing != null) return refreshing;
-    final token = _cachedToken ?? await _getToken(interactive: interactive);
+    final token = _cachedToken ?? await _fetchToken(interactive: interactive);
     _cachedToken = token;
     return token;
   }
+
+  Future<String> _fetchToken({required bool interactive}) =>
+      interactive ? _getToken(interactive: true) : _getToken(interactive: false).timeout(silentTokenTimeout);
 
   /// A new token after [staleToken] got a 401, fetched once for all the
   /// uploads in flight: whoever comes second gets the same one.
@@ -833,7 +850,7 @@ class GoogleDriveFrameService {
         _tripFolders.clear();
         final String refreshed;
         try {
-          refreshed = await _getToken(interactive: false);
+          refreshed = await _fetchToken(interactive: false);
         } catch (refreshError) {
           throw DriveAuthRequiredException(refreshError);
         }
@@ -878,6 +895,7 @@ class GoogleDriveFrameService {
         if (!canRetry || !_isRetryableStatus(res.statusCode)) return res;
         debugPrint('[GoogleDriveFrameService] HTTP ${res.statusCode}; retrying');
       } catch (e) {
+        if (cancel?.isCancelled ?? false) throw const BackupCancelled();
         if (!canRetry || !_isNetworkError(e)) rethrow;
         debugPrint('[GoogleDriveFrameService] $e; retrying');
       }
@@ -1039,17 +1057,34 @@ class GoogleDriveFrameService {
       ..add(utf8.encode('\r\n--$boundary--\r\n'));
     final payload = builder.takeBytes();
 
+    final limit = _uploadTimeout(payload.length);
     final res = await _sendWithRetry(
-      () => _client
-          .post(
+      () async {
+        // Cancel, or running out of time, aborts the request itself: it
+        // doesn't keep sending in the background next to its retry.
+        final abort = Completer<void>();
+        void stop() {
+          if (!abort.isCompleted) abort.complete();
+        }
+
+        cancel?.onCancel(stop);
+        final timer = Timer(limit, stop);
+        try {
+          final req = http.AbortableRequest(
+            'POST',
             Uri.parse('$_driveUploadApi/files?uploadType=multipart&fields=id,permissions(type,role)'),
-            headers: {
-              'Authorization': 'Bearer $token',
-              'Content-Type': 'multipart/related; boundary=$boundary',
-            },
-            body: payload,
+            abortTrigger: abort.future,
           )
-          .timeout(const Duration(seconds: 30)),
+            ..headers['Authorization'] = 'Bearer $token'
+            ..headers['Content-Type'] = 'multipart/related; boundary=$boundary'
+            ..bodyBytes = payload;
+          final streamed = await _client.send(req).timeout(limit + const Duration(seconds: 5));
+          return await http.Response.fromStream(streamed).timeout(const Duration(seconds: 30));
+        } finally {
+          timer.cancel();
+          stop();
+        }
+      },
       cancel: cancel,
     );
     _throwIfError(res, 'Failed to upload frame image to Google Drive');
