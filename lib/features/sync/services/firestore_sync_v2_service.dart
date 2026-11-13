@@ -1,5 +1,6 @@
 import 'package:cloud_firestore/cloud_firestore.dart';
 import '../../../../core/database/database.dart';
+import '../../trip/models/trip_activity.dart';
 
 /// A snapshot of user trips from [FirestoreSyncV2Service], carrying whether it originated from local cache.
 class UserTripsSnapshot {
@@ -259,5 +260,39 @@ class FirestoreSyncV2Service {
         .snapshots(includeMetadataChanges: true)
         .where((snapshot) => !snapshot.metadata.hasPendingWrites)
         .map((snapshot) => snapshot.docs.map((doc) => withDocumentId(doc.id, doc.data())).toList());
+  }
+
+  /// Build batch operation for a [TripActivity].
+  void buildActivityBatchOperation(WriteBatch batch, TripActivity activity) {
+    final docRef = _db
+        .collection('tripsV2')
+        .doc(activity.tripId)
+        .collection('activity')
+        .doc(activity.id);
+    batch.set(docRef, activity.toMap());
+  }
+
+  /// Record an audit log entry for a trip.
+  Future<void> recordActivity(TripActivity activity) async {
+    final docRef = _db
+        .collection('tripsV2')
+        .doc(activity.tripId)
+        .collection('activity')
+        .doc(activity.id);
+    await docRef.set(activity.toMap());
+  }
+
+  /// Watch recent activity logs for a trip, newest first.
+  Stream<List<TripActivity>> watchTripActivity(String tripId, {int limit = 50}) {
+    return _db
+        .collection('tripsV2')
+        .doc(tripId)
+        .collection('activity')
+        .orderBy('createdAt', descending: true)
+        .limit(limit)
+        .snapshots()
+        .map((snapshot) => snapshot.docs
+            .map((doc) => TripActivity.fromMap(withDocumentId(doc.id, doc.data())))
+            .toList());
   }
 }

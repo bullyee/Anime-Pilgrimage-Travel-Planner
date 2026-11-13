@@ -268,6 +268,27 @@ service cloud.firestore {
           && isScheduleItemSafe(itemId);
         allow delete: if false;
       }
+
+      // --- Activity Log subcollection (Phase 2 Safety Net) ---
+      function isActivitySafe(activityId) {
+        let data = request.resource.data;
+        return (!('id' in data) || data.id == activityId)
+          && (!('tripId' in data) || data.tripId == tripId)
+          && (!('summary' in data) || (data.summary is string && data.summary.size() <= 500))
+          && (!('entityType' in data) || (data.entityType is string && data.entityType.size() <= 50))
+          && (!('action' in data) || (data.action is string && data.action.size() <= 50))
+          && (!('expireAt' in data) || data.expireAt is timestamp);
+      }
+
+      match /activity/{activityId} {
+        allow read: if isAuthenticated() && isTripMemberV2(tripId);
+        allow create: if isAuthenticated()
+          && isTripMemberV2(tripId)
+          && isTripEditorOrOwner(tripId)
+          && request.resource.data.actorId == request.auth.uid
+          && isActivitySafe(activityId);
+        allow update, delete: if false; // Append-only audit log
+      }
     }
 
     // ==========================================
