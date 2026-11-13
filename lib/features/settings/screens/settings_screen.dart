@@ -8,6 +8,10 @@ import '../../../shared/map/app_map.dart';
 import '../../anime/services/isnet_model_store.dart';
 import '../../auth/providers/auth_provider.dart';
 import '../../library/widgets/library_backup_flow.dart';
+import '../../sync/providers/drive_cleanup_providers.dart';
+import '../../sync/widgets/drive_cleanup_flow.dart';
+import '../../sync/providers/drive_upload_quality_provider.dart';
+import '../../sync/widgets/drive_upload_quality_picker.dart';
 import '../services/storage_usage.dart';
 
 /// Deletes the cutout model; tests replace it.
@@ -28,8 +32,6 @@ String sizeInSentence(int bytes) => bytes < 1024 * 1024 ? 'less than 1 MB' : for
 
 const privacyPolicyUrl = 'https://trip-planner-2775c.web.app/privacy.html';
 const sourceCodeUrl = 'https://github.com/bullyee/trip_planner';
-const googleConnectionsUrl = 'https://myaccount.google.com/connections';
-const sharedFramesFolder = 'Trip Planner Shared Frames';
 
 /// Settings: the account, your data and About, in one place instead of the
 /// ⋮ menus they used to be in. Opened from Home's gear and My Trips' account
@@ -136,17 +138,50 @@ class _AccountSection extends ConsumerWidget {
           subtitle: const Text("Shared trips sync only while you're signed in. Your library and private trips don't need it."),
           onTap: () => _signOut(context, ref),
         ),
-        ListTile(
-          leading: const Icon(Icons.add_to_drive_outlined),
-          title: const Text('Frames shared through Google Drive'),
-          subtitle: const Text(
-            'They stay in the "$sharedFramesFolder" folder in your Drive, and anyone with the link can see them. '
-            'To stop sharing, delete them there, or remove Trip Planner\'s access to your Google account.',
-          ),
-          trailing: const Icon(Icons.open_in_new, size: 18),
-          onTap: () => ref.read(openLinkProvider)(Uri.parse(googleConnectionsUrl)),
-        ),
+        const _UploadQualityTile(),
+        const _DriveRemovalTile(),
       ],
+    );
+  }
+}
+
+/// Remove every frame this user shared through Google Drive, and how many
+/// removals are still waiting to reach Drive.
+class _UploadQualityTile extends ConsumerWidget {
+  const _UploadQualityTile();
+
+  @override
+  Widget build(BuildContext context, WidgetRef ref) {
+    final quality = ref.watch(driveUploadQualityProvider);
+    return ListTile(
+      key: const Key('settingsUploadQuality'),
+      leading: const Icon(Icons.high_quality_outlined),
+      title: const Text('Frame upload quality'),
+      subtitle: Text('${quality.label}: ${quality.detail}'),
+      onTap: () => showDriveUploadQualityPicker(context),
+    );
+  }
+}
+
+class _DriveRemovalTile extends ConsumerWidget {
+  const _DriveRemovalTile();
+
+  @override
+  Widget build(BuildContext context, WidgetRef ref) {
+    final waiting = ref.watch(driveRemovalsWaitingProvider).valueOrNull ?? 0;
+    return ListTile(
+      key: const Key('settingsDriveRemoval'),
+      leading: const Icon(Icons.cloud_off_outlined),
+      title: const Text('Remove shared frames from my Google Drive'),
+      subtitle: Text([
+        'Deletes every frame Trip Planner put in your Drive; anyone with a link loses it. '
+            "People in your trips lose the frames they haven't downloaded.",
+        if (waiting > 0)
+          '${waiting == 1 ? 'One removal is' : '$waiting removals are'} waiting, and will finish '
+              'the next time Google Drive can be reached.',
+      ].join('\n\n')),
+      isThreeLine: true,
+      onTap: () => confirmAndRemoveAllSharedFrames(context, ref),
     );
   }
 }

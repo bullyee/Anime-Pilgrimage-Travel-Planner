@@ -12,6 +12,9 @@ import 'package:trip_planner/core/providers/database_provider.dart';
 import 'package:trip_planner/features/auth/providers/auth_provider.dart';
 import 'package:trip_planner/features/settings/screens/settings_screen.dart';
 import 'package:trip_planner/features/settings/services/storage_usage.dart';
+import 'package:trip_planner/features/sync/providers/drive_cleanup_providers.dart';
+import 'package:trip_planner/features/sync/providers/drive_upload_quality_provider.dart';
+import 'package:trip_planner/features/sync/services/drive_upload_quality.dart';
 
 class _FakeUser extends Fake implements User {
   @override
@@ -28,11 +31,15 @@ void main() {
   late List<Uri> opened;
   late int modelDeletes;
   late StorageUsage usage;
+  var waiting = 0;
+  var qualityStore = InMemoryDriveUploadQualityStore();
 
   setUp(() {
     db = AppDatabase.forTesting(NativeDatabase.memory());
     opened = [];
     modelDeletes = 0;
+    waiting = 0;
+    qualityStore = InMemoryDriveUploadQualityStore();
     usage = const StorageUsage(total: 900 * _mb, mapTiles: 120 * _mb, cutoutModel: 176 * _mb);
   });
   tearDown(() => db.close());
@@ -46,6 +53,8 @@ void main() {
         databaseProvider.overrideWithValue(db),
         authStateChangesProvider.overrideWith((ref) => Stream.value(user)),
         storageUsageProvider.overrideWith((ref) async => usage),
+        driveRemovalsWaitingProvider.overrideWith((ref) => Stream.value(waiting)),
+        driveUploadQualityStoreProvider.overrideWithValue(qualityStore),
         openLinkProvider.overrideWithValue((uri) async => opened.add(uri)),
         deleteCutoutModelProvider.overrideWithValue(() async {
           modelDeletes++;
@@ -71,15 +80,41 @@ void main() {
     await disposeApp(tester);
   });
 
-  testWidgets('signed in: who, Sign out, and where shared frames live', (tester) async {
+  testWidgets('signed in: who, Sign out, and removing shared frames from Drive', (tester) async {
     await pump(tester, user: _FakeUser(displayName: 'Mika', email: 'mika@example.com'));
     expect(find.text('Mika'), findsOneWidget);
     expect(find.textContaining('mika@example.com'), findsOneWidget);
     expect(find.text('Sign out'), findsOneWidget);
-    expect(find.textContaining('Trip Planner Shared Frames'), findsOneWidget);
+    expect(find.text('Remove shared frames from my Google Drive'), findsOneWidget);
+    expect(find.textContaining('waiting'), findsNothing);
+    await disposeApp(tester);
+  });
 
-    await tester.tap(find.text('Frames shared through Google Drive'));
-    expect(opened.single.toString(), googleConnectionsUrl);
+  testWidgets('removals still waiting to reach Drive are counted', (tester) async {
+    waiting = 3;
+    await pump(tester, user: _FakeUser(displayName: 'Mika', email: 'mika@example.com'));
+    expect(find.textContaining('3 removals are waiting'), findsOneWidget);
+    await disposeApp(tester);
+  });
+
+  testWidgets('Frame upload quality shows the choice and changes it', (tester) async {
+    await pump(tester, user: _FakeUser(displayName: 'Mika', email: 'mika@example.com'));
+    expect(find.textContaining('Original: Best quality'), findsOneWidget);
+    await tester.tap(find.text('Frame upload quality'));
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('Smallest'));
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('Done'));
+    await tester.pumpAndSettle();
+    expect(qualityStore.value, DriveUploadQuality.smallest);
+    expect(find.textContaining('Smallest: 1280 px'), findsOneWidget);
+    await disposeApp(tester);
+  });
+
+  testWidgets('signed out: no Drive row', (tester) async {
+    await pump(tester);
+    expect(find.byKey(const Key('settingsDriveRemoval')), findsNothing);
+    expect(find.byKey(const Key('settingsUploadQuality')), findsNothing);
     await disposeApp(tester);
   });
 
