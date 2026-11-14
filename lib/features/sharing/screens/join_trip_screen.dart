@@ -6,7 +6,6 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 import 'package:intl/intl.dart';
 
-import '../../../core/router/app_router.dart';
 import '../../../core/utils/schedule_logic.dart';
 import '../../../shared/theme/app_theme.dart';
 import '../../auth/providers/auth_provider.dart';
@@ -398,15 +397,11 @@ class _JoinTripScreenState extends ConsumerState<JoinTripScreen> {
     });
   }
 
-  /// Signing in rebuilds the router, so it's told to come back to this
-  /// invite afterwards.
+  /// Signing in keeps this screen, which then shows the invite's Join.
   Future<void> _signIn(TripInvite invite) async {
-    final returnTo = ref.read(signInReturnProvider.notifier);
-    returnTo.state = Uri(path: '/join', queryParameters: {'token': invite.token}).toString();
     try {
       await ref.read(authControllerProvider.notifier).signInWithGoogle();
     } catch (e) {
-      returnTo.state = null;
       if (!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text("Couldn't sign in: $e")));
     }
