@@ -40,13 +40,15 @@ const overlapRadius = 14.0;
 /// the same tile isn't fetched again each time a map opens. OSM's tile policy
 /// asks apps to cache; this never downloads tiles you didn't look at.
 ///
-/// Call once before the first map is built; later calls do nothing.
+/// Call once before the first map is built; later calls do nothing until
+/// [clearMapTileCache] has run.
 Future<void> setUpMapTileCache() async {
   if (kIsWeb) return;
   try {
-    final dir = await getApplicationSupportDirectory();
-    _tileCache = BuiltInMapCachingProvider.getOrCreateInstance(
-      cacheDirectory: p.join(dir.path, 'map_tiles'),
+    final dir = await mapTileCacheDirectory();
+    if (dir == null) return;
+    mapTileCache.value = BuiltInMapCachingProvider.getOrCreateInstance(
+      cacheDirectory: dir,
       maxCacheSize: 300 * 1024 * 1024,
       overrideFreshAge: const Duration(days: 14),
     );
@@ -55,9 +57,31 @@ Future<void> setUpMapTileCache() async {
   }
 }
 
+/// Where [setUpMapTileCache] keeps the tiles; null on the web.
+Future<String?> mapTileCacheDirectory() async {
+  if (kIsWeb) return null;
+  return p.join((await getApplicationSupportDirectory()).path, 'map_tiles');
+}
+
+/// Deletes the kept tiles (Settings → Clear map tiles) and starts an empty
+/// cache. Maps on screen switch to the new cache by themselves.
+Future<void> clearMapTileCache() async {
+  final old = mapTileCache.value;
+  // Maps let go of the old cache before it's deleted under them.
+  mapTileCache.value = null;
+  if (old is BuiltInMapCachingProvider) {
+    try {
+      await old.destroy(deleteCache: true);
+    } catch (_) {
+      // No tiles were kept yet, so there was no folder to delete.
+    }
+  }
+  await setUpMapTileCache();
+}
+
 /// Set by [setUpMapTileCache]; without it (tests, web) tiles aren't kept, and
 /// flutter_map never looks for its own cache folder.
-MapCachingProvider? _tileCache;
+final mapTileCache = ValueNotifier<MapCachingProvider?>(null);
 
 /// The OpenStreetMap tiles every map uses.
 class AppTileLayer extends StatefulWidget {
@@ -69,10 +93,30 @@ class AppTileLayer extends StatefulWidget {
 
 class _AppTileLayerState extends State<AppTileLayer> {
   // One per layer: TileLayer disposes its provider when it goes.
-  late final _provider = NetworkTileProvider(cachingProvider: _tileCache ?? const DisabledMapCachingProvider());
+  late var _provider = _newProvider();
+
+  NetworkTileProvider _newProvider() =>
+      NetworkTileProvider(cachingProvider: mapTileCache.value ?? const DisabledMapCachingProvider());
+
+  @override
+  void initState() {
+    super.initState();
+    mapTileCache.addListener(_cacheChanged);
+  }
+
+  @override
+  void dispose() {
+    mapTileCache.removeListener(_cacheChanged);
+    super.dispose();
+  }
+
+  // A new cache needs a new provider, and a new TileLayer (by its key) so the
+  // old one disposes the old provider.
+  void _cacheChanged() => setState(() => _provider = _newProvider());
 
   @override
   Widget build(BuildContext context) => TileLayer(
+        key: ObjectKey(_provider),
         urlTemplate: osmTileUrl,
         userAgentPackageName: mapUserAgentPackage,
         tileProvider: _provider,
