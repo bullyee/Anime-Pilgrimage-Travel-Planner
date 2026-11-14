@@ -5,12 +5,14 @@ import 'package:go_router/go_router.dart';
 import '../../../core/database/database.dart';
 import '../../../core/utils/app_result.dart';
 import '../../../shared/theme/app_theme.dart';
+import '../../planner/providers/planner_providers.dart';
 import '../../planner/widgets/day_planner.dart';
 import '../../sharing/models/trip_member.dart';
 import '../../sharing/providers/group_sharing_providers.dart';
 import '../../sharing/widgets/invite_sheet.dart';
 import '../controllers/trips_controller.dart';
 import '../providers/trip_providers.dart';
+import '../services/trip_route_export_service.dart';
 import '../widgets/trip_card.dart';
 import '../widgets/trip_form_sheet.dart';
 import '../widgets/trip_sync_icon.dart';
@@ -92,8 +94,13 @@ class _TripScreenState extends ConsumerState<TripScreen> with SingleTickerProvid
     // A viewer's role can change while they're on the page.
     final editing = _editing && canEdit;
     final shared = trip.sharing == 'group';
+    final hasAccess = !shared || role != null;
     final menu = [
       if (canEdit) const PopupMenuItem(value: 'edit', child: Text('Edit trip')),
+      if (hasAccess) ...[
+        const PopupMenuItem(value: 'export_gpx', child: Text('Export route (GPX)')),
+        const PopupMenuItem(value: 'export_geojson', child: Text('Export route (GeoJSON)')),
+      ],
       if (role == TripMemberRole.owner) const PopupMenuItem(value: 'delete', child: Text('Delete trip')),
       if (shared && role != null && role != TripMemberRole.owner)
         const PopupMenuItem(value: 'leave', child: Text('Leave trip')),
@@ -149,6 +156,8 @@ class _TripScreenState extends ConsumerState<TripScreen> with SingleTickerProvid
             PopupMenuButton<String>(
               onSelected: (value) {
                 if (value == 'edit') _editTrip(context, trip);
+                if (value == 'export_gpx') _exportRoute(context, trip, isGeoJson: false);
+                if (value == 'export_geojson') _exportRoute(context, trip, isGeoJson: true);
                 if (value == 'delete') _deleteTrip(context, trip);
                 if (value == 'leave') leaveTrip(context, ref, trip);
               },
@@ -248,6 +257,48 @@ class _TripScreenState extends ConsumerState<TripScreen> with SingleTickerProvid
         }
       case Failure(:final error):
         ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text("Couldn't delete the trip: $error")));
+    }
+  }
+
+  Future<void> _exportRoute(BuildContext context, Trip trip, {required bool isGeoJson}) async {
+    final view = ref.read(plannerViewProvider(trip.id)).valueOrNull;
+    if (view == null) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Trip details are still loading.')),
+      );
+      return;
+    }
+
+    final exporter = ref.read(tripRouteExportServiceProvider);
+    final result = isGeoJson
+        ? exporter.exportGeoJson(trip: trip, plannerView: view)
+        : exporter.exportGpx(trip: trip, plannerView: view);
+
+    if (result.stopCount == 0) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('None of the stops in this trip have coordinates to export.')),
+      );
+      return;
+    }
+
+    try {
+      await ref.read(shareRouteFileProvider)(result);
+      if (!context.mounted) return;
+      final skippedMsg = result.skippedCount > 0
+          ? ' (${result.skippedCount} without coordinates skipped)'
+          : '';
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text(
+            'Exported ${result.stopCount} ${result.stopCount == 1 ? 'stop' : 'stops'}$skippedMsg.',
+          ),
+        ),
+      );
+    } catch (e) {
+      if (!context.mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text("Couldn't export route: $e")),
+      );
     }
   }
 }
