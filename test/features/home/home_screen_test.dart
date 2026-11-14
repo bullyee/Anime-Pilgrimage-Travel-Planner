@@ -288,6 +288,8 @@ void main() {
       expect(find.byTooltip('More'), findsNothing);
       expect(find.text('Sign in'), findsNothing);
       expect(find.text('Sign out'), findsNothing);
+      // The account and the backup are in Settings.
+      expect(find.byTooltip('Settings'), findsOneWidget);
     });
   });
 }

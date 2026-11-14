@@ -2,6 +2,7 @@ import 'dart:async';
 import 'dart:convert';
 import 'dart:io';
 import 'dart:isolate';
+import 'dart:math' as math;
 import 'dart:typed_data' show BytesBuilder;
 
 import 'package:crypto/crypto.dart';
@@ -14,6 +15,9 @@ import 'package:uuid/uuid.dart';
 import '../../../core/database/database.dart';
 import '../../../core/utils/archive_isolate.dart';
 import '../../library/models/frames.dart';
+import 'drive_cleanup_journal.dart';
+import 'drive_upload_quality.dart';
+import 'online_frame_matcher.dart';
 
 /// Thrown when a Google Drive upload or permission operation fails.
 class GoogleDriveUploadException implements Exception {
@@ -56,12 +60,46 @@ class DriveSyncSummary {
   final int updatedStops;
   final int skippedMissing;
 
+  /// Frames that took the link of the same image already online at Anitabi
+  /// instead of being uploaded.
+  final int linkedOnline;
+
   const DriveSyncSummary({
     required this.uploaded,
     required this.reused,
     required this.updatedStops,
     required this.skippedMissing,
+    this.linkedOnline = 0,
   });
+}
+
+/// A file or folder the app created in the user's Drive, as listed by
+/// [GoogleDriveFrameService.listAppFiles].
+@immutable
+class DriveAppFile {
+  final String id;
+  final String name;
+  final bool isFolder;
+
+  /// The `tripId` / `frameId` app properties the app set, if any.
+  final String? tripId;
+  final String? frameId;
+
+  const DriveAppFile({required this.id, required this.name, required this.isFolder, this.tripId, this.frameId});
+
+  /// The top folder ([GoogleDriveFrameService.appFolderName]).
+  bool get isAppFolder => isFolder && tripId == null && name == GoogleDriveFrameService.appFolderName;
+}
+
+/// How a delete went.
+enum DriveDeleteOutcome {
+  deleted,
+
+  /// Already gone (deleted by hand, or never visible to this app).
+  notFound,
+
+  /// Drive refused: not this user's file.
+  forbidden,
 }
 
 typedef DriveTokenFetcher = Future<String> Function({bool interactive});
@@ -73,12 +111,20 @@ typedef DriveSleep = Future<void> Function(Duration delay);
 /// Drive using the non-sensitive `drive.file` scope, grants link-read access so
 /// trip collaborators can cache them, and writes back `remoteUrl` without using
 /// Firebase Storage or Blaze billing.
+///
+/// A trip's frames go into a folder of their own inside [appFolderName],
+/// shared once as "anyone with the link can view"; files created in it
+/// inherit that, so a frame needs one request (the upload) instead of two.
+/// Frames uploaded before that (directly in [appFolderName], each shared on
+/// its own) keep working as they are.
 class GoogleDriveFrameService {
   static const appFolderName = 'Trip Planner Shared Frames';
-  static const maxUploadDimension = 1280;
-  static const jpegQuality = 82;
+  /// How many frames [syncTripLocalFrames] works on at once.
+  static const uploadConcurrency = 3;
+
   static const _driveApi = 'https://www.googleapis.com/drive/v3';
   static const _driveUploadApi = 'https://www.googleapis.com/upload/drive/v3';
+  static const _folderMime = 'application/vnd.google-apps.folder';
   static const _uuid = Uuid();
 
   final http.Client _client;
@@ -86,14 +132,35 @@ class GoogleDriveFrameService {
   final DriveImageCompressor _compress;
   final DriveFileReader _readFile;
   final DriveSleep _sleep;
+  final FrameHasher _hashFrames;
+
+  /// Remembers what this user uploads, so it can be removed again
+  /// (`DriveFrameCleanup`).
+  final DriveCleanupJournal? _journal;
 
   /// Waits between attempts when a Google endpoint drops the connection or
   /// answers 429/5xx; one retry per entry. (Google only: never applied to
   /// Anitabi.)
   final List<Duration> retryDelays;
 
+  final Duration Function(int bytes) _uploadTimeout;
+
+  /// How long one upload of [bytes] may take before it is aborted and tried
+  /// again: 30 s, plus the time to send it at 128 kbit/s (a weak mobile
+  /// connection). An original frame of a few MB gets minutes, not 30 s.
+  static Duration uploadTimeoutFor(int bytes) => Duration(seconds: 30 + bytes ~/ 16000);
+
+  /// A token without showing anything gives up after this long, so a
+  /// background upload can't hang on it.
+  final Duration silentTokenTimeout;
+
   String? _cachedToken;
-  String? _cachedFolderId;
+  Future<String>? _refreshingToken;
+
+  /// Folder lookups in flight or done, shared by concurrent uploads so a
+  /// folder is looked up (or created) once.
+  Future<String>? _rootFolder;
+  final _tripFolders = <String, Future<String>>{};
 
   GoogleDriveFrameService({
     http.Client? client,
@@ -101,38 +168,85 @@ class GoogleDriveFrameService {
     DriveImageCompressor? compress,
     DriveFileReader? readFile,
     DriveSleep? sleep,
+    FrameHasher? hashFrames,
+    DriveCleanupJournal? journal,
+    Future<DriveUploadQuality> Function()? uploadQuality,
+    Duration Function(int bytes)? uploadTimeout,
+    this.silentTokenTimeout = const Duration(seconds: 30),
     this.retryDelays = const [Duration(seconds: 2), Duration(seconds: 6), Duration(seconds: 15)],
   })  : _client = client ?? http.Client(),
         _getToken = getToken,
-        _compress = compress ?? compressForDriveUpload,
+        _compress = compress ?? _compressAt(uploadQuality),
+        _uploadTimeout = uploadTimeout ?? uploadTimeoutFor,
         _readFile = readFile ?? _defaultReadFile,
-        _sleep = sleep ?? Future<void>.delayed;
+        _sleep = sleep ?? Future<void>.delayed,
+        _hashFrames = hashFrames ?? FrameHash.computeAll,
+        _journal = journal;
 
   /// Canonical direct-download URL stored on synced `NewReferenceImages.remoteUrl`.
   static String downloadUrlForFileId(String fileId) =>
       'https://drive.google.com/uc?export=download&id=$fileId';
 
-  /// Compresses and resizes an image to a lightweight JPEG (max [maxUploadDimension]
-  /// on its longest edge) so uploads stay fast and modest in Google Drive quota.
-  static Future<Uint8List> compressForDriveUpload(Uint8List rawBytes) {
+  /// Compresses with the quality the user chose when the upload runs.
+  static DriveImageCompressor _compressAt(Future<DriveUploadQuality> Function()? uploadQuality) =>
+      (rawBytes) async => compressForDriveUpload(
+            rawBytes,
+            quality: uploadQuality == null ? DriveUploadQuality.original : await uploadQuality(),
+          );
+
+  /// What goes to Drive for a frame: the file itself, untouched, when its
+  /// longest edge is at most [quality]'s `maxEdge` (no second round of JPEG
+  /// loss, and a PNG stays lossless); otherwise a copy scaled down to that
+  /// size as a JPEG at its `jpegQuality`. Undecodable bytes go as they are.
+  static Future<Uint8List> compressForDriveUpload(
+    Uint8List rawBytes, {
+    DriveUploadQuality quality = DriveUploadQuality.original,
+  }) {
+    final maxEdge = quality.maxEdge;
+    final jpegQuality = quality.jpegQuality;
     if (kIsWeb) {
-      return Future.value(_encodeDriveJpeg(rawBytes));
+      return Future.value(_encodeDriveJpeg(rawBytes, maxEdge, jpegQuality));
     }
-    return Isolate.run(() => _encodeDriveJpeg(rawBytes));
+    return Isolate.run(() => _encodeDriveJpeg(rawBytes, maxEdge, jpegQuality));
   }
 
-  static Uint8List _encodeDriveJpeg(Uint8List rawBytes) {
+  static Uint8List _encodeDriveJpeg(Uint8List rawBytes, int maxUploadDimension, int jpegQuality) {
+    // The header is enough to know whether the file can go as it is.
+    final info = _imageInfo(rawBytes);
+    if (info != null && math.max(info.$1, info.$2) <= maxUploadDimension) return rawBytes;
     final decoded = img.decodeImage(rawBytes);
     if (decoded == null) {
       return rawBytes;
     }
     final longest = decoded.width > decoded.height ? decoded.width : decoded.height;
-    final resized = longest > maxUploadDimension
-        ? (decoded.width >= decoded.height
-            ? img.copyResize(decoded, width: maxUploadDimension, interpolation: img.Interpolation.average)
-            : img.copyResize(decoded, height: maxUploadDimension, interpolation: img.Interpolation.average))
-        : decoded;
+    if (longest <= maxUploadDimension) return rawBytes;
+    final resized = decoded.width >= decoded.height
+        ? img.copyResize(decoded, width: maxUploadDimension, interpolation: img.Interpolation.average)
+        : img.copyResize(decoded, height: maxUploadDimension, interpolation: img.Interpolation.average);
     return Uint8List.fromList(img.encodeJpg(resized, quality: jpegQuality));
+  }
+
+  /// Width and height from an image's header, without decoding it.
+  static (int, int)? _imageInfo(Uint8List bytes) {
+    try {
+      final info = img.findDecoderForData(bytes)?.startDecode(bytes);
+      if (info == null || info.width <= 0 || info.height <= 0) return null;
+      return (info.width, info.height);
+    } catch (_) {
+      return null;
+    }
+  }
+
+  /// The MIME type and file extension of an image file, from its first bytes.
+  /// Frames that go up as they are keep their own format.
+  static (String, String) uploadType(Uint8List b) {
+    if (b.length >= 8 && b[0] == 0x89 && b[1] == 0x50 && b[2] == 0x4E && b[3] == 0x47) return ('image/png', 'png');
+    if (b.length >= 12 && b[0] == 0x52 && b[1] == 0x49 && b[2] == 0x46 && b[3] == 0x46 &&
+        b[8] == 0x57 && b[9] == 0x45 && b[10] == 0x42 && b[11] == 0x50) {
+      return ('image/webp', 'webp');
+    }
+    if (b.length >= 6 && b[0] == 0x47 && b[1] == 0x49 && b[2] == 0x46) return ('image/gif', 'gif');
+    return ('image/jpeg', 'jpg');
   }
 
   static Future<Uint8List?> _defaultReadFile(String path) async {
@@ -157,12 +271,19 @@ class GoogleDriveFrameService {
   /// the upload itself never has to prompt.
   Future<void> prepareToken() => _ensureToken(interactive: true);
 
-  /// Uploads [rawBytes] into the app's Google Drive folder, shares it read-only by
-  /// link so trip collaborators can download it, and returns the resulting file metadata.
+  /// Uploads [rawBytes] to the user's Google Drive, readable by anyone with
+  /// the link so trip collaborators can download it, and returns the
+  /// resulting file metadata.
+  ///
+  /// With a [tripId] the file goes into the trip's link-shared folder (named
+  /// after [tripTitle]) and inherits its sharing; it is shared on its own only
+  /// if Drive doesn't report that. Without one it goes into [appFolderName]
+  /// and is shared on its own.
   Future<GoogleDriveUploadedFile> uploadImageBytes({
     required Uint8List rawBytes,
     required String frameId,
     String? tripId,
+    String? tripTitle,
     String? stopId,
     bool interactive = true,
     BackupCancel? cancel,
@@ -179,12 +300,14 @@ class GoogleDriveFrameService {
       }
     }
     return _runWithAuthRetry(token, (activeToken) async {
-      final folderId = await _ensureFolderId(activeToken, cancel: cancel);
-      final fileId = await _multipartUpload(
+      final folderId = tripId == null
+          ? await _ensureFolderId(activeToken, cancel: cancel)
+          : await _ensureTripFolderId(activeToken, tripId, tripTitle, cancel: cancel);
+      final (fileId: fileId, linkShared: linkShared) = await _multipartUpload(
         cancel: cancel,
         token: activeToken,
         folderId: folderId,
-        fileName: 'frame_$frameId.jpg',
+        fileName: 'frame_$frameId.${uploadType(jpegBytes).$2}',
         bytes: jpegBytes,
         appProperties: {
           'tripId': ?tripId,
@@ -192,12 +315,14 @@ class GoogleDriveFrameService {
           'frameId': frameId,
         },
       );
-      try {
-        await _grantAnyoneReaderPermission(activeToken, fileId, cancel: cancel);
-      } catch (e) {
-        // Avoid leaving private unshareable orphan files in Drive on permission failure.
-        await _deleteDriveFileQuietly(activeToken, fileId);
-        rethrow;
+      if (!linkShared) {
+        try {
+          await _grantAnyoneReaderPermission(activeToken, fileId, cancel: cancel);
+        } catch (e) {
+          // Avoid leaving private unshareable orphan files in Drive on permission failure.
+          await _deleteDriveFileQuietly(activeToken, fileId);
+          rethrow;
+        }
       }
       return GoogleDriveUploadedFile(
         fileId: fileId,
@@ -232,6 +357,7 @@ class GoogleDriveFrameService {
       rawBytes: bytes,
       frameId: frameId,
       tripId: tripId,
+      tripTitle: await _tripTitle(db, tripId),
       stopId: stopId,
       interactive: interactive,
     );
@@ -271,6 +397,7 @@ class GoogleDriveFrameService {
       }
       rethrow;
     }
+    await _journal?.recordFile(uploaded.fileId, tripId);
     return (await (db.select(db.newReferenceImages)..where((r) => r.id.equals(frameId))).getSingle());
   }
 
@@ -280,9 +407,16 @@ class GoogleDriveFrameService {
   ///
   /// When a local frame originates from a library place (`stopId == null`), the
   /// personal library row is left untouched and only a stop-scoped copy receives
-  /// the Drive link. Frames backed by identical image bytes upload once and reuse
-  /// the link within the trip. Each finished stop commits before checking cancel
-  /// for the next upload so already-uploaded Drive files are never orphaned.
+  /// the link. Frames backed by identical image bytes upload once and reuse
+  /// the link within the trip. A frame that is the same image as one already
+  /// online at Anitabi ([OnlineFrameMatcher]) takes that link, with Anitabi's
+  /// attribution, and isn't uploaded.
+  ///
+  /// Works on [uploadConcurrency] frames at a time. Each frame commits as soon
+  /// as its link is known; on cancel or on the first error no new frame is
+  /// started, the ones in flight finish and commit, and then it throws, so
+  /// already-uploaded Drive files are never orphaned. A file uploaded for a
+  /// stop deleted meanwhile, and used by no other frame, is deleted again.
   ///
   /// With [interactive] false (a background run, token fetched beforehand with
   /// [prepareToken]) it never shows Google's sign-in: an expired token that
@@ -310,76 +444,116 @@ class GoogleDriveFrameService {
       }
     }
 
-    var uploaded = 0;
+    final tripTitle = await _tripTitle(db, tripId);
+    final matcher = await OnlineFrameMatcher.forStops(db, plan.stops, readFile: _readFile, hashAll: _hashFrames);
+
     var reused = 0;
+    var linkedOnline = 0;
     var skippedMissing = 0;
     var done = 0;
     final touchedStopIds = <String>{};
-    final hashToUrl = Map<String, String>.from(plan.existingUrlByHash);
-    final pathToUrl = Map<String, String>.from(plan.existingUrlByPath);
 
-    onProgress?.call(0, plan.pendingCount);
+    /// Links some frame was committed with, and Drive files uploaded in this
+    /// run (link → file ID): a file whose link nobody committed is deleted.
+    final committedUrls = <String>{};
+    final uploadedFiles = <String, String>{};
 
-    for (final task in plan.tasks) {
-      if (cancel?.isCancelled ?? false) throw const BackupCancelled();
+    /// Links found online in this run → the Anitabi frame they belong to.
+    final onlineSources = <String, OnlineFrameCandidate>{};
 
-      final localPath = task.frame.localPath!;
-      String? url = pathToUrl[localPath];
-      String? newlyUploadedFileId;
-      var countedAsUpload = false;
+    /// The link for each image content and each file, known or on its way,
+    /// so concurrent frames with the same image wait for one upload.
+    final byHash = <String, Future<String>>{
+      for (final e in plan.existingUrlByHash.entries) e.key: Future.value(e.value),
+    };
+    final byPath = <String, Future<_Resolved?>>{
+      for (final e in plan.existingUrlByPath.entries) e.key: Future.value(_Resolved(e.value, _How.reused)),
+    };
 
-      if (url == null) {
-        final bytes = await _readFile(localPath);
-        if (bytes == null || bytes.isEmpty) {
-          skippedMissing++;
-          done++;
-          onProgress?.call(done, plan.pendingCount);
-          continue;
-        }
-        final hash = md5.convert(bytes).toString();
-        url = hashToUrl[hash];
-        if (url != null) {
-          reused++;
+    _How howOf(String url) => onlineSources.containsKey(url) ? _How.online : _How.reused;
+
+    Future<_Resolved?> resolve(_DriveFrameTask task) async {
+      final bytes = await _readFile(task.frame.localPath!);
+      if (bytes == null || bytes.isEmpty) return null;
+      final hash = md5.convert(bytes).toString();
+      final known = byHash[hash];
+      if (known != null) {
+        final url = await known;
+        return _Resolved(url, howOf(url));
+      }
+      final completer = Completer<String>();
+      completer.future.ignore();
+      byHash[hash] = completer.future;
+      try {
+        final match = await matcher.match(bytes, stop: task.stop, animeLabelId: task.frame.animeLabelId);
+        final _Resolved resolved;
+        if (match != null) {
+          onlineSources[match.url] = match.candidate;
+          resolved = _Resolved(match.url, _How.online);
         } else {
-          final stopBeforeUpload = await (db.select(db.stops)
-                ..where((s) => s.id.equals(task.stop.id) & s.tripId.equals(tripId) & s.deletedAt.isNull()))
-              .getSingleOrNull();
-          if (stopBeforeUpload == null) {
-            done++;
-            onProgress?.call(done, plan.pendingCount);
-            continue;
-          }
+          if (cancel?.isCancelled ?? false) throw const BackupCancelled();
           final res = await uploadImageBytes(
             rawBytes: bytes,
             frameId: task.frame.id,
             tripId: tripId,
+            tripTitle: tripTitle,
             stopId: task.stop.id,
             interactive: interactive,
             cancel: cancel,
           );
-          url = res.downloadUrl;
-          newlyUploadedFileId = res.fileId;
-          hashToUrl[hash] = url;
-          countedAsUpload = true;
-          uploaded++;
+          uploadedFiles[res.downloadUrl] = res.fileId;
+          resolved = _Resolved(res.downloadUrl, _How.uploaded);
         }
-        pathToUrl[localPath] = url;
+        completer.complete(resolved.url);
+        return resolved;
+      } catch (e, st) {
+        completer.completeError(e, st);
+        rethrow;
+      }
+    }
+
+    Future<bool> stopIsLive(String stopId) async =>
+        await (db.select(db.stops)..where((s) => s.id.equals(stopId) & s.tripId.equals(tripId) & s.deletedAt.isNull()))
+            .getSingleOrNull() !=
+        null;
+
+    Future<void> runTask(_DriveFrameTask task) async {
+      if (!await stopIsLive(task.stop.id)) return;
+      final localPath = task.frame.localPath!;
+      final _Resolved? resolved;
+      final pending = byPath[localPath];
+      if (pending != null) {
+        final r = await pending;
+        // Another frame did the work for this file.
+        resolved = r == null ? null : _Resolved(r.url, howOf(r.url));
       } else {
-        reused++;
+        final mine = resolve(task);
+        byPath[localPath] = mine;
+        resolved = await mine;
+      }
+      if (resolved == null) {
+        skippedMissing++;
+        return;
       }
 
-      final remoteUrl = url;
+      final remoteUrl = resolved.url;
+      final online = onlineSources[remoteUrl]?.frame;
       final now = DateTime.now();
       final committed = await db.transaction(() async {
-        final stopStillLive = await (db.select(db.stops)
-              ..where((s) => s.id.equals(task.stop.id) & s.tripId.equals(tripId) & s.deletedAt.isNull()))
-            .getSingleOrNull();
-        if (stopStillLive == null) return false;
+        if (!await stopIsLive(task.stop.id)) return false;
 
         if (task.frame.stopId != null) {
           // Stop-owned frame: targeted update preserves localPath and metadata.
+          // A link from Anitabi brings Anitabi's attribution (CC BY-NC-SA)
+          // when the frame doesn't say where it's from.
+          final takeAttribution =
+              online != null && (task.frame.source?.trim().isEmpty ?? true) && (task.frame.sourceUrl?.trim().isEmpty ?? true);
           await (db.update(db.newReferenceImages)..where((r) => r.id.equals(task.frame.id))).write(
-            NewReferenceImagesCompanion(remoteUrl: Value(remoteUrl)),
+            NewReferenceImagesCompanion(
+              remoteUrl: Value(remoteUrl),
+              source: takeAttribution ? Value(online.source ?? 'Anitabi') : const Value.absent(),
+              sourceUrl: takeAttribution ? Value(online.sourceUrl) : const Value.absent(),
+            ),
           );
         } else {
           // Place-owned frame: leave the personal library row untouched; insert
@@ -401,8 +575,8 @@ class GoogleDriveFrameService {
                     animeLabelId: Value(task.frame.animeLabelId),
                     episode: Value(task.frame.episode),
                     timestampS: Value(task.frame.timestampS),
-                    source: Value(task.frame.source ?? 'Google Drive'),
-                    sourceUrl: Value(task.frame.sourceUrl ?? remoteUrl),
+                    source: Value(task.frame.source ?? online?.source ?? (online != null ? 'Anitabi' : 'Google Drive')),
+                    sourceUrl: Value(task.frame.sourceUrl ?? online?.sourceUrl ?? remoteUrl),
                   ),
                 );
           }
@@ -416,30 +590,71 @@ class GoogleDriveFrameService {
         );
         return true;
       });
+      if (!committed) return;
 
-      if (!committed) {
-        if (newlyUploadedFileId != null) {
-          final tok = _cachedToken;
-          if (tok != null) await _deleteDriveFileQuietly(tok, newlyUploadedFileId);
-          if (countedAsUpload) uploaded--;
+      committedUrls.add(remoteUrl);
+      final uploadedFileId = uploadedFiles[remoteUrl];
+      if (uploadedFileId != null) await _journal?.recordFile(uploadedFileId, tripId);
+      touchedStopIds.add(task.stop.id);
+      switch (resolved.how) {
+        case _How.online:
+          linkedOnline++;
+        case _How.reused:
+          reused++;
+        case _How.uploaded:
+          break; // counted from uploadedFiles at the end
+      }
+    }
+
+    onProgress?.call(0, plan.pendingCount);
+
+    var next = 0;
+    Object? failure;
+    StackTrace? failureStack;
+    bool cancelled() => cancel?.isCancelled ?? false;
+
+    Future<void> worker() async {
+      while (failure == null && !cancelled() && next < plan.tasks.length) {
+        final task = plan.tasks[next++];
+        try {
+          await runTask(task);
+        } catch (e, st) {
+          failure ??= e;
+          failureStack ??= st;
+          return;
         }
         done++;
         onProgress?.call(done, plan.pendingCount);
-        continue;
       }
-
-      touchedStopIds.add(task.stop.id);
-      done++;
-      onProgress?.call(done, plan.pendingCount);
     }
 
+    try {
+      await Future.wait([
+        for (var i = 0; i < math.min(uploadConcurrency, plan.tasks.length); i++) worker(),
+      ]);
+    } finally {
+      // Uploaded for a stop deleted meanwhile (or a commit that failed), and
+      // used by no other frame.
+      final tok = _cachedToken;
+      for (final e in uploadedFiles.entries) {
+        if (!committedUrls.contains(e.key) && tok != null) await _deleteDriveFileQuietly(tok, e.value);
+      }
+    }
+
+    if (failure != null) Error.throwWithStackTrace(failure!, failureStack!);
+    if (cancelled() && next < plan.tasks.length) throw const BackupCancelled();
+
     return DriveSyncSummary(
-      uploaded: uploaded,
+      uploaded: uploadedFiles.keys.where(committedUrls.contains).length,
       reused: reused,
       updatedStops: touchedStopIds.length,
       skippedMissing: skippedMissing,
+      linkedOnline: linkedOnline,
     );
   }
+
+  Future<String?> _tripTitle(AppDatabase db, String tripId) async =>
+      (await (db.select(db.trips)..where((t) => t.id.equals(tripId))).getSingleOrNull())?.title;
 
   /// [hashSynced] reads every already-synced file to find identical bytes;
   /// counting doesn't need that.
@@ -448,7 +663,7 @@ class GoogleDriveFrameService {
           ..where((s) => s.tripId.equals(tripId) & s.deletedAt.isNull()))
         .get();
     if (liveStops.isEmpty) {
-      return const _TripDriveSyncPlan(tasks: [], existingUrlByPath: {}, existingUrlByHash: {});
+      return const _TripDriveSyncPlan(stops: [], tasks: [], existingUrlByPath: {}, existingUrlByHash: {});
     }
 
     final stopIds = {for (final s in liveStops) s.id};
@@ -506,16 +721,145 @@ class GoogleDriveFrameService {
     }
 
     return _TripDriveSyncPlan(
+      stops: liveStops,
       tasks: tasks,
       existingUrlByPath: existingUrlByPath,
       existingUrlByHash: existingUrlByHash,
     );
   }
 
+  /// The files and folders the app created in this user's Drive, trashed ones
+  /// included (a trashed file stays readable by link until it is deleted),
+  /// optionally only those for [tripId]. With `drive.file` Drive lists only
+  /// files this app created or opened; anything else that shows up is skipped
+  /// unless it carries the app's own markers (a frame ID or trip ID app
+  /// property, or the top folder's name).
+  Future<List<DriveAppFile>> listAppFiles({String? tripId, bool interactive = false, BackupCancel? cancel}) async {
+    final token = await _tokenFor(interactive: interactive);
+    return _runWithAuthRetry(token, (activeToken) async {
+      final out = <DriveAppFile>[];
+      String? pageToken;
+      do {
+        final uri = Uri.parse('$_driveApi/files').replace(
+          queryParameters: {
+            if (tripId != null) 'q': "appProperties has { key='tripId' and value='${_quote(tripId)}' }",
+            'fields': 'nextPageToken,files(id,name,mimeType,appProperties)',
+            'spaces': 'drive',
+            'pageSize': '1000',
+            'pageToken': ?pageToken,
+          },
+        );
+        final res = await _sendWithRetry(
+          () => _client.get(uri, headers: {'Authorization': 'Bearer $activeToken'}).timeout(const Duration(seconds: 20)),
+          cancel: cancel,
+        );
+        _throwIfError(res, 'Failed to list the frames on Google Drive');
+        final json = jsonDecode(res.body) as Map<String, dynamic>;
+        for (final raw in (json['files'] as List?) ?? const []) {
+          if (raw is! Map) continue;
+          final id = raw['id'] as String?;
+          if (id == null || id.isEmpty) continue;
+          final props = raw['appProperties'] is Map ? raw['appProperties'] as Map : const {};
+          final file = DriveAppFile(
+            id: id,
+            name: raw['name'] as String? ?? '',
+            isFolder: raw['mimeType'] == _folderMime,
+            tripId: props['tripId'] as String?,
+            frameId: props['frameId'] as String?,
+          );
+          if (file.frameId != null || (file.isFolder && (file.tripId != null || file.isAppFolder))) out.add(file);
+        }
+        pageToken = json['nextPageToken'] as String?;
+      } while (pageToken != null && pageToken.isNotEmpty);
+      return out;
+    });
+  }
+
+  /// Whether [fileId]'s link is gone for everyone: Drive answers 404 (or
+  /// 410) to an anonymous request for it. Only the first byte is asked for.
+  /// Anything else, such as the image, a quota page, or no network, counts
+  /// as still there.
+  Future<bool> isPublicLinkGone(String fileId) async {
+    try {
+      final req = http.Request('GET', Uri.parse(downloadUrlForFileId(fileId)))..headers['Range'] = 'bytes=0-0';
+      final res = await _client.send(req).timeout(const Duration(seconds: 15));
+      unawaited(res.stream.listen(null).cancel());
+      return res.statusCode == 404 || res.statusCode == 410;
+    } catch (_) {
+      return false;
+    }
+  }
+
+  /// Permanently deletes [fileId] (a folder with everything of this user's
+  /// in it). Not trashed: Drive keeps a trashed file readable by everyone it
+  /// was shared with until it is deleted for good.
+  Future<DriveDeleteOutcome> deleteDriveFile(String fileId, {bool interactive = false, BackupCancel? cancel}) async {
+    final token = await _tokenFor(interactive: interactive);
+    return _runWithAuthRetry(token, (activeToken) async {
+      final res = await _sendWithRetry(
+        () => _client
+            .delete(Uri.parse('$_driveApi/files/$fileId'), headers: {'Authorization': 'Bearer $activeToken'})
+            .timeout(const Duration(seconds: 15)),
+        cancel: cancel,
+      );
+      if (res.statusCode == 404) return DriveDeleteOutcome.notFound;
+      if (res.statusCode == 403 && !_isRateLimit(res)) return DriveDeleteOutcome.forbidden;
+      _throwIfError(res, 'Failed to delete a frame from Google Drive');
+      return DriveDeleteOutcome.deleted;
+    });
+  }
+
+  /// A 403 that means "slow down" rather than "not allowed".
+  static bool _isRateLimit(http.Response res) =>
+      res.body.contains('rateLimitExceeded') || res.body.contains('userRateLimitExceeded');
+
+  /// A token for a call; without [interactive], one that never shows
+  /// Google's sign-in (else [DriveAuthRequiredException]).
+  Future<String> _tokenFor({required bool interactive}) async {
+    if (interactive) return _ensureToken(interactive: true);
+    try {
+      return await _ensureToken(interactive: false);
+    } on DriveAuthRequiredException {
+      rethrow;
+    } catch (e) {
+      throw DriveAuthRequiredException(e);
+    }
+  }
+
   Future<String> _ensureToken({required bool interactive}) async {
-    final token = _cachedToken ?? await _getToken(interactive: interactive);
+    final refreshing = _refreshingToken;
+    if (refreshing != null) return refreshing;
+    final token = _cachedToken ?? await _fetchToken(interactive: interactive);
     _cachedToken = token;
     return token;
+  }
+
+  Future<String> _fetchToken({required bool interactive}) =>
+      interactive ? _getToken(interactive: true) : _getToken(interactive: false).timeout(silentTokenTimeout);
+
+  /// A new token after [staleToken] got a 401, fetched once for all the
+  /// uploads in flight: whoever comes second gets the same one.
+  Future<String> _refreshAfter401(String staleToken) {
+    final current = _cachedToken;
+    if (current != null && current != staleToken) return Future.value(current);
+    return _refreshingToken ??= () async {
+      try {
+        _cachedToken = null;
+        // Possibly another account now: look its folders up again.
+        _rootFolder = null;
+        _tripFolders.clear();
+        final String refreshed;
+        try {
+          refreshed = await _fetchToken(interactive: false);
+        } catch (refreshError) {
+          throw DriveAuthRequiredException(refreshError);
+        }
+        _cachedToken = refreshed;
+        return refreshed;
+      } finally {
+        _refreshingToken = null;
+      }
+    }();
   }
 
   Future<T> _runWithAuthRetry<T>(String initialToken, Future<T> Function(String token) op) async {
@@ -523,15 +867,7 @@ class GoogleDriveFrameService {
       return await op(initialToken);
     } on GoogleDriveUploadException catch (e) {
       if (e.statusCode != 401) rethrow;
-      _cachedToken = null;
-      _cachedFolderId = null;
-      final String refreshed;
-      try {
-        refreshed = await _getToken(interactive: false);
-      } catch (refreshError) {
-        throw DriveAuthRequiredException(refreshError);
-      }
-      _cachedToken = refreshed;
+      final refreshed = await _refreshAfter401(initialToken);
       try {
         return await op(refreshed);
       } on GoogleDriveUploadException catch (again) {
@@ -559,6 +895,7 @@ class GoogleDriveFrameService {
         if (!canRetry || !_isRetryableStatus(res.statusCode)) return res;
         debugPrint('[GoogleDriveFrameService] HTTP ${res.statusCode}; retrying');
       } catch (e) {
+        if (cancel?.isCancelled ?? false) throw const BackupCancelled();
         if (!canRetry || !_isNetworkError(e)) rethrow;
         debugPrint('[GoogleDriveFrameService] $e; retrying');
       }
@@ -568,14 +905,84 @@ class GoogleDriveFrameService {
     }
   }
 
-  Future<String> _ensureFolderId(String token, {BackupCancel? cancel}) async {
-    if (_cachedFolderId != null) return _cachedFolderId!;
-    const query =
-        "name = '$appFolderName' and mimeType = 'application/vnd.google-apps.folder' and trashed = false";
+  /// The app's top folder, [appFolderName] (looked up or created once).
+  Future<String> _ensureFolderId(String token, {BackupCancel? cancel}) {
+    final known = _rootFolder;
+    if (known != null) return known;
+    final lookup = _findOrCreateRootFolder(token, cancel: cancel);
+    _rootFolder = lookup;
+    lookup.then((_) {}, onError: (Object _) {
+      if (identical(_rootFolder, lookup)) _rootFolder = null;
+    });
+    return lookup;
+  }
+
+  /// [tripId]'s folder inside the app's folder, shared "anyone with the link
+  /// can view" (looked up or created once).
+  Future<String> _ensureTripFolderId(String token, String tripId, String? tripTitle, {BackupCancel? cancel}) {
+    final known = _tripFolders[tripId];
+    if (known != null) return known;
+    final lookup = _findOrCreateTripFolder(token, tripId, tripTitle, cancel: cancel);
+    _tripFolders[tripId] = lookup;
+    lookup.then((_) {}, onError: (Object _) {
+      if (identical(_tripFolders[tripId], lookup)) _tripFolders.remove(tripId);
+    });
+    return lookup;
+  }
+
+  Future<String> _findOrCreateRootFolder(String token, {BackupCancel? cancel}) async {
+    const query = "name = '$appFolderName' and mimeType = '$_folderMime' and trashed = false";
+    final found = await _findFolder(token, query, cancel: cancel);
+    if (found != null) return found.id;
+    return _createFolder(token, {'name': appFolderName, 'mimeType': _folderMime}, cancel: cancel);
+  }
+
+  /// Found by its `tripId` app property, so renaming the trip (or the folder)
+  /// doesn't matter. `drive.file` lets the app see and share the folders and
+  /// files it created, on any of the user's devices.
+  Future<String> _findOrCreateTripFolder(String token, String tripId, String? tripTitle, {BackupCancel? cancel}) async {
+    final rootId = await _ensureFolderId(token, cancel: cancel);
+    final query = "'${_quote(rootId)}' in parents and mimeType = '$_folderMime' and "
+        "appProperties has { key='tripId' and value='${_quote(tripId)}' } and trashed = false";
+    final found = await _findFolder(token, query, cancel: cancel);
+    if (found != null) {
+      // Created by an earlier run whose sharing step failed, or unshared by
+      // hand: share it (again).
+      if (!found.linkShared) await _grantAnyoneReaderPermission(token, found.id, cancel: cancel);
+      await _journal?.recordFolder(found.id, tripId);
+      return found.id;
+    }
+    final title = tripTitle?.trim() ?? '';
+    final name = title.isEmpty || title == appFolderName ? 'Trip $tripId' : title;
+    final folderId = await _createFolder(
+      token,
+      {
+        'name': name,
+        'mimeType': _folderMime,
+        'parents': [rootId],
+        'appProperties': {'tripId': tripId},
+      },
+      cancel: cancel,
+    );
+    try {
+      await _grantAnyoneReaderPermission(token, folderId, cancel: cancel);
+    } catch (_) {
+      // An unshared trip folder would make every upload into it unreadable.
+      await _deleteDriveFileQuietly(token, folderId);
+      rethrow;
+    }
+    await _journal?.recordFolder(folderId, tripId);
+    return folderId;
+  }
+
+  /// Escapes [value] for a single-quoted string in a Drive search query.
+  static String _quote(String value) => value.replaceAll(r'\', r'\').replaceAll("'", r"\'");
+
+  Future<({String id, bool linkShared})?> _findFolder(String token, String query, {BackupCancel? cancel}) async {
     final searchUri = Uri.parse('$_driveApi/files').replace(
       queryParameters: {
         'q': query,
-        'fields': 'files(id)',
+        'fields': 'files(id,permissions(type,role))',
         'spaces': 'drive',
         'pageSize': '1',
       },
@@ -587,14 +994,14 @@ class GoogleDriveFrameService {
     _throwIfError(searchRes, 'Failed to look up Google Drive folder');
     final searchJson = jsonDecode(searchRes.body) as Map<String, dynamic>;
     final files = (searchJson['files'] as List?) ?? const [];
-    if (files.isNotEmpty) {
-      final id = (files.first as Map)['id'] as String?;
-      if (id != null && id.isNotEmpty) {
-        _cachedFolderId = id;
-        return id;
-      }
-    }
+    if (files.isEmpty) return null;
+    final file = files.first as Map;
+    final id = file['id'] as String?;
+    if (id == null || id.isEmpty) return null;
+    return (id: id, linkShared: _anyoneCanRead(file['permissions']));
+  }
 
+  Future<String> _createFolder(String token, Map<String, Object> metadata, {BackupCancel? cancel}) async {
     final createRes = await _sendWithRetry(
       () => _client
           .post(
@@ -603,10 +1010,7 @@ class GoogleDriveFrameService {
               'Authorization': 'Bearer $token',
               'Content-Type': 'application/json; charset=UTF-8',
             },
-            body: jsonEncode({
-              'name': appFolderName,
-              'mimeType': 'application/vnd.google-apps.folder',
-            }),
+            body: jsonEncode(metadata),
           )
           .timeout(const Duration(seconds: 15)),
       cancel: cancel,
@@ -617,11 +1021,20 @@ class GoogleDriveFrameService {
     if (folderId == null || folderId.isEmpty) {
       throw const GoogleDriveUploadException('Google Drive returned an empty folder ID.');
     }
-    _cachedFolderId = folderId;
     return folderId;
   }
 
-  Future<String> _multipartUpload({
+  /// Whether a Drive `permissions` list lets anyone with the link read.
+  static bool _anyoneCanRead(Object? permissions) =>
+      permissions is List &&
+      permissions.any(
+        (p) => p is Map && p['type'] == 'anyone' && const {'reader', 'commenter', 'writer'}.contains(p['role']),
+      );
+
+  /// Uploads [bytes] as a new file in [folderId]. [linkShared] tells whether
+  /// Drive reports the file readable by anyone with the link already
+  /// (inherited from the folder); if not, the caller shares it on its own.
+  Future<({String fileId, bool linkShared})> _multipartUpload({
     BackupCancel? cancel,
     required String token,
     required String folderId,
@@ -639,22 +1052,39 @@ class GoogleDriveFrameService {
     final builder = BytesBuilder(copy: false)
       ..add(utf8.encode('--$boundary\r\nContent-Type: application/json; charset=UTF-8\r\n\r\n'))
       ..add(utf8.encode(metaJson))
-      ..add(utf8.encode('\r\n--$boundary\r\nContent-Type: image/jpeg\r\n\r\n'))
+      ..add(utf8.encode('\r\n--$boundary\r\nContent-Type: ${uploadType(bytes).$1}\r\n\r\n'))
       ..add(bytes)
       ..add(utf8.encode('\r\n--$boundary--\r\n'));
     final payload = builder.takeBytes();
 
+    final limit = _uploadTimeout(payload.length);
     final res = await _sendWithRetry(
-      () => _client
-          .post(
-            Uri.parse('$_driveUploadApi/files?uploadType=multipart&fields=id'),
-            headers: {
-              'Authorization': 'Bearer $token',
-              'Content-Type': 'multipart/related; boundary=$boundary',
-            },
-            body: payload,
+      () async {
+        // Cancel, or running out of time, aborts the request itself: it
+        // doesn't keep sending in the background next to its retry.
+        final abort = Completer<void>();
+        void stop() {
+          if (!abort.isCompleted) abort.complete();
+        }
+
+        cancel?.onCancel(stop);
+        final timer = Timer(limit, stop);
+        try {
+          final req = http.AbortableRequest(
+            'POST',
+            Uri.parse('$_driveUploadApi/files?uploadType=multipart&fields=id,permissions(type,role)'),
+            abortTrigger: abort.future,
           )
-          .timeout(const Duration(seconds: 30)),
+            ..headers['Authorization'] = 'Bearer $token'
+            ..headers['Content-Type'] = 'multipart/related; boundary=$boundary'
+            ..bodyBytes = payload;
+          final streamed = await _client.send(req).timeout(limit + const Duration(seconds: 5));
+          return await http.Response.fromStream(streamed).timeout(const Duration(seconds: 30));
+        } finally {
+          timer.cancel();
+          stop();
+        }
+      },
       cancel: cancel,
     );
     _throwIfError(res, 'Failed to upload frame image to Google Drive');
@@ -663,7 +1093,7 @@ class GoogleDriveFrameService {
     if (id == null || id.isEmpty) {
       throw const GoogleDriveUploadException('Google Drive upload returned no file ID.');
     }
-    return id;
+    return (fileId: id, linkShared: _anyoneCanRead(body['permissions']));
   }
 
   Future<void> _grantAnyoneReaderPermission(String token, String fileId, {BackupCancel? cancel}) async {
@@ -680,7 +1110,7 @@ class GoogleDriveFrameService {
           .timeout(const Duration(seconds: 15)),
       cancel: cancel,
     );
-    _throwIfError(res, 'Uploaded file, but failed to create a shareable link in Google Drive');
+    _throwIfError(res, 'Failed to create a shareable link in Google Drive');
   }
 
   Future<void> _deleteDriveFileQuietly(String token, String fileId) async {
@@ -701,11 +1131,13 @@ class GoogleDriveFrameService {
 }
 
 class _TripDriveSyncPlan {
+  final List<Stop> stops;
   final List<_DriveFrameTask> tasks;
   final Map<String, String> existingUrlByPath;
   final Map<String, String> existingUrlByHash;
 
   const _TripDriveSyncPlan({
+    required this.stops,
     required this.tasks,
     required this.existingUrlByPath,
     required this.existingUrlByHash,
@@ -722,4 +1154,14 @@ class _DriveFrameTask {
     required this.stop,
     required this.frame,
   });
+}
+
+enum _How { uploaded, reused, online }
+
+/// The link a frame gets, and how it came by it.
+class _Resolved {
+  final String url;
+  final _How how;
+
+  const _Resolved(this.url, this.how);
 }

@@ -34,7 +34,7 @@ final backupFolderProvider = Provider<Future<Directory> Function()>((ref) => () 
       return dir;
     });
 
-/// Library ⋮ → Back up to a file: confirm, write the file with progress, then share it.
+/// Settings → Back up to a file: confirm, write the file with progress, then share it.
 Future<void> backUpLibrary(BuildContext context, WidgetRef ref) async {
   final svc = ref.read(libraryBackupServiceProvider);
   final db = ref.read(databaseProvider);
@@ -79,7 +79,7 @@ Future<void> backUpLibrary(BuildContext context, WidgetRef ref) async {
   await ref.read(shareBackupFileProvider)(file.path);
 }
 
-/// Library ⋮ → Restore from a file: pick, read what's in it, confirm, restore with progress.
+/// Settings → Restore from a file (also on the empty library): pick, read what's in it, confirm, restore with progress.
 Future<void> restoreLibrary(BuildContext context, WidgetRef ref) async {
   final svc = ref.read(libraryBackupServiceProvider);
   final path = await ref.read(pickBackupFileProvider)();

@@ -24,16 +24,6 @@ class TripListScreen extends ConsumerStatefulWidget {
 class _TripListScreenState extends ConsumerState<TripListScreen> {
   TripFilter _filter = TripFilter.all;
 
-  Future<void> _signOut() async {
-    final messenger = ScaffoldMessenger.of(context);
-    try {
-      await ref.read(authControllerProvider.notifier).signOut();
-      messenger.showSnackBar(const SnackBar(content: Text('Signed out.')));
-    } catch (e) {
-      messenger.showSnackBar(SnackBar(content: Text("Couldn't sign out: $e")));
-    }
-  }
-
   @override
   Widget build(BuildContext context) {
     final summaries = ref.watch(tripSummariesProvider);
@@ -47,22 +37,14 @@ class _TripListScreenState extends ConsumerState<TripListScreen> {
             icon: const Icon(Icons.group_add_outlined),
             onPressed: () => context.push('/join'),
           ),
-          // Signing in is only for shared trips, and sharing, inviting and
-          // joining ask for it, so the account lives here, with the trips.
+          // Signing in is only for shared trips, so the account shows here,
+          // with the trips, once signed in; it opens Settings, where Sign out is.
           if (ref.watch(currentUserIdProvider) != guestUserId)
-            PopupMenuButton<String>(
+            IconButton(
               key: const Key('tripListAccount'),
               tooltip: 'Account',
               icon: const Icon(Icons.account_circle_outlined),
-              onSelected: (_) => _signOut(),
-              itemBuilder: (_) {
-                final user = ref.read(authStateChangesProvider).valueOrNull;
-                final who = user?.email ?? user?.displayName;
-                return [
-                  if (who != null) PopupMenuItem<String>(enabled: false, child: Text('Signed in as $who')),
-                  const PopupMenuItem(value: 'signOut', child: Text('Sign out')),
-                ];
-              },
+              onPressed: () => context.push('/settings'),
             ),
         ],
       ),

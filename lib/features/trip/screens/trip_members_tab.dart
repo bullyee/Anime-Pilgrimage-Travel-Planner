@@ -14,6 +14,7 @@ import '../../sharing/widgets/invite_sheet.dart';
 import '../../sharing/widgets/member_avatar.dart';
 import '../../sync/providers/frame_transfer_providers.dart';
 import '../../sync/services/frame_transfer_queue.dart';
+import '../../sync/widgets/drive_cleanup_flow.dart';
 import '../../sync/widgets/frame_transfer_widgets.dart';
 import '../widgets/trip_frames_pack_flow.dart';
 
@@ -337,7 +338,15 @@ class _LocalFramesCard extends ConsumerWidget {
               icon: const Icon(Icons.cloud_upload_outlined, size: 18),
               label: const Text('Sync via my Google Drive'),
             ),
-            const SizedBox(height: 8),
+            Align(
+              alignment: Alignment.centerLeft,
+              child: TextButton.icon(
+                onPressed: () => confirmAndRemoveTripFrames(context, ref, trip),
+                icon: const Icon(Icons.cloud_off_outlined, size: 18),
+                label: const Text('Remove my frames from Google Drive'),
+              ),
+            ),
+            const SizedBox(height: 4),
           ],
           OutlinedButton.icon(
             onPressed: downloading ? null : () => downloadTripFramesForOffline(context, ref, trip),

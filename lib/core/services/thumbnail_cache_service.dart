@@ -147,7 +147,7 @@ class ThumbnailCacheService {
     if (driveId != null) {
       return [
         'https://drive.google.com/uc?export=download&id=$driveId',
-        'https://lh3.googleusercontent.com/d/$driveId=w1280',
+        'https://lh3.googleusercontent.com/d/$driveId=w1920',
       ];
     }
     return [url];
