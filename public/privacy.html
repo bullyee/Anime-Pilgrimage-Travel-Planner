@@ -67,14 +67,14 @@
 <body>
   <div class="container">
     <h1>Trip Planner 隱私權政策</h1>
-    <div class="last-updated">最後更新日期：2026 年 11 月 12 日</div>
+    <div class="last-updated">最後更新日期：2026 年 11 月 13 日</div>
 
     <p>歡迎使用 Trip Planner（以下簡稱「本應用程式」）。我們非常重視您的個人隱私與資料安全，本隱私權政策旨在說明我們如何收集、使用、儲存及保護您的資訊。</p>
 
     <h2>一、我們收集的資訊</h2>
     <ul>
       <li><strong>Google 帳戶基本資料</strong>：當您選擇透過 Google 登入時，我們僅讀取您的基本公開檔案（名稱、電子郵件地址及個人頭像），用於識別您的使用者身分並在群組協作行程中顯示成員資訊。</li>
-      <li><strong>Google 雲端硬碟授權（<code>drive.file</code>，選用）</strong>：僅當您主動使用「透過 Google Drive 同步自訂參考圖」功能時，本應用程式才會請求非敏感權限 <code>https://www.googleapis.com/auth/drive.file</code>。本應用程式<strong>僅能存取並管理由本應用程式為該功能建立的圖片檔案</strong>，絕不會讀取、列出或修改您雲端硬碟中的其他私人檔案。</li>
+      <li><strong>Google 雲端硬碟授權（<code>drive.file</code>，選用）</strong>：僅當您主動使用「透過 Google Drive 同步自訂參考圖」功能時，本應用程式才會請求非敏感權限 <code>https://www.googleapis.com/auth/drive.file</code>。本應用程式<strong>僅能存取並管理由本應用程式為該功能建立的資料夾與圖片檔案</strong>，絕不會讀取、列出或修改您雲端硬碟中的其他私人檔案。</li>
       <li><strong>行程與景點資料</strong>：您建立或規劃的聖地巡禮景點、每日時程、個人標籤及拍照編輯紀錄。</li>
       <li><strong>相機與檔案權限</strong>：本應用程式之相機疊圖與照片編輯功能僅於本機端執行，未經您的明確分享或同步操作，個人照片絕不會自動上傳至雲端。</li>
     </ul>
@@ -82,7 +82,7 @@
     <h2>二、資訊之儲存與使用方式</h2>
     <ul>
       <li><strong>本地優先（Local-First）</strong>：您的私人收藏庫、景點備註及巡禮照片預設儲存於您的本機裝置 SQLite 資料庫中。</li>
-      <li><strong>雲端雙向同步與圖片分享</strong>：僅當您明確開啟「群組分享行程」或透過邀請碼加入共用行程時，該行程之景點排程資料方會透過 Google Firebase 進行同步；若您主動將自訂參考圖上傳至自己的 Google Drive 以分享給行程成員，系統會為該張圖片建立「知道連結的任何人皆可檢視」（anyone with the link can view）的唯讀連結並同步至該共用行程。</li>
+      <li><strong>雲端雙向同步與圖片分享</strong>：僅當您明確開啟「群組分享行程」或透過邀請碼加入共用行程時，該行程之景點排程資料方會透過 Google Firebase 進行同步；若您主動將自訂參考圖上傳至自己的 Google Drive 以分享給行程成員，系統會在您的雲端硬碟中為該行程建立一個資料夾，將該資料夾（及其中的圖片）設為「知道連結的任何人皆可檢視」（anyone with the link can view），並將各圖片的唯讀連結同步至該共用行程。若某張參考圖與本機已快取的 Anitabi 場景圖為同一張圖片，則改用該 Anitabi 圖片連結，不上傳至雲端硬碟。您可隨時於行程的「成員」頁或設定中，將您分享的參考圖從雲端硬碟移除；當您刪除、停止分享或退出行程，或移除景點與參考圖時，本應用程式也會自動從您的雲端硬碟<strong>永久刪除</strong>您為此上傳的檔案，連結隨即失效（移至垃圾桶並不會停止他人透過連結存取，因此採永久刪除）。</li>
       <li><strong>Google API 資料使用揭露（Limited Use）</strong>：本應用程式對任何透過 Google API 取得之資訊的使用與傳輸，均嚴格遵守 <a href="https://developers.google.com/terms/api-services-user-data-policy" target="_blank" rel="noopener noreferrer">Google API Services User Data Policy</a>（包含 Limited Use 限制使用規範）。</li>
       <li><strong>絕不出售資料</strong>：我們絕不會將您的個人資訊販售、出租、用於廣告投放或轉讓給任何第三方。</li>
     </ul>
