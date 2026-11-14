@@ -137,6 +137,7 @@ class ReferenceOverlay(
         index: Int,
         opacity: Float,
         placement: Placement? = null,
+        floatOnly: Boolean = false,
     ): Boolean {
         if (frames.isEmpty()) return false
         paths = frames
@@ -226,7 +227,11 @@ class ReferenceOverlay(
                 y = placement.y
                 clamp(this, screen)
             } else {
-                x = screen.right - imageWidth - dp(12f)
+                x = if (landscape && !floatOnly) {
+                    screen.left + dp(12f)
+                } else {
+                    screen.right - imageWidth - dp(12f)
+                }
                 y = screen.top + if (landscape) dp(24f) else dp(96f)
             }
         }

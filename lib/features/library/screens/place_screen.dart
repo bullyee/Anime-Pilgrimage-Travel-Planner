@@ -160,11 +160,11 @@ class _PlaceScreenState extends ConsumerState<PlaceScreen> {
               ),
           ],
         ),
-        body: Center(
-          child: ConstrainedBox(
-            constraints: const BoxConstraints(maxWidth: 840),
-            child: ListView(
-              padding: const EdgeInsets.only(bottom: 32),
+        body: LayoutBuilder(
+          builder: (context, constraints) {
+            final padH = constraints.maxWidth > 840 ? (constraints.maxWidth - 840) / 2 : 0.0;
+            return ListView(
+              padding: EdgeInsets.fromLTRB(padH, 0, padH, 32),
               children: [
                 FrameHero(
                   frames: visibleFrames,
@@ -228,8 +228,8 @@ class _PlaceScreenState extends ConsumerState<PlaceScreen> {
               ),
             ),
           ],
-        ),
-      ),
+        );
+      },
     ),
   ),
 );
