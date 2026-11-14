@@ -781,16 +781,14 @@ class PhotosCard extends ConsumerWidget {
         path: photo.localPath,
         title: DateFormat.yMMMd().add_Hm().format(photo.takenAt ?? photo.createdAt),
         actions: [
-          ViewerAction('Edit', () {
-            final framePath = (frame?.localPath?.isNotEmpty ?? false)
-                ? frame!.localPath
-                : frame?.remoteUrl;
+          ViewerAction('Edit', () async {
+            final frameRefPath = frame == null ? null : await framePathOnDevice(ref, frame);
             viewerContext.push(PhotoEditArgs(
               path: photo.localPath,
               placeKey: placeKey,
               tripId: photo.tripId,
               photoId: photo.id,
-              referencePath: framePath,
+              referencePath: frameRefPath,
               referenceImageId: frame?.id,
             ).location);
           }, primary: true),

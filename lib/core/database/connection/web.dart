@@ -1,6 +1,14 @@
 import 'package:drift/drift.dart';
 import 'package:drift/wasm.dart';
-import 'package:flutter/foundation.dart' show debugPrint;
+import 'package:flutter/foundation.dart';
+
+enum WebStorageStatus {
+  persistent,
+  unsafeIndexedDb,
+  inMemory,
+}
+
+final ValueNotifier<WebStorageStatus?> webStorageStatusNotifier = ValueNotifier(null);
 
 /// Opens a WebAssembly SQLite3 database connection.
 ///
@@ -15,8 +23,8 @@ QueryExecutor openConnection() {
       // Aligned with the native filename base ('trip_planner') so the logical
       // database name is consistent across platforms.
       databaseName: 'trip_planner',
-      sqlite3Uri: Uri.parse('/sqlite3.wasm'),
-      driftWorkerUri: Uri.parse('/drift_worker.js'),
+      sqlite3Uri: Uri.base.resolve('sqlite3.wasm'),
+      driftWorkerUri: Uri.base.resolve('drift_worker.js'),
     );
 
     if (result.chosenImplementation == WasmStorageImplementation.inMemory) {
@@ -24,6 +32,11 @@ QueryExecutor openConnection() {
         'Drift Wasm database using in-memory storage '
         '(missing features: ${result.missingFeatures}).',
       );
+      webStorageStatusNotifier.value = WebStorageStatus.inMemory;
+    } else if (result.chosenImplementation == WasmStorageImplementation.unsafeIndexedDb) {
+      webStorageStatusNotifier.value = WebStorageStatus.unsafeIndexedDb;
+    } else {
+      webStorageStatusNotifier.value = WebStorageStatus.persistent;
     }
 
     return result.resolvedExecutor;

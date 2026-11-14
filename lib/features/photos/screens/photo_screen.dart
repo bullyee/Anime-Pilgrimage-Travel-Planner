@@ -81,7 +81,6 @@ class PhotoScreen extends ConsumerWidget {
         key: const Key('photoScreenShot'),
         fit: BoxFit.contain,
         width: double.infinity,
-        cacheWidth: 1600,
         errorBuilder: (_, _, _) => const Center(child: Icon(Icons.broken_image_outlined)),
       ),
     );

@@ -60,15 +60,15 @@ void main() {
   test('webSafeRemoteImageUrl converts Google Drive links to CORS-friendly lh3 host', () {
     expect(
       webSafeRemoteImageUrl('https://drive.google.com/uc?export=download&id=abc123XYZ'),
-      'https://lh3.googleusercontent.com/d/abc123XYZ=w1280',
+      'https://lh3.googleusercontent.com/d/abc123XYZ=w1920',
     );
     expect(
       webSafeRemoteImageUrl('https://drive.google.com/file/d/abc123XYZ/view?usp=sharing'),
-      'https://lh3.googleusercontent.com/d/abc123XYZ=w1280',
+      'https://lh3.googleusercontent.com/d/abc123XYZ=w1920',
     );
     expect(
-      webSafeRemoteImageUrl('https://lh3.googleusercontent.com/d/abc123XYZ=w1280'),
-      'https://lh3.googleusercontent.com/d/abc123XYZ=w1280',
+      webSafeRemoteImageUrl('https://lh3.googleusercontent.com/d/abc123XYZ=w1920'),
+      'https://lh3.googleusercontent.com/d/abc123XYZ=w1920',
     );
     expect(
       webSafeRemoteImageUrl('https://example.com/image.jpg'),

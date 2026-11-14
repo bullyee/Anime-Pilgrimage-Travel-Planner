@@ -679,6 +679,7 @@ class _Photo extends StatelessWidget {
       path,
       fit: fit,
       cacheWidth: decodeWidth,
+      gaplessPlayback: true,
       errorBuilder: (context, error, stack) =>
           const Center(child: Icon(Icons.broken_image_outlined, color: Colors.white38, size: 40)),
     );

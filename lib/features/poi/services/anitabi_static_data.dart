@@ -5,6 +5,8 @@ import 'package:flutter/foundation.dart';
 import 'package:http/http.dart' as http;
 import 'package:path/path.dart' as p;
 
+import 'anitabi_web_cache.dart';
+
 /// One Anitabi work from the static map data.
 class AnitabiStaticWork {
   /// Original (usually Japanese) title, falling back to the Chinese one.
@@ -123,12 +125,21 @@ class AnitabiStaticData {
       if (cached != null && _now().difference(cached.at) < indexMaxAge) {
         return cached.body;
       }
+      final webCachedBody = await AnitabiWebCache.get('g.json');
+      final webCachedAt = await AnitabiWebCache.timestamp('g.json');
+      if (webCachedBody != null && webCachedAt != null && _now().difference(webCachedAt) < indexMaxAge) {
+        _memIndex = (at: webCachedAt, body: webCachedBody);
+        return webCachedBody;
+      }
       try {
         final body = await _download('g.json');
-        _memIndex = (at: _now(), body: body);
+        final now = _now();
+        _memIndex = (at: now, body: body);
+        await AnitabiWebCache.put('g.json', body, now);
         return body;
       } on AnitabiStaticDataUnavailableException {
         if (cached != null) return cached.body;
+        if (webCachedBody != null) return webCachedBody;
         rethrow;
       }
     }
@@ -155,9 +166,16 @@ class AnitabiStaticData {
       final key = '$page.$version';
       final cached = _memPages[key];
       if (cached != null) return cached;
+      final webCached = await AnitabiWebCache.get(key);
+      if (webCached != null) {
+        _memPages[key] = webCached;
+        return webCached;
+      }
       final body = await _download('g$page.json');
       _memPages.removeWhere((k, _) => k.startsWith('$page.'));
-      return _memPages[key] = body;
+      _memPages[key] = body;
+      await AnitabiWebCache.put(key, body, _now());
+      return body;
     }
     final file = File(p.join(dir.path, 'g$page.$version.json'));
     if (await file.exists()) return file.readAsString();

@@ -42,7 +42,7 @@ String webSafeRemoteImageUrl(String url) {
       }
     }
     if (id != null && id.isNotEmpty) {
-      return 'https://lh3.googleusercontent.com/d/$id=w1280';
+      return 'https://lh3.googleusercontent.com/d/$id=w1920';
     }
   }
   return url;
@@ -111,6 +111,7 @@ class PlatformImage extends StatefulWidget {
   final int? cacheHeight;
   final ImageErrorWidgetBuilder? errorBuilder;
   final String? semanticLabel;
+  final bool gaplessPlayback;
 
   const PlatformImage(
     this.pathOrUrl, {
@@ -122,6 +123,7 @@ class PlatformImage extends StatefulWidget {
     this.cacheHeight,
     this.errorBuilder,
     this.semanticLabel,
+    this.gaplessPlayback = false,
   });
 
   @override
@@ -172,6 +174,7 @@ class _PlatformImageState extends State<PlatformImage> {
           fit: widget.fit,
           cacheWidth: widget.cacheWidth,
           cacheHeight: widget.cacheHeight,
+          gaplessPlayback: widget.gaplessPlayback,
           errorBuilder: widget.errorBuilder,
           semanticLabel: widget.semanticLabel,
         );
@@ -193,6 +196,7 @@ class _PlatformImageState extends State<PlatformImage> {
         fit: widget.fit,
         cacheWidth: widget.cacheWidth,
         cacheHeight: widget.cacheHeight,
+        gaplessPlayback: widget.gaplessPlayback,
         errorBuilder: widget.errorBuilder,
         semanticLabel: widget.semanticLabel,
       );
@@ -216,6 +220,7 @@ class _PlatformImageState extends State<PlatformImage> {
       fit: widget.fit,
       cacheWidth: widget.cacheWidth,
       cacheHeight: widget.cacheHeight,
+      gaplessPlayback: widget.gaplessPlayback,
       errorBuilder: widget.errorBuilder,
       semanticLabel: widget.semanticLabel,
     );
