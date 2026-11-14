@@ -174,17 +174,20 @@ void main() {
       // Waypoints
       expect(xml, contains('<wpt lat="34.89" lon="135.81">'));
       expect(xml, contains('<name>Uji Bridge</name>'));
-      expect(xml, contains('<desc>Opening scene</desc>'));
-      expect(xml, contains('<time>2026-05-01T09:00:00.000Z</time>'));
+      expect(xml, contains('<desc>Day 1 (2026-05-01) · Planned 09:00 · Opening scene</desc>'));
+      expect(xml, isNot(contains('<wpt lat="34.89" lon="135.81">\n    <name>Uji Bridge</name>\n    <desc>Day 1 (2026-05-01) · Planned 09:00 · Opening scene</desc>\n    <time>')));
       expect(xml, contains('<wpt lat="34.895" lon="135.815">'));
       expect(xml, contains('<name>Mount Daikichi</name>'));
+      expect(xml, contains('<desc>Day 1 (2026-05-01) · Planned 11:00</desc>'));
 
       // Routes
       expect(xml, contains('<rte>'));
       expect(xml, contains('<name>Day 1 (2026-05-01)</name>'));
       expect(xml, contains('<number>1</number>'));
       expect(xml, contains('<rtept lat="34.89" lon="135.81">'));
+      expect(xml, contains('<desc>Planned 09:00 · Opening scene</desc>'));
       expect(xml, contains('<rtept lat="34.895" lon="135.815">'));
+      expect(xml, contains('<desc>Planned 11:00</desc>'));
       expect(xml.endsWith('</gpx>'), isTrue);
     });
 
@@ -208,7 +211,7 @@ void main() {
       expect(xml, contains('<name>Ben &amp; Jerry&apos;s &lt;Tokyo&gt; &quot;Special&quot;</name>'));
       expect(xml, contains('<desc>Testing &lt;tag&gt; &amp; &quot;quotes&quot; &amp; &apos;apos&apos;</desc>'));
       expect(xml, contains('<name>Spot &lt;A&gt; &amp; &quot;B&quot;</name>'));
-      expect(xml, contains('<desc>Note with &lt;markup&gt; &amp; &quot;quotes&quot;</desc>'));
+      expect(xml, contains('Note with &lt;markup&gt; &amp; &quot;quotes&quot;'));
     });
 
     test('skips stops with (0.0, 0.0) coordinates and reports skipped count', () {
@@ -321,9 +324,44 @@ void main() {
       expect(props['day'], 1);
       expect(props['order'], 1);
       expect(props['name'], 'Uji River');
-      expect(props['time'], '2026-05-01T10:00:00.000Z');
+      expect(props['date'], '2026-05-01');
+      expect(props['time'], '10:00');
       expect(props['notes'], 'Bench scene');
       expect(props['address'], 'Uji, Kyoto');
+    });
+
+    test('distinguishes backup days in GeoJSON and GPX exports', () {
+      final trip = makeTrip(title: 'Rain Backup Tour');
+      final s1 = makeStop(id: 's1', name: 'Sunny Spot', lat: 35.1, lng: 135.1);
+      final s2 = makeStop(id: 's2', name: 'Museum (Rain)', lat: 35.2, lng: 135.2);
+      final day1 = makeDay(id: 'd1', index: 0, isBackup: false, date: DateTime.utc(2026, 5, 1), items: [
+        makeItem(itemId: 'i1', stop: s1, startMinutes: 600),
+      ]);
+      final backupDay = makeDay(id: 'd2', index: 1, isBackup: true, date: null, items: [
+        makeItem(itemId: 'i2', stop: s2, startMinutes: 660),
+      ]);
+
+      final view = PlannerView(trip: trip, days: [day1, backupDay], backlog: []);
+
+      // GeoJSON: backup day has day: null, backup: true
+      final geoResult = service.exportGeoJson(trip: trip, plannerView: view);
+      final decoded = jsonDecode(geoResult.content) as Map<String, dynamic>;
+      final features = decoded['features'] as List;
+      expect(features.length, 2);
+
+      final p1 = features[0]['properties'] as Map<String, dynamic>;
+      expect(p1['day'], 1);
+      expect(p1['backup'], isNull);
+
+      final p2 = features[1]['properties'] as Map<String, dynamic>;
+      expect(p2['day'], isNull);
+      expect(p2['backup'], isTrue);
+
+      // GPX: backup day is named Backup Day 1 and has no <number>
+      final gpxResult = service.exportGpx(trip: trip, plannerView: view);
+      expect(gpxResult.content, contains('<name>Backup Day 1</name>'));
+      expect(gpxResult.content, contains('<desc>Backup Day 1 · Planned 11:00</desc>'));
+      expect(gpxResult.content, isNot(contains('<name>Backup Day 1</name>\n      <number>')));
     });
 
     test('includes backlog stops in GeoJSON with day = null', () {

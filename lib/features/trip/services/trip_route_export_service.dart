@@ -117,15 +117,23 @@ class TripRouteExportService {
     final routes = <String>[];
 
     int dayNumber = 0;
+    int backupNumber = 0;
     for (final day in plannerView.days) {
-      dayNumber++;
-      final routePoints = <String>[];
-      final dayLabel = day.isBackup
-          ? 'Backup Day ${day.index + 1}'
-          : (day.date != null
-              ? 'Day $dayNumber (${_formatDateOnly(day.date!)})'
-              : 'Day $dayNumber');
+      final String dayLabel;
+      final int? currentDayNumber;
+      if (day.isBackup) {
+        backupNumber++;
+        dayLabel = 'Backup Day $backupNumber';
+        currentDayNumber = null;
+      } else {
+        dayNumber++;
+        currentDayNumber = dayNumber;
+        dayLabel = day.date != null
+            ? 'Day $dayNumber (${_formatDateOnly(day.date!)})'
+            : 'Day $dayNumber';
+      }
 
+      final routePoints = <String>[];
       for (final it in day.items) {
         final stop = it.stop;
         if (!hasValidCoordinates(stop.lat, stop.lng)) {
@@ -133,25 +141,31 @@ class TripRouteExportService {
           continue;
         }
 
-        seenStopIds.add(stop.id);
-        final isoTime = _buildIsoTime(day.date, it.startMinutes);
-        final desc = _stopDescription(stop);
+        final timeStr = _formatClockTime(it.startMinutes);
+        final rawDesc = _stopDescription(stop);
+        final rteptDesc = rawDesc != null
+            ? 'Planned $timeStr · $rawDesc'
+            : 'Planned $timeStr';
+        final wptDesc = rawDesc != null
+            ? '$dayLabel · Planned $timeStr · $rawDesc'
+            : '$dayLabel · Planned $timeStr';
 
-        // Add waypoint once per stop id
-        if (waypoints.length < seenStopIds.length) {
-          // If this stop ID was just added, render waypoint
-          waypoints.add(_renderWpt(stop, desc: desc, time: isoTime));
+        // Add waypoint once per unique stop id
+        if (seenStopIds.add(stop.id)) {
+          waypoints.add(_renderWpt(stop, desc: wptDesc));
         }
 
         // Add route point for this day's sequence
-        routePoints.add(_renderRtept(stop, desc: desc, time: isoTime));
+        routePoints.add(_renderRtept(stop, desc: rteptDesc));
       }
 
       if (routePoints.isNotEmpty) {
         final buf = StringBuffer();
         buf.writeln('    <rte>');
         buf.writeln('      <name>${_xmlEscape(dayLabel)}</name>');
-        buf.writeln('      <number>$dayNumber</number>');
+        if (currentDayNumber != null) {
+          buf.writeln('      <number>$currentDayNumber</number>');
+        }
         for (final pt in routePoints) {
           buf.writeln(pt);
         }
@@ -167,7 +181,7 @@ class TripRouteExportService {
         continue;
       }
       if (seenStopIds.add(stop.id)) {
-        waypoints.add(_renderWpt(stop, desc: _stopDescription(stop), time: null));
+        waypoints.add(_renderWpt(stop, desc: _stopDescription(stop)));
       }
     }
 
@@ -220,7 +234,14 @@ class TripRouteExportService {
 
     int dayNumber = 0;
     for (final day in plannerView.days) {
-      dayNumber++;
+      final int? currentDayNumber;
+      if (day.isBackup) {
+        currentDayNumber = null;
+      } else {
+        dayNumber++;
+        currentDayNumber = dayNumber;
+      }
+
       int order = 0;
       for (final it in day.items) {
         order++;
@@ -231,7 +252,7 @@ class TripRouteExportService {
         }
 
         seenStopIds.add(stop.id);
-        final isoTime = _buildIsoTime(day.date, it.startMinutes);
+        final timeStr = _formatClockTime(it.startMinutes);
         features.add({
           'type': 'Feature',
           'geometry': {
@@ -240,10 +261,12 @@ class TripRouteExportService {
             'coordinates': [stop.lng, stop.lat],
           },
           'properties': {
-            'day': dayNumber,
+            'day': currentDayNumber,
+            if (day.isBackup) 'backup': true,
             'order': order,
             'name': stop.name,
-            if (isoTime != null) 'time': isoTime,
+            if (day.date != null) 'date': _formatDateOnly(day.date!),
+            'time': timeStr,
             if (stop.note != null && stop.note!.trim().isNotEmpty)
               'notes': stop.note!.trim(),
             if (stop.address != null && stop.address!.trim().isNotEmpty)
@@ -296,22 +319,20 @@ class TripRouteExportService {
     );
   }
 
-  static String _renderWpt(Stop stop, {String? desc, String? time}) {
+  static String _renderWpt(Stop stop, {String? desc}) {
     final buf = StringBuffer();
     buf.writeln('  <wpt lat="${stop.lat}" lon="${stop.lng}">');
     buf.writeln('    <name>${_xmlEscape(stop.name)}</name>');
-    if (desc != null) buf.writeln('    <desc>${_xmlEscape(desc)}</desc>');
-    if (time != null) buf.writeln('    <time>$time</time>');
+    if (desc != null && desc.isNotEmpty) buf.writeln('    <desc>${_xmlEscape(desc)}</desc>');
     buf.write('  </wpt>');
     return buf.toString();
   }
 
-  static String _renderRtept(Stop stop, {String? desc, String? time}) {
+  static String _renderRtept(Stop stop, {String? desc}) {
     final buf = StringBuffer();
     buf.writeln('      <rtept lat="${stop.lat}" lon="${stop.lng}">');
     buf.writeln('        <name>${_xmlEscape(stop.name)}</name>');
-    if (desc != null) buf.writeln('        <desc>${_xmlEscape(desc)}</desc>');
-    if (time != null) buf.writeln('        <time>$time</time>');
+    if (desc != null && desc.isNotEmpty) buf.writeln('        <desc>${_xmlEscape(desc)}</desc>');
     buf.write('      </rtept>');
     return buf.toString();
   }
@@ -326,12 +347,10 @@ class TripRouteExportService {
     return null;
   }
 
-  static String? _buildIsoTime(DateTime? date, int startMinutes) {
-    if (date == null) return null;
-    final hours = startMinutes ~/ 60;
-    final minutes = startMinutes % 60;
-    return DateTime.utc(date.year, date.month, date.day, hours, minutes)
-        .toIso8601String();
+  static String _formatClockTime(int minutes) {
+    final h = (minutes ~/ 60).toString().padLeft(2, '0');
+    final m = (minutes % 60).toString().padLeft(2, '0');
+    return '$h:$m';
   }
 
   static String _formatDateOnly(DateTime date) {
