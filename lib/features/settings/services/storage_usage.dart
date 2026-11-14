@@ -68,13 +68,20 @@ StorageUsage measureStorage(StorageFolders f) {
   );
 }
 
+/// Directories holding app binaries/assets or public caches that should not be
+/// counted as user data in Settings → Your data.
+const _excludedDirectoryNames = {'flutter_assets', 'anitabi_static'};
+
 int _sizeOf(String path) {
   final dir = Directory(path);
   if (!dir.existsSync()) return 0;
   var bytes = 0;
   try {
-    for (final e in dir.listSync(recursive: true, followLinks: false)) {
-      if (e is File) {
+    for (final e in dir.listSync(recursive: false, followLinks: false)) {
+      if (e is Directory) {
+        if (_excludedDirectoryNames.contains(p.basename(e.path))) continue;
+        bytes += _sizeOf(e.path);
+      } else if (e is File) {
         try {
           bytes += e.lengthSync();
         } catch (_) {
