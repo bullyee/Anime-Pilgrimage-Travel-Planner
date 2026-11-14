@@ -1,3 +1,4 @@
+import 'package:flutter/foundation.dart' show kIsWeb;
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 // Add this
@@ -7,6 +8,7 @@ import 'package:trip_planner/features/auth/providers/auth_provider.dart'; // Add
 import 'package:trip_planner/features/auth/screens/login_screen.dart'; // Add this
 
 import '../../features/home/screens/home_screen.dart';
+import '../../features/photos/providers/photos_providers.dart';
 import '../../features/photos/screens/photo_screen.dart';
 import '../../features/photos/screens/photos_screen.dart';
 import '../../features/poi/screens/photo_edit_screen.dart';
@@ -46,7 +48,8 @@ GoRouter router(RouterRef ref) {
   }
 
   return GoRouter(
-    initialLocation: returnTo ?? '/',
+    initialLocation: returnTo,
+    overridePlatformDefaultLocation: returnTo != null,
     
     // AUTH REDIRECT LOGIC
     redirect: (context, state) {
@@ -220,6 +223,9 @@ Widget _photoEditScreen(GoRouterState state) {
       body: Center(child: Text('Missing source path.')),
     );
   }
+  if (args.path.isEmpty && args.photoId != null) {
+    return _PhotoEditFromDb(args: args);
+  }
   return PhotoEditScreen(
     placeKey: args.placeKey,
     tripId: args.tripId,
@@ -230,4 +236,37 @@ Widget _photoEditScreen(GoRouterState state) {
     wasUpload: args.upload,
     isCapture: args.capture,
   );
+}
+
+class _PhotoEditFromDb extends ConsumerWidget {
+  final PhotoEditArgs args;
+  const _PhotoEditFromDb({required this.args});
+
+  @override
+  Widget build(BuildContext context, WidgetRef ref) {
+    final entry = ref.watch(photoEntryProvider(args.photoId!));
+    return entry.when(
+      loading: () => const Scaffold(body: Center(child: CircularProgressIndicator())),
+      error: (e, _) => Scaffold(body: Center(child: Text("Couldn't load photo: $e"))),
+      data: (data) {
+        if (data == null) {
+          return const Scaffold(body: Center(child: Text('Photo not found.')));
+        }
+        final refPath = args.referencePath ??
+            ((data.frame?.localPath?.isNotEmpty ?? false)
+                ? data.frame!.localPath
+                : (kIsWeb ? data.frame?.remoteUrl : null));
+        return PhotoEditScreen(
+          placeKey: args.placeKey ?? data.photo.placeKey,
+          tripId: args.tripId ?? data.photo.tripId,
+          derivedFromId: data.photo.id,
+          sourcePath: data.photo.localPath,
+          referencePath: refPath,
+          referenceImageId: args.referenceImageId ?? data.frame?.id,
+          wasUpload: args.upload,
+          isCapture: args.capture,
+        );
+      },
+    );
+  }
 }

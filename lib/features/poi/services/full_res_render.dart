@@ -4,6 +4,7 @@ import 'dart:ui' as ui;
 import 'package:flutter/foundation.dart';
 import 'package:flutter/services.dart';
 
+import '../../../core/utils/platform_media.dart';
 import 'edit_preview_service.dart';
 import 'edit_recipe.dart';
 
@@ -17,7 +18,7 @@ Future<RgbaImage> renderEditedPixels(
   String sourcePath,
   EditRecipe recipe,
 ) async => _applyRecipe(
-  await decodeRgba(await File(sourcePath).readAsBytes()),
+  await decodeRgba(await readMediaBytes(sourcePath)),
   recipe,
 );
 
@@ -29,7 +30,7 @@ Future<RgbaImage> _applyRecipe(RgbaImage photo, EditRecipe recipe) async {
     final path = step.tool == 'match' && !step.isNoOp
         ? step.referencePath
         : null;
-    references.add(path == null ? null : await File(path).readAsBytes());
+    references.add(path == null ? null : await readMediaBytes(path));
   }
   return compute(renderEdits, RenderEditsArgs(photo, recipe, references));
 }
@@ -39,7 +40,7 @@ Future<RgbaImage> _applyRecipe(RgbaImage photo, EditRecipe recipe) async {
 /// time went (`adb logcat -s flutter`).
 Future<Uint8List> renderEditedJpeg(String sourcePath, EditRecipe recipe) async {
   final watch = Stopwatch()..start();
-  final photo = await decodeRgba(await File(sourcePath).readAsBytes());
+  final photo = await decodeRgba(await readMediaBytes(sourcePath));
   final decoded = watch.elapsedMilliseconds;
   final edited = await _applyRecipe(photo, recipe);
   final rendered = watch.elapsedMilliseconds;
@@ -57,7 +58,7 @@ Future<Uint8List> renderEditedJpeg(String sourcePath, EditRecipe recipe) async {
 /// nothing to apply, the photo is decoded straight into one.
 Future<ui.Image> renderEditedImage(String sourcePath, EditRecipe recipe) async {
   if (recipe.isEmpty) {
-    return decodeUiImage(await File(sourcePath).readAsBytes());
+    return decodeUiImage(await readMediaBytes(sourcePath));
   }
   return imageFromRgba(await renderEditedPixels(sourcePath, recipe));
 }

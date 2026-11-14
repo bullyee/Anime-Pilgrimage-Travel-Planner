@@ -2,6 +2,7 @@ import 'dart:async';
 import 'dart:io';
 
 import 'package:file_selector/file_selector.dart' as fs;
+import 'package:flutter/foundation.dart' show kIsWeb;
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:path/path.dart' as p;
@@ -36,6 +37,14 @@ final backupFolderProvider = Provider<Future<Directory> Function()>((ref) => () 
 
 /// Library ⋮ → Back up to a file: confirm, write the file with progress, then share it.
 Future<void> backUpLibrary(BuildContext context, WidgetRef ref) async {
+  if (kIsWeb) {
+    await tellArchiveMessage(
+      context,
+      'Not available on Web',
+      'Offline library backup files require the mobile or desktop app.',
+    );
+    return;
+  }
   final svc = ref.read(libraryBackupServiceProvider);
   final db = ref.read(databaseProvider);
   final contents = await svc.describeExport(db);
@@ -81,6 +90,14 @@ Future<void> backUpLibrary(BuildContext context, WidgetRef ref) async {
 
 /// Library ⋮ → Restore from a file: pick, read what's in it, confirm, restore with progress.
 Future<void> restoreLibrary(BuildContext context, WidgetRef ref) async {
+  if (kIsWeb) {
+    await tellArchiveMessage(
+      context,
+      'Not available on Web',
+      'Restoring from a backup file requires the mobile or desktop app.',
+    );
+    return;
+  }
   final svc = ref.read(libraryBackupServiceProvider);
   final path = await ref.read(pickBackupFileProvider)();
   if (path == null || !context.mounted) return;

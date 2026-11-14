@@ -10,26 +10,24 @@ import 'package:image/image.dart' as img;
 import 'package:image_picker/image_picker.dart';
 
 import '../../../core/database/database.dart' show NewReferenceImage;
+import '../../../core/utils/platform_media.dart';
 import '../providers/camera_provider.dart';
 import '../widgets/capture_sheets.dart';
 
 enum _CameraFrameMode { native, screenFill }
 
 class _CropArgs {
-  final String sourcePath;
-  final String targetPath;
+  final Uint8List bytes;
   final double targetAspectRatio;
 
   const _CropArgs({
-    required this.sourcePath,
-    required this.targetPath,
+    required this.bytes,
     required this.targetAspectRatio,
   });
 }
 
-Future<String?> _cropPhotoToAspectInIsolate(_CropArgs args) async {
-  final bytes = await File(args.sourcePath).readAsBytes();
-  final decoded = img.decodeImage(bytes);
+Future<Uint8List?> _cropPhotoToAspectInIsolate(_CropArgs args) async {
+  final decoded = img.decodeImage(args.bytes);
   if (decoded == null) return null;
 
   final oriented = img.bakeOrientation(decoded);
@@ -55,8 +53,7 @@ Future<String?> _cropPhotoToAspectInIsolate(_CropArgs args) async {
     width: cropWidth,
     height: cropHeight,
   );
-  await File(args.targetPath).writeAsBytes(img.encodeJpg(cropped, quality: 95));
-  return args.targetPath;
+  return Uint8List.fromList(img.encodeJpg(cropped, quality: 95));
 }
 
 class CameraScreen extends ConsumerStatefulWidget {
@@ -81,6 +78,7 @@ class _CameraScreenState extends ConsumerState<CameraScreen>
   List<CameraDescription> _cameras = [];
   int _cameraIndex = 0;
   FlashMode _flashMode = FlashMode.off;
+  bool _flashSupported = true;
   bool _isCameraReady = false;
   bool _isTakingPicture = false;
   Offset _gestureStartOffset = Offset.zero;
@@ -117,9 +115,25 @@ class _CameraScreenState extends ConsumerState<CameraScreen>
     if (!mounted) return;
     setState(() => _placeFrames = frames);
     final start = frames.where((f) => f.id == startOn).firstOrNull;
-    if (start != null && ref.read(cameraProvider).referenceImage == null) {
-      ref.read(cameraProvider.notifier).setReferenceImage(File(start.localPath!), referenceImageId: start.id);
+    final startPath = start == null ? null : _framePathOrUrl(start);
+    if (start != null &&
+        startPath != null &&
+        ref.read(cameraProvider).effectiveReferencePath == null) {
+      ref.read(cameraProvider.notifier).setReferencePath(
+            startPath,
+            referenceImageId: start.id,
+          );
     }
+  }
+
+  String? _framePathOrUrl(NewReferenceImage frame) {
+    final local = frame.localPath;
+    if (local != null && local.isNotEmpty) {
+      if (!kIsWeb || isRemoteOrMemoryUri(local)) return local;
+    }
+    final remote = frame.remoteUrl;
+    if (remote != null && remote.isNotEmpty) return remote;
+    return null;
   }
 
   /// The reference's place in [_placeFrames]; null when it isn't one of them.
@@ -133,7 +147,11 @@ class _CameraScreenState extends ConsumerState<CameraScreen>
     final i = _frameIndex(camState);
     if (i == null || _placeFrames.length < 2) return;
     final next = _placeFrames[(i + step) % _placeFrames.length];
-    ref.read(cameraProvider.notifier).switchReference(File(next.localPath!), referenceImageId: next.id);
+    final nextPath = _framePathOrUrl(next);
+    if (nextPath == null) return;
+    ref
+        .read(cameraProvider.notifier)
+        .switchReferencePath(nextPath, referenceImageId: next.id);
   }
 
   @override
@@ -165,10 +183,10 @@ class _CameraScreenState extends ConsumerState<CameraScreen>
 
   Future<void> _initializeCameras() async {
     try {
-      if (kIsWeb || Platform.isWindows || Platform.isMacOS || Platform.isLinux) {
+      if (!kIsWeb && (Platform.isWindows || Platform.isMacOS || Platform.isLinux)) {
         if (mounted) {
           ref.read(cameraProvider.notifier).setCameraError(
-                'Anime Camera is only supported on mobile devices (Android / iOS).',
+                'Anime Camera is only supported on mobile and Web browsers.',
               );
         }
         return;
@@ -214,16 +232,34 @@ class _CameraScreenState extends ConsumerState<CameraScreen>
 
     try {
       await controller.initialize();
-      await controller.setFlashMode(_flashMode);
-      final minZoom = await controller.getMinZoomLevel();
-      final maxZoom = await controller.getMaxZoomLevel();
-      final initialZoom = math.max(1, minZoom).clamp(minZoom, maxZoom);
-      await controller.setZoomLevel(initialZoom.toDouble());
+      var flashSupported = true;
+      try {
+        await controller.setFlashMode(_flashMode);
+      } catch (_) {
+        // Webcams and browsers without torch capabilities throw here.
+        flashSupported = false;
+      }
+      double minZoom = 1;
+      double maxZoom = 1;
+      double initialZoom = 1;
+      try {
+        minZoom = await controller.getMinZoomLevel();
+        maxZoom = await controller.getMaxZoomLevel();
+        initialZoom = math.max(1, minZoom).clamp(minZoom, maxZoom).toDouble();
+        if (maxZoom > minZoom) {
+          await controller.setZoomLevel(initialZoom);
+        }
+      } catch (_) {
+        minZoom = 1;
+        maxZoom = 1;
+        initialZoom = 1;
+      }
       if (!mounted) return;
       setState(() {
+        _flashSupported = flashSupported;
         _minZoom = minZoom;
         _maxZoom = maxZoom;
-        _currentZoom = initialZoom.toDouble();
+        _currentZoom = initialZoom;
         _isCameraReady = true;
       });
     } on CameraException catch (e) {
@@ -231,6 +267,9 @@ class _CameraScreenState extends ConsumerState<CameraScreen>
       ref
           .read(cameraProvider.notifier)
           .setCameraError('Camera unavailable: ${e.description ?? e.code}');
+    } catch (e) {
+      if (!mounted) return;
+      ref.read(cameraProvider.notifier).setCameraError('Camera error: $e');
     }
   }
 
@@ -244,15 +283,14 @@ class _CameraScreenState extends ConsumerState<CameraScreen>
 
     try {
       setState(() => _isTakingPicture = true);
-      HapticFeedback.mediumImpact();
+      if (!kIsWeb) HapticFeedback.mediumImpact();
       final screenSize = MediaQuery.sizeOf(context);
       final screenAspectRatio = screenSize.width / screenSize.height;
       final file = await controller.takePicture();
       if (!mounted) return;
-      final photoFile = File(file.path);
-      final visiblePhoto = _frameMode == _CameraFrameMode.screenFill
-          ? await _cropPhotoToAspect(photoFile, screenAspectRatio)
-          : photoFile;
+      final visiblePath = _frameMode == _CameraFrameMode.screenFill
+          ? await _cropPhotoToAspect(file, screenAspectRatio)
+          : file.path;
       if (!mounted) return;
 
       // Hand the capture off to the standalone photo editor by route
@@ -272,10 +310,10 @@ class _CameraScreenState extends ConsumerState<CameraScreen>
       final camState = ref.read(cameraProvider);
       openCaptureInEditor(
         context,
-        photoPath: visiblePhoto.path,
+        photoPath: visiblePath,
         placeKey: widget.placeKey ?? camState.placeKey,
         tripId: widget.tripId,
-        referencePath: camState.referenceImage?.path,
+        referencePath: camState.effectiveReferencePath,
         referenceImageId: camState.referenceImageId,
       );
     } on CameraException catch (e) {
@@ -288,32 +326,42 @@ class _CameraScreenState extends ConsumerState<CameraScreen>
     }
   }
 
-  Future<File> _cropPhotoToAspect(
-    File photoFile,
+  Future<String> _cropPhotoToAspect(
+    XFile photoFile,
     double targetAspectRatio,
   ) async {
-    final targetPath = photoFile.path.replaceFirst(
-      RegExp(r'\.(jpe?g|png)$', caseSensitive: false),
-      '_screen.jpg',
-    );
     try {
-      final result = await compute(
+      final sourceBytes = await photoFile.readAsBytes();
+      final croppedBytes = await compute(
         _cropPhotoToAspectInIsolate,
         _CropArgs(
-          sourcePath: photoFile.path,
-          targetPath: targetPath,
+          bytes: sourceBytes,
           targetAspectRatio: targetAspectRatio,
         ),
       );
-      if (result == null) return photoFile;
-      return File(result);
+      if (croppedBytes == null) return photoFile.path;
+      if (kIsWeb) {
+        return XFile.fromData(
+          croppedBytes,
+          mimeType: 'image/jpeg',
+          name: 'capture_screen.jpg',
+        ).path;
+      }
+      final replaced = photoFile.path.replaceFirst(
+        RegExp(r'\.(jpe?g|png)$', caseSensitive: false),
+        '_screen.jpg',
+      );
+      final targetPath =
+          replaced == photoFile.path ? '${photoFile.path}_screen.jpg' : replaced;
+      await File(targetPath).writeAsBytes(croppedBytes);
+      return targetPath;
     } catch (e) {
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(content: Text('Screen crop failed, using original: $e')),
         );
       }
-      return photoFile;
+      return photoFile.path;
     }
   }
 
@@ -383,6 +431,14 @@ class _CameraScreenState extends ConsumerState<CameraScreen>
                   textAlign: TextAlign.center,
                 ),
                 const SizedBox(height: 16),
+                if (kIsWeb) ...[
+                  FilledButton.icon(
+                    onPressed: _captureViaSystemPicker,
+                    icon: const Icon(Icons.photo_camera_outlined),
+                    label: const Text('Use browser camera / photo picker'),
+                  ),
+                  const SizedBox(height: 8),
+                ],
                 TextButton(
                   onPressed: () => Navigator.pop(context),
                   child: const Text(
@@ -400,6 +456,27 @@ class _CameraScreenState extends ConsumerState<CameraScreen>
     return _buildCameraScreen(camState);
   }
 
+  Future<void> _captureViaSystemPicker() async {
+    try {
+      final picked = await ImagePicker().pickImage(source: ImageSource.camera);
+      if (picked == null || !mounted) return;
+      final camState = ref.read(cameraProvider);
+      openCaptureInEditor(
+        context,
+        photoPath: picked.path,
+        placeKey: widget.placeKey ?? camState.placeKey,
+        tripId: widget.tripId,
+        referencePath: camState.effectiveReferencePath,
+        referenceImageId: camState.referenceImageId,
+      );
+    } on PlatformException catch (e) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text('Could not open picker: ${e.message ?? e.code}')),
+      );
+    }
+  }
+
   Widget _buildCameraScreen(CameraState camState) {
     return Scaffold(
       backgroundColor: Colors.black,
@@ -407,7 +484,7 @@ class _CameraScreenState extends ConsumerState<CameraScreen>
         fit: StackFit.expand,
         children: [
           _buildCameraPreview(camState),
-          if (camState.referenceImage != null && camState.overlayVisible)
+          if (camState.effectiveReferencePath != null && camState.overlayVisible)
             _buildReferenceOverlay(camState),
           _buildTopBar(camState),
           _buildBottomControls(camState),
@@ -439,18 +516,23 @@ class _CameraScreenState extends ConsumerState<CameraScreen>
 
     return GestureDetector(
       behavior: HitTestBehavior.opaque,
-      onScaleStart: camState.referenceImage == null
+      onScaleStart: camState.effectiveReferencePath == null && _maxZoom > _minZoom
           ? (_) => _gestureStartZoom = _currentZoom
           : null,
-      onScaleUpdate: camState.referenceImage == null
+      onScaleUpdate: camState.effectiveReferencePath == null && _maxZoom > _minZoom
           ? (details) => _setZoom(_gestureStartZoom * details.scale)
           : null,
       child: LayoutBuilder(
         builder: (context, constraints) {
           final previewSize = controller.value.previewSize;
-          final previewAspectRatio = previewSize == null
-              ? controller.value.aspectRatio
-              : previewSize.height / previewSize.width;
+          final rawAspect = kIsWeb
+              ? ((previewSize == null || previewSize.height == 0)
+                  ? controller.value.aspectRatio
+                  : previewSize.width / previewSize.height)
+              : (previewSize == null
+                  ? controller.value.aspectRatio
+                  : previewSize.height / previewSize.width);
+          final previewAspectRatio = rawAspect > 0 ? rawAspect : 1.0;
           final preview = AspectRatio(
             aspectRatio: previewAspectRatio,
             child: CameraPreview(controller),
@@ -510,8 +592,8 @@ class _CameraScreenState extends ConsumerState<CameraScreen>
                   decoration: BoxDecoration(
                     border: Border.all(color: Colors.white70, width: 1.5),
                   ),
-                  child: Image.file(
-                    camState.referenceImage!,
+                  child: PlatformImage(
+                    camState.effectiveReferencePath!,
                     fit: BoxFit.contain,
                     cacheWidth: 1080,
                   ),
@@ -548,13 +630,15 @@ class _CameraScreenState extends ConsumerState<CameraScreen>
                 mode: _frameMode,
                 onChanged: (mode) => setState(() => _frameMode = mode),
               ),
-              const SizedBox(width: 10),
-              _CameraIconButton(
-                icon: _flashMode == FlashMode.off
-                    ? Icons.flash_off
-                    : Icons.flash_auto,
-                onTap: _toggleFlash,
-              ),
+              if (_flashSupported) ...[
+                const SizedBox(width: 10),
+                _CameraIconButton(
+                  icon: _flashMode == FlashMode.off
+                      ? Icons.flash_off
+                      : Icons.flash_auto,
+                  onTap: _toggleFlash,
+                ),
+              ],
             ],
           ),
         ),
@@ -607,7 +691,7 @@ class _CameraScreenState extends ConsumerState<CameraScreen>
                     ),
                   ],
                 ),
-              if (camState.referenceImage != null)
+              if (camState.effectiveReferencePath != null)
                 Row(
                   children: [
                     // Layers icon + opacity slider only show while the
@@ -695,8 +779,9 @@ class _CameraScreenState extends ConsumerState<CameraScreen>
                 crossAxisAlignment: CrossAxisAlignment.center,
                 children: [
                   _ReferenceButton(
-                    referenceImage:
-                        camState.placeKey == null ? camState.referenceImage : null,
+                    referencePath: camState.placeKey == null
+                        ? camState.effectiveReferencePath
+                        : null,
                     emptyIcon: camState.placeKey == null
                         ? Icons.image
                         : Icons.file_upload_outlined,
@@ -725,7 +810,7 @@ class _CameraScreenState extends ConsumerState<CameraScreen>
     // Adding a photo to a place lives on the place page's "Add photos"
     // button, so this button only sets the current camera overlay
     // reference regardless of context.
-    ref.read(cameraProvider.notifier).setReferenceImage(File(picked.path));
+    ref.read(cameraProvider.notifier).setReferencePath(picked.path);
   }
 
   Future<void> _pickPlaceFrame() async {
@@ -734,10 +819,12 @@ class _CameraScreenState extends ConsumerState<CameraScreen>
 
     final picked = await pickPlaceFrame(context, ref, placeKey);
     if (picked == null) return;
+    final path = _framePathOrUrl(picked);
+    if (path == null) return;
 
     ref
         .read(cameraProvider.notifier)
-        .setReferenceImage(File(picked.localPath!), referenceImageId: picked.id);
+        .setReferencePath(path, referenceImageId: picked.id);
     if (_placeFrames.every((f) => f.id != picked.id)) await _loadPlaceFrames(placeKey);
   }
 
@@ -862,12 +949,12 @@ class _CameraIconButton extends StatelessWidget {
 }
 
 class _ReferenceButton extends StatelessWidget {
-  final File? referenceImage;
+  final String? referencePath;
   final IconData emptyIcon;
   final VoidCallback onTap;
 
   const _ReferenceButton({
-    required this.referenceImage,
+    required this.referencePath,
     required this.emptyIcon,
     required this.onTap,
   });
@@ -885,9 +972,9 @@ class _ReferenceButton extends StatelessWidget {
           border: Border.all(color: Colors.white30, width: 1.2),
         ),
         clipBehavior: Clip.antiAlias,
-        child: referenceImage == null
+        child: referencePath == null
             ? Icon(emptyIcon, color: Colors.white, size: 28)
-            : Image.file(referenceImage!, fit: BoxFit.cover, cacheWidth: 200),
+            : PlatformImage(referencePath!, fit: BoxFit.cover, cacheWidth: 200),
       ),
     );
   }

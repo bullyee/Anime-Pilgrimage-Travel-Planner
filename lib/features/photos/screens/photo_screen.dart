@@ -1,10 +1,9 @@
-import 'dart:io';
-
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 import 'package:intl/intl.dart';
 
+import '../../../core/utils/platform_media.dart';
 import '../../../shared/theme/app_theme.dart';
 import '../../camera/services/photo_edit_route.dart';
 import '../../library/widgets/place_page_parts.dart' show FrameImage, framePath;
@@ -77,8 +76,8 @@ class PhotoScreen extends ConsumerWidget {
 
     final shot = panel(
       entry.isEdit ? 'Edited' : 'Your shot',
-      Image.file(
-        File(photo.localPath),
+      PlatformImage(
+        photo.localPath,
         key: const Key('photoScreenShot'),
         fit: BoxFit.contain,
         width: double.infinity,

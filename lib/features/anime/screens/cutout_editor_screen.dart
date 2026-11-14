@@ -35,6 +35,20 @@ class _CutoutEditorScreenState extends State<CutoutEditorScreen> {
 
   @override
   Widget build(BuildContext context) {
+    if (kIsWeb) {
+      return Scaffold(
+        appBar: AppBar(title: const Text('Cut out character')),
+        body: const Center(
+          child: Padding(
+            padding: EdgeInsets.all(24),
+            child: Text(
+              'On-device AI character cutout is available in the Android, iOS, and desktop apps.',
+              textAlign: TextAlign.center,
+            ),
+          ),
+        ),
+      );
+    }
     final source = File(widget.sourcePath);
     return Scaffold(
       appBar: AppBar(

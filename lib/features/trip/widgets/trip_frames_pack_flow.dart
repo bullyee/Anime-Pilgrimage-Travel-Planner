@@ -1,5 +1,6 @@
 import 'dart:io';
 
+import 'package:flutter/foundation.dart' show kIsWeb;
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:image_picker/image_picker.dart';
@@ -10,6 +11,7 @@ import 'package:uuid/uuid.dart';
 import '../../../core/database/database.dart';
 import '../../../core/providers/database_provider.dart';
 import '../../../core/utils/archive_isolate.dart';
+import '../../../core/utils/platform_media.dart';
 import '../../auth/providers/auth_provider.dart';
 import '../../library/providers/place_providers.dart' show placeRepositoryProvider;
 import '../../library/widgets/library_backup_flow.dart';
@@ -32,6 +34,14 @@ void _tellQueued(BuildContext context, String text) {
 /// Members tab → Share local frames: exports only the local-only stop frames in [trip]
 /// into a `.pilgrimage-frames` file and hands it to the system share sheet.
 Future<void> shareTripLocalFrames(BuildContext context, WidgetRef ref, Trip trip) async {
+  if (kIsWeb) {
+    await tellArchiveMessage(
+      context,
+      'Not available on Web',
+      'Sharing offline frame pack files requires the mobile or desktop app. Use Google Drive sync instead.',
+    );
+    return;
+  }
   final svc = ref.read(tripFramesPackServiceProvider);
   final db = ref.read(databaseProvider);
   final TripFramesPackContents contents;
@@ -97,6 +107,14 @@ Future<void> shareTripLocalFrames(BuildContext context, WidgetRef ref, Trip trip
 /// Members tab → Import local frames: picks a `.pilgrimage-frames` file and attaches
 /// its frames to matching stops of [trip].
 Future<void> importTripLocalFrames(BuildContext context, WidgetRef ref, Trip trip) async {
+  if (kIsWeb) {
+    await tellArchiveMessage(
+      context,
+      'Not available on Web',
+      'Importing offline frame pack files requires the mobile or desktop app.',
+    );
+    return;
+  }
   final svc = ref.read(tripFramesPackServiceProvider);
   final path = await ref.read(pickBackupFileProvider)();
   if (path == null || !context.mounted) return;
@@ -235,28 +253,47 @@ Future<void> downloadTripFramesForOffline(BuildContext context, WidgetRef ref, T
   _tellQueued(context, 'Downloading ${urls.length} ${urls.length == 1 ? 'frame' : 'frames'} in the background.');
 }
 
+Future<List<String>> _stagePickedFrames(List<XFile> picked) async {
+  if (kIsWeb) {
+    return [for (final file in picked) await encodePickedMediaAsDataUrl(file)];
+  }
+  final docsDir = await getApplicationDocumentsDirectory();
+  final refDir = Directory(p.join(docsDir.path, 'reference_images'));
+  if (!await refDir.exists()) await refDir.create(recursive: true);
+  const uuid = Uuid();
+  final paths = <String>[];
+  for (final file in picked) {
+    final ext = p.extension(file.path).isEmpty ? '.jpg' : p.extension(file.path);
+    final targetPath = p.join(refDir.path, 'ref_${uuid.v4()}$ext');
+    await File(file.path).copy(targetPath);
+    paths.add(targetPath);
+  }
+  return paths;
+}
+
+Future<void> _deleteStagedFrame(String path) async {
+  if (kIsWeb || isRemoteOrMemoryUri(path)) return;
+  try {
+    await File(path).delete();
+  } catch (_) {}
+}
+
 /// Picks gallery photos and stores copies locally on [stopId] without uploading
 /// to the cloud. Returns how many frames were added.
 Future<int> addLocalStopFrames(BuildContext context, WidgetRef ref, {required String stopId}) async {
   final picked = await ImagePicker().pickMultiImage();
   if (picked.isEmpty) return 0;
   final repo = ref.read(placeRepositoryProvider);
-  final docsDir = await getApplicationDocumentsDirectory();
-  final refDir = Directory(p.join(docsDir.path, 'reference_images'));
-  if (!await refDir.exists()) await refDir.create(recursive: true);
+  final staged = await _stagePickedFrames(picked);
 
-  const uuid = Uuid();
   var count = 0;
-  for (final file in picked) {
-    final ext = p.extension(file.path).isEmpty ? '.jpg' : p.extension(file.path);
-    final targetPath = p.join(refDir.path, 'ref_${uuid.v4()}$ext');
-    await File(file.path).copy(targetPath);
+  for (final targetPath in staged) {
     try {
       await repo.addReferenceImage(stopId: stopId, localPath: targetPath, source: 'You');
     } catch (_) {
-      try {
-        await File(targetPath).delete();
-      } catch (_) {}
+      for (final remaining in staged.skip(count)) {
+        await _deleteStagedFrame(remaining);
+      }
       rethrow;
     }
     count++;
@@ -321,22 +358,10 @@ Future<int> uploadStopGalleryFramesViaDrive(
     return 0;
   }
 
-  final docsDir = await getApplicationDocumentsDirectory();
-  final refDir = Directory(p.join(docsDir.path, 'reference_images'));
-  if (!await refDir.exists()) await refDir.create(recursive: true);
-  const uuid = Uuid();
-  final paths = <String>[];
-  for (final file in picked) {
-    final ext = p.extension(file.path).isEmpty ? '.jpg' : p.extension(file.path);
-    final targetPath = p.join(refDir.path, 'ref_${uuid.v4()}$ext');
-    await File(file.path).copy(targetPath);
-    paths.add(targetPath);
-  }
+  final paths = await _stagePickedFrames(picked);
   if (!context.mounted) {
     for (final path in paths) {
-      try {
-        await File(path).delete();
-      } catch (_) {}
+      await _deleteStagedFrame(path);
     }
     return 0;
   }

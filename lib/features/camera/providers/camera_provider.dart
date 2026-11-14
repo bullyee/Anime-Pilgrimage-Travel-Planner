@@ -6,6 +6,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 class CameraState {
   final bool isInitialized;
   final File? referenceImage;
+  final String? referencePath;
   final String? referenceImageId;
   // Whether the reference overlay should currently be painted on top
   // of the live preview. The reference itself stays in state when
@@ -20,6 +21,7 @@ class CameraState {
   const CameraState({
     this.isInitialized = false,
     this.referenceImage,
+    this.referencePath,
     this.referenceImageId,
     this.overlayVisible = true,
     this.placeKey,
@@ -29,9 +31,13 @@ class CameraState {
     this.overlayOpacity = 0.55,
   });
 
+  /// Effective reference path or URL for both native files and Web URLs.
+  String? get effectiveReferencePath => referencePath ?? referenceImage?.path;
+
   CameraState copyWith({
     bool? isInitialized,
     File? referenceImage,
+    String? referencePath,
     String? referenceImageId,
     bool? overlayVisible,
     String? placeKey,
@@ -47,6 +53,8 @@ class CameraState {
       isInitialized: isInitialized ?? this.isInitialized,
       referenceImage:
           clearReferenceImage ? null : (referenceImage ?? this.referenceImage),
+      referencePath:
+          clearReferenceImage ? null : (referencePath ?? this.referencePath),
       referenceImageId: (clearReferenceImage || clearReferenceImageId)
           ? null
           : (referenceImageId ?? this.referenceImageId),
@@ -74,6 +82,20 @@ class CameraNotifier extends StateNotifier<CameraState> {
   void setReferenceImage(File file, {String? referenceImageId}) {
     state = state.copyWith(
       referenceImage: file,
+      referencePath: file.path,
+      referenceImageId: referenceImageId,
+      clearReferenceImageId: referenceImageId == null,
+      overlayVisible: true,
+      overlayOffset: Offset.zero,
+      overlayScale: 1,
+      overlayOpacity: 0.55,
+    );
+  }
+
+  /// Sets the reference overlay from either a filesystem path or a Web URI.
+  void setReferencePath(String path, {String? referenceImageId}) {
+    state = state.copyWith(
+      referencePath: path,
       referenceImageId: referenceImageId,
       clearReferenceImageId: referenceImageId == null,
       overlayVisible: true,
@@ -86,7 +108,21 @@ class CameraNotifier extends StateNotifier<CameraState> {
   /// Switches to another frame of the same spot, keeping where the overlay
   /// is, its size and its opacity.
   void switchReference(File file, {required String referenceImageId}) {
-    state = state.copyWith(referenceImage: file, referenceImageId: referenceImageId, overlayVisible: true);
+    state = state.copyWith(
+      referenceImage: file,
+      referencePath: file.path,
+      referenceImageId: referenceImageId,
+      overlayVisible: true,
+    );
+  }
+
+  /// Switches to another frame by path or URL, preserving overlay transforms.
+  void switchReferencePath(String path, {required String referenceImageId}) {
+    state = state.copyWith(
+      referencePath: path,
+      referenceImageId: referenceImageId,
+      overlayVisible: true,
+    );
   }
 
   void clearReferenceImage() {

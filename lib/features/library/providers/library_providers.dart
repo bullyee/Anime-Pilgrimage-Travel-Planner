@@ -1,4 +1,5 @@
 import 'package:drift/drift.dart';
+import 'package:flutter/foundation.dart' show kIsWeb;
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../../core/database/database.dart';
@@ -42,28 +43,45 @@ final libraryEntriesProvider = Provider.autoDispose<AsyncValue<List<LibraryEntry
   ));
 });
 
-/// Each place's cover file, by place key, for the places that have one.
+/// Each place's cover file (or remote URL on Web), by place key.
 final placeCoversProvider = StreamProvider.autoDispose<Map<String, String>>((ref) {
   final db = ref.watch(databaseProvider);
-  final query = db.select(db.places)..where((p) => p.coverLocalPath.isNotNull());
+  final query = db.select(db.places)
+    ..where(
+      (p) => kIsWeb
+          ? (p.coverLocalPath.isNotNull() | p.coverRemoteUrl.isNotNull())
+          : p.coverLocalPath.isNotNull(),
+    );
   return query.watch().map((places) => {
         for (final p in places)
-          if (p.coverLocalPath!.isNotEmpty) p.placeKey: p.coverLocalPath!,
+          if (p.coverLocalPath?.isNotEmpty ?? false)
+            p.placeKey: p.coverLocalPath!
+          else if (kIsWeb && (p.coverRemoteUrl?.isNotEmpty ?? false))
+            p.placeKey: p.coverRemoteUrl!,
       });
 });
 
-/// The files of each place's anime frames, oldest first, by place key: the
-/// camera's place picker shows the first as a thumbnail. Frames that only
-/// have a remote copy are left out.
+/// The files (or remote URLs on Web) of each place's anime frames, oldest first,
+/// by place key: the camera's place picker shows the first as a thumbnail. On
+/// native, frames that only have a remote copy are left out.
 final placeFramePathsProvider = StreamProvider.autoDispose<Map<String, List<String>>>((ref) {
   final db = ref.watch(databaseProvider);
   final query = db.select(db.newReferenceImages)
-    ..where((f) => f.placeKey.isNotNull() & f.localPath.isNotNull())
+    ..where(
+      (f) =>
+          f.placeKey.isNotNull() &
+          (kIsWeb ? (f.localPath.isNotNull() | f.remoteUrl.isNotNull()) : f.localPath.isNotNull()),
+    )
     ..orderBy([(f) => OrderingTerm.asc(f.createdAt)]);
   return query.watch().map((frames) {
     final byPlace = <String, List<String>>{};
     for (final f in frames) {
-      byPlace.putIfAbsent(f.placeKey!, () => []).add(f.localPath!);
+      final path = (f.localPath?.isNotEmpty ?? false)
+          ? f.localPath!
+          : (kIsWeb ? f.remoteUrl : null);
+      if (path != null && path.isNotEmpty) {
+        byPlace.putIfAbsent(f.placeKey!, () => []).add(path);
+      }
     }
     return byPlace;
   });

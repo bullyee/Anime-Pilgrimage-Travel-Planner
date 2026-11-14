@@ -1,6 +1,7 @@
 import 'dart:io';
 
 import 'package:drift/drift.dart' show Value;
+import 'package:flutter/foundation.dart' show kIsWeb;
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:gal/gal.dart';
 import 'package:image_picker/image_picker.dart';
@@ -11,6 +12,7 @@ import 'package:uuid/uuid.dart';
 import '../../../core/database/database.dart';
 import '../../../core/providers/database_provider.dart';
 import '../../../core/utils/app_result.dart';
+import '../../../core/utils/platform_media.dart';
 import '../../poi/services/background_photo_save.dart' show galleryAlbum;
 import '../../trip/controllers/trips_controller.dart' show isoDate;
 import '../models/frames.dart';
@@ -111,7 +113,7 @@ class PlaceController extends Notifier<AsyncValue<void>> {
       final picked = await ImagePicker().pickMultiImage();
       final repo = ref.read(placeRepositoryProvider);
       for (final file in picked) {
-        final path = await _copyIntoApp(file.path, 'reference_images', 'ref');
+        final path = await _copyIntoApp(file, 'reference_images', 'ref');
         await repo.addReferenceImage(placeKey: placeKey, localPath: path, source: 'You');
       }
       return picked.length;
@@ -161,8 +163,10 @@ class PlaceController extends Notifier<AsyncValue<void>> {
       final repo = ref.read(placeRepositoryProvider);
       final db = ref.read(databaseProvider);
       for (final file in picked) {
-        final takenAt = await File(file.path).lastModified();
-        final path = await _copyIntoApp(file.path, 'camera_photos', 'photo');
+        final takenAt = kIsWeb
+            ? await file.lastModified()
+            : await File(file.path).lastModified();
+        final path = await _copyIntoApp(file, 'camera_photos', 'photo');
         await repo.addPhoto(
           placeKey: placeKey,
           localPath: path,
@@ -181,9 +185,18 @@ class PlaceController extends Notifier<AsyncValue<void>> {
     });
   }
 
-  /// Saves a copy of a photo to the phone's gallery, in the app's album.
+  /// Saves a copy of a photo to the phone's gallery, in the app's album, or
+  /// downloads it in the browser on Web.
   Future<AppResult<void>> saveToGallery(String localPath) {
     return _run(() async {
+      if (kIsWeb) {
+        final bytes = await readMediaBytes(localPath);
+        await saveBytesAsMediaDownload(
+          bytes,
+          filename: 'trip_planner_${DateTime.now().millisecondsSinceEpoch}.jpg',
+        );
+        return;
+      }
       if (!await Gal.requestAccess(toAlbum: true)) throw StateError('Allow access to your photos to save it.');
       await Gal.putImage(localPath, album: galleryAlbum);
     });
@@ -192,18 +205,24 @@ class PlaceController extends Notifier<AsyncValue<void>> {
   static String? _clean(String? s) => s == null || s.trim().isEmpty ? null : s.trim();
 
   /// Copies [source] into the app's own [folder], so the copy outlives the
-  /// picker's temporary file.
-  static Future<String> _copyIntoApp(String source, String folder, String prefix) async {
+  /// picker's temporary file. On Web, stores an inline `data:` URI so the
+  /// asset persists in local SQLite across tab reloads.
+  static Future<String> _copyIntoApp(XFile source, String folder, String prefix) async {
+    if (kIsWeb) {
+      final bytes = await source.readAsBytes();
+      final mime = source.mimeType ?? 'image/jpeg';
+      return encodeDataUrl(bytes, mimeType: mime);
+    }
     final dir = Directory(p.join((await getApplicationDocumentsDirectory()).path, folder));
     if (!await dir.exists()) await dir.create(recursive: true);
-    final ext = p.extension(source).isEmpty ? '.jpg' : p.extension(source);
+    final ext = p.extension(source.path).isEmpty ? '.jpg' : p.extension(source.path);
     final target = p.join(dir.path, '${prefix}_${_uuid.v4()}$ext');
-    await File(source).copy(target);
+    await File(source.path).copy(target);
     return target;
   }
 
   static Future<void> _deleteFile(String? path) async {
-    if (path == null || path.isEmpty) return;
+    if (path == null || path.isEmpty || kIsWeb || isRemoteOrMemoryUri(path)) return;
     try {
       final file = File(path);
       if (await file.exists()) await file.delete();

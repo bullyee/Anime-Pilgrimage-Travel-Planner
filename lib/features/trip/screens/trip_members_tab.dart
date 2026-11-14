@@ -1,3 +1,4 @@
+import 'package:flutter/foundation.dart' show kIsWeb;
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:intl/intl.dart';
@@ -339,16 +340,18 @@ class _LocalFramesCard extends ConsumerWidget {
             ),
             const SizedBox(height: 8),
           ],
-          OutlinedButton.icon(
-            onPressed: downloading ? null : () => downloadTripFramesForOffline(context, ref, trip),
-            icon: const Icon(Icons.cloud_download_outlined, size: 18),
-            label: Text(
-              toDownload > 0 && !downloading
-                  ? 'Download $toDownload ${toDownload == 1 ? 'frame' : 'frames'} for offline'
-                  : 'Download frames for offline',
+          if (!kIsWeb) ...[
+            OutlinedButton.icon(
+              onPressed: downloading ? null : () => downloadTripFramesForOffline(context, ref, trip),
+              icon: const Icon(Icons.cloud_download_outlined, size: 18),
+              label: Text(
+                toDownload > 0 && !downloading
+                    ? 'Download $toDownload ${toDownload == 1 ? 'frame' : 'frames'} for offline'
+                    : 'Download frames for offline',
+              ),
             ),
-          ),
-          const SizedBox(height: 8),
+            const SizedBox(height: 8),
+          ],
           Wrap(
             spacing: 8,
             runSpacing: 8,

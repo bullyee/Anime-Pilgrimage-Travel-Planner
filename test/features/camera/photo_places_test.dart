@@ -92,8 +92,31 @@ void main() {
           reason: 'what the old second decode did with this name');
     });
 
-    test('the old POI route supplies the place, and a query without a path is refused', () {
+    test('the old POI route supplies the place, and a query without a path or photoId is refused', () {
       expect(PhotoEditArgs.fromQuery({'ref': '/a.jpg'}), isNull);
+    });
+
+    test('omits data URI from route URL when photoId is present to prevent massive URLs', () {
+      const dataUri = 'data:image/jpeg;base64,VGhpcyBpcyBhIHNhbXBsZSBtZWRpYSBzdHJpbmc=';
+      const refDataUri = 'data:image/jpeg;base64,UmVmZXJlbmNlIGZyYW1lIGRhdGE=';
+      const args = PhotoEditArgs(
+        path: dataUri,
+        photoId: 'photo-uuid-123',
+        placeKey: 'anitabi:42',
+        referencePath: refDataUri,
+        referenceImageId: 'frame-uuid-456',
+      );
+      final location = Uri.parse(args.location);
+      expect(location.path, '/photo-edit');
+      expect(location.queryParameters.containsKey('path'), isFalse);
+      expect(location.queryParameters.containsKey('ref'), isFalse);
+      expect(location.queryParameters['photo'], 'photo-uuid-123');
+      expect(location.queryParameters['refId'], 'frame-uuid-456');
+
+      final read = PhotoEditArgs.fromQuery(location.queryParameters)!;
+      expect(read.photoId, 'photo-uuid-123');
+      expect(read.placeKey, 'anitabi:42');
+      expect(read.referenceImageId, 'frame-uuid-456');
     });
   });
 

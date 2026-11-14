@@ -1,5 +1,6 @@
 import 'dart:io';
 
+import 'package:flutter/foundation.dart' show kIsWeb;
 import 'package:http/http.dart' as http;
 import 'package:path/path.dart' as p;
 import 'package:path_provider/path_provider.dart';
@@ -8,6 +9,8 @@ import 'package:uuid/uuid.dart';
 /// Downloads an image at [url] into the app's documents directory and returns
 /// the absolute path on success. Returns null on any HTTP, network, or file
 /// system failure — callers should treat null as "leave existing URI alone".
+/// On Web, local filesystem caching is skipped (callers render remote URLs
+/// directly via browser cache).
 ///
 /// Files go under `${appDocs}/$subdir/<uuid>.<ext>` where the extension is
 /// inferred from the URL path (falling back to `.jpg` for query-string heavy
@@ -20,7 +23,7 @@ Future<String?> downloadCoverImage(
   String subdir = 'poi_covers',
   http.Client? client,
 }) async {
-  if (url.isEmpty) return null;
+  if (url.isEmpty || kIsWeb) return null;
 
   final httpClient = client ?? http.Client();
   final ownsClient = client == null;

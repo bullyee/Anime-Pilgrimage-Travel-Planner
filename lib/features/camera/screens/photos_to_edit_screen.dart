@@ -1,5 +1,3 @@
-import 'dart:io';
-
 import 'package:drift/drift.dart' show Value;
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
@@ -8,6 +6,7 @@ import 'package:intl/intl.dart';
 
 import '../../../core/database/database.dart';
 import '../../../core/providers/database_provider.dart';
+import '../../../core/utils/platform_media.dart';
 import '../../../shared/theme/app_theme.dart';
 import '../../library/providers/place_providers.dart';
 import '../../library/widgets/place_page_parts.dart' show framePath;
@@ -247,8 +246,8 @@ class _PhotoTile extends StatelessWidget {
       child: SizedBox(
         width: 72,
         height: 72,
-        child: Image.file(
-          File(photo.localPath),
+        child: PlatformImage(
+          photo.localPath,
           fit: BoxFit.cover,
           cacheWidth: 216,
           errorBuilder: (_, _, _) => ColoredBox(

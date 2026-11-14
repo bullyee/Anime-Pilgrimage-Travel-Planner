@@ -1,6 +1,7 @@
 import 'dart:io';
 
 import 'package:drift/drift.dart';
+import 'package:flutter/foundation.dart' show kIsWeb;
 
 import '../../../core/database/database.dart';
 import '../../../core/services/thumbnail_cache_service.dart';
@@ -62,6 +63,7 @@ class TripFrameDownloader {
   /// The links on [tripId]'s live stops that aren't on this phone yet, in
   /// stop order, each once. [include] narrows them (e.g. Drive links only).
   Future<List<String>> pendingUrls(AppDatabase db, String tripId, {bool Function(String url)? include}) async {
+    if (kIsWeb) return const [];
     final stops =
         await (db.select(db.stops)
               ..where((s) => s.tripId.equals(tripId) & s.deletedAt.isNull())

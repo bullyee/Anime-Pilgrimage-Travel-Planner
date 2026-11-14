@@ -10,6 +10,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 import 'package:image_picker/image_picker.dart';
 
+import '../../../core/utils/platform_media.dart';
 import '../../camera/services/reinhard_match_service.dart';
 import '../../camera/widgets/capture_sheets.dart';
 import '../../library/providers/place_providers.dart';
@@ -290,9 +291,6 @@ class _PhotoEditScreenState extends ConsumerState<PhotoEditScreen> {
     return _editingBaseBytes;
   }
 
-  File get _sourceFile => File(widget.sourcePath);
-  File? get _referenceFile =>
-      _referencePath != null ? File(_referencePath!) : null;
   bool get _hasReference => _referencePath != null;
 
   @override
@@ -319,13 +317,13 @@ class _PhotoEditScreenState extends ConsumerState<PhotoEditScreen> {
   }
 
   Future<void> _loadReferenceSize() async {
-    final ref = _referenceFile;
-    if (ref == null) {
+    final refPath = _referencePath;
+    if (refPath == null) {
       if (mounted) setState(() => _referenceImageSize = null);
       return;
     }
     try {
-      final size = await _decodeImageSize(await ref.readAsBytes());
+      final size = await _decodeImageSize(await readMediaBytes(refPath));
       if (!mounted) return;
       setState(() => _referenceImageSize = size);
     } catch (_) {
@@ -359,7 +357,7 @@ class _PhotoEditScreenState extends ConsumerState<PhotoEditScreen> {
   Future<void> _prepareEditingBase() async {
     setState(() => _preparingEditingBase = true);
     try {
-      final sourceBytes = await _sourceFile.readAsBytes();
+      final sourceBytes = await readMediaBytes(widget.sourcePath);
       final downscaled = await compute(downscaleForEditing, sourceBytes);
       if (!mounted) return;
       setState(() => _editingBaseBytes = downscaled);
@@ -521,8 +519,8 @@ class _PhotoEditScreenState extends ConsumerState<PhotoEditScreen> {
     Future<Uint8List> Function(MatchArgs) algorithm, {
     bool storeMatchedBase = false,
   }) async {
-    final ref = _referenceFile;
-    if (ref == null) return;
+    final refPath = _referencePath;
+    if (refPath == null) return;
     if (_processing) return;
     // Re-tapping the same chip while already on this tool's step just
     // re-enters edit submode without recomputing the (still-cached)
@@ -545,7 +543,7 @@ class _PhotoEditScreenState extends ConsumerState<PhotoEditScreen> {
 
     setState(() => _processing = true);
     try {
-      final referenceBytes = await ref.readAsBytes();
+      final referenceBytes = await readMediaBytes(refPath);
       final result = await compute(
         algorithm,
         MatchArgs(
@@ -563,7 +561,7 @@ class _PhotoEditScreenState extends ConsumerState<PhotoEditScreen> {
           toolBaseBytes: base,
           matchedBaseBytes: storeMatchedBase ? result : null,
           strength: 1.0,
-          matchReferencePath: ref.path,
+          matchReferencePath: refPath,
         ));
         _inEditMode = true;
       });
@@ -840,8 +838,7 @@ class _PhotoEditScreenState extends ConsumerState<PhotoEditScreen> {
         return compute(applySharpness,
             SharpnessArgs(sourceBytes: base, amount: step.sharpness));
       case 'match':
-        final ref = _referenceFile;
-        if (ref == null || step.matchedBaseBytes == null) return base;
+        if (_referencePath == null || step.matchedBaseBytes == null) return base;
         final t = step.strength.clamp(0.0, 1.0);
         if (t <= 0.001) return base;
         if (t >= 0.999) return step.matchedBaseBytes;
@@ -858,18 +855,18 @@ class _PhotoEditScreenState extends ConsumerState<PhotoEditScreen> {
   /// revisiting an earlier adjustment keeps the later ones. Re-matches Match
   /// against the new upstream so its colour transfer stays correct.
   Future<void> _replayDownstream(int from) async {
-    final ref = _referenceFile;
+    final refPath = _referencePath;
     for (var j = from + 1; j < _history.length; j++) {
       final prev = _history[j - 1].bytes;
       if (prev == null) continue;
       var step = _history[j];
-      if (step.tool == 'match' && ref != null) {
-        final refBytes = await ref.readAsBytes();
+      if (step.tool == 'match' && refPath != null) {
+        final refBytes = await readMediaBytes(refPath);
         final matched = await compute(
             reinhardMatch, MatchArgs(capturedBytes: prev, referenceBytes: refBytes));
         step = step.copyWith(
           matchedBaseBytes: matched,
-          matchReferencePath: ref.path,
+          matchReferencePath: refPath,
         );
       }
       final recomputed = await _recomputePreview(step, prev);
@@ -972,7 +969,7 @@ class _PhotoEditScreenState extends ConsumerState<PhotoEditScreen> {
           originalToGallery: widget.isCapture,
           render: () async =>
               edited ? await renderEditedJpeg(sourcePath, recipe) : null,
-          original: File(sourcePath),
+          originalPath: sourcePath,
           referenceImageId: _referenceImageId,
         );
     ScaffoldMessenger.of(context).showSnackBar(
@@ -985,9 +982,11 @@ class _PhotoEditScreenState extends ConsumerState<PhotoEditScreen> {
   /// capture, else the file's date. The save files the photo under the trip
   /// that has its place on that day.
   DateTime? _takenAt() {
-    if (widget.isCapture) return null;
+    if (widget.isCapture || kIsWeb || isRemoteOrMemoryUri(widget.sourcePath)) {
+      return null;
+    }
     try {
-      return _sourceFile.lastModifiedSync();
+      return File(widget.sourcePath).lastModifiedSync();
     } catch (_) {
       return null;
     }
@@ -1434,7 +1433,7 @@ class _PhotoEditScreenState extends ConsumerState<PhotoEditScreen> {
             fit: BoxFit.contain,
             gaplessPlayback: true,
           )
-        : Image.file(_sourceFile, fit: BoxFit.contain);
+        : PlatformImage(widget.sourcePath, fit: BoxFit.contain);
 
     if (_inEditMode) {
       final toolBase = _current.toolBaseBytes ?? base;
@@ -1679,7 +1678,7 @@ class _PhotoEditScreenState extends ConsumerState<PhotoEditScreen> {
   /// cropped as Save will write it) with the optional translucent
   /// reference overlay layered on top. While the Rotate tool is open the
   /// photo shows the draft orientation instead, uncropped, under a grid.
-  Widget _buildCanvasContent(Uint8List? currentBytes, File? reference) {
+  Widget _buildCanvasContent(Uint8List? currentBytes, String? referencePath) {
     // Only the photo turns with the Rotate tool; the reference overlay
     // below keeps its own independent rotation.
     final rotating = _inRotateMode;
@@ -1724,7 +1723,7 @@ class _PhotoEditScreenState extends ConsumerState<PhotoEditScreen> {
       fit: StackFit.expand,
       children: [
         photo,
-        if (_showOverlay && reference != null)
+        if (_showOverlay && referencePath != null)
           Positioned.fill(
             child: GestureDetector(
               behavior: HitTestBehavior.translucent,
@@ -1763,7 +1762,7 @@ class _PhotoEditScreenState extends ConsumerState<PhotoEditScreen> {
                         ),
                         child: Opacity(
                           opacity: _overlayOpacity,
-                          child: Image.file(reference, fit: BoxFit.contain),
+                          child: PlatformImage(referencePath, fit: BoxFit.contain),
                         ),
                       ),
                     ),
@@ -1780,7 +1779,7 @@ class _PhotoEditScreenState extends ConsumerState<PhotoEditScreen> {
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
     final hasReference = _hasReference;
-    final reference = _referenceFile;
+    final referencePath = _referencePath;
     final currentBytes = _current.bytes;
     final activeTool = _current.tool;
 
@@ -1813,7 +1812,7 @@ class _PhotoEditScreenState extends ConsumerState<PhotoEditScreen> {
               child: Stack(
                 fit: StackFit.expand,
                 children: [
-                  _buildCanvasContent(currentBytes, reference),
+                  _buildCanvasContent(currentBytes, referencePath),
                   if (_processing || _preparingEditingBase || _preparingCompose)
                     const Positioned.fill(
                       child: ColoredBox(
@@ -1877,7 +1876,7 @@ class _PhotoEditScreenState extends ConsumerState<PhotoEditScreen> {
           tripId: widget.tripId,
           derivedFromId: widget.derivedFromId,
           takenAt: _takenAt(),
-          originalCapture: widget.isCapture ? _sourceFile : null,
+          originalCapturePath: widget.isCapture ? widget.sourcePath : null,
           onBack: () => setState(() => _collagePage = false),
         ),
       ],
@@ -1934,11 +1933,11 @@ class _PhotoEditScreenState extends ConsumerState<PhotoEditScreen> {
   Widget _buildCropCanvas() {
     final ar = _displayedImageAspect ?? 1;
     final display = _chainBase;
-    final reference = _showOverlay ? _referenceFile : null;
+    final referencePath = _showOverlay ? _referencePath : null;
     final image = _orientedPhoto(
       display != null
           ? Image.memory(display, fit: BoxFit.fill, gaplessPlayback: true)
-          : Image.file(_sourceFile, fit: BoxFit.fill),
+          : PlatformImage(widget.sourcePath, fit: BoxFit.fill),
       mirror: _mirrored,
       quarters: _rotationQuarters,
       degrees: _straightenDegrees,
@@ -1956,7 +1955,7 @@ class _PhotoEditScreenState extends ConsumerState<PhotoEditScreen> {
                 fit: StackFit.expand,
                 children: [
                   image,
-                  if (reference != null)
+                  if (referencePath != null)
                     Positioned(
                       left: box.left * constraints.maxWidth,
                       top: box.top * constraints.maxHeight,
@@ -1965,7 +1964,7 @@ class _PhotoEditScreenState extends ConsumerState<PhotoEditScreen> {
                       child: IgnorePointer(
                         child: Opacity(
                           opacity: _overlayOpacity,
-                          child: Image.file(reference, fit: BoxFit.contain),
+                          child: PlatformImage(referencePath, fit: BoxFit.contain),
                         ),
                       ),
                     ),
