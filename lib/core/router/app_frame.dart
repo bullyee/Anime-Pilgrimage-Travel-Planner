@@ -2,7 +2,6 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 
-import '../database/connection/connection.dart' as db_connection;
 import '../../features/camera/services/anime_camera_launcher.dart';
 
 /// The main tabs, in the order of [AppFrame]'s branches.
@@ -46,12 +45,7 @@ class AppFrame extends ConsumerWidget {
         if (!didPop) _select(AppTab.home.index);
       },
       child: Scaffold(
-        body: Column(
-          children: [
-            const _WebStorageBanner(),
-            Expanded(child: shell),
-          ],
-        ),
+        body: shell,
         floatingActionButtonLocation: FloatingActionButtonLocation.centerDocked,
         floatingActionButton: shoot
             ? FloatingActionButton.large(
@@ -125,54 +119,6 @@ class _TabButton extends StatelessWidget {
           ),
         ),
       ),
-    );
-  }
-}
-
-class _WebStorageBanner extends StatefulWidget {
-  const _WebStorageBanner();
-
-  @override
-  State<_WebStorageBanner> createState() => _WebStorageBannerState();
-}
-
-class _WebStorageBannerState extends State<_WebStorageBanner> {
-  bool _dismissed = false;
-
-  @override
-  Widget build(BuildContext context) {
-    return ValueListenableBuilder<db_connection.WebStorageStatus?>(
-      valueListenable: db_connection.webStorageStatusNotifier,
-      builder: (context, status, _) {
-        if (status == db_connection.WebStorageStatus.inMemory) {
-          return MaterialBanner(
-            backgroundColor: Colors.amber.shade900,
-            leading: const Icon(Icons.warning_amber_rounded, color: Colors.white),
-            content: const Text(
-              'Storage is in-memory only (e.g. private window). Places and trips will not be saved on this device across reloads.',
-              style: TextStyle(color: Colors.white),
-            ),
-            actions: const [SizedBox.shrink()],
-          );
-        }
-        if (status == db_connection.WebStorageStatus.unsafeIndexedDb && !_dismissed) {
-          return MaterialBanner(
-            backgroundColor: Colors.amber.shade800,
-            leading: const Icon(Icons.info_outline, color: Colors.white),
-            content: const Text(
-              'Cross-tab lock is unavailable. Avoid editing in multiple browser tabs simultaneously to prevent data loss.',
-              style: TextStyle(color: Colors.white),
-            ),
-            actions: [
-              TextButton(
-                onPressed: () => setState(() => _dismissed = true),
-                child: const Text('DISMISS', style: TextStyle(color: Colors.white)),
-              ),
-            ],
-          );
-        }
-        return const SizedBox.shrink();
-      },
     );
   }
 }

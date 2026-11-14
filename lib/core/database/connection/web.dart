@@ -1,3 +1,5 @@
+// ignore_for_file: avoid_web_libraries_in_flutter
+import 'dart:html' as html;
 import 'package:drift/drift.dart';
 import 'package:drift/wasm.dart';
 import 'package:flutter/foundation.dart';
@@ -33,7 +35,15 @@ QueryExecutor openConnection() {
         '(missing features: ${result.missingFeatures}).',
       );
       webStorageStatusNotifier.value = WebStorageStatus.inMemory;
+      try {
+        html.window.onBeforeUnload.listen((event) {
+          if (event is html.BeforeUnloadEvent) {
+            event.returnValue = 'Places and trips will not be saved across reloads.';
+          }
+        });
+      } catch (_) {}
     } else if (result.chosenImplementation == WasmStorageImplementation.unsafeIndexedDb) {
+      debugPrint('Drift Wasm database using unsafeIndexedDb without cross-tab lock.');
       webStorageStatusNotifier.value = WebStorageStatus.unsafeIndexedDb;
     } else {
       webStorageStatusNotifier.value = WebStorageStatus.persistent;
