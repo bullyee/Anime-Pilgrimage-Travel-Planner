@@ -4,6 +4,7 @@ import 'dart:typed_data';
 import 'dart:ui' as ui;
 
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart' show PlatformException;
 import 'package:google_mlkit_subject_segmentation/google_mlkit_subject_segmentation.dart';
 import 'package:image/image.dart' as img;
 import 'package:path/path.dart' as p;
@@ -131,9 +132,19 @@ class _MlkitCutoutPanelState extends State<MlkitCutoutPanel> {
       });
     } catch (e) {
       if (!mounted) return;
+      final msg = e.toString();
+      final String status;
+      if (msg.contains('Waiting for the subject segmentation optional module to be downloaded') ||
+          msg.contains('module to be downloaded')) {
+        status = 'Google ML Kit is downloading the segmentation model in the background — please retry in a few seconds.';
+      } else if (e is PlatformException && e.message != null && e.message!.isNotEmpty) {
+        status = 'Cutout failed: ${e.message}';
+      } else {
+        status = 'Cutout failed: $e';
+      }
       setState(() {
         _processing = false;
-        _status = 'Failed (model may be downloading — retry): $e';
+        _status = status;
       });
     } finally {
       await segmenter.close();

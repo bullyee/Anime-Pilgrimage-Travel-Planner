@@ -226,7 +226,7 @@ class ReferenceOverlay(
                 y = placement.y
                 clamp(this, screen)
             } else {
-                x = if (landscape) screen.left + dp(12f) else screen.right - imageWidth - dp(12f)
+                x = screen.right - imageWidth - dp(12f)
                 y = screen.top + if (landscape) dp(24f) else dp(96f)
             }
         }

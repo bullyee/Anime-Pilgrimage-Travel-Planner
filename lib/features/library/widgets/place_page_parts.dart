@@ -1,4 +1,5 @@
 import 'dart:io';
+import 'dart:math' as math;
 
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
@@ -121,25 +122,31 @@ class FrameHero extends StatelessWidget {
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
     final p = theme.trip;
+    final screenHeight = MediaQuery.sizeOf(context).height;
+    final maxHeroHeight = math.min(380.0, screenHeight * 0.45);
+
     if (frames.isEmpty) {
       // A place without frames still gets a hero, so the page keeps its shape.
-      return AspectRatio(
-        aspectRatio: 16 / 9,
-        child: DecoratedBox(
-          decoration: BoxDecoration(
-            gradient: LinearGradient(begin: Alignment.topLeft, end: Alignment.bottomRight, colors: [p.teaSoft, p.wisteriaSoft]),
-          ),
-          child: Column(
-            mainAxisAlignment: MainAxisAlignment.center,
-            children: [
-              Icon(Icons.movie_filter_outlined, size: 44, color: p.wisteria),
-              const SizedBox(height: 8),
-              Text('No anime frames yet', style: theme.textTheme.titleMedium),
-              if (onAdd != null) ...[
-                const SizedBox(height: 4),
-                TextButton.icon(onPressed: onAdd, icon: const Icon(Icons.add_photo_alternate_outlined), label: const Text('Add a frame')),
+      return ConstrainedBox(
+        constraints: BoxConstraints(maxHeight: maxHeroHeight),
+        child: AspectRatio(
+          aspectRatio: 16 / 9,
+          child: DecoratedBox(
+            decoration: BoxDecoration(
+              gradient: LinearGradient(begin: Alignment.topLeft, end: Alignment.bottomRight, colors: [p.teaSoft, p.wisteriaSoft]),
+            ),
+            child: Column(
+              mainAxisAlignment: MainAxisAlignment.center,
+              children: [
+                Icon(Icons.movie_filter_outlined, size: 44, color: p.wisteria),
+                const SizedBox(height: 8),
+                Text('No anime frames yet', style: theme.textTheme.titleMedium),
+                if (onAdd != null) ...[
+                  const SizedBox(height: 4),
+                  TextButton.icon(onPressed: onAdd, icon: const Icon(Icons.add_photo_alternate_outlined), label: const Text('Add a frame')),
+                ],
               ],
-            ],
+            ),
           ),
         ),
       );
@@ -147,23 +154,26 @@ class FrameHero extends StatelessWidget {
     final caption = frameCaption(frames[index]);
     return Column(
       children: [
-        AspectRatio(
-          aspectRatio: 16 / 9,
-          child: Stack(
-            fit: StackFit.expand,
-            children: [
-              PageView.builder(
-                itemCount: frames.length,
-                controller: PageController(initialPage: index),
-                onPageChanged: onPage,
-                itemBuilder: (_, i) => GestureDetector(
-                  onTap: () => onOpen(i),
-                  child: FrameImage(frame: frames[i], semanticLabel: frameCaption(frames[i]) ?? 'Anime frame ${i + 1}'),
+        ConstrainedBox(
+          constraints: BoxConstraints(maxHeight: maxHeroHeight),
+          child: AspectRatio(
+            aspectRatio: 16 / 9,
+            child: Stack(
+              fit: StackFit.expand,
+              children: [
+                PageView.builder(
+                  itemCount: frames.length,
+                  controller: PageController(initialPage: index),
+                  onPageChanged: onPage,
+                  itemBuilder: (_, i) => GestureDetector(
+                    onTap: () => onOpen(i),
+                    child: FrameImage(frame: frames[i], semanticLabel: frameCaption(frames[i]) ?? 'Anime frame ${i + 1}'),
+                  ),
                 ),
-              ),
-              if (caption != null) Positioned(left: 12, bottom: 12, child: PageChip(caption)),
-              Positioned(right: 12, bottom: 12, child: PageChip('${index + 1} / ${frames.length}')),
-            ],
+                if (caption != null) Positioned(left: 12, bottom: 12, child: PageChip(caption)),
+                Positioned(right: 12, bottom: 12, child: PageChip('${index + 1} / ${frames.length}')),
+              ],
+            ),
           ),
         ),
         if (frames.length > 1)

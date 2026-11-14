@@ -232,6 +232,7 @@ Future<void> downloadTripFramesForOffline(BuildContext context, WidgetRef ref, T
     return;
   }
   queue.enqueue(frameDownloadJob(db: db, downloader: downloader, tripId: trip.id, tripTitle: trip.title));
+  ref.invalidate(pendingFrameDownloadCountProvider(trip.id));
   _tellQueued(context, 'Downloading ${urls.length} ${urls.length == 1 ? 'frame' : 'frames'} in the background.');
 }
 
