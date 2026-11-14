@@ -160,19 +160,22 @@ class _PlaceScreenState extends ConsumerState<PlaceScreen> {
               ),
           ],
         ),
-        body: ListView(
-          padding: const EdgeInsets.only(bottom: 32),
-          children: [
-            FrameHero(
-              frames: visibleFrames,
-              index: _frame,
-              onPage: (i) => setState(() => _frame = i),
-              onAdd: _addFrame,
-              onOpen: (i) => _openFrame(visibleFrames, i, place),
-            ),
-            Padding(
-              padding: const EdgeInsets.fromLTRB(16, 12, 16, 0),
-              child: Column(
+        body: Center(
+          child: ConstrainedBox(
+            constraints: const BoxConstraints(maxWidth: 840),
+            child: ListView(
+              padding: const EdgeInsets.only(bottom: 32),
+              children: [
+                FrameHero(
+                  frames: visibleFrames,
+                  index: _frame,
+                  onPage: (i) => setState(() => _frame = i),
+                  onAdd: _addFrame,
+                  onOpen: (i) => _openFrame(visibleFrames, i, place),
+                ),
+                Padding(
+                  padding: const EdgeInsets.fromLTRB(16, 12, 16, 0),
+                  child: Column(
                 crossAxisAlignment: CrossAxisAlignment.stretch,
                 children: [
                   PageActions(
@@ -227,8 +230,10 @@ class _PlaceScreenState extends ConsumerState<PlaceScreen> {
           ],
         ),
       ),
-    );
-  }
+    ),
+  ),
+);
+}
 
   Future<String?> _resolveFramePath(NewReferenceImage frame) async {
     final path = await framePath(ref, frame);

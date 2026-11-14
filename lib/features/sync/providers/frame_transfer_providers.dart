@@ -48,6 +48,8 @@ final pendingDriveUploadCountProvider = StreamProvider.autoDispose.family<int, S
 final pendingFrameDownloadCountProvider = StreamProvider.autoDispose.family<int, String>((ref, tripId) {
   final db = ref.watch(databaseProvider);
   final downloader = ref.watch(tripFrameDownloaderProvider);
+  // Recount whenever a transfer job for this trip finishes or changes queue status.
+  ref.watch(frameTransferQueueProvider.select((q) => q.jobsForTrip(tripId).length));
   return _recountOnChange(db, () async => (await downloader.pendingUrls(db, tripId)).length);
 });
 
