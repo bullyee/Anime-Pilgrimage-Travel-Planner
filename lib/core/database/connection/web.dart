@@ -1,8 +1,8 @@
-// ignore_for_file: avoid_web_libraries_in_flutter
-import 'dart:html' as html;
+import 'dart:js_interop';
 import 'package:drift/drift.dart';
 import 'package:drift/wasm.dart';
 import 'package:flutter/foundation.dart';
+import 'package:web/web.dart' as web;
 
 enum WebStorageStatus {
   persistent,
@@ -21,12 +21,15 @@ final ValueNotifier<WebStorageStatus?> webStorageStatusNotifier = ValueNotifier(
 /// strict COOP/COEP isolation headers (which also conflict with Google OAuth popups).
 QueryExecutor openConnection() {
   return DatabaseConnection.delayed(Future(() async {
+    // Resolving against document.baseURI honours <base href="$FLUTTER_BASE_HREF">
+    // and works seamlessly on deep link paths like /join/:invite or /trips/:id.
+    final baseUri = Uri.parse(web.document.baseURI);
     final result = await WasmDatabase.open(
       // Aligned with the native filename base ('trip_planner') so the logical
       // database name is consistent across platforms.
       databaseName: 'trip_planner',
-      sqlite3Uri: Uri.base.resolve('sqlite3.wasm'),
-      driftWorkerUri: Uri.base.resolve('drift_worker.js'),
+      sqlite3Uri: baseUri.resolve('sqlite3.wasm'),
+      driftWorkerUri: baseUri.resolve('drift_worker.js'),
     );
 
     if (result.chosenImplementation == WasmStorageImplementation.inMemory) {
@@ -36,11 +39,9 @@ QueryExecutor openConnection() {
       );
       webStorageStatusNotifier.value = WebStorageStatus.inMemory;
       try {
-        html.window.onBeforeUnload.listen((event) {
-          if (event is html.BeforeUnloadEvent) {
-            event.returnValue = 'Places and trips will not be saved across reloads.';
-          }
-        });
+        web.window.onbeforeunload = ((web.BeforeUnloadEvent event) {
+          event.returnValue = 'Places and trips will not be saved across reloads.';
+        }).toJS;
       } catch (_) {}
     } else if (result.chosenImplementation == WasmStorageImplementation.unsafeIndexedDb) {
       debugPrint('Drift Wasm database using unsafeIndexedDb without cross-tab lock.');
