@@ -19,6 +19,7 @@ import '../../features/library/screens/library_screen.dart';
 import '../../features/library/screens/place_screen.dart';
 import '../../features/sharing/invite_links.dart';
 import '../../features/sharing/screens/join_trip_screen.dart';
+import '../../features/settings/screens/settings_screen.dart';
 import '../../features/trip/screens/library_picker_screen.dart';
 import '../../features/trip/screens/new_spot_screen.dart';
 import '../../features/trip/screens/pilgrimage_day_map_screen.dart';
@@ -30,23 +31,19 @@ import 'app_frame.dart';
 
 part 'app_router.g.dart';
 
-/// Where the app opens after the next sign-in, when a screen asks for it.
-/// Signing in rebuilds the router, which would otherwise start over at home.
-final signInReturnProvider = StateProvider<String?>((ref) => null);
-
-/// Wrap the existing router in a Provider to react to Auth state changes.
+/// The app's one router. It lives as long as the app: signing in or out
+/// only re-runs [GoRouter.redirect] (through `refreshListenable`), so the
+/// screen the user signed in from, and everything under it, stays where it
+/// was, with its back button. (Rebuilding the router on sign-in used to
+/// restart navigation at that screen with nothing to go back to.)
 @Riverpod(keepAlive: true)
 GoRouter router(RouterRef ref) {
-  // Watch the auth state from our previously created provider.
-  ref.watch(authStateChangesProvider);
-  final returnTo = ref.read(signInReturnProvider);
-  if (returnTo != null) {
-    // Only once: a later rebuild, such as signing out, starts at home.
-    Future.microtask(() => ref.read(signInReturnProvider.notifier).state = null);
-  }
+  final authChanged = ValueNotifier<int>(0);
+  ref.listen(authStateChangesProvider, (_, _) => authChanged.value++);
 
-  return GoRouter(
-    initialLocation: returnTo ?? '/',
+  final router = GoRouter(
+    initialLocation: '/',
+    refreshListenable: authChanged,
     
     // AUTH REDIRECT LOGIC
     redirect: (context, state) {
@@ -104,6 +101,7 @@ GoRouter router(RouterRef ref) {
           ]),
         ],
       ),
+      GoRoute(path: '/settings', builder: (context, state) => const SettingsScreen()),
       GoRoute(
         path: '/trips/:tripId',
         builder: (context, state) => TripScreen(
@@ -210,6 +208,11 @@ GoRouter router(RouterRef ref) {
       ),
     ],
   );
+  ref.onDispose(() {
+    router.dispose();
+    authChanged.dispose();
+  });
+  return router;
 }
 
 /// The photo editor, from the query ([PhotoEditArgs]).

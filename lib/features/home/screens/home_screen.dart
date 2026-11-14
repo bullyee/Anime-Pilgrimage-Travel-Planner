@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:go_router/go_router.dart';
 
 import 'package:trip_planner/features/camera/services/anime_camera_launcher.dart';
 
@@ -50,6 +51,11 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
               icon: const Icon(Icons.picture_in_picture_alt_outlined),
               onPressed: () => floatReference(context, ref),
             ),
+          IconButton(
+            tooltip: 'Settings',
+            icon: const Icon(Icons.settings_outlined),
+            onPressed: () => context.push('/settings'),
+          ),
         ],
       ),
       body: Align(
