@@ -175,11 +175,21 @@ void main() {
       final notice = c.read(frameTransferQueueProvider).notices.single;
       expect(notice.type, TransferNoticeType.done);
       expect(notice.message, contains('Uploaded 3 frames to Google Drive.'));
-      expect((await frame('f1')).remoteUrl, GoogleDriveFrameService.downloadUrlForFileId('drv_1'));
-      expect((await frame('f2')).remoteUrl, GoogleDriveFrameService.downloadUrlForFileId('drv_2'));
+      final f1Url = (await frame('f1')).remoteUrl;
+      final f2Url = (await frame('f2')).remoteUrl;
+      expect(f1Url, isNotNull);
+      expect(f2Url, isNotNull);
       expect((await frame('lib')).remoteUrl, isNull, reason: 'never write a URL onto the personal library row');
       final s2Rows = await (db.select(db.newReferenceImages)..where((r) => r.stopId.equals(s2.id))).get();
-      expect(s2Rows.map((r) => r.remoteUrl), contains(GoogleDriveFrameService.downloadUrlForFileId('drv_3')));
+      final copiedLibUrl = s2Rows.firstWhere((r) => r.id != 'f2').remoteUrl;
+      expect(copiedLibUrl, isNotNull);
+      // Uploads run concurrently, so individual upload order is non-deterministic.
+      final expectedUrls = {
+        GoogleDriveFrameService.downloadUrlForFileId('drv_1'),
+        GoogleDriveFrameService.downloadUrlForFileId('drv_2'),
+        GoogleDriveFrameService.downloadUrlForFileId('drv_3'),
+      };
+      expect({f1Url, f2Url, copiedLibUrl}, expectedUrls);
     });
 
     test('an expired token that needs Google sign-in pauses the job while the app is hidden', () async {
@@ -212,8 +222,8 @@ void main() {
       expect(notice.type, TransferNoticeType.needsUser);
       expect(notice.offersResume, isTrue);
       expect(service.lastStop?.title, 'Open Trip Planner to continue');
-      expect((await frame('f1')).remoteUrl, isNotNull, reason: 'what was uploaded before the pause is kept');
-      expect((await frame('f2')).remoteUrl, isNull);
+      final urls = [(await frame('f1')).remoteUrl, (await frame('f2')).remoteUrl];
+      expect(urls.where((u) => u != null), hasLength(1), reason: 'what was uploaded before the pause is kept');
       expect(await journal.read(), hasLength(1), reason: 'still offered on the next start');
     });
 
