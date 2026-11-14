@@ -183,6 +183,8 @@ void main() {
     }
 
     write('docs/app_photos/a.jpg', 300);
+    write('docs/flutter_assets/asset.bin', 1000);
+    write('support/anitabi_static/g.json', 500);
     write('support/map_tiles/t1', 100);
     write('support/models/isnet-anime.onnx', 50);
     write('support/trip_planner.sqlite', 25);
