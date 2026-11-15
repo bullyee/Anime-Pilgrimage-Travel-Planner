@@ -296,7 +296,9 @@ class FileTransferJournal implements TransferJournal {
   });
 }
 
-final transferJournalProvider = Provider<TransferJournal>((ref) => FileTransferJournal());
+final transferJournalProvider = Provider<TransferJournal>(
+  (ref) => kIsWeb ? InMemoryTransferJournal() : FileTransferJournal(),
+);
 
 /// Runs frame uploads, downloads and pack imports one at a time, off the
 /// screen that started them, and keeps the platform's foreground service

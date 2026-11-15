@@ -18,7 +18,7 @@ const _guestUserId = 'guest_local_user';
 /// What this user put on Drive, and the removals still to do (per user).
 final driveCleanupJournalProvider = Provider<DriveCleanupJournal>((ref) {
   final uid = ref.watch(currentUserIdProvider);
-  return uid == _guestUserId ? InMemoryDriveCleanupJournal() : FileDriveCleanupJournal(uid);
+  return (kIsWeb || uid == _guestUserId) ? InMemoryDriveCleanupJournal() : FileDriveCleanupJournal(uid);
 });
 
 final driveFrameCleanupProvider = Provider<DriveFrameCleanup>(
