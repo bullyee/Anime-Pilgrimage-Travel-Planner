@@ -134,7 +134,8 @@ class _MlkitCutoutPanelState extends State<MlkitCutoutPanel> {
       if (!mounted) return;
       final msg = e.toString();
       final String status;
-      if (msg.contains('Waiting for the subject segmentation optional module to be downloaded') ||
+      if ((e is PlatformException && (e.code == 'UNAVAILABLE' || e.code == '14')) ||
+          msg.contains('Waiting for the subject segmentation optional module to be downloaded') ||
           msg.contains('module to be downloaded')) {
         status = 'Google ML Kit is downloading the segmentation model in the background — please retry in a few seconds.';
       } else if (e is PlatformException && e.message != null && e.message!.isNotEmpty) {
