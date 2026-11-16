@@ -477,8 +477,8 @@ Future<bool?> _askOverlayPermission(
                 'restricted settings", then come back and allow it. Android '
                 'asks this of apps installed from a downloaded file.',
           if (!floatOnly)
-            'Without it you can still shoot — the reference opens in the '
-                'editor.',
+            'Without it you can still shoot — take as many shots as you like, '
+                'then press Back to pick the ones to keep next to your reference.',
         ].join('\n\n'),
       ),
       actions: [

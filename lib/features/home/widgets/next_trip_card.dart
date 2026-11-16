@@ -51,9 +51,14 @@ class _NextTrip extends ConsumerWidget {
     final p = theme.trip;
     final today = normalizeDateOnly(ref.watch(homeClockProvider)());
     final first = summary.firstDate;
+    final last = summary.lastDate;
+    final isPast = last != null && last.isBefore(today);
     final String when;
     if (first == null) {
       when = 'NEXT TRIP · NO DATES YET';
+    } else if (isPast) {
+      final daysAgo = today.difference(last).inDays;
+      when = daysAgo == 1 ? 'RECENT TRIP · YESTERDAY' : 'RECENT TRIP · $daysAgo DAYS AGO';
     } else {
       final days = first.difference(today).inDays;
       when = days == 1 ? 'NEXT TRIP · TOMORROW' : 'NEXT TRIP · IN $days DAYS';
@@ -146,7 +151,7 @@ class _NextTrip extends ConsumerWidget {
             FilledButton(
               style: FilledButton.styleFrom(minimumSize: const Size.fromHeight(48), backgroundColor: p.wisteria),
               onPressed: () => context.push('/trips/$tripId?tab=plan'),
-              child: const Text('Continue planning'),
+              child: Text(isPast ? 'View trip' : 'Continue planning'),
             ),
           ],
         ),

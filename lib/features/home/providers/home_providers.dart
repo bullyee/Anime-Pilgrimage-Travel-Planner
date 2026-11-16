@@ -30,7 +30,8 @@ final homeClockProvider = Provider<DateTime Function()>((ref) => DateTime.now);
 
 /// Picks what Home shows from [trips] on [now]: the trip happening today
 /// (the one that started last when several are), else the soonest trip
-/// still to come, else a trip with no dates yet (the newest).
+/// still to come, else a trip with no dates yet (the newest), else the most
+/// recent past trip.
 HomeFocus pickHomeFocus(List<TripSummary> trips, DateTime now) {
   final today = normalizeDateOnly(now);
   bool covers(TripSummary t) =>
@@ -45,7 +46,11 @@ HomeFocus pickHomeFocus(List<TripSummary> trips, DateTime now) {
 
   final undated = trips.where((t) => t.firstDate == null).toList()
     ..sort((a, b) => b.trip.createdAt.compareTo(a.trip.createdAt));
-  return HomeNextTrip(undated.firstOrNull);
+  if (undated.isNotEmpty) return HomeNextTrip(undated.first);
+
+  final past = trips.where((t) => t.lastDate != null && t.lastDate!.isBefore(today)).toList()
+    ..sort((a, b) => b.lastDate!.compareTo(a.lastDate!));
+  return HomeNextTrip(past.firstOrNull);
 }
 
 final homeFocusProvider = Provider.autoDispose<AsyncValue<HomeFocus>>((ref) {

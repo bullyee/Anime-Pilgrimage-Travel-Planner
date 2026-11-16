@@ -135,6 +135,16 @@ void main() {
       expect((pickHomeFocus([], DateTime(2026, 11, 9)) as HomeNextTrip).trip, isNull);
     });
 
+    test('when all trips are in the past, shows the most recent past trip', () {
+      final oldTrip = _trip('old', 'Old Trip');
+      final recentTrip = _trip('recent', 'Recent Trip');
+      final focus = pickHomeFocus([
+        _summary(oldTrip, first: _d(1), last: _d(3)),
+        _summary(recentTrip, first: _d(5), last: _d(8)),
+      ], DateTime(2026, 11, 15));
+      expect((focus as HomeNextTrip).trip!.trip.id, 'recent');
+    });
+
     test('two trips today: the one that started last', () {
       final focus = pickHomeFocus([
         _summary(kyoto, first: _d(10), last: _d(16)),

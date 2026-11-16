@@ -280,20 +280,23 @@ class _StopScreenState extends ConsumerState<StopScreen> {
               ),
           ],
         ),
-        body: ListView(
-          padding: const EdgeInsets.only(bottom: 32),
-          children: [
-            FrameHero(
-              frames: frames,
-              index: _frame,
-              onPage: (i) => setState(() => _frame = i),
-              onAdd: !canEdit
-                  ? null
-                  : isShared
-                      ? () => _addFrameToStop(stop, trip)
-                      : () => _addLocalFrameToStop(stop),
-              onOpen: (i) => _openFrame(stop, trip, canEdit, frames, i),
-            ),
+        body: LayoutBuilder(
+          builder: (context, constraints) {
+            final padH = constraints.maxWidth > 840 ? (constraints.maxWidth - 840) / 2 : 0.0;
+            return ListView(
+              padding: EdgeInsets.fromLTRB(padH, 0, padH, 32),
+              children: [
+                FrameHero(
+                  frames: frames,
+                  index: _frame,
+                  onPage: (i) => setState(() => _frame = i),
+                  onAdd: !canEdit
+                      ? null
+                      : isShared
+                          ? () => _addFrameToStop(stop, trip)
+                          : () => _addLocalFrameToStop(stop),
+                  onOpen: (i) => _openFrame(stop, trip, canEdit, frames, i),
+                ),
             Padding(
               padding: const EdgeInsets.fromLTRB(16, 12, 16, 0),
               child: Column(
@@ -391,10 +394,12 @@ class _StopScreenState extends ConsumerState<StopScreen> {
               ),
             ),
           ],
-        ),
-      ),
-    );
-  }
+        );
+      },
+    ),
+  ),
+);
+}
 
   Future<String?> _framePath(NewReferenceImage frame) async {
     final path = await framePath(ref, frame);
