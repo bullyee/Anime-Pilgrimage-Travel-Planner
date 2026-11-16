@@ -1,3 +1,5 @@
+import 'package:flutter/foundation.dart' show kIsWeb;
+
 /// What the photo editor's route (`/photo-edit`) carries in its query.
 class PhotoEditArgs {
   /// The photo to edit. The editor never writes over it.
@@ -36,19 +38,20 @@ class PhotoEditArgs {
     this.capture = false,
   });
 
-  /// Reads a `/photo-edit` query, or returns null without a `path`.
+  /// Reads a `/photo-edit` query, or returns null without a `path` or `photoId`.
   /// [placeKey] comes from the old `/pois/:poiId/photo-edit` route.
   ///
   /// The router has decoded the values already, so they're used as they are.
   /// Decoding them again broke file names with a `%` in them (#84).
   static PhotoEditArgs? fromQuery(Map<String, String> query) {
     final path = query['path'];
-    if (path == null || path.isEmpty) return null;
+    final photoId = query['photo'];
+    if ((path == null || path.isEmpty) && (photoId == null || photoId.isEmpty)) return null;
     return PhotoEditArgs(
-      path: path,
+      path: path ?? '',
       placeKey: query['place'],
       tripId: query['trip'],
-      photoId: query['photo'],
+      photoId: photoId,
       referencePath: query['ref'],
       referenceImageId: query['refId'],
       upload: query['upload'] == '1',
@@ -57,14 +60,21 @@ class PhotoEditArgs {
   }
 
   /// The location that opens the editor with these arguments.
-  String get location => Uri(path: '/photo-edit', queryParameters: {
-        'path': path,
-        if (placeKey != null) 'place': placeKey!,
-        if (tripId != null) 'trip': tripId!,
-        if (photoId != null) 'photo': photoId!,
-        if (referencePath != null) 'ref': referencePath!,
-        if (referenceImageId != null) 'refId': referenceImageId!,
-        if (upload) 'upload': '1',
-        if (capture) 'capture': '1',
-      }).toString();
+  /// Large `data:` URIs are omitted on Web and when [photoId] is present,
+  /// keeping multi-megabyte payloads out of browser URLs and history.
+  String get location {
+    final isData = path.toLowerCase().startsWith('data:');
+    final isRefData = referencePath?.toLowerCase().startsWith('data:') ?? false;
+    final includePath = path.isNotEmpty && !isData && (photoId == null || !kIsWeb);
+    return Uri(path: '/photo-edit', queryParameters: {
+      if (includePath) 'path': path,
+      if (placeKey != null) 'place': placeKey!,
+      if (tripId != null) 'trip': tripId!,
+      if (photoId != null) 'photo': photoId!,
+      if (referencePath != null && !isRefData) 'ref': referencePath!,
+      if (referenceImageId != null) 'refId': referenceImageId!,
+      if (upload) 'upload': '1',
+      if (capture) 'capture': '1',
+    }).toString();
+  }
 }

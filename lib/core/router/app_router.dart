@@ -1,3 +1,4 @@
+import 'package:flutter/foundation.dart' show kIsWeb;
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 // Add this
@@ -7,6 +8,7 @@ import 'package:trip_planner/features/auth/providers/auth_provider.dart'; // Add
 import 'package:trip_planner/features/auth/screens/login_screen.dart'; // Add this
 
 import '../../features/home/screens/home_screen.dart';
+import '../../features/photos/providers/photos_providers.dart';
 import '../../features/photos/screens/photo_screen.dart';
 import '../../features/photos/screens/photos_screen.dart';
 import '../../features/poi/screens/photo_edit_screen.dart';
@@ -27,6 +29,8 @@ import '../../features/trip/screens/stop_screen.dart';
 import '../../features/trip/screens/trip_list_screen.dart';
 import '../../features/trip/screens/trip_screen.dart';
 
+import '../database/database.dart';
+import '../providers/database_provider.dart';
 import 'app_frame.dart';
 
 part 'app_router.g.dart';
@@ -223,6 +227,12 @@ Widget _photoEditScreen(GoRouterState state) {
       body: Center(child: Text('Missing source path.')),
     );
   }
+  if (args.path.isEmpty && args.photoId != null) {
+    return _PhotoEditFromDb(args: args);
+  }
+  if (args.referencePath == null && args.referenceImageId != null) {
+    return _PhotoEditWithFrameLookup(args: args);
+  }
   return PhotoEditScreen(
     placeKey: args.placeKey,
     tripId: args.tripId,
@@ -233,4 +243,74 @@ Widget _photoEditScreen(GoRouterState state) {
     wasUpload: args.upload,
     isCapture: args.capture,
   );
+}
+
+class _PhotoEditFromDb extends ConsumerWidget {
+  final PhotoEditArgs args;
+  const _PhotoEditFromDb({required this.args});
+
+  @override
+  Widget build(BuildContext context, WidgetRef ref) {
+    final entry = ref.watch(photoEntryProvider(args.photoId!));
+    return entry.when(
+      loading: () => const Scaffold(body: Center(child: CircularProgressIndicator())),
+      error: (e, _) => Scaffold(body: Center(child: Text("Couldn't load photo: $e"))),
+      data: (data) {
+        if (data == null) {
+          return const Scaffold(body: Center(child: Text('Photo not found.')));
+        }
+        final refPath = args.referencePath ??
+            ((data.frame?.localPath?.isNotEmpty ?? false)
+                ? data.frame!.localPath
+                : (kIsWeb ? data.frame?.remoteUrl : null));
+        return PhotoEditScreen(
+          placeKey: args.placeKey ?? data.photo.placeKey,
+          tripId: args.tripId ?? data.photo.tripId,
+          derivedFromId: data.photo.id,
+          sourcePath: data.photo.localPath,
+          referencePath: refPath,
+          referenceImageId: args.referenceImageId ?? data.frame?.id,
+          wasUpload: args.upload,
+          isCapture: args.capture,
+        );
+      },
+    );
+  }
+}
+
+final frameLookupProvider = FutureProvider.autoDispose.family<NewReferenceImage?, String>((ref, frameId) async {
+  final db = ref.watch(databaseProvider);
+  return (db.select(db.newReferenceImages)..where((t) => t.id.equals(frameId))).getSingleOrNull();
+});
+
+class _PhotoEditWithFrameLookup extends ConsumerWidget {
+  final PhotoEditArgs args;
+  const _PhotoEditWithFrameLookup({required this.args});
+
+  @override
+  Widget build(BuildContext context, WidgetRef ref) {
+    final frameAsync = ref.watch(frameLookupProvider(args.referenceImageId!));
+    return frameAsync.when(
+      loading: () => const Scaffold(body: Center(child: CircularProgressIndicator())),
+      error: (e, _) => Scaffold(body: Center(child: Text("Couldn't load frame: $e"))),
+      data: (frame) {
+        final refPath = args.referencePath ??
+            (frame == null
+                ? null
+                : ((frame.localPath?.isNotEmpty ?? false)
+                    ? frame.localPath
+                    : (kIsWeb ? frame.remoteUrl : null)));
+        return PhotoEditScreen(
+          placeKey: args.placeKey,
+          tripId: args.tripId,
+          derivedFromId: args.photoId,
+          sourcePath: args.path,
+          referencePath: refPath,
+          referenceImageId: args.referenceImageId,
+          wasUpload: args.upload,
+          isCapture: args.capture,
+        );
+      },
+    );
+  }
 }

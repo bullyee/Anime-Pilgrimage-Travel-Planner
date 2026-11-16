@@ -1,10 +1,10 @@
-import 'dart:io';
-
+import 'package:flutter/foundation.dart' show kIsWeb;
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 
 import '../../../core/database/database.dart';
+import '../../../core/utils/platform_media.dart';
 import '../../../core/utils/schedule_logic.dart' show TripStatus;
 import '../../library/models/frames.dart';
 import '../../library/models/library_entry.dart';
@@ -192,8 +192,8 @@ class _PlaceSheetState extends ConsumerState<_PlaceSheet> {
           height: 48,
           child: framePaths == null
               ? const ColoredBox(color: Colors.white10, child: Icon(Icons.place, color: Colors.white54))
-              : Image.file(
-                  File(framePaths.first),
+              : PlatformImage(
+                  framePaths.first,
                   fit: BoxFit.cover,
                   cacheWidth: 144,
                   errorBuilder: (_, _, _) =>
@@ -244,8 +244,21 @@ class _Header extends StatelessWidget {
 /// switches between.
 Future<List<NewReferenceImage>> placeFramesOnDevice(WidgetRef ref, String placeKey) async => [
       for (final f in await ref.read(placeRepositoryProvider).getReferenceImagesForPlace(placeKey))
-        if (f.localPath?.isNotEmpty ?? false) f,
+        if (((f.localPath?.isNotEmpty ?? false) &&
+                (!kIsWeb || isRemoteOrMemoryUri(f.localPath!))) ||
+            (kIsWeb && (f.remoteUrl?.isNotEmpty ?? false)))
+          f,
     ];
+
+String? _usableFrameSource(NewReferenceImage frame) {
+  final local = frame.localPath;
+  if (local != null && local.isNotEmpty && (!kIsWeb || isRemoteOrMemoryUri(local))) {
+    return local;
+  }
+  final remote = frame.remoteUrl;
+  if (remote != null && remote.isNotEmpty) return remote;
+  return null;
+}
 
 /// Sheet of [placeKey]'s anime frames. A place with a single frame skips the
 /// sheet. Returns the picked frame once its file is confirmed on the device;
@@ -301,8 +314,8 @@ Future<NewReferenceImage?> pickPlaceFrame(
                                 child: ClipRRect(
                                   borderRadius: BorderRadius.circular(8),
                                   child: SizedBox.expand(
-                                    child: Image.file(
-                                      File(frame.localPath!),
+                                    child: PlatformImage(
+                                      _usableFrameSource(frame) ?? '',
                                       fit: BoxFit.cover,
                                       cacheWidth: 480,
                                       errorBuilder: (_, _, _) => const ColoredBox(
@@ -332,7 +345,7 @@ Future<NewReferenceImage?> pickPlaceFrame(
         );
   if (picked == null) return null;
 
-  if (!await File(picked.localPath!).exists()) {
+  if (!await mediaExists(_usableFrameSource(picked))) {
     if (context.mounted) {
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(content: Text("That frame's file is missing from this phone.")),

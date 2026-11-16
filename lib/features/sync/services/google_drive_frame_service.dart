@@ -14,6 +14,7 @@ import 'package:uuid/uuid.dart';
 
 import '../../../core/database/database.dart';
 import '../../../core/utils/archive_isolate.dart';
+import '../../../core/utils/platform_media.dart';
 import '../../library/models/frames.dart';
 import 'drive_cleanup_journal.dart';
 import 'drive_upload_quality.dart';
@@ -251,6 +252,9 @@ class GoogleDriveFrameService {
 
   static Future<Uint8List?> _defaultReadFile(String path) async {
     try {
+      if (kIsWeb || isRemoteOrMemoryUri(path)) {
+        return await readMediaBytes(path);
+      }
       final f = File(path);
       if (!await f.exists()) return null;
       return await f.readAsBytes();

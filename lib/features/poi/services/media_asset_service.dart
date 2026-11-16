@@ -1,6 +1,6 @@
 import 'dart:io';
 
-import 'package:flutter/foundation.dart'; // ADDED: for debugPrint
+import 'package:flutter/foundation.dart';
 import 'package:path/path.dart' as p;
 import 'package:path_provider/path_provider.dart';
 import 'package:uuid/uuid.dart';
@@ -8,10 +8,11 @@ import 'package:uuid/uuid.dart';
 import 'package:drift/drift.dart' show Value;
 
 import '../../../core/database/database.dart';
+import '../../../core/utils/platform_media.dart';
 import '../../library/repositories/place_repository.dart';
 
-/// Copies [source] into the app's permanent `camera_photos` directory
-/// (filename derived from a unique UUID) and adds it to [placeKey]'s photos.
+/// Copies [source] (or encodes [bytes] on Web) into permanent storage and adds
+/// it to [placeKey]'s photos.
 ///
 /// [kind] is `original`, `edited`, `composite` or `comparison`;
 /// [derivedFromId] is the place photo it was edited from, and [tripId] the
@@ -21,7 +22,9 @@ import '../../library/repositories/place_repository.dart';
 /// — callers decide whether to surface that via a SnackBar.
 Future<bool> persistPlacePhoto({
   required PlaceRepository places,
-  required File source,
+  File? source,
+  Uint8List? bytes,
+  String? sourcePath,
   required String placeKey,
   String? referenceImageId,
   String kind = 'original',
@@ -33,17 +36,29 @@ Future<bool> persistPlacePhoto({
     // Checked first, so a photo for a missing place leaves no copy behind.
     if (await places.getPlace(placeKey) == null) throw StateError('$placeKey is not a place');
 
-    final appDir = await getApplicationDocumentsDirectory();
-    final photosDir = Directory(p.join(appDir.path, 'camera_photos'));
-    if (!await photosDir.exists()) {
-      await photosDir.create(recursive: true);
-    }
-
     final photoId = const Uuid().v4();
-    final extension =
-        p.extension(source.path).isEmpty ? '.jpg' : p.extension(source.path);
-    final savedPath = p.join(photosDir.path, 'photo_$photoId$extension');
-    await source.copy(savedPath);
+    final String savedPath;
+    if (kIsWeb) {
+      final rawBytes = bytes ?? await readMediaBytes(sourcePath ?? source!.path);
+      savedPath = encodeDataUrl(rawBytes);
+    } else {
+      final appDir = await getApplicationDocumentsDirectory();
+      final photosDir = Directory(p.join(appDir.path, 'camera_photos'));
+      if (!await photosDir.exists()) {
+        await photosDir.create(recursive: true);
+      }
+
+      if (bytes != null) {
+        savedPath = p.join(photosDir.path, 'photo_$photoId.jpg');
+        await File(savedPath).writeAsBytes(bytes, flush: true);
+      } else {
+        final file = source ?? File(sourcePath!);
+        final extension =
+            p.extension(file.path).isEmpty ? '.jpg' : p.extension(file.path);
+        savedPath = p.join(photosDir.path, 'photo_$photoId$extension');
+        await file.copy(savedPath);
+      }
+    }
 
     await places.upsertPhoto(PhotosCompanion.insert(
       id: photoId,

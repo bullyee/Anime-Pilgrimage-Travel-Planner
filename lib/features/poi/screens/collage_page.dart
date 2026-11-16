@@ -1,10 +1,11 @@
-import 'dart:io';
 import 'dart:typed_data';
 import 'dart:ui' as ui;
 
+import 'package:flutter/foundation.dart' show kIsWeb;
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
+import '../../../core/utils/platform_media.dart';
 import '../../anime/screens/cutout_editor_screen.dart';
 import '../services/background_photo_save.dart';
 import '../services/edit_recipe.dart';
@@ -41,7 +42,7 @@ class CollagePage extends ConsumerStatefulWidget {
 
   /// The untouched photo, when it was just taken with the Anime Camera: it
   /// isn't in the gallery yet, so it's saved there next to the result.
-  final File? originalCapture;
+  final String? originalCapturePath;
 
   /// Return to the Adjust page (back arrow). Layers persist — the parent keeps
   /// this page alive in an IndexedStack.
@@ -57,7 +58,7 @@ class CollagePage extends ConsumerStatefulWidget {
     this.tripId,
     this.derivedFromId,
     this.takenAt,
-    this.originalCapture,
+    this.originalCapturePath,
     required this.onBack,
   });
 
@@ -183,6 +184,14 @@ class _CollagePageState extends ConsumerState<CollagePage> {
 
   Future<void> _addCutout(CutoutEngine? _) async {
     if (_busy) return;
+    if (kIsWeb) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text('AI character cutout is not supported on Web; try Direct overlay.'),
+        ),
+      );
+      return;
+    }
     final bytes = await Navigator.of(context).push<Uint8List>(
       MaterialPageRoute(
         builder: (_) => CutoutEditorScreen(sourcePath: widget.referencePath),
@@ -204,7 +213,7 @@ class _CollagePageState extends ConsumerState<CollagePage> {
 
   Future<void> _addDirectOverlay() async {
     if (_busy) return;
-    final bytes = await File(widget.referencePath).readAsBytes();
+    final bytes = await readMediaBytes(widget.referencePath);
     final image = await decodeUiImage(bytes);
     if (!mounted) {
       image.dispose();
@@ -268,8 +277,8 @@ class _CollagePageState extends ConsumerState<CollagePage> {
           derivedFromId: widget.derivedFromId,
           takenAt: widget.takenAt,
           toGallery: true,
-          originalToGallery: widget.originalCapture != null,
-          original: widget.originalCapture,
+          originalToGallery: widget.originalCapturePath != null,
+          originalPath: widget.originalCapturePath,
           render: () => _renderCollage(
             renderEditedImage(sourcePath, recipe),
             layers,
@@ -354,7 +363,7 @@ class _CollagePageState extends ConsumerState<CollagePage> {
       final composed = Expanded(child: _composedView());
       final reference = Expanded(
         child: Center(
-          child: Image.file(File(widget.referencePath), fit: BoxFit.contain),
+          child: PlatformImage(widget.referencePath, fit: BoxFit.contain),
         ),
       );
       if (_compareVertical) {
@@ -659,7 +668,7 @@ Future<Uint8List> _renderCollage(
     var finalImage = composed;
     if (compare) {
       final refImage =
-          await decodeUiImage(await File(referencePath).readAsBytes());
+          await decodeUiImage(await readMediaBytes(referencePath));
       finalImage = await _stitch(composed, refImage, vertical);
       refImage.dispose();
       composed.dispose();

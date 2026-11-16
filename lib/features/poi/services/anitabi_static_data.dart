@@ -5,6 +5,8 @@ import 'package:flutter/foundation.dart';
 import 'package:http/http.dart' as http;
 import 'package:path/path.dart' as p;
 
+import 'anitabi_web_cache.dart';
+
 /// One Anitabi work from the static map data.
 class AnitabiStaticWork {
   /// Original (usually Japanese) title, falling back to the Chinese one.
@@ -58,6 +60,10 @@ class AnitabiStaticData {
   /// downloads in this process skip hosts known to be dead.
   static int _preferredBase = 0;
 
+  // In-memory cache used on Web where local filesystem caching is unavailable.
+  static ({DateTime at, String body})? _memIndex;
+  static final Map<String, String> _memPages = {};
+
   final http.Client client;
   final Future<Directory> Function() cacheDir;
   final List<String> baseUrls;
@@ -71,7 +77,11 @@ class AnitabiStaticData {
   }) : _now = now ?? DateTime.now;
 
   @visibleForTesting
-  static void resetPreferredHost() => _preferredBase = 0;
+  static void resetPreferredHost() {
+    _preferredBase = 0;
+    _memIndex = null;
+    _memPages.clear();
+  }
 
   /// The work for [bangumiId] with its spots, or null when Anitabi has no
   /// such work. Throws [AnitabiStaticDataUnavailableException] when the data
@@ -79,7 +89,7 @@ class AnitabiStaticData {
   Future<AnitabiStaticWork?> work(String bangumiId) async {
     final id = int.tryParse(bangumiId);
     if (id == null) return null;
-    final dir = await cacheDir();
+    final dir = kIsWeb ? null : await cacheDir();
 
     final indexBody = await _index(dir);
     final located = await compute(_locateWork, [indexBody, id]);
@@ -109,7 +119,30 @@ class AnitabiStaticData {
     return AnitabiStaticWork(title: title, spots: const []);
   }
 
-  Future<String> _index(Directory dir) async {
+  Future<String> _index(Directory? dir) async {
+    if (dir == null) {
+      final cached = _memIndex;
+      if (cached != null && _now().difference(cached.at) < indexMaxAge) {
+        return cached.body;
+      }
+      final webCachedBody = await AnitabiWebCache.get('g.json');
+      final webCachedAt = await AnitabiWebCache.timestamp('g.json');
+      if (webCachedBody != null && webCachedAt != null && _now().difference(webCachedAt) < indexMaxAge) {
+        _memIndex = (at: webCachedAt, body: webCachedBody);
+        return webCachedBody;
+      }
+      try {
+        final body = await _download('g.json');
+        final now = _now();
+        _memIndex = (at: now, body: body);
+        await AnitabiWebCache.put('g.json', body, now);
+        return body;
+      } on AnitabiStaticDataUnavailableException {
+        if (cached != null) return cached.body;
+        if (webCachedBody != null) return webCachedBody;
+        rethrow;
+      }
+    }
     final file = File(p.join(dir.path, 'g.json'));
     if (await file.exists() &&
         _now().difference(await file.lastModified()) < indexMaxAge) {
@@ -128,7 +161,22 @@ class AnitabiStaticData {
 
   /// Detail pages are cached per index version (`g1.<version>.json`), so a
   /// newer index re-fetches them once and older copies are dropped.
-  Future<String> _page(Directory dir, int page, String version) async {
+  Future<String> _page(Directory? dir, int page, String version) async {
+    if (dir == null) {
+      final key = '$page.$version';
+      final cached = _memPages[key];
+      if (cached != null) return cached;
+      final webCached = await AnitabiWebCache.get(key);
+      if (webCached != null) {
+        _memPages[key] = webCached;
+        return webCached;
+      }
+      final body = await _download('g$page.json');
+      _memPages.removeWhere((k, _) => k.startsWith('$page.'));
+      _memPages[key] = body;
+      await AnitabiWebCache.put(key, body, _now());
+      return body;
+    }
     final file = File(p.join(dir.path, 'g$page.$version.json'));
     if (await file.exists()) return file.readAsString();
     final body = await _download('g$page.json');

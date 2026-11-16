@@ -15,14 +15,17 @@ import '../widgets/capture_sheets.dart';
 import '../widgets/shoot_here_sheet.dart';
 import 'camera_overlay.dart';
 import 'photo_edit_route.dart';
+import 'web_camera_probe.dart';
 
 @visibleForTesting
 bool? debugAnimeCameraSupportedOverride;
 
-/// Whether this platform has an Anime Camera at all. Desktop and web don't,
-/// so their camera entry points are hidden.
+/// Whether this platform has an Anime Camera at all. Mobile apps use either
+/// Android's overlay or the in-app camera; Web enables the in-app WebRTC
+/// camera when the browser exposes `navigator.mediaDevices`.
 bool get animeCameraSupported =>
-    debugAnimeCameraSupportedOverride ?? (!kIsWeb && (Platform.isAndroid || Platform.isIOS));
+    debugAnimeCameraSupportedOverride ??
+    (kIsWeb ? webCameraAvailable : (Platform.isAndroid || Platform.isIOS));
 
 /// Whether [floatReference] works here (Android only).
 bool get floatingReferenceSupported => CameraOverlay.isSupported;
@@ -51,7 +54,7 @@ Future<void> openAnimeCamera(
     await _shootHere(context, ref, tripId: tripId);
     return;
   }
-  if (Platform.isAndroid) {
+  if (!kIsWeb && Platform.isAndroid) {
     await _shootWithPhoneCamera(context, ref, placeKey: placeKey, tripId: tripId);
   } else {
     context.push(_inAppCameraLocation(placeKey, tripId));
@@ -188,7 +191,7 @@ class _Reference {
 
 /// Shoot here, then the camera for what the user picked.
 Future<void> _shootHere(BuildContext context, WidgetRef ref, {String? tripId}) async {
-  final android = Platform.isAndroid;
+  final android = !kIsWeb && Platform.isAndroid;
   final choice = await pickShootHere(context, plainCameraOnly: !android);
   if (choice == null || !context.mounted) return;
   switch (choice) {
@@ -275,7 +278,7 @@ Future<void> shootWithFrames(
     }
     reference = _Reference(resolved.frames, index: resolved.index, placeKey: placeKey);
   }
-  if (!Platform.isAndroid) {
+  if (kIsWeb || !Platform.isAndroid) {
     // The in-app camera starts on the frame and offers the place's others.
     final start = reference?.frames[reference.index].imageId;
     context.push(_inAppCameraLocation(placeKey, tripId, frameId: start));

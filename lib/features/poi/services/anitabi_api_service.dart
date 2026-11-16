@@ -1,5 +1,6 @@
 import 'dart:io';
 
+import 'package:flutter/foundation.dart' show kIsWeb;
 import 'package:http/http.dart' as http;
 import 'package:path/path.dart' as p;
 import 'package:path_provider/path_provider.dart';
@@ -42,9 +43,11 @@ class AnitabiApiService {
   /// Downloads an Anitabi image into the app's reference images, trying the
   /// image mirror when the official host refuses. Null when neither works;
   /// it never retries a refusal.
-  static Future<String?> downloadReferenceImage(String url, http.Client client) async =>
-      await downloadCoverImage(url, subdir: 'reference_images', client: client) ??
-      await _downloadFromImageMirror(url, client);
+  static Future<String?> downloadReferenceImage(String url, http.Client client) async {
+    if (kIsWeb) return null;
+    return await downloadCoverImage(url, subdir: 'reference_images', client: client) ??
+        await _downloadFromImageMirror(url, client);
+  }
 
   static Future<Directory> _defaultCacheDir() async {
     final base = await getApplicationSupportDirectory();
@@ -81,7 +84,8 @@ class _UserAgentClient extends http.BaseClient {
 
   @override
   Future<http.StreamedResponse> send(http.BaseRequest request) {
-    request.headers['User-Agent'] = AnitabiApiService.userAgent;
+    // Browsers forbid setting custom User-Agent headers on XHR/fetch requests.
+    if (!kIsWeb) request.headers['User-Agent'] = AnitabiApiService.userAgent;
     return _inner.send(request);
   }
 

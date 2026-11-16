@@ -1,10 +1,9 @@
-import 'dart:io';
-
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 import 'package:intl/intl.dart';
 
+import '../../../core/utils/platform_media.dart';
 import '../../../shared/theme/app_theme.dart';
 import '../../camera/providers/shooting_core_providers.dart';
 import '../../camera/services/anime_camera_launcher.dart' show editPhotoFromGallery;
@@ -244,8 +243,8 @@ class _Tile extends StatelessWidget {
           child: Stack(
             fit: StackFit.expand,
             children: [
-              Image.file(
-                File(photo.localPath),
+              PlatformImage(
+                photo.localPath,
                 fit: BoxFit.cover,
                 cacheWidth: 320,
                 errorBuilder: (_, _, _) => ColoredBox(

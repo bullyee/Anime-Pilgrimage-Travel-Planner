@@ -11,6 +11,7 @@ import 'package:path_provider/path_provider.dart';
 import 'package:uuid/uuid.dart';
 
 import '../../../core/providers/database_provider.dart';
+import '../../../core/utils/platform_media.dart';
 import '../../library/providers/place_providers.dart';
 import '../../library/services/photo_trip.dart';
 import 'media_asset_service.dart';
@@ -79,18 +80,23 @@ class BackgroundPhotoSaves extends Notifier<List<PendingPhotoSave>> {
     bool originalToGallery = false,
     required Future<Uint8List?> Function() render,
     File? original,
+    String? originalPath,
     String? referenceImageId,
   }) {
     final job = PendingPhotoSave(const Uuid().v4(), placeKey);
     state = [...state, job];
     final isDesktop =
         !kIsWeb && (Platform.isWindows || Platform.isMacOS || Platform.isLinux);
-    final targetName = isDesktop ? 'Pictures folder' : 'gallery';
+    final targetName = kIsWeb
+        ? 'Downloads'
+        : isDesktop
+        ? 'Pictures folder'
+        : 'gallery';
     final message = !toGallery
         ? 'Photo saved.'
         : placeKey == null
-        ? 'Saved to the $targetName.'
-        : 'Saved to the place and the $targetName.';
+        ? 'Saved to $targetName.'
+        : 'Saved to the place and $targetName.';
     unawaited(
       _run(
         job,
@@ -98,6 +104,7 @@ class BackgroundPhotoSaves extends Notifier<List<PendingPhotoSave>> {
         originalToGallery: originalToGallery,
         render: render,
         original: original,
+        originalPath: originalPath,
         referenceImageId: referenceImageId,
         kind: kind,
         derivedFromId: derivedFromId,
@@ -114,6 +121,7 @@ class BackgroundPhotoSaves extends Notifier<List<PendingPhotoSave>> {
     required bool originalToGallery,
     required Future<Uint8List?> Function() render,
     required File? original,
+    required String? originalPath,
     required String? referenceImageId,
     required String kind,
     required String? derivedFromId,
@@ -134,29 +142,55 @@ class BackgroundPhotoSaves extends Notifier<List<PendingPhotoSave>> {
       });
       _renderQueue = rendered.then((_) {}, onError: (_) {});
       final bytes = await rendered;
-      final File source;
-      if (bytes == null) {
-        if (original == null) throw StateError('nothing to save');
-        source = original;
+      Uint8List? webBytes;
+      File? nativeSource;
+      if (kIsWeb) {
+        final effectiveOriginalPath = originalPath ?? original?.path;
+        if (bytes != null) {
+          webBytes = bytes;
+        } else if (effectiveOriginalPath != null) {
+          webBytes = await readMediaBytes(effectiveOriginalPath);
+        } else {
+          throw StateError('nothing to save');
+        }
+        if (toGallery) {
+          final galleryStart = watch.elapsedMilliseconds;
+          await saveBytesAsMediaDownload(
+            webBytes,
+            filename: 'trip_planner_${job.id}.jpg',
+          );
+          galleryMs = watch.elapsedMilliseconds - galleryStart;
+        }
       } else {
-        temp = File(
-          p.join((await getTemporaryDirectory()).path, 'edited_${job.id}.jpg'),
-        );
-        await temp.writeAsBytes(bytes, flush: true);
-        source = temp;
-      }
-      if (toGallery) {
-        final galleryStart = watch.elapsedMilliseconds;
-        if (!kIsWeb && (Platform.isAndroid || Platform.isIOS)) {
-          if (!await Gal.requestAccess(toAlbum: true)) {
-            throw StateError('no access to the gallery');
+        final File source;
+        if (bytes == null) {
+          final orig = original ?? (originalPath != null ? File(originalPath) : null);
+          if (orig == null) throw StateError('nothing to save');
+          source = orig;
+        } else {
+          temp = File(
+            p.join((await getTemporaryDirectory()).path, 'edited_${job.id}.jpg'),
+          );
+          await temp.writeAsBytes(bytes, flush: true);
+          source = temp;
+        }
+        nativeSource = source;
+        if (toGallery) {
+          final galleryStart = watch.elapsedMilliseconds;
+          if (Platform.isAndroid || Platform.isIOS) {
+            if (!await Gal.requestAccess(toAlbum: true)) {
+              throw StateError('no access to the gallery');
+            }
           }
+          await Gal.putImage(source.path, album: galleryAlbum);
+          if (originalToGallery && bytes != null) {
+            final origPath = original?.path ?? originalPath;
+            if (origPath != null) {
+              await Gal.putImage(origPath, album: galleryAlbum);
+            }
+          }
+          galleryMs = watch.elapsedMilliseconds - galleryStart;
         }
-        await Gal.putImage(source.path, album: galleryAlbum);
-        if (originalToGallery && bytes != null && original != null) {
-          await Gal.putImage(original.path, album: galleryAlbum);
-        }
-        galleryMs = watch.elapsedMilliseconds - galleryStart;
       }
       final placeKey = job.placeKey;
       if (placeKey == null) {
@@ -169,7 +203,8 @@ class BackgroundPhotoSaves extends Notifier<List<PendingPhotoSave>> {
         final persisted = _persistQueue.then(
           (_) => persistPlacePhoto(
             places: ref.read(placeRepositoryProvider),
-            source: source,
+            source: nativeSource,
+            bytes: webBytes,
             placeKey: placeKey,
             referenceImageId: referenceImageId,
             kind: kind,

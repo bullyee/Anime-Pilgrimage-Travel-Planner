@@ -69,6 +69,7 @@ class ThumbnailCacheService {
   /// Returns null if offline, blocked (403/429), or download fails.
   Future<String?> getOrFetchThumbnail(String url) async {
     if (url.trim().isEmpty) return null;
+    if (kIsWeb && _overrideCacheDir == null) return null;
 
     final targetFile = await getCacheFile(url);
     if (await targetFile.exists()) {

@@ -23,4 +23,24 @@ void main() {
     camera.setReferenceImage(File('/frames/u3.jpg'), referenceImageId: 'u3');
     expect(camera.debugState.overlayScale, 1);
   });
+
+  test('setReferencePath and switchReferencePath preserve Web URLs and overlay state', () {
+    final camera = CameraNotifier()
+      ..setReferencePath('https://example.com/frame1.jpg', referenceImageId: 'r1')
+      ..updateOverlayTransform(offset: const Offset(10, 15), scale: 1.5)
+      ..setOverlayOpacity(0.75)
+      ..toggleOverlayVisibility();
+
+    camera.switchReferencePath('blob:https://example.com/frame2', referenceImageId: 'r2');
+
+    final state = camera.state;
+    expect(state.effectiveReferencePath, 'blob:https://example.com/frame2');
+    expect(state.referenceImageId, 'r2');
+    expect((state.overlayOffset, state.overlayScale, state.overlayOpacity), (const Offset(10, 15), 1.5, 0.75));
+    expect(state.overlayVisible, isTrue);
+
+    camera.clearReferenceImage();
+    expect(camera.state.effectiveReferencePath, isNull);
+    expect(camera.state.referenceImageId, isNull);
+  });
 }
