@@ -27,13 +27,14 @@ Your library and your trips live on your phone. **No account is needed, and ever
 
 - 📚 **Keep a library of places** with their anime frames, labels, facts, your own note, your visits and your photos.
 - ⬇️ **Import spots from Anitabi** by searching an anime: pick the spots you want, with their frames and coordinates.
-- 🗺️ **See your places on a map**, and find new ones by name, by a Google Maps link or by coordinates.
+- 🗺️ **See your places on a map**, coloured by anime, and find new ones by name, by a Google Maps link or by coordinates. Maps you've looked at work offline.
 - 🗓️ **Plan trips day by day**: drag stops between days, set times, keep backup days for rain, and pin a day to a date. Group stops that are close together, or merge ones that are the same spot.
 - 👥 **Share a trip** with friends who can edit it or only view it, and see it sync as they change it.
 - 📍 **Shoot where you stand**: **Shoot** offers the frames of your places within about 150 m, and the day map shows the day's stops around you.
 - 📸 **Recreate scenes with the Anime Camera**, with the frame floating over your camera. On Android it opens your phone's own camera app, so you keep its HDR and night mode.
 - 💾 **Back up to a file** and restore it on a new phone: your library, private trips and photos.
-- 🎨 **Touch up your shots later**: the photos you keep wait under **Photos to edit**. The photo editor matches the colors to the frame, adjusts brightness and sharpness, rotates, straightens and crops, or pastes a character from the frame into your photo.
+- 🧭 **Export a trip's route** as GPX or GeoJSON for other map apps.
+- 🎨 **Touch up your shots later**: the photos you keep wait under **To edit** on the Photos tab. The photo editor matches the colors to the frame, adjusts brightness and sharpness, rotates, straightens and crops, or pastes a character from the frame into your photo.
 
 ---
 
@@ -45,7 +46,7 @@ The **home screen** is a column of cards. Only the top one changes with the date
 
 Under it, **Photos to edit** shows while there are any, and **Near you** lists up to 3 of your places within 3 km. It asks for your location only when you tap it.
 
-The bar at the bottom has **Trips**, **Shoot** *(Android and iOS)* and **Library**. The **⋮** menu has **Float a frame over any app** *(Android)* and **Edit a photo from the gallery**.
+The bar at the bottom of every main screen has **Home**, **Trips**, **Shoot** *(Android and iOS)*, **Library** and **Photos**. Each tab keeps where you were; a page you open from one (a trip, a place, the day map) opens full screen, and back returns to the tab. **Float a frame over any app** *(Android)* is the button at the top of Home.
 
 There's no sign-in on the home screen. Sharing, inviting and joining a trip ask you to sign in with Google.
 
@@ -116,6 +117,8 @@ My note, your visits and your photos are only yours, even on a shared trip.
 
 The **map** button at the top of a trip opens its day map (see [On the day](#5-on-the-day)).
 
+**Export the route** for another map app (OsmAnd, Organic Maps, Google My Maps): the trip's **⋮** menu → **Export route (GPX)** or **Export route (GeoJSON)**, then pick where to send it. Each day is a route in visiting order, with the planned times in the stops' descriptions. Stops without coordinates are left out.
+
 <br clear="right">
 
 ### The Plan tab
@@ -175,19 +178,27 @@ Sharing needs a Google sign-in, for you and for the friends you invite.
 - **View only** members see the trip with "View only" under its name. They can't change the plan, but their own note and photos still work.
 - **A small cloud** next to a shared trip's name means it isn't in sync yet: you're offline, it's still sending, or a change was refused. Tap it to see which.
 
+**Share your own frames:** frames from Anitabi reach everyone by themselves. Frames you added yourself (from your gallery) stay on your phone until you share them:
+- **Members → Sync via my Google Drive** uploads them to a "Trip Planner Shared Frames" folder in your Google Drive and shares them by link. Google asks once for access to the files the app creates; it can't see the rest of your Drive. **Anyone with the link can view these files.** Only people who can edit the trip can upload, and private trips never upload.
+- **Upload quality** is yours to pick, in the upload dialog or in **Settings**: **Original** (the default, up to 1920 px), **Smaller** or **Smallest** (1280 px, about a half to a third of the size).
+- The upload runs in the background with a notification and **Cancel**, even if you switch apps or swipe the app away. If it stops, the next start offers **Resume**.
+- **Taking them back:** deleting, unsharing or leaving the trip, or removing a stop or frame, deletes the Drive files nothing else needs. **Members → Remove my frames from Google Drive** removes yours for this trip, and **Settings → Remove shared frames from my Google Drive** for every trip.
+- **Download frames for offline** fetches the trip's frames to your phone. Frames your friends shared download by themselves on Wi-Fi.
+- No Google account? **Share local frames** makes a file you can send, and **Import local frames** reads one.
+
 > 💡 If a link opens in a chat app's browser (LINE, Discord) and the app doesn't open, copy the 6-letter code from the page and enter it under **Join a trip**.
 
 <br clear="right">
 
 ## 5. On the day
 
-**The day map** shows a day's stops on a map with your location, the route between them, and how many are visited. Open it from the **map** button at the top of a trip, or from the small map on the home screen. Switch days along the top. Tap a stop for its frame, how far it is and which way, the photos you took there, **Take photo** and **Mark visited**.
+**The day map** shows a day's stops on a map with your location, the route between them, and how many are visited. A group of stops is one pin with a badge; stops close together merge into a bubble such as "1–4" that opens when you tap it. Open it from the **map** button at the top of a trip, or from the small map on the home screen. Switch days along the top. Tap a stop for its frame, how far it is and which way, the photos you took there, **Take photo** and **Mark visited**.
 
 **On the home screen**, today's card shows the next stop with **Take photo** and **Mark done**. Undo takes it back. View-only members don't get Mark done.
 
 A shot never marks a stop done: that's always your call.
 
-> 🌐 The map's tiles need a connection. The day's stops and the camera work offline.
+> 🌐 Map tiles you've looked at in the last two weeks stay on your phone, so check the day's map once while you're online. The day's stops and the camera work offline.
 
 ## 6. Recreate the scene (Anime Camera)
 
@@ -200,16 +211,16 @@ A shot never marks a stop done: that's always your call.
      The first time, Android asks you to allow Trip Planner to **display over other apps**. If you'd rather not, you can still shoot without the window. On Android 13 and later, if you installed the app from a downloaded APK, Android may only say "App access denied": first turn on **Allow restricted settings** in the app's App info (**⋮** menu). The app's dialog has an **App info** button that opens it.
    - **On iOS**, the frame floats over the in-app camera. Drag it, pinch to resize it, use the **opacity slider**, switch frames with **‹ ›**, and switch **flash**, the **native or fill** framing, **zoom** or the **front camera** as needed.
 3. Take the shot.
-   - **On Android**, the camera opens again with the frame still where you left it, so you can take a few. Press back in the camera when you're done. Your shots then show beside the frame each was taken with: tap the ones to keep, then **Keep**. They're saved as shot to the place's **My photos**, under the trip you were on that day, and to a **Trip Planner** album on your phone, and wait under **Photos to edit**; the others are deleted. If you can edit the trip, **Mark X done** is offered for a stop on a day (already ticked when every frame of the stop has a shot), or **Add X to Day N** for a place that isn't on one. Each stop shows its progress, such as "2 of 5 frames". **Take more** opens the camera again. If Android closes Trip Planner while the camera is open, your shots come back the next time you open it.
+   - **On Android**, the camera opens again with the frame still where you left it, so you can take a few. Press back in the camera when you're done. Your shots then show beside the frame each was taken with: tap the ones to keep, then **Keep**. They're saved as shot to the place's **My photos**, under the trip you were on that day, and to a **Trip Planner** album on your phone, and wait under **To edit** on the Photos tab; the others are deleted. If you can edit the trip, **Mark X done** is offered for a stop on a day (already ticked when every frame of the stop has a shot), or **Add X to Day N** for a place that isn't on one. Each stop shows its progress, such as "2 of 5 frames". **Take more** opens the camera again. If Android closes Trip Planner while the camera is open, your shots come back the next time you open it.
    - **On iOS**, the shot opens in the photo editor with the frame attached.
 
-> 💡 **Float a frame over any app** *(Android)*, in the home screen's **⋮** menu, or **Float frame** on a page, floats a frame over every app until you close it, so you can take as many shots as you like with any camera app.
+> 💡 **Float a frame over any app** *(Android)*, the button at the top of Home, or **Float frame** on a page, floats a frame over every app until you close it, so you can take as many shots as you like with any camera app.
 
 ## 7. Edit your photos
 
-**Photos to edit** (from its card on the home screen) holds the photos you kept as shot and haven't edited yet, by day. Tap one to edit it. **Keep as it is** takes it off the list, with Undo; hold one to pick several.
+**The Photos tab** shows every photo you've taken, newest first, by day or by place; tap one to see it next to its frame. Its **To edit** filter (also from the card on the home screen) holds the photos you kept as shot and haven't edited yet, by day. Tap one to edit it. **Keep as it is** takes it off the list, with Undo; hold one to pick several.
 
-You can also tap **Edit** on a photo in a place's page, or **Edit a photo from the gallery** in the home screen's **⋮** menu. On iOS the editor also opens after every shot.
+You can also tap **Edit** on a photo in a place's page, or **Edit a photo from the gallery** on the Photos tab. On iOS the editor also opens after every shot.
 
 - **Tools** run along the bottom; swipe the strip to see them all:
   - **Reference**: add or swap the frame you're matching.
@@ -237,7 +248,7 @@ The first time you open v0.2.0 or later, your data moves to the new library:
 - **What goes online:**
   - importing from Anitabi and searching anime on Bangumi;
   - the maps' tiles (the library's, the day map's and the home screen's) and searching by name (OpenStreetMap);
-  - signing in and shared trips (Google Firebase);
+  - signing in and shared trips (Google Firebase), and frames you share through Google Drive;
   - the photo editor's **Compose**, which downloads its AI model (~176 MB) the first time; use Wi-Fi for that one.
 - **Back up before you switch phones.** Shared trips are kept in the cloud, but your library, private trips and photos live only on this phone. Nothing backs up by itself: use **Back up to a file** before switching phones or clearing app data.
 - **Where features work:**
@@ -250,6 +261,8 @@ The first time you open v0.2.0 or later, your data moves to the new library:
   | Several shots, then pick | ✅ | — | — |
   | Floating Reference | ✅ | — | — |
   | Photo editor | ✅ | ✅ | ✅ (no Compose) |
+
+  A web version, from the same app, is on its way; it isn't online yet.
 
   On Android, the camera asks once for permission to display over other apps, which the floating frame needs. With an APK you downloaded, turn on **Allow restricted settings** in the app's App info first.
 
