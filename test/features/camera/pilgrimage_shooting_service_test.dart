@@ -661,7 +661,7 @@ void main() {
       final result = await service.recordShot(
         db,
         sourceImagePath: '/dummy/camera/rescheduled.jpg',
-        placeKey: stop.placeKey!,
+        placeKey: stop.placeKey,
         stopId: stop.id,
         tripId: trip.id,
         takenAt: now,
@@ -862,7 +862,7 @@ void main() {
 
       final result = await service.checkInWithoutPhoto(
         db,
-        placeKey: stop.placeKey!,
+        placeKey: stop.placeKey,
         stopId: stop.id,
         tripId: trip.id,
         scheduleItemId: item.id,
@@ -902,7 +902,7 @@ void main() {
 
       final result = await service.checkInWithoutPhoto(
         db,
-        placeKey: stop.placeKey!,
+        placeKey: stop.placeKey,
         stopId: stop.id,
         tripId: trip.id,
         scheduleItemId: item.id,
@@ -942,7 +942,7 @@ void main() {
 
       final result = await service.checkInWithoutPhoto(
         db,
-        placeKey: stop.placeKey!,
+        placeKey: stop.placeKey,
         stopId: stop.id,
         tripId: trip.id,
         dayId: day3.id,
@@ -1026,7 +1026,7 @@ void main() {
       // Check-in at stop 1
       await service.checkInWithoutPhoto(
         db,
-        placeKey: stop1.placeKey!,
+        placeKey: stop1.placeKey,
         scheduleItemId: item1.id,
         visitedAt: now,
         markDone: true,

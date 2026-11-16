@@ -89,7 +89,7 @@ class ShotPlan {
   ) => {
         ...saved,
         for (final id in frameIds)
-          if (pictures[id] case final picture?) picture,
+          ?pictures[id],
       }.where((picture) => counted.isEmpty || counted.contains(picture)).length;
 
   bool get done => item?.status == 'done';

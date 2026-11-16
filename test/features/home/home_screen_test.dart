@@ -162,7 +162,7 @@ void main() {
 
     test('saved places within 3 km, nearest first, three at most', () {
       LibraryEntry e(Place p) => LibraryEntry(place: p, labels: const [], tripIds: const {});
-      final uji = LatLng(34.8930, 135.8062);
+      const uji = LatLng(34.8930, 135.8062);
       final near = nearbyPlaces([
         e(_place('far', 35.0116, 135.7681)), // Kyoto Station, about 13 km
         e(_place('bridge', 34.8931, 135.8063)),

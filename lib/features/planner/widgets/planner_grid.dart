@@ -76,7 +76,7 @@ class PlannerGrid extends StatelessWidget {
               onTap: onAddDay,
             ),
         ]),
-        _Divider(label: 'Backup days'),
+        const _Divider(label: 'Backup days'),
         if (!editing && view.backupDays.isEmpty)
           Padding(
             padding: const EdgeInsets.only(bottom: 8),
@@ -99,7 +99,7 @@ class PlannerGrid extends StatelessWidget {
                 onTap: onAddBackup,
               ),
           ]),
-        _Divider(label: 'Backlog'),
+        const _Divider(label: 'Backlog'),
         grid([
           _Tile(
             dashed: true,

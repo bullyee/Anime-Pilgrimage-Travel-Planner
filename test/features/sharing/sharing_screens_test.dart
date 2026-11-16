@@ -579,7 +579,7 @@ void main() {
       await done(tester);
     });
 
-    testWidgets("a code nobody made says so under the field", (tester) async {
+    testWidgets('a code nobody made says so under the field', (tester) async {
       await pump(tester, joinRouter('/join'));
 
       await tester.enterText(find.byType(TextField), 'ABC234');

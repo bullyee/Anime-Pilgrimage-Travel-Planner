@@ -63,9 +63,9 @@ class ShotSeriesArgs {
   }
 
   String get location => Uri(path: '/shots', queryParameters: {
-        if (seriesId != null) 'series': seriesId!,
-        if (placeKey != null) 'place': placeKey!,
-        if (tripId != null) 'trip': tripId!,
+        'series': ?seriesId,
+        'place': ?placeKey,
+        'trip': ?tripId,
         if (frames.isNotEmpty) 'ref': [for (final f in frames) f.path],
         if (frames.isNotEmpty) 'refId': [for (final f in frames) f.imageId ?? ''],
         if (frameIndex != 0) 'frame': '$frameIndex',
@@ -428,7 +428,7 @@ class _ShotSeriesScreenState extends ConsumerState<ShotSeriesScreen> {
     await _discardSeries(series.id);
     final message = _savedMessage(result, kept.length, series.placeKey == null ? null : placeName ?? 'the place');
     rootMessengerKey.currentState?.showSnackBar(
-      SnackBar(content: Text(planNote == null ? message : "$message $planNote")),
+      SnackBar(content: Text(planNote == null ? message : '$message $planNote')),
     );
     if (mounted) _leave();
   }
@@ -623,7 +623,7 @@ class _ShotSeriesScreenState extends ConsumerState<ShotSeriesScreen> {
     Widget tick(String key, String title, List<String?> about, bool value, void Function(bool) onChanged) {
       final subtitle = [
         for (final part in about)
-          if (part != null) part,
+          ?part,
       ].join(' · ');
       return CheckboxListTile(
         key: Key(key),

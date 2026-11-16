@@ -94,7 +94,7 @@ class _TripFormSheetState extends State<TripFormSheet> {
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
     final start = _startDate;
-    final lastDay = start == null ? null : start.add(Duration(days: _dayCount - 1));
+    final lastDay = start?.add(Duration(days: _dayCount - 1));
 
     return Padding(
       padding: EdgeInsets.fromLTRB(20, 0, 20, 20 + MediaQuery.viewInsetsOf(context).bottom),

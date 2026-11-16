@@ -68,11 +68,11 @@ class PhotoEditArgs {
     final includePath = path.isNotEmpty && !isData && (photoId == null || !kIsWeb);
     return Uri(path: '/photo-edit', queryParameters: {
       if (includePath) 'path': path,
-      if (placeKey != null) 'place': placeKey!,
-      if (tripId != null) 'trip': tripId!,
-      if (photoId != null) 'photo': photoId!,
+      'place': ?placeKey,
+      'trip': ?tripId,
+      'photo': ?photoId,
       if (referencePath != null && !isRefData) 'ref': referencePath!,
-      if (referenceImageId != null) 'refId': referenceImageId!,
+      'refId': ?referenceImageId,
       if (upload) 'upload': '1',
       if (capture) 'capture': '1',
     }).toString();

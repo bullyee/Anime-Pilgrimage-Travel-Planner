@@ -18,7 +18,6 @@ import '../../camera/models/shooting_core_models.dart';
 import '../../camera/services/anime_camera_launcher.dart';
 import '../../camera/services/pilgrimage_shooting_service.dart';
 import '../../library/controllers/place_controller.dart';
-import '../../library/models/frames.dart';
 import '../../library/providers/place_providers.dart';
 import '../../library/widgets/place_page_parts.dart';
 import '../../planner/controllers/day_planner_controller.dart';
@@ -267,7 +266,7 @@ class _PilgrimageDayMapScreenState extends ConsumerState<PilgrimageDayMapScreen>
       final result = await planner.setVisited(item.item.id, newDone);
       if (result is Failure) {
         if (mounted) {
-          ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text((result as Failure).error)));
+          ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text((result).error)));
         }
         return;
       }
@@ -335,7 +334,6 @@ class _PilgrimageDayMapScreenState extends ConsumerState<PilgrimageDayMapScreen>
 
   @override
   Widget build(BuildContext context) {
-    final theme = Theme.of(context);
     final tripAsync = ref.watch(tripDetailProvider(widget.tripId));
     final viewAsync = ref.watch(plannerViewProvider(widget.tripId));
 
@@ -620,7 +618,7 @@ class _PilgrimageDayMapScreenState extends ConsumerState<PilgrimageDayMapScreen>
                 scrollDirection: Axis.horizontal,
                 padding: const EdgeInsets.symmetric(horizontal: 4),
                 itemCount: allDays.length,
-                separatorBuilder: (_, __) => const SizedBox(width: 8),
+                separatorBuilder: (_, _) => const SizedBox(width: 8),
                 itemBuilder: (context, i) {
                   final day = allDays[i];
                   final isSelected = day.day.id == _selectedDayId;
@@ -861,7 +859,7 @@ class _PilgrimageDayMapScreenState extends ConsumerState<PilgrimageDayMapScreen>
                       child: ListView.separated(
                         scrollDirection: Axis.horizontal,
                         itemCount: stopPhotos.length,
-                        separatorBuilder: (_, __) => const SizedBox(width: 6),
+                        separatorBuilder: (_, _) => const SizedBox(width: 6),
                         itemBuilder: (context, idx) {
                           final photo = stopPhotos[idx];
                           return GestureDetector(
@@ -874,7 +872,7 @@ class _PilgrimageDayMapScreenState extends ConsumerState<PilgrimageDayMapScreen>
                                   photo.localPath,
                                   fit: BoxFit.cover,
                                   cacheWidth: 320,
-                                  errorBuilder: (_, __, ___) => Container(
+                                  errorBuilder: (_, _, _) => Container(
                                     color: theme.colorScheme.surfaceContainerHighest,
                                     child: const Icon(Icons.broken_image_outlined),
                                   ),

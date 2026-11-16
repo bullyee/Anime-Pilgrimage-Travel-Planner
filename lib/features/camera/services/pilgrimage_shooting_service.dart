@@ -7,7 +7,6 @@ import 'package:path_provider/path_provider.dart';
 import 'package:uuid/uuid.dart';
 
 import '../../../core/database/database.dart';
-import '../../../core/utils/fractional_index.dart';
 import '../../../core/utils/schedule_logic.dart';
 import '../models/shooting_core_models.dart';
 
@@ -604,15 +603,13 @@ class PilgrimageShootingService {
                   ..where((s) => s.id.equals(stopId) & s.deletedAt.isNull()))
                 .getSingleOrNull();
           }
-          if (activeStop == null) {
-            activeStop = (await (db.select(db.stops)
+          activeStop ??= (await (db.select(db.stops)
                   ..where((s) =>
                       s.tripId.equals(resolvedTripId) &
                       s.placeKey.equals(placeKey) &
                       s.deletedAt.isNull()))
                 .get())
                 .firstOrNull;
-          }
 
           if (activeStop != null) {
             final items = await (db.select(db.scheduleItems)
@@ -823,15 +820,13 @@ class PilgrimageShootingService {
                 ..where((s) => s.id.equals(stopId) & s.deletedAt.isNull()))
               .getSingleOrNull();
         }
-        if (activeStop == null) {
-          activeStop = (await (db.select(db.stops)
+        activeStop ??= (await (db.select(db.stops)
                 ..where((s) =>
                     s.tripId.equals(resolvedTripId!) &
                     s.placeKey.equals(placeKey) &
                     s.deletedAt.isNull()))
               .get())
               .firstOrNull;
-        }
 
         if (activeStop != null && activeItem == null) {
           final items = await (db.select(db.scheduleItems)

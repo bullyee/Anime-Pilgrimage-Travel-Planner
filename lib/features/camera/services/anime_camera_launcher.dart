@@ -63,9 +63,9 @@ Future<void> openAnimeCamera(
 
 String _inAppCameraLocation(String? placeKey, String? tripId, {String? frameId}) =>
     Uri(path: '/camera', queryParameters: {
-      if (placeKey != null) 'place': placeKey,
-      if (tripId != null) 'trip': tripId,
-      if (frameId != null) 'frame': frameId,
+      'place': ?placeKey,
+      'trip': ?tripId,
+      'frame': ?frameId,
     }).toString();
 
 /// Floats a reference over whatever is on screen without opening a camera.

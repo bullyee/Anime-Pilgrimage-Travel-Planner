@@ -30,7 +30,7 @@ class TripsController extends Notifier<AsyncValue<void>> {
     final name = title.trim();
     if (name.isEmpty) return const Failure('Give the trip a name.');
     if (dayCount < 1 || dayCount > maxDays) {
-      return Failure('A trip has 1 to $maxDays days.');
+      return const Failure('A trip has 1 to $maxDays days.');
     }
     final about = _cleanDescription(description);
     if (about != null && about.length > maxDescriptionLength) return _tooLong;

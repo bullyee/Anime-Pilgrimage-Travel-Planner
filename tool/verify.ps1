@@ -2,7 +2,8 @@ param(
   [switch]$All,
   [switch]$WithEmulator,
   [switch]$RulesOnly,
-  [switch]$UnitOnly
+  [switch]$UnitOnly,
+  [string[]]$TestPath
 )
 
 # Prerequisites:
@@ -35,8 +36,23 @@ if ($RulesOnly) {
 
 # 1. Flutter Unit Tests
 if ($runUnit) {
-  Write-Host "[1/2] Running Flutter Unit Tests..." -ForegroundColor Yellow
-  $testOutput = flutter test --reporter=failures-only 2>&1
+  Write-Host "[1/2] Checking conditional imports & running Flutter Unit Tests..." -ForegroundColor Yellow
+  $repoRootPrefix = [regex]::Escape("$((Get-Location).Path)\")
+  $htmlCondMatches = Get-ChildItem -Path "lib" -Recurse -Filter "*.dart" -File | Select-String -Pattern "dart\.library\.html"
+  if ($htmlCondMatches) {
+    Write-Host "[FAIL] Found dart.library.html in lib/ (breaks flutter build web --wasm; use dart.library.js_interop instead):" -ForegroundColor Red
+    $htmlCondMatches | ForEach-Object {
+      $rel = $_.Path -replace $repoRootPrefix, ""
+      Write-Host "  ${rel}:$($_.LineNumber): $($_.Line.Trim())" -ForegroundColor Red
+    }
+    exit 1
+  }
+
+  $flutterTestArgs = @("test", "--reporter=failures-only")
+  if ($TestPath -and $TestPath.Count -gt 0) {
+    $flutterTestArgs += $TestPath
+  }
+  $testOutput = & flutter @flutterTestArgs 2>&1
   if ($LASTEXITCODE -ne 0) {
     Write-Host "[FAIL] Flutter unit tests failed!" -ForegroundColor Red
     $testOutput | Select-Object -Last 30
