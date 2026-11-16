@@ -105,6 +105,42 @@ service cloud.firestore {
     // id, when present, must equal the document path ID: the sync engine keys
     // local writes on it, so a mismatch would let one trip's editor overwrite
     // another trip on every member's device.
+    // expireAt is the TTL field: Firestore deletes a document once it passes.
+    // Only a tombstone may carry it (deletedAt set, by the person deleting it,
+    // about 30 days ahead), and a restore clears it. Without this an editor
+    // could put a TTL on a live document and delete it around "no deletes".
+    function isExpireAtValid() {
+      let data = request.resource.data;
+      return !('expireAt' in data) || data.expireAt == null || (
+        data.expireAt is timestamp
+        && ('deletedAt' in data) && data.deletedAt != null
+        && ('updatedBy' in data) && data.updatedBy == request.auth.uid
+        && data.expireAt > request.time + duration.value(29, 'd')
+        && data.expireAt < request.time + duration.value(31, 'd'));
+    }
+
+    // Deleting or restoring the trip itself is the owner's (members only leave).
+    function isTripDeletionByOwner(tripId) {
+      return !('deletedAt' in request.resource.data)
+        || request.resource.data.deletedAt == resource.data.get('deletedAt', null)
+        || isTripOwner(tripId);
+    }
+
+    // One entry of a trip's activity log (What changed). Append-only, written by
+    // the person who made the change, and gone after 30 days (TTL on expireAt).
+    function isActivitySafe(tripId, activityId) {
+      let data = request.resource.data;
+      return data.id == activityId
+        && data.tripId == tripId
+        && data.actorId == request.auth.uid
+        && data.action is string && data.action.size() <= 50
+        && data.entityType is string && data.entityType.size() <= 50
+        && data.entityId is string && data.entityId.size() <= 200
+        && data.summary is string && data.summary.size() <= 500
+        && data.createdAt is timestamp && data.createdAt < request.time + duration.value(1, 'd')
+        && data.expireAt is timestamp && data.expireAt < request.time + duration.value(31, 'd');
+    }
+
     function isTripV2Safe(docId) {
       let data = request.resource.data;
       return (!('id' in data) || data.id == docId)
@@ -198,7 +234,9 @@ service cloud.firestore {
           && (!('sharing' in request.resource.data) || request.resource.data.sharing == resource.data.sharing || isTripOwner(tripId))
           && (!('members' in request.resource.data) || !('members' in resource.data) || isTripOwner(tripId) || request.resource.data.members.toSet().hasAll(resource.data.members))
           && isLwwValid()
-          && isTripV2Safe(tripId)) ||
+          && isTripV2Safe(tripId)
+          && isTripDeletionByOwner(tripId)
+          && isExpireAtValid()) ||
         isSelfMemberArraySync(tripId)
       );
 
@@ -245,7 +283,8 @@ service cloud.firestore {
           && isTripMemberV2(tripId)
           && isTripEditorOrOwner(tripId)
           && isLwwValid()
-          && isDayBlockSafe(dayId);
+          && isDayBlockSafe(dayId)
+          && isExpireAtValid();
         allow delete: if false;
       }
 
@@ -255,7 +294,8 @@ service cloud.firestore {
           && isTripMemberV2(tripId)
           && isTripEditorOrOwner(tripId)
           && isLwwValid()
-          && isStopSafe(stopId);
+          && isStopSafe(stopId)
+          && isExpireAtValid();
         allow delete: if false;
       }
 
@@ -265,8 +305,19 @@ service cloud.firestore {
           && isTripMemberV2(tripId)
           && isTripEditorOrOwner(tripId)
           && isLwwValid()
-          && isScheduleItemSafe(itemId);
+          && isScheduleItemSafe(itemId)
+          && isExpireAtValid();
         allow delete: if false;
+      }
+
+      // --- Activity log (What changed), append-only ---
+      match /activity/{activityId} {
+        allow read: if isAuthenticated() && isTripMemberV2(tripId);
+        allow create: if isAuthenticated()
+          && isTripMemberV2(tripId)
+          && isTripEditorOrOwner(tripId)
+          && isActivitySafe(tripId, activityId);
+        allow update, delete: if false;
       }
     }
 

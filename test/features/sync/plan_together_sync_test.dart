@@ -1,0 +1,190 @@
+import 'package:cloud_firestore/cloud_firestore.dart' show Timestamp;
+import 'package:drift/drift.dart' hide isNull, isNotNull;
+import 'package:drift/native.dart';
+import 'package:flutter_test/flutter_test.dart';
+import 'package:trip_planner/core/database/database.dart';
+import 'package:trip_planner/features/sync/services/firestore_sync_v2_service.dart';
+import 'package:trip_planner/features/sync/services/sync_engine_service_v2.dart';
+import 'package:trip_planner/features/trip/repositories/trip_repository.dart';
+
+import 'sync_engine_v2_test.dart' show FakeFirestoreSyncV2Service;
+
+/// The cloud half of v0.4.0's trash and activity log: tombstones get a TTL,
+/// activity entries go up with their change and come down from others, and a
+/// device that missed a purged tombstone hides the row anyway.
+void main() {
+  late AppDatabase db;
+  late FakeFirestoreSyncV2Service cloud;
+  late SyncEngineServiceV2 engine;
+  const me = 'user_alice';
+
+  setUp(() {
+    db = AppDatabase.forTesting(NativeDatabase.memory());
+    cloud = FakeFirestoreSyncV2Service();
+    engine = SyncEngineServiceV2(localDb: db, firestoreSync: cloud, currentUserId: me);
+  });
+
+  tearDown(() async {
+    engine.stopSync();
+    await db.close();
+  });
+
+  Future<void> settle([int ms = 600]) => Future.delayed(Duration(milliseconds: ms));
+
+  Future<void> sharedTrip(String id, {String owner = me, int syncStatus = 0}) async {
+    await db.into(db.trips).insert(TripsCompanion.insert(
+          id: id,
+          title: 'Uji',
+          ownerId: owner,
+          sharing: const Value('group'),
+          dayCount: const Value(2),
+          updatedAt: Value(DateTime.now()),
+          syncStatus: Value(syncStatus),
+        ));
+  }
+
+  Future<void> stop(String id, String tripId, {required DateTime updatedAt, int syncStatus = 0, DateTime? deletedAt}) async {
+    await db.into(db.stops).insert(StopsCompanion.insert(
+          id: id,
+          tripId: tripId,
+          placeKey: 'anitabi:$id',
+          name: 'Stop $id',
+          lat: 34.9,
+          lng: 135.8,
+          addedBy: me,
+          updatedAt: Value(updatedAt),
+          updatedBy: const Value('user_bob'),
+          deletedAt: Value(deletedAt),
+          syncStatus: Value(syncStatus),
+        ));
+  }
+
+  group('tombstone TTL', () {
+    test('a live row has no expireAt, a deleted one expires 30 days from the push', () {
+      final now = DateTime(2026, 11, 16, 12);
+      expect(FirestoreSyncV2Service.tombstoneExpiry(null, now: now), isNull);
+      final expiry = FirestoreSyncV2Service.tombstoneExpiry(DateTime(2026, 11, 1), now: now)!;
+      expect(expiry, isA<Timestamp>());
+      expect(expiry.toDate(), now.add(const Duration(days: 30)));
+    });
+  });
+
+  group('activity entries', () {
+    test('go up in the same push as the change, then count as synced', () async {
+      await sharedTrip('t1');
+      await stop('s1', 't1', updatedAt: DateTime.now());
+      cloud.trips['t1'] = {'id': 't1'};
+      engine.startSync();
+
+      await DriftTripRepository(db, null, me).deleteStop('s1');
+      await settle(1500);
+
+      final pushed = cloud.tripActivity['t1']!.values.toList();
+      expect(pushed, hasLength(1));
+      expect(pushed.single['summary'], 'removed Stop s1');
+      expect(pushed.single['actorId'], me);
+      expect(cloud.tripStops['t1']!['s1']!['deletedAt'], isNotNull);
+
+      final local = await db.select(db.tripActivities).getSingle();
+      expect(local.syncStatus, 0);
+    });
+
+    test("other members' entries come down into the local log; old ones are skipped", () async {
+      await sharedTrip('t1', owner: 'user_bob');
+      engine.startSync();
+      cloud.emitUserTrips([
+        {'id': 't1', 'title': 'Uji', 'ownerId': 'user_bob', 'sharing': 'group', 'dayCount': 2, 'updatedAt': DateTime.now()},
+      ]);
+      await settle(200);
+
+      cloud.emitActivity('t1', [
+        {
+          'id': 'a1',
+          'tripId': 't1',
+          'actorId': 'user_bob',
+          'action': 'move_stop',
+          'entityType': 'stop',
+          'entityId': 's1',
+          'summary': 'moved Uji Bridge to Day 2',
+          'createdAt': Timestamp.fromDate(DateTime.now().subtract(const Duration(hours: 1))),
+        },
+        {
+          'id': 'a_old',
+          'tripId': 't1',
+          'actorId': 'user_bob',
+          'action': 'add_stop',
+          'entityType': 'stop',
+          'entityId': 's2',
+          'summary': 'added Daikichiyama',
+          'createdAt': Timestamp.fromDate(DateTime.now().subtract(const Duration(days: 40))),
+        },
+      ]);
+      await settle(200);
+
+      final rows = await db.select(db.tripActivities).get();
+      expect(rows.map((r) => r.id), ['a1']);
+      expect(rows.single.summary, 'moved Uji Bridge to Day 2');
+      expect(rows.single.syncStatus, 0);
+    });
+  });
+
+  group('tombstones purged while away', () {
+    test('a server snapshot without an old clean stop hides it; recent, dirty and cached cases are left alone', () async {
+      final old = DateTime.now().subtract(const Duration(days: 45));
+      await sharedTrip('t1', owner: 'user_bob');
+      await stop('gone', 't1', updatedAt: old);
+      await stop('recent', 't1', updatedAt: DateTime.now().subtract(const Duration(days: 3)));
+      await stop('dirty', 't1', updatedAt: old, syncStatus: 1);
+      await stop('kept', 't1', updatedAt: old);
+
+      // Offline for pushes, so 'dirty' still has its local change when the snapshot arrives.
+      cloud.failCommit = true;
+      engine.startSync();
+      cloud.emitUserTrips([
+        {'id': 't1', 'title': 'Uji', 'ownerId': 'user_bob', 'sharing': 'group', 'dayCount': 2, 'updatedAt': DateTime.now()},
+      ]);
+      await settle(200);
+
+      Map<String, dynamic> doc(String id) => {
+            'id': id,
+            'tripId': 't1',
+            'placeKey': 'anitabi:$id',
+            'name': 'Stop $id',
+            'lat': 34.9,
+            'lng': 135.8,
+            'addedBy': me,
+            'updatedAt': old,
+          };
+
+      // From the cache: says nothing about what the server has.
+      cloud.emitStops('t1', RemoteDocList([doc('kept')], isFromCache: true));
+      await settle(200);
+      expect((await (db.select(db.stops)..where((s) => s.id.equals('gone'))).getSingle()).deletedAt, isNull);
+
+      // From the server: 'gone' was purged there.
+      cloud.emitStops('t1', RemoteDocList([doc('kept')], isFromCache: false));
+      await settle(200);
+
+      Future<Stop> row(String id) => (db.select(db.stops)..where((s) => s.id.equals(id))).getSingle();
+      expect((await row('gone')).deletedAt, isNotNull);
+      expect((await row('gone')).syncStatus, 0, reason: 'never pushed back');
+      expect((await row('recent')).deletedAt, isNull, reason: 'changed within 29 days, so it would still be on the server');
+      expect((await row('dirty')).deletedAt, isNull, reason: 'local edits are pushed, not dropped');
+      expect((await row('kept')).deletedAt, isNull);
+    });
+
+    test('a plain list (older callers) never hides anything', () async {
+      final old = DateTime.now().subtract(const Duration(days: 45));
+      await sharedTrip('t1', owner: 'user_bob');
+      await stop('gone', 't1', updatedAt: old);
+      engine.startSync();
+      cloud.emitUserTrips([
+        {'id': 't1', 'title': 'Uji', 'ownerId': 'user_bob', 'sharing': 'group', 'dayCount': 2, 'updatedAt': DateTime.now()},
+      ]);
+      await settle(200);
+      cloud.emitStops('t1', []);
+      await settle(200);
+      expect((await (db.select(db.stops)..where((s) => s.id.equals('gone'))).getSingle()).deletedAt, isNull);
+    });
+  });
+}

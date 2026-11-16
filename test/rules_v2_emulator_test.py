@@ -742,6 +742,115 @@ def main():
                                          'name': {'stringValue': 'x'}, 'updatedAt': {'integerValue': '1000'}}}, user_id='mallory')
     assert_status("id integrity: unicode id equal to path succeeds (200)", 200, code, resp=resp)
 
+    print("\n--- Testing the trash's TTL (expireAt), owner-only trip deletion and the activity log ---")
+
+    def ts(offset_days):
+        return {'timestampValue': time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime(int(time.time()) + int(offset_days * 86400)))}
+
+    def patch(path, fields, user):
+        mask = '&'.join(f'updateMask.fieldPaths={k}' for k in fields)
+        return api_request('PATCH', f'{path}?{mask}', {'fields': fields}, user_id=user)
+
+    # A shared trip owned by tina, with eddie as an editor and vic as a viewer.
+    code, resp = api_request('POST', 'tripsV2?documentId=trip_ttl', {'fields': {
+        'id': {'stringValue': 'trip_ttl'}, 'title': {'stringValue': 'TTL'}, 'ownerId': {'stringValue': 'tina'},
+        'sharing': {'stringValue': 'group'}, 'members': {'arrayValue': {'values': [{'stringValue': 'tina'}]}},
+        'updatedAt': {'integerValue': '1000'}}}, user_id='tina')
+    assert_status("TTL: owner creates trip_ttl (200)", 200, code, resp=resp)
+    code, resp = api_request('POST', 'tripsV2/trip_ttl/members?documentId=tina', {'fields': {
+        'userId': {'stringValue': 'tina'}, 'tripId': {'stringValue': 'trip_ttl'}, 'role': {'stringValue': 'owner'},
+        'displayName': {'stringValue': 'Tina'}}}, user_id='tina')
+    assert_status("TTL: owner member doc (200)", 200, code, resp=resp)
+    for who, role in [('eddie', 'editor'), ('vic', 'viewer')]:
+        token = f'token_ttl_{who}'
+        code, resp = api_request('POST', f'invites?documentId={token}', {'fields': {
+            'token': {'stringValue': token}, 'tripId': {'stringValue': 'trip_ttl'}, 'role': {'stringValue': role},
+            'createdBy': {'stringValue': 'tina'}, 'isRevoked': {'booleanValue': False},
+            'expiresAt': ts(6), 'tripTitle': {'stringValue': 'TTL'}}}, user_id='tina')
+        assert_status(f"TTL: invite for {who} (200)", 200, code, resp=resp)
+        code, resp = api_request('POST', f'tripsV2/trip_ttl/members?documentId={who}', {'fields': {
+            'userId': {'stringValue': who}, 'tripId': {'stringValue': 'trip_ttl'}, 'role': {'stringValue': role},
+            'inviteToken': {'stringValue': token}, 'displayName': {'stringValue': who}}}, user_id=who)
+        assert_status(f"TTL: {who} joins as {role} (200)", 200, code, resp=resp)
+
+    stop_path = 'tripsV2/trip_ttl/stops/stop_ttl'
+    code, resp = api_request('POST', 'tripsV2/trip_ttl/stops?documentId=stop_ttl', {'fields': {
+        'id': {'stringValue': 'stop_ttl'}, 'tripId': {'stringValue': 'trip_ttl'}, 'name': {'stringValue': 'Uji Bridge'},
+        'placeKey': {'stringValue': 'anitabi:1'}, 'updatedAt': {'integerValue': '1000'}, 'updatedBy': {'stringValue': 'tina'},
+        'deletedAt': {'nullValue': None}, 'expireAt': {'nullValue': None}}}, user_id='tina')
+    assert_status("TTL: live stop with expireAt null (200)", 200, code, resp=resp)
+
+    code, resp = patch(stop_path, {'expireAt': ts(30), 'updatedAt': {'integerValue': '2000'},
+                                   'updatedBy': {'stringValue': 'eddie'}}, 'eddie')
+    assert_status("TTL: expireAt on a live stop is denied (403)", 403, code, resp=resp)
+
+    code, resp = patch(stop_path, {'deletedAt': ts(0), 'expireAt': ts(30), 'updatedAt': {'integerValue': '2000'},
+                                   'updatedBy': {'stringValue': 'tina'}}, 'eddie')
+    assert_status("TTL: expireAt written in someone else's name is denied (403)", 403, code, resp=resp)
+
+    code, resp = patch(stop_path, {'deletedAt': ts(0), 'expireAt': ts(2), 'updatedAt': {'integerValue': '2000'},
+                                   'updatedBy': {'stringValue': 'eddie'}}, 'eddie')
+    assert_status("TTL: expireAt sooner than 29 days is denied (403)", 403, code, resp=resp)
+
+    code, resp = patch(stop_path, {'deletedAt': ts(0), 'expireAt': ts(30), 'updatedAt': {'integerValue': '2000'},
+                                   'updatedBy': {'stringValue': 'eddie'}}, 'eddie')
+    assert_status("TTL: editor deletes the stop with expireAt in 30 days (200)", 200, code, resp=resp)
+
+    code, resp = patch(stop_path, {'deletedAt': {'nullValue': None}, 'expireAt': {'nullValue': None},
+                                   'updatedAt': {'integerValue': '3000'}, 'updatedBy': {'stringValue': 'vic'}}, 'vic')
+    assert_status("TTL: viewer cannot restore (403)", 403, code, resp=resp)
+
+    code, resp = patch(stop_path, {'deletedAt': {'nullValue': None}, 'expireAt': {'nullValue': None},
+                                   'updatedAt': {'integerValue': '3000'}, 'updatedBy': {'stringValue': 'eddie'}}, 'eddie')
+    assert_status("TTL: editor restores the stop, clearing expireAt (200)", 200, code, resp=resp)
+
+    code, resp = patch('tripsV2/trip_ttl', {'deletedAt': ts(0), 'expireAt': ts(30), 'updatedAt': {'integerValue': '2000'},
+                                            'updatedBy': {'stringValue': 'eddie'}}, 'eddie')
+    assert_status("Trip deletion: editor cannot delete the trip (403)", 403, code, resp=resp)
+
+    code, resp = patch('tripsV2/trip_ttl', {'title': {'stringValue': 'TTL renamed'}, 'deletedAt': {'nullValue': None},
+                                            'updatedAt': {'integerValue': '2000'}, 'updatedBy': {'stringValue': 'eddie'}}, 'eddie')
+    assert_status("Trip deletion: editor can still rename a live trip (200)", 200, code, resp=resp)
+
+    code, resp = patch('tripsV2/trip_ttl', {'deletedAt': ts(0), 'expireAt': ts(30), 'updatedAt': {'integerValue': '3000'},
+                                            'updatedBy': {'stringValue': 'tina'}}, 'tina')
+    assert_status("Trip deletion: owner deletes the trip (200)", 200, code, resp=resp)
+
+    code, resp = patch('tripsV2/trip_ttl', {'deletedAt': {'nullValue': None}, 'expireAt': {'nullValue': None},
+                                            'updatedAt': {'integerValue': '4000'}, 'updatedBy': {'stringValue': 'eddie'}}, 'eddie')
+    assert_status("Trip deletion: editor cannot restore the trip (403)", 403, code, resp=resp)
+
+    code, resp = patch('tripsV2/trip_ttl', {'deletedAt': {'nullValue': None}, 'expireAt': {'nullValue': None},
+                                            'updatedAt': {'integerValue': '4000'}, 'updatedBy': {'stringValue': 'tina'}}, 'tina')
+    assert_status("Trip deletion: owner restores the trip (200)", 200, code, resp=resp)
+
+    def activity(entry_id, actor, **over):
+        fields = {
+            'id': {'stringValue': entry_id}, 'tripId': {'stringValue': 'trip_ttl'}, 'actorId': {'stringValue': actor},
+            'action': {'stringValue': 'remove_stop'}, 'entityType': {'stringValue': 'stop'},
+            'entityId': {'stringValue': 'stop_ttl'}, 'summary': {'stringValue': 'removed Uji Bridge'},
+            'createdAt': ts(0), 'expireAt': ts(30),
+        }
+        fields.update(over)
+        return {'fields': fields}
+
+    code, resp = api_request('POST', 'tripsV2/trip_ttl/activity?documentId=act_1', activity('act_1', 'eddie'), user_id='eddie')
+    assert_status("Activity: editor appends an entry in their own name (200)", 200, code, resp=resp)
+    code, resp = api_request('POST', 'tripsV2/trip_ttl/activity?documentId=act_2', activity('act_2', 'tina'), user_id='eddie')
+    assert_status("Activity: entry in someone else's name is denied (403)", 403, code, resp=resp)
+    code, resp = api_request('POST', 'tripsV2/trip_ttl/activity?documentId=act_3', activity('act_3', 'vic'), user_id='vic')
+    assert_status("Activity: viewer cannot write entries (403)", 403, code, resp=resp)
+    code, resp = api_request('POST', 'tripsV2/trip_ttl/activity?documentId=act_4', activity('act_4', 'eddie', expireAt=ts(400)), user_id='eddie')
+    assert_status("Activity: entry that never expires is denied (403)", 403, code, resp=resp)
+    code, resp = patch('tripsV2/trip_ttl/activity/act_1', {'summary': {'stringValue': 'edited'}}, 'eddie')
+    assert_status("Activity: entries can't be changed (403)", 403, code, resp=resp)
+    code, resp = api_request('DELETE', 'tripsV2/trip_ttl/activity/act_1', user_id='tina')
+    assert_status("Activity: entries can't be deleted, even by the owner (403)", 403, code, resp=resp)
+    code, resp = api_request('GET', 'tripsV2/trip_ttl/activity/act_1', user_id='vic')
+    assert_status("Activity: a viewer reads the log (200)", 200, code, resp=resp)
+    code, resp = api_request('GET', 'tripsV2/trip_ttl/activity/act_1', user_id='intruder_bob')
+    assert_status("Activity: a non-member can't read it (403)", 403, code, resp=resp)
+
     print(f"\nALL {tests_passed}/{tests_total} FIRESTORE RULES TESTS PASSED!")
 
 if __name__ == '__main__':

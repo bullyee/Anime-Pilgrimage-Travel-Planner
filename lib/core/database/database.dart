@@ -17,6 +17,8 @@ part 'database.g.dart';
   Stops,
   StopLabels,
   ScheduleItems,
+  TripActivities,
+  TripViews,
 ])
 class AppDatabase extends _$AppDatabase {
   AppDatabase() : super(db_connection.openConnection());
@@ -24,7 +26,7 @@ class AppDatabase extends _$AppDatabase {
   AppDatabase.forTesting(super.executor);
 
   @override
-  int get schemaVersion => 14;
+  int get schemaVersion => 15;
 
   @override
   MigrationStrategy get migration => MigrationStrategy(
@@ -40,6 +42,7 @@ class AppDatabase extends _$AppDatabase {
             ON labels(bangumi_id)
             WHERE bangumi_id IS NOT NULL;
           ''');
+          await _createActivityIndex();
         },
         onUpgrade: (m, from, to) async {
           if (from < 10) {
@@ -90,10 +93,20 @@ class AppDatabase extends _$AppDatabase {
               await customStatement('UPDATE photos SET keep_as_is = 1 WHERE keep_as_is = 0');
             }
           }
+          if (from < 15) {
+            // The activity log (What changed) and the unread dot (v0.4.0).
+            await m.createTable(tripActivities);
+            await m.createTable(tripViews);
+            await _createActivityIndex();
+          }
         },
         beforeOpen: (details) async {
           await customStatement('PRAGMA foreign_keys = ON');
         },
+      );
+
+  Future<void> _createActivityIndex() => customStatement(
+        'CREATE INDEX IF NOT EXISTS idx_trip_activities_trip_created ON trip_activities(trip_id, created_at)',
       );
 
   Future<bool> _hasColumn(String table, String column) async {

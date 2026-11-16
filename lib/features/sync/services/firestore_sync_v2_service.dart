@@ -1,3 +1,5 @@
+import 'dart:collection';
+
 import 'package:cloud_firestore/cloud_firestore.dart';
 import '../../../../core/database/database.dart';
 
@@ -20,6 +22,29 @@ Map<String, dynamic> withDocumentId(String docId, Map<String, dynamic> data) =>
     {...data, 'id': docId};
 
 /// Service responsible for communicating with Firestore under the new `/tripsV2/{tripId}` collection.
+/// The documents of one trip subcollection, as a list, plus whether the
+/// snapshot came from the local cache. A snapshot from the server is the whole
+/// collection, which is what lets the sync engine notice rows that are gone
+/// (tombstones Firestore purged after 30 days).
+class RemoteDocList extends ListBase<Map<String, dynamic>> {
+  final List<Map<String, dynamic>> _docs;
+  final bool isFromCache;
+
+  RemoteDocList(this._docs, {required this.isFromCache});
+
+  @override
+  int get length => _docs.length;
+
+  @override
+  set length(int value) => _docs.length = value;
+
+  @override
+  Map<String, dynamic> operator [](int index) => _docs[index];
+
+  @override
+  void operator []=(int index, Map<String, dynamic> value) => _docs[index] = value;
+}
+
 class FirestoreSyncV2Service {
   final FirebaseFirestore _db;
 
@@ -58,6 +83,17 @@ class FirestoreSyncV2Service {
   /// Create a Firestore WriteBatch.
   WriteBatch createBatch() => _db.batch();
 
+  /// How long Firestore keeps a deleted row (a tombstone) after it was last
+  /// pushed. A TTL policy on `expireAt` (days, stops, schedule_items, tripsV2,
+  /// set up in the Firebase Console) removes it after that; the app's trash
+  /// offers Restore for the same 30 days.
+  static const tombstoneLifetime = Duration(days: 30);
+
+  /// `expireAt` for a row: 30 days from now when it is deleted, null (no TTL)
+  /// when it is live, so a restore clears it again.
+  static Timestamp? tombstoneExpiry(DateTime? deletedAt, {DateTime? now}) =>
+      deletedAt == null ? null : Timestamp.fromDate((now ?? DateTime.now()).add(tombstoneLifetime));
+
   /// Commit a Firestore WriteBatch.
   Future<void> commitBatch(WriteBatch batch) => batch.commit();
 
@@ -78,6 +114,7 @@ class FirestoreSyncV2Service {
         'updatedAt': Timestamp.fromDate(trip.updatedAt),
         'updatedBy': trip.updatedBy,
         'deletedAt': trip.deletedAt != null ? Timestamp.fromDate(trip.deletedAt!) : null,
+        'expireAt': tombstoneExpiry(trip.deletedAt),
       },
       SetOptions(merge: true),
     );
@@ -101,6 +138,7 @@ class FirestoreSyncV2Service {
         'updatedAt': Timestamp.fromDate(day.updatedAt),
         'updatedBy': day.updatedBy,
         'deletedAt': day.deletedAt != null ? Timestamp.fromDate(day.deletedAt!) : null,
+        'expireAt': tombstoneExpiry(day.deletedAt),
       },
       SetOptions(merge: true),
     );
@@ -141,6 +179,7 @@ class FirestoreSyncV2Service {
       'updatedAt': Timestamp.fromDate(stop.updatedAt),
       'updatedBy': stop.updatedBy,
       'deletedAt': stop.deletedAt != null ? Timestamp.fromDate(stop.deletedAt!) : null,
+        'expireAt': tombstoneExpiry(stop.deletedAt),
     };
 
     if (labels != null) {
@@ -198,9 +237,46 @@ class FirestoreSyncV2Service {
         'updatedAt': Timestamp.fromDate(item.updatedAt),
         'updatedBy': item.updatedBy,
         'deletedAt': item.deletedAt != null ? Timestamp.fromDate(item.deletedAt!) : null,
+        'expireAt': tombstoneExpiry(item.deletedAt),
       },
       SetOptions(merge: true),
     );
+  }
+
+  /// Build batch operation for one activity log entry (What changed).
+  /// Entries are append-only: a plain set of a new document id.
+  void buildActivityBatchOperation(WriteBatch batch, TripActivity entry) {
+    final docRef = _db
+        .collection('tripsV2')
+        .doc(entry.tripId)
+        .collection('activity')
+        .doc(entry.id);
+    batch.set(docRef, {
+      'id': entry.id,
+      'tripId': entry.tripId,
+      'actorId': entry.actorId,
+      'action': entry.action,
+      'entityType': entry.entityType,
+      'entityId': entry.entityId,
+      'summary': entry.summary,
+      'createdAt': Timestamp.fromDate(entry.createdAt),
+      'expireAt': Timestamp.fromDate(entry.createdAt.add(tombstoneLifetime)),
+    });
+  }
+
+  /// Watch a trip's newest activity entries.
+  Stream<List<Map<String, dynamic>>> watchTripActivity(String tripId, {int limit = 200}) {
+    return _db
+        .collection('tripsV2')
+        .doc(tripId)
+        .collection('activity')
+        .orderBy('createdAt', descending: true)
+        .limit(limit)
+        .snapshots()
+        .map((snapshot) => RemoteDocList(
+              snapshot.docs.map((doc) => withDocumentId(doc.id, doc.data())).toList(),
+              isFromCache: snapshot.metadata.isFromCache,
+            ));
   }
 
   /// Watch trips accessible to the given user.
@@ -236,7 +312,10 @@ class FirestoreSyncV2Service {
         .collection('days')
         .snapshots(includeMetadataChanges: true)
         .where((snapshot) => !snapshot.metadata.hasPendingWrites)
-        .map((snapshot) => snapshot.docs.map((doc) => withDocumentId(doc.id, doc.data())).toList());
+        .map((snapshot) => RemoteDocList(
+              snapshot.docs.map((doc) => withDocumentId(doc.id, doc.data())).toList(),
+              isFromCache: snapshot.metadata.isFromCache,
+            ));
   }
 
   /// Watch stops of a specific trip.
@@ -247,7 +326,10 @@ class FirestoreSyncV2Service {
         .collection('stops')
         .snapshots(includeMetadataChanges: true)
         .where((snapshot) => !snapshot.metadata.hasPendingWrites)
-        .map((snapshot) => snapshot.docs.map((doc) => withDocumentId(doc.id, doc.data())).toList());
+        .map((snapshot) => RemoteDocList(
+              snapshot.docs.map((doc) => withDocumentId(doc.id, doc.data())).toList(),
+              isFromCache: snapshot.metadata.isFromCache,
+            ));
   }
 
   /// Watch schedule items of a specific trip.
@@ -258,6 +340,9 @@ class FirestoreSyncV2Service {
         .collection('schedule_items')
         .snapshots(includeMetadataChanges: true)
         .where((snapshot) => !snapshot.metadata.hasPendingWrites)
-        .map((snapshot) => snapshot.docs.map((doc) => withDocumentId(doc.id, doc.data())).toList());
+        .map((snapshot) => RemoteDocList(
+              snapshot.docs.map((doc) => withDocumentId(doc.id, doc.data())).toList(),
+              isFromCache: snapshot.metadata.isFromCache,
+            ));
   }
 }

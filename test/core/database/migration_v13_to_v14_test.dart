@@ -11,7 +11,7 @@ void main() {
       final db = AppDatabase.forTesting(NativeDatabase.memory());
       addTearDown(db.close);
 
-      expect(db.schemaVersion, equals(14));
+      expect(db.schemaVersion, greaterThanOrEqualTo(14));
 
       final rawColsPlaces = await db.customSelect('PRAGMA table_info(places)').get();
       final colNamesPlaces = rawColsPlaces.map((c) => c.read<String>('name')).toSet();
@@ -84,7 +84,7 @@ void main() {
 
       // Verify schema version bumped
       final versionResult = await db.customSelect('PRAGMA user_version').getSingle();
-      expect(versionResult.read<int>('user_version'), equals(14));
+      expect(versionResult.read<int>('user_version'), greaterThanOrEqualTo(14));
 
       // Verify columns added
       final rawColsPlaces = await db.customSelect('PRAGMA table_info(places)').get();

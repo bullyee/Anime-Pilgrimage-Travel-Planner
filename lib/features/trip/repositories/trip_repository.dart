@@ -4,6 +4,7 @@ import '../../../core/database/database.dart';
 import '../../../core/utils/fractional_index.dart';
 import '../../../core/utils/schedule_logic.dart';
 import '../../library/repositories/place_repository.dart';
+import '../services/trip_activity_log.dart';
 
 /// The trip note of stops merged into one: [kept]'s, then each other one
 /// that isn't already there, a blank line apart. Null when none has a note.
@@ -136,6 +137,19 @@ class DriftTripRepository implements TripRepository {
   final String _currentUserId;
   final PlaceRepository _placeRepository;
   int _lastTimestampMs = 0;
+  late final TripActivityLog _activity = TripActivityLog(_db, _uuid);
+
+  /// Adds an entry to the trip's activity log (shared trips only), inside the
+  /// caller's transaction so the entry and the change go up together.
+  Future<void> _log(String tripId, TripActivityAction action, String entityType, String entityId, String summary) =>
+      _activity.record(
+        tripId: tripId,
+        actorId: _currentUserId,
+        action: action,
+        entityType: entityType,
+        entityId: entityId,
+        summary: summary,
+      );
 
   DriftTripRepository(
     this._db, [
@@ -231,13 +245,26 @@ class DriftTripRepository implements TripRepository {
   @override
   Future<void> updateTrip(TripsCompanion trip) {
     final now = _now();
-    return (_db.update(_db.trips)..where((tbl) => tbl.id.equals(trip.id.value))).write(
-      trip.copyWith(
-        updatedAt: Value(now),
-        updatedBy: trip.updatedBy.present ? trip.updatedBy : Value(_currentUserId),
-        syncStatus: const Value(1),
-      ),
-    );
+    return _db.transaction(() async {
+      await (_db.update(_db.trips)..where((tbl) => tbl.id.equals(trip.id.value))).write(
+        trip.copyWith(
+          updatedAt: Value(now),
+          updatedBy: trip.updatedBy.present ? trip.updatedBy : Value(_currentUserId),
+          syncStatus: const Value(1),
+        ),
+      );
+      final String summary;
+      if (trip.title.present) {
+        summary = 'renamed the trip to "${trip.title.value}"';
+      } else if (trip.startDate.present || trip.dayCount.present) {
+        summary = "changed the trip's dates";
+      } else if (trip.description.present) {
+        summary = "edited the trip's description";
+      } else {
+        return;
+      }
+      await _log(trip.id.value, TripActivityAction.updateTrip, 'trip', trip.id.value, summary);
+    });
   }
 
   @override
@@ -276,6 +303,7 @@ class DriftTripRepository implements TripRepository {
           syncStatus: const Value(1),
         ),
       );
+      await _log(tripId, TripActivityAction.deleteTrip, 'trip', tripId, 'deleted the trip');
     });
   }
 
@@ -348,6 +376,7 @@ class DriftTripRepository implements TripRepository {
       );
 
       await _db.into(_db.tripDays).insert(companion);
+      await _log(tripId, TripActivityAction.addDay, 'day', dayId, 'added ${await _activity.dayLabel(tripId, dayId)}');
       return await (_db.select(_db.tripDays)..where((tbl) => tbl.id.equals(dayId))).getSingle();
     });
   }
@@ -391,6 +420,12 @@ class DriftTripRepository implements TripRepository {
           syncStatus: const Value(1),
         ),
       );
+      if (day.title.present) {
+        final label = await _activity.dayLabel(current.tripId, dayId);
+        final title = day.title.value?.trim();
+        await _log(current.tripId, TripActivityAction.updateDay, 'day', dayId,
+            title == null || title.isEmpty ? 'cleared the name of $label' : 'named $label');
+      }
     });
   }
 
@@ -398,6 +433,8 @@ class DriftTripRepository implements TripRepository {
   Future<void> deleteDayBlock(String dayId) async {
     final now = _now();
     await _db.transaction(() async {
+      final day = await (_db.select(_db.tripDays)..where((tbl) => tbl.id.equals(dayId))).getSingleOrNull();
+      final label = day == null ? null : await _activity.dayLabel(day.tripId, dayId);
       await (_db.update(_db.tripDays)..where((tbl) => tbl.id.equals(dayId))).write(
         TripDaysCompanion(
           deletedAt: Value(now),
@@ -414,6 +451,9 @@ class DriftTripRepository implements TripRepository {
           syncStatus: const Value(1),
         ),
       );
+      if (day != null && day.deletedAt == null) {
+        await _log(day.tripId, TripActivityAction.removeDay, 'day', dayId, 'deleted $label');
+      }
     });
   }
 
@@ -422,6 +462,8 @@ class DriftTripRepository implements TripRepository {
     await _db.transaction(() async {
       final dayA = await (_db.select(_db.tripDays)..where((tbl) => tbl.id.equals(dayIdA))).getSingle();
       final dayB = await (_db.select(_db.tripDays)..where((tbl) => tbl.id.equals(dayIdB))).getSingle();
+      final labelA = await _activity.dayLabel(dayA.tripId, dayIdA);
+      final labelB = await _activity.dayLabel(dayB.tripId, dayIdB);
 
       final now = _now();
       await (_db.update(_db.tripDays)..where((tbl) => tbl.id.equals(dayIdA))).write(
@@ -440,6 +482,7 @@ class DriftTripRepository implements TripRepository {
           syncStatus: const Value(1),
         ),
       );
+      await _log(dayA.tripId, TripActivityAction.moveDay, 'day', dayIdA, 'swapped $labelA and $labelB');
     });
   }
 
@@ -481,6 +524,9 @@ class DriftTripRepository implements TripRepository {
           syncStatus: const Value(1),
         ),
       );
+      final label = await _activity.dayLabel(targetDay.tripId, dayId);
+      await _log(targetDay.tripId, TripActivityAction.updateDay, 'day', dayId,
+          pinnedDate == null ? 'unpinned $label from its date' : 'pinned $label to $pinnedDate');
     });
   }
 
@@ -508,6 +554,7 @@ class DriftTripRepository implements TripRepository {
         );
       }
 
+      final before = await _activity.dayLabel(targetDay.tripId, dayId, days: allDays);
       await (_db.update(_db.tripDays)..where((tbl) => tbl.id.equals(dayId))).write(
         TripDaysCompanion(
           sortKey: Value(newSortKey),
@@ -516,6 +563,10 @@ class DriftTripRepository implements TripRepository {
           syncStatus: const Value(1),
         ),
       );
+      final after = await _activity.dayLabel(targetDay.tripId, dayId);
+      if (after != before) {
+        await _log(targetDay.tripId, TripActivityAction.moveDay, 'day', dayId, 'moved $before to ${after.split(' (').first}');
+      }
     });
   }
 
@@ -624,6 +675,7 @@ class DriftTripRepository implements TripRepository {
             );
       }
 
+      await _log(tripId, TripActivityAction.addStop, 'stop', stopId, 'added ${place.name}');
       return await (_db.select(_db.stops)..where((tbl) => tbl.id.equals(stopId))).getSingle();
     });
   }
@@ -662,13 +714,28 @@ class DriftTripRepository implements TripRepository {
   @override
   Future<void> updateStop(StopsCompanion stop) {
     final now = _now();
-    return (_db.update(_db.stops)..where((tbl) => tbl.id.equals(stop.id.value))).write(
-      stop.copyWith(
-        updatedAt: Value(now),
-        updatedBy: stop.updatedBy.present ? stop.updatedBy : Value(_currentUserId),
-        syncStatus: const Value(1),
-      ),
-    );
+    return _db.transaction(() async {
+      final before = await getStop(stop.id.value);
+      await (_db.update(_db.stops)..where((tbl) => tbl.id.equals(stop.id.value))).write(
+        stop.copyWith(
+          updatedAt: Value(now),
+          updatedBy: stop.updatedBy.present ? stop.updatedBy : Value(_currentUserId),
+          syncStatus: const Value(1),
+        ),
+      );
+      if (before == null) return;
+      final String summary;
+      if (stop.name.present && stop.name.value != before.name) {
+        summary = 'renamed ${before.name} to ${stop.name.value}';
+      } else if (stop.note.present) {
+        summary = 'edited the note on ${before.name}';
+      } else if (stop.lat.present || stop.lng.present) {
+        summary = 'moved the pin of ${before.name}';
+      } else {
+        summary = 'edited ${before.name}';
+      }
+      await _log(before.tripId, TripActivityAction.updateStop, 'stop', before.id, summary);
+    });
   }
 
   @override
@@ -687,13 +754,21 @@ class DriftTripRepository implements TripRepository {
           syncStatus: const Value(1),
         ),
       );
+      final stops = await (_db.select(_db.stops)..where((tbl) => tbl.id.isIn(stopIds) & tbl.deletedAt.isNull())).get();
+      if (stops.isEmpty) return;
+      final names = stopNames([for (final s in stops) s.name]);
+      await _log(stops.first.tripId, TripActivityAction.groupStops, 'stop', stops.first.id,
+          normalizedArea == null ? 'ungrouped $names' : 'grouped $names as "$normalizedArea"');
     });
   }
 
   @override
-  Future<void> deleteStop(String stopId) async {
+  Future<void> deleteStop(String stopId) => _deleteStop(stopId);
+
+  Future<void> _deleteStop(String stopId, {bool log = true}) async {
     final now = _now();
     await _db.transaction(() async {
+      final stop = await getStop(stopId);
       await (_db.update(_db.stops)..where((tbl) => tbl.id.equals(stopId))).write(
         StopsCompanion(
           deletedAt: Value(now),
@@ -710,6 +785,9 @@ class DriftTripRepository implements TripRepository {
           syncStatus: const Value(1),
         ),
       );
+      if (log && stop != null && stop.deletedAt == null) {
+        await _log(stop.tripId, TripActivityAction.removeStop, 'stop', stopId, 'removed ${stop.name}');
+      }
     });
   }
 
@@ -792,8 +870,10 @@ class DriftTripRepository implements TripRepository {
         syncStatus: const Value(1),
       ));
       for (final other in others) {
-        await deleteStop(other.id);
+        await _deleteStop(other.id, log: false);
       }
+      await _log(kept.tripId, TripActivityAction.mergeStops, 'stop', keepId,
+          'merged ${stopNames([for (final o in others) o.name])} into ${kept.name}');
     });
   }
 
@@ -961,6 +1041,8 @@ class DriftTripRepository implements TripRepository {
       );
 
       await _db.into(_db.scheduleItems).insert(companion);
+      await _log(tripId, TripActivityAction.scheduleStop, 'stop', stopId,
+          'planned ${await _activity.stopName(stopId)} on ${await _activity.dayLabel(tripId, dayId)}');
       return await (_db.select(_db.scheduleItems)..where((tbl) => tbl.id.equals(itemId))).getSingle();
     });
   }
@@ -1019,6 +1101,9 @@ class DriftTripRepository implements TripRepository {
             );
       }
 
+      final names = [for (final id in stopIds) await _activity.stopName(id)];
+      await _log(tripId, TripActivityAction.scheduleStop, 'stop', stopIds.first,
+          'planned ${stopNames(names)} on ${await _activity.dayLabel(tripId, dayId)}');
       final inserted = await (_db.select(_db.scheduleItems)
             ..where((tbl) => tbl.id.isIn(createdIds)))
           .get();
@@ -1030,13 +1115,24 @@ class DriftTripRepository implements TripRepository {
   @override
   Future<void> updateScheduleItem(ScheduleItemsCompanion item) {
     final now = _now();
-    return (_db.update(_db.scheduleItems)..where((tbl) => tbl.id.equals(item.id.value))).write(
-      item.copyWith(
-        updatedAt: Value(now),
-        updatedBy: item.updatedBy.present ? item.updatedBy : Value(_currentUserId),
-        syncStatus: const Value(1),
-      ),
-    );
+    return _db.transaction(() async {
+      final before = await (_db.select(_db.scheduleItems)..where((tbl) => tbl.id.equals(item.id.value))).getSingleOrNull();
+      await (_db.update(_db.scheduleItems)..where((tbl) => tbl.id.equals(item.id.value))).write(
+        item.copyWith(
+          updatedAt: Value(now),
+          updatedBy: item.updatedBy.present ? item.updatedBy : Value(_currentUserId),
+          syncStatus: const Value(1),
+        ),
+      );
+      if (before == null) return;
+      final name = await _activity.stopName(before.stopId);
+      final day = await _activity.dayLabel(before.tripId, before.dayId);
+      if (item.deletedAt.present && item.deletedAt.value == null && before.deletedAt != null) {
+        await _log(before.tripId, TripActivityAction.scheduleStop, 'stop', before.stopId, 'put $name back on $day');
+      } else if (item.fixedTime.present || item.stayMinutes.present || item.transitMinutes.present) {
+        await _log(before.tripId, TripActivityAction.changeTime, 'stop', before.stopId, "changed $name's times on $day");
+      }
+    });
   }
 
   @override
@@ -1046,15 +1142,34 @@ class DriftTripRepository implements TripRepository {
     String? targetDayId,
   }) {
     final now = _now();
-    return (_db.update(_db.scheduleItems)..where((tbl) => tbl.id.equals(itemId))).write(
-      ScheduleItemsCompanion(
-        sortKey: Value(newSortKey),
-        dayId: targetDayId != null ? Value(targetDayId) : const Value.absent(),
-        updatedAt: Value(now),
-        updatedBy: Value(_currentUserId),
-        syncStatus: const Value(1),
-      ),
-    );
+    return _db.transaction(() async {
+      final before = await (_db.select(_db.scheduleItems)..where((tbl) => tbl.id.equals(itemId))).getSingleOrNull();
+      await (_db.update(_db.scheduleItems)..where((tbl) => tbl.id.equals(itemId))).write(
+        ScheduleItemsCompanion(
+          sortKey: Value(newSortKey),
+          dayId: targetDayId != null ? Value(targetDayId) : const Value.absent(),
+          updatedAt: Value(now),
+          updatedBy: Value(_currentUserId),
+          syncStatus: const Value(1),
+        ),
+      );
+      if (before != null) await _logMoves(before.tripId, [before], targetDayId);
+    });
+  }
+
+  /// "moved Uji Bridge to Day 3" when items changed day; "reordered Day 2"
+  /// when they only changed places within it.
+  Future<void> _logMoves(String tripId, List<ScheduleItem> before, String? targetDayId) async {
+    if (before.isEmpty) return;
+    final movedDays = targetDayId != null && before.any((i) => i.dayId != targetDayId);
+    if (movedDays) {
+      final names = [for (final i in before) await _activity.stopName(i.stopId)];
+      await _log(tripId, TripActivityAction.moveStop, 'stop', before.first.stopId,
+          'moved ${stopNames(names)} to ${await _activity.dayLabel(tripId, targetDayId!)}');
+    } else {
+      final dayId = before.first.dayId;
+      await _log(tripId, TripActivityAction.moveDay, 'day', dayId, 'reordered ${await _activity.dayLabel(tripId, dayId)}');
+    }
   }
 
   @override
@@ -1075,6 +1190,7 @@ class DriftTripRepository implements TripRepository {
 
     final resolvedDayId = dayId ?? targetDayId;
     await _db.transaction(() async {
+      final before = await (_db.select(_db.scheduleItems)..where((tbl) => tbl.id.isIn(itemIds))).get();
       final now = _now();
       for (int i = 0; i < itemIds.length; i++) {
         await (_db.update(_db.scheduleItems)..where((tbl) => tbl.id.equals(itemIds[i]))).write(
@@ -1087,6 +1203,7 @@ class DriftTripRepository implements TripRepository {
           ),
         );
       }
+      if (before.isNotEmpty) await _logMoves(before.first.tripId, before, resolvedDayId);
     });
   }
 
@@ -1096,33 +1213,37 @@ class DriftTripRepository implements TripRepository {
     required String status,
   }) {
     final now = _now();
-    return (_db.update(_db.scheduleItems)..where((tbl) => tbl.id.equals(itemId))).write(
-      ScheduleItemsCompanion(
-        status: Value(status),
-        updatedAt: Value(now),
-        updatedBy: Value(_currentUserId),
-        syncStatus: const Value(1),
-      ),
-    );
+    return _db.transaction(() async {
+      final before = await (_db.select(_db.scheduleItems)..where((tbl) => tbl.id.equals(itemId))).getSingleOrNull();
+      await (_db.update(_db.scheduleItems)..where((tbl) => tbl.id.equals(itemId))).write(
+        ScheduleItemsCompanion(
+          status: Value(status),
+          updatedAt: Value(now),
+          updatedBy: Value(_currentUserId),
+          syncStatus: const Value(1),
+        ),
+      );
+      if (before == null || before.status == status) return;
+      final name = await _activity.stopName(before.stopId);
+      final summary = switch (status) {
+        'done' => 'marked $name done',
+        'skipped' => 'skipped $name',
+        _ => 'marked $name not done',
+      };
+      await _log(before.tripId, TripActivityAction.setVisited, 'stop', before.stopId, summary);
+    });
   }
 
   @override
-  Future<void> deleteScheduleItem(String itemId) {
-    final now = _now();
-    return (_db.update(_db.scheduleItems)..where((tbl) => tbl.id.equals(itemId))).write(
-      ScheduleItemsCompanion(
-        deletedAt: Value(now),
-        updatedAt: Value(now),
-        updatedBy: Value(_currentUserId),
-        syncStatus: const Value(1),
-      ),
-    );
-  }
+  Future<void> deleteScheduleItem(String itemId) => deleteScheduleItems([itemId]);
 
   @override
   Future<void> deleteScheduleItems(List<String> itemIds) async {
     if (itemIds.isEmpty) return;
     await _db.transaction(() async {
+      final before = await (_db.select(_db.scheduleItems)
+            ..where((tbl) => tbl.id.isIn(itemIds) & tbl.deletedAt.isNull()))
+          .get();
       final now = _now();
       await (_db.update(_db.scheduleItems)..where((tbl) => tbl.id.isIn(itemIds))).write(
         ScheduleItemsCompanion(
@@ -1132,6 +1253,12 @@ class DriftTripRepository implements TripRepository {
           syncStatus: const Value(1),
         ),
       );
+      if (before.isEmpty) return;
+      final names = [for (final i in before) await _activity.stopName(i.stopId)];
+      final days = {for (final i in before) i.dayId};
+      final from = days.length == 1 ? await _activity.dayLabel(before.first.tripId, days.first) : 'their days';
+      await _log(before.first.tripId, TripActivityAction.unscheduleStop, 'stop', before.first.stopId,
+          'took ${stopNames(names)} off $from');
     });
   }
 
@@ -1158,6 +1285,8 @@ class DriftTripRepository implements TripRepository {
           syncStatus: const Value(1),
         ),
       );
+
+      await _log(stop.tripId, TripActivityAction.restoreStop, 'stop', stopId, 'restored ${stop.name}');
 
       // Revive schedule items that were deleted at the same time as this stop
       await (_db.update(_db.scheduleItems)
@@ -1195,6 +1324,8 @@ class DriftTripRepository implements TripRepository {
           syncStatus: const Value(1),
         ),
       );
+
+      await _log(day.tripId, TripActivityAction.restoreDay, 'day', dayId, 'restored ${await _activity.dayLabel(day.tripId, dayId)}');
 
       // Revive schedule items deleted with this day whose stops are still active
       final liveStops = await (_db.select(_db.stops)
@@ -1266,6 +1397,7 @@ class DriftTripRepository implements TripRepository {
         updatedBy: Value(_currentUserId),
         syncStatus: const Value(1),
       ));
+      await _log(tripId, TripActivityAction.restoreTrip, 'trip', tripId, 'restored the trip');
     });
   }
 }

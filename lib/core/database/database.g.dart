@@ -6991,6 +6991,831 @@ class ScheduleItemsCompanion extends UpdateCompanion<ScheduleItem> {
   }
 }
 
+class $TripActivitiesTable extends TripActivities
+    with TableInfo<$TripActivitiesTable, TripActivity> {
+  @override
+  final GeneratedDatabase attachedDatabase;
+  final String? _alias;
+  $TripActivitiesTable(this.attachedDatabase, [this._alias]);
+  static const VerificationMeta _idMeta = const VerificationMeta('id');
+  @override
+  late final GeneratedColumn<String> id = GeneratedColumn<String>(
+    'id',
+    aliasedName,
+    false,
+    type: DriftSqlType.string,
+    requiredDuringInsert: true,
+  );
+  static const VerificationMeta _tripIdMeta = const VerificationMeta('tripId');
+  @override
+  late final GeneratedColumn<String> tripId = GeneratedColumn<String>(
+    'trip_id',
+    aliasedName,
+    false,
+    type: DriftSqlType.string,
+    requiredDuringInsert: true,
+    defaultConstraints: GeneratedColumn.constraintIsAlways(
+      'REFERENCES trips (id) ON DELETE CASCADE',
+    ),
+  );
+  static const VerificationMeta _actorIdMeta = const VerificationMeta(
+    'actorId',
+  );
+  @override
+  late final GeneratedColumn<String> actorId = GeneratedColumn<String>(
+    'actor_id',
+    aliasedName,
+    false,
+    type: DriftSqlType.string,
+    requiredDuringInsert: true,
+  );
+  static const VerificationMeta _actionMeta = const VerificationMeta('action');
+  @override
+  late final GeneratedColumn<String> action = GeneratedColumn<String>(
+    'action',
+    aliasedName,
+    false,
+    type: DriftSqlType.string,
+    requiredDuringInsert: true,
+  );
+  static const VerificationMeta _entityTypeMeta = const VerificationMeta(
+    'entityType',
+  );
+  @override
+  late final GeneratedColumn<String> entityType = GeneratedColumn<String>(
+    'entity_type',
+    aliasedName,
+    false,
+    type: DriftSqlType.string,
+    requiredDuringInsert: true,
+  );
+  static const VerificationMeta _entityIdMeta = const VerificationMeta(
+    'entityId',
+  );
+  @override
+  late final GeneratedColumn<String> entityId = GeneratedColumn<String>(
+    'entity_id',
+    aliasedName,
+    false,
+    type: DriftSqlType.string,
+    requiredDuringInsert: true,
+  );
+  static const VerificationMeta _summaryMeta = const VerificationMeta(
+    'summary',
+  );
+  @override
+  late final GeneratedColumn<String> summary = GeneratedColumn<String>(
+    'summary',
+    aliasedName,
+    false,
+    type: DriftSqlType.string,
+    requiredDuringInsert: true,
+  );
+  @override
+  late final GeneratedColumnWithTypeConverter<DateTime, int> createdAt =
+      GeneratedColumn<int>(
+        'created_at',
+        aliasedName,
+        false,
+        type: DriftSqlType.int,
+        requiredDuringInsert: true,
+      ).withConverter<DateTime>($TripActivitiesTable.$convertercreatedAt);
+  static const VerificationMeta _syncStatusMeta = const VerificationMeta(
+    'syncStatus',
+  );
+  @override
+  late final GeneratedColumn<int> syncStatus = GeneratedColumn<int>(
+    'sync_status',
+    aliasedName,
+    false,
+    type: DriftSqlType.int,
+    requiredDuringInsert: false,
+    defaultValue: const Constant(0),
+  );
+  @override
+  List<GeneratedColumn> get $columns => [
+    id,
+    tripId,
+    actorId,
+    action,
+    entityType,
+    entityId,
+    summary,
+    createdAt,
+    syncStatus,
+  ];
+  @override
+  String get aliasedName => _alias ?? actualTableName;
+  @override
+  String get actualTableName => $name;
+  static const String $name = 'trip_activities';
+  @override
+  VerificationContext validateIntegrity(
+    Insertable<TripActivity> instance, {
+    bool isInserting = false,
+  }) {
+    final context = VerificationContext();
+    final data = instance.toColumns(true);
+    if (data.containsKey('id')) {
+      context.handle(_idMeta, id.isAcceptableOrUnknown(data['id']!, _idMeta));
+    } else if (isInserting) {
+      context.missing(_idMeta);
+    }
+    if (data.containsKey('trip_id')) {
+      context.handle(
+        _tripIdMeta,
+        tripId.isAcceptableOrUnknown(data['trip_id']!, _tripIdMeta),
+      );
+    } else if (isInserting) {
+      context.missing(_tripIdMeta);
+    }
+    if (data.containsKey('actor_id')) {
+      context.handle(
+        _actorIdMeta,
+        actorId.isAcceptableOrUnknown(data['actor_id']!, _actorIdMeta),
+      );
+    } else if (isInserting) {
+      context.missing(_actorIdMeta);
+    }
+    if (data.containsKey('action')) {
+      context.handle(
+        _actionMeta,
+        action.isAcceptableOrUnknown(data['action']!, _actionMeta),
+      );
+    } else if (isInserting) {
+      context.missing(_actionMeta);
+    }
+    if (data.containsKey('entity_type')) {
+      context.handle(
+        _entityTypeMeta,
+        entityType.isAcceptableOrUnknown(data['entity_type']!, _entityTypeMeta),
+      );
+    } else if (isInserting) {
+      context.missing(_entityTypeMeta);
+    }
+    if (data.containsKey('entity_id')) {
+      context.handle(
+        _entityIdMeta,
+        entityId.isAcceptableOrUnknown(data['entity_id']!, _entityIdMeta),
+      );
+    } else if (isInserting) {
+      context.missing(_entityIdMeta);
+    }
+    if (data.containsKey('summary')) {
+      context.handle(
+        _summaryMeta,
+        summary.isAcceptableOrUnknown(data['summary']!, _summaryMeta),
+      );
+    } else if (isInserting) {
+      context.missing(_summaryMeta);
+    }
+    if (data.containsKey('sync_status')) {
+      context.handle(
+        _syncStatusMeta,
+        syncStatus.isAcceptableOrUnknown(data['sync_status']!, _syncStatusMeta),
+      );
+    }
+    return context;
+  }
+
+  @override
+  Set<GeneratedColumn> get $primaryKey => {id};
+  @override
+  TripActivity map(Map<String, dynamic> data, {String? tablePrefix}) {
+    final effectivePrefix = tablePrefix != null ? '$tablePrefix.' : '';
+    return TripActivity(
+      id: attachedDatabase.typeMapping.read(
+        DriftSqlType.string,
+        data['${effectivePrefix}id'],
+      )!,
+      tripId: attachedDatabase.typeMapping.read(
+        DriftSqlType.string,
+        data['${effectivePrefix}trip_id'],
+      )!,
+      actorId: attachedDatabase.typeMapping.read(
+        DriftSqlType.string,
+        data['${effectivePrefix}actor_id'],
+      )!,
+      action: attachedDatabase.typeMapping.read(
+        DriftSqlType.string,
+        data['${effectivePrefix}action'],
+      )!,
+      entityType: attachedDatabase.typeMapping.read(
+        DriftSqlType.string,
+        data['${effectivePrefix}entity_type'],
+      )!,
+      entityId: attachedDatabase.typeMapping.read(
+        DriftSqlType.string,
+        data['${effectivePrefix}entity_id'],
+      )!,
+      summary: attachedDatabase.typeMapping.read(
+        DriftSqlType.string,
+        data['${effectivePrefix}summary'],
+      )!,
+      createdAt: $TripActivitiesTable.$convertercreatedAt.fromSql(
+        attachedDatabase.typeMapping.read(
+          DriftSqlType.int,
+          data['${effectivePrefix}created_at'],
+        )!,
+      ),
+      syncStatus: attachedDatabase.typeMapping.read(
+        DriftSqlType.int,
+        data['${effectivePrefix}sync_status'],
+      )!,
+    );
+  }
+
+  @override
+  $TripActivitiesTable createAlias(String alias) {
+    return $TripActivitiesTable(attachedDatabase, alias);
+  }
+
+  static TypeConverter<DateTime, int> $convertercreatedAt =
+      const MillisecondDateTimeConverter();
+}
+
+class TripActivity extends DataClass implements Insertable<TripActivity> {
+  final String id;
+  final String tripId;
+  final String actorId;
+  final String action;
+  final String entityType;
+  final String entityId;
+  final String summary;
+  final DateTime createdAt;
+  final int syncStatus;
+  const TripActivity({
+    required this.id,
+    required this.tripId,
+    required this.actorId,
+    required this.action,
+    required this.entityType,
+    required this.entityId,
+    required this.summary,
+    required this.createdAt,
+    required this.syncStatus,
+  });
+  @override
+  Map<String, Expression> toColumns(bool nullToAbsent) {
+    final map = <String, Expression>{};
+    map['id'] = Variable<String>(id);
+    map['trip_id'] = Variable<String>(tripId);
+    map['actor_id'] = Variable<String>(actorId);
+    map['action'] = Variable<String>(action);
+    map['entity_type'] = Variable<String>(entityType);
+    map['entity_id'] = Variable<String>(entityId);
+    map['summary'] = Variable<String>(summary);
+    {
+      map['created_at'] = Variable<int>(
+        $TripActivitiesTable.$convertercreatedAt.toSql(createdAt),
+      );
+    }
+    map['sync_status'] = Variable<int>(syncStatus);
+    return map;
+  }
+
+  TripActivitiesCompanion toCompanion(bool nullToAbsent) {
+    return TripActivitiesCompanion(
+      id: Value(id),
+      tripId: Value(tripId),
+      actorId: Value(actorId),
+      action: Value(action),
+      entityType: Value(entityType),
+      entityId: Value(entityId),
+      summary: Value(summary),
+      createdAt: Value(createdAt),
+      syncStatus: Value(syncStatus),
+    );
+  }
+
+  factory TripActivity.fromJson(
+    Map<String, dynamic> json, {
+    ValueSerializer? serializer,
+  }) {
+    serializer ??= driftRuntimeOptions.defaultSerializer;
+    return TripActivity(
+      id: serializer.fromJson<String>(json['id']),
+      tripId: serializer.fromJson<String>(json['tripId']),
+      actorId: serializer.fromJson<String>(json['actorId']),
+      action: serializer.fromJson<String>(json['action']),
+      entityType: serializer.fromJson<String>(json['entityType']),
+      entityId: serializer.fromJson<String>(json['entityId']),
+      summary: serializer.fromJson<String>(json['summary']),
+      createdAt: serializer.fromJson<DateTime>(json['createdAt']),
+      syncStatus: serializer.fromJson<int>(json['syncStatus']),
+    );
+  }
+  @override
+  Map<String, dynamic> toJson({ValueSerializer? serializer}) {
+    serializer ??= driftRuntimeOptions.defaultSerializer;
+    return <String, dynamic>{
+      'id': serializer.toJson<String>(id),
+      'tripId': serializer.toJson<String>(tripId),
+      'actorId': serializer.toJson<String>(actorId),
+      'action': serializer.toJson<String>(action),
+      'entityType': serializer.toJson<String>(entityType),
+      'entityId': serializer.toJson<String>(entityId),
+      'summary': serializer.toJson<String>(summary),
+      'createdAt': serializer.toJson<DateTime>(createdAt),
+      'syncStatus': serializer.toJson<int>(syncStatus),
+    };
+  }
+
+  TripActivity copyWith({
+    String? id,
+    String? tripId,
+    String? actorId,
+    String? action,
+    String? entityType,
+    String? entityId,
+    String? summary,
+    DateTime? createdAt,
+    int? syncStatus,
+  }) => TripActivity(
+    id: id ?? this.id,
+    tripId: tripId ?? this.tripId,
+    actorId: actorId ?? this.actorId,
+    action: action ?? this.action,
+    entityType: entityType ?? this.entityType,
+    entityId: entityId ?? this.entityId,
+    summary: summary ?? this.summary,
+    createdAt: createdAt ?? this.createdAt,
+    syncStatus: syncStatus ?? this.syncStatus,
+  );
+  TripActivity copyWithCompanion(TripActivitiesCompanion data) {
+    return TripActivity(
+      id: data.id.present ? data.id.value : this.id,
+      tripId: data.tripId.present ? data.tripId.value : this.tripId,
+      actorId: data.actorId.present ? data.actorId.value : this.actorId,
+      action: data.action.present ? data.action.value : this.action,
+      entityType: data.entityType.present
+          ? data.entityType.value
+          : this.entityType,
+      entityId: data.entityId.present ? data.entityId.value : this.entityId,
+      summary: data.summary.present ? data.summary.value : this.summary,
+      createdAt: data.createdAt.present ? data.createdAt.value : this.createdAt,
+      syncStatus: data.syncStatus.present
+          ? data.syncStatus.value
+          : this.syncStatus,
+    );
+  }
+
+  @override
+  String toString() {
+    return (StringBuffer('TripActivity(')
+          ..write('id: $id, ')
+          ..write('tripId: $tripId, ')
+          ..write('actorId: $actorId, ')
+          ..write('action: $action, ')
+          ..write('entityType: $entityType, ')
+          ..write('entityId: $entityId, ')
+          ..write('summary: $summary, ')
+          ..write('createdAt: $createdAt, ')
+          ..write('syncStatus: $syncStatus')
+          ..write(')'))
+        .toString();
+  }
+
+  @override
+  int get hashCode => Object.hash(
+    id,
+    tripId,
+    actorId,
+    action,
+    entityType,
+    entityId,
+    summary,
+    createdAt,
+    syncStatus,
+  );
+  @override
+  bool operator ==(Object other) =>
+      identical(this, other) ||
+      (other is TripActivity &&
+          other.id == this.id &&
+          other.tripId == this.tripId &&
+          other.actorId == this.actorId &&
+          other.action == this.action &&
+          other.entityType == this.entityType &&
+          other.entityId == this.entityId &&
+          other.summary == this.summary &&
+          other.createdAt == this.createdAt &&
+          other.syncStatus == this.syncStatus);
+}
+
+class TripActivitiesCompanion extends UpdateCompanion<TripActivity> {
+  final Value<String> id;
+  final Value<String> tripId;
+  final Value<String> actorId;
+  final Value<String> action;
+  final Value<String> entityType;
+  final Value<String> entityId;
+  final Value<String> summary;
+  final Value<DateTime> createdAt;
+  final Value<int> syncStatus;
+  final Value<int> rowid;
+  const TripActivitiesCompanion({
+    this.id = const Value.absent(),
+    this.tripId = const Value.absent(),
+    this.actorId = const Value.absent(),
+    this.action = const Value.absent(),
+    this.entityType = const Value.absent(),
+    this.entityId = const Value.absent(),
+    this.summary = const Value.absent(),
+    this.createdAt = const Value.absent(),
+    this.syncStatus = const Value.absent(),
+    this.rowid = const Value.absent(),
+  });
+  TripActivitiesCompanion.insert({
+    required String id,
+    required String tripId,
+    required String actorId,
+    required String action,
+    required String entityType,
+    required String entityId,
+    required String summary,
+    required DateTime createdAt,
+    this.syncStatus = const Value.absent(),
+    this.rowid = const Value.absent(),
+  }) : id = Value(id),
+       tripId = Value(tripId),
+       actorId = Value(actorId),
+       action = Value(action),
+       entityType = Value(entityType),
+       entityId = Value(entityId),
+       summary = Value(summary),
+       createdAt = Value(createdAt);
+  static Insertable<TripActivity> custom({
+    Expression<String>? id,
+    Expression<String>? tripId,
+    Expression<String>? actorId,
+    Expression<String>? action,
+    Expression<String>? entityType,
+    Expression<String>? entityId,
+    Expression<String>? summary,
+    Expression<int>? createdAt,
+    Expression<int>? syncStatus,
+    Expression<int>? rowid,
+  }) {
+    return RawValuesInsertable({
+      if (id != null) 'id': id,
+      if (tripId != null) 'trip_id': tripId,
+      if (actorId != null) 'actor_id': actorId,
+      if (action != null) 'action': action,
+      if (entityType != null) 'entity_type': entityType,
+      if (entityId != null) 'entity_id': entityId,
+      if (summary != null) 'summary': summary,
+      if (createdAt != null) 'created_at': createdAt,
+      if (syncStatus != null) 'sync_status': syncStatus,
+      if (rowid != null) 'rowid': rowid,
+    });
+  }
+
+  TripActivitiesCompanion copyWith({
+    Value<String>? id,
+    Value<String>? tripId,
+    Value<String>? actorId,
+    Value<String>? action,
+    Value<String>? entityType,
+    Value<String>? entityId,
+    Value<String>? summary,
+    Value<DateTime>? createdAt,
+    Value<int>? syncStatus,
+    Value<int>? rowid,
+  }) {
+    return TripActivitiesCompanion(
+      id: id ?? this.id,
+      tripId: tripId ?? this.tripId,
+      actorId: actorId ?? this.actorId,
+      action: action ?? this.action,
+      entityType: entityType ?? this.entityType,
+      entityId: entityId ?? this.entityId,
+      summary: summary ?? this.summary,
+      createdAt: createdAt ?? this.createdAt,
+      syncStatus: syncStatus ?? this.syncStatus,
+      rowid: rowid ?? this.rowid,
+    );
+  }
+
+  @override
+  Map<String, Expression> toColumns(bool nullToAbsent) {
+    final map = <String, Expression>{};
+    if (id.present) {
+      map['id'] = Variable<String>(id.value);
+    }
+    if (tripId.present) {
+      map['trip_id'] = Variable<String>(tripId.value);
+    }
+    if (actorId.present) {
+      map['actor_id'] = Variable<String>(actorId.value);
+    }
+    if (action.present) {
+      map['action'] = Variable<String>(action.value);
+    }
+    if (entityType.present) {
+      map['entity_type'] = Variable<String>(entityType.value);
+    }
+    if (entityId.present) {
+      map['entity_id'] = Variable<String>(entityId.value);
+    }
+    if (summary.present) {
+      map['summary'] = Variable<String>(summary.value);
+    }
+    if (createdAt.present) {
+      map['created_at'] = Variable<int>(
+        $TripActivitiesTable.$convertercreatedAt.toSql(createdAt.value),
+      );
+    }
+    if (syncStatus.present) {
+      map['sync_status'] = Variable<int>(syncStatus.value);
+    }
+    if (rowid.present) {
+      map['rowid'] = Variable<int>(rowid.value);
+    }
+    return map;
+  }
+
+  @override
+  String toString() {
+    return (StringBuffer('TripActivitiesCompanion(')
+          ..write('id: $id, ')
+          ..write('tripId: $tripId, ')
+          ..write('actorId: $actorId, ')
+          ..write('action: $action, ')
+          ..write('entityType: $entityType, ')
+          ..write('entityId: $entityId, ')
+          ..write('summary: $summary, ')
+          ..write('createdAt: $createdAt, ')
+          ..write('syncStatus: $syncStatus, ')
+          ..write('rowid: $rowid')
+          ..write(')'))
+        .toString();
+  }
+}
+
+class $TripViewsTable extends TripViews
+    with TableInfo<$TripViewsTable, TripView> {
+  @override
+  final GeneratedDatabase attachedDatabase;
+  final String? _alias;
+  $TripViewsTable(this.attachedDatabase, [this._alias]);
+  static const VerificationMeta _tripIdMeta = const VerificationMeta('tripId');
+  @override
+  late final GeneratedColumn<String> tripId = GeneratedColumn<String>(
+    'trip_id',
+    aliasedName,
+    false,
+    type: DriftSqlType.string,
+    requiredDuringInsert: true,
+  );
+  static const VerificationMeta _userIdMeta = const VerificationMeta('userId');
+  @override
+  late final GeneratedColumn<String> userId = GeneratedColumn<String>(
+    'user_id',
+    aliasedName,
+    false,
+    type: DriftSqlType.string,
+    requiredDuringInsert: true,
+  );
+  @override
+  late final GeneratedColumnWithTypeConverter<DateTime, int> viewedAt =
+      GeneratedColumn<int>(
+        'viewed_at',
+        aliasedName,
+        false,
+        type: DriftSqlType.int,
+        requiredDuringInsert: true,
+      ).withConverter<DateTime>($TripViewsTable.$converterviewedAt);
+  @override
+  List<GeneratedColumn> get $columns => [tripId, userId, viewedAt];
+  @override
+  String get aliasedName => _alias ?? actualTableName;
+  @override
+  String get actualTableName => $name;
+  static const String $name = 'trip_views';
+  @override
+  VerificationContext validateIntegrity(
+    Insertable<TripView> instance, {
+    bool isInserting = false,
+  }) {
+    final context = VerificationContext();
+    final data = instance.toColumns(true);
+    if (data.containsKey('trip_id')) {
+      context.handle(
+        _tripIdMeta,
+        tripId.isAcceptableOrUnknown(data['trip_id']!, _tripIdMeta),
+      );
+    } else if (isInserting) {
+      context.missing(_tripIdMeta);
+    }
+    if (data.containsKey('user_id')) {
+      context.handle(
+        _userIdMeta,
+        userId.isAcceptableOrUnknown(data['user_id']!, _userIdMeta),
+      );
+    } else if (isInserting) {
+      context.missing(_userIdMeta);
+    }
+    return context;
+  }
+
+  @override
+  Set<GeneratedColumn> get $primaryKey => {tripId, userId};
+  @override
+  TripView map(Map<String, dynamic> data, {String? tablePrefix}) {
+    final effectivePrefix = tablePrefix != null ? '$tablePrefix.' : '';
+    return TripView(
+      tripId: attachedDatabase.typeMapping.read(
+        DriftSqlType.string,
+        data['${effectivePrefix}trip_id'],
+      )!,
+      userId: attachedDatabase.typeMapping.read(
+        DriftSqlType.string,
+        data['${effectivePrefix}user_id'],
+      )!,
+      viewedAt: $TripViewsTable.$converterviewedAt.fromSql(
+        attachedDatabase.typeMapping.read(
+          DriftSqlType.int,
+          data['${effectivePrefix}viewed_at'],
+        )!,
+      ),
+    );
+  }
+
+  @override
+  $TripViewsTable createAlias(String alias) {
+    return $TripViewsTable(attachedDatabase, alias);
+  }
+
+  static TypeConverter<DateTime, int> $converterviewedAt =
+      const MillisecondDateTimeConverter();
+}
+
+class TripView extends DataClass implements Insertable<TripView> {
+  final String tripId;
+  final String userId;
+  final DateTime viewedAt;
+  const TripView({
+    required this.tripId,
+    required this.userId,
+    required this.viewedAt,
+  });
+  @override
+  Map<String, Expression> toColumns(bool nullToAbsent) {
+    final map = <String, Expression>{};
+    map['trip_id'] = Variable<String>(tripId);
+    map['user_id'] = Variable<String>(userId);
+    {
+      map['viewed_at'] = Variable<int>(
+        $TripViewsTable.$converterviewedAt.toSql(viewedAt),
+      );
+    }
+    return map;
+  }
+
+  TripViewsCompanion toCompanion(bool nullToAbsent) {
+    return TripViewsCompanion(
+      tripId: Value(tripId),
+      userId: Value(userId),
+      viewedAt: Value(viewedAt),
+    );
+  }
+
+  factory TripView.fromJson(
+    Map<String, dynamic> json, {
+    ValueSerializer? serializer,
+  }) {
+    serializer ??= driftRuntimeOptions.defaultSerializer;
+    return TripView(
+      tripId: serializer.fromJson<String>(json['tripId']),
+      userId: serializer.fromJson<String>(json['userId']),
+      viewedAt: serializer.fromJson<DateTime>(json['viewedAt']),
+    );
+  }
+  @override
+  Map<String, dynamic> toJson({ValueSerializer? serializer}) {
+    serializer ??= driftRuntimeOptions.defaultSerializer;
+    return <String, dynamic>{
+      'tripId': serializer.toJson<String>(tripId),
+      'userId': serializer.toJson<String>(userId),
+      'viewedAt': serializer.toJson<DateTime>(viewedAt),
+    };
+  }
+
+  TripView copyWith({String? tripId, String? userId, DateTime? viewedAt}) =>
+      TripView(
+        tripId: tripId ?? this.tripId,
+        userId: userId ?? this.userId,
+        viewedAt: viewedAt ?? this.viewedAt,
+      );
+  TripView copyWithCompanion(TripViewsCompanion data) {
+    return TripView(
+      tripId: data.tripId.present ? data.tripId.value : this.tripId,
+      userId: data.userId.present ? data.userId.value : this.userId,
+      viewedAt: data.viewedAt.present ? data.viewedAt.value : this.viewedAt,
+    );
+  }
+
+  @override
+  String toString() {
+    return (StringBuffer('TripView(')
+          ..write('tripId: $tripId, ')
+          ..write('userId: $userId, ')
+          ..write('viewedAt: $viewedAt')
+          ..write(')'))
+        .toString();
+  }
+
+  @override
+  int get hashCode => Object.hash(tripId, userId, viewedAt);
+  @override
+  bool operator ==(Object other) =>
+      identical(this, other) ||
+      (other is TripView &&
+          other.tripId == this.tripId &&
+          other.userId == this.userId &&
+          other.viewedAt == this.viewedAt);
+}
+
+class TripViewsCompanion extends UpdateCompanion<TripView> {
+  final Value<String> tripId;
+  final Value<String> userId;
+  final Value<DateTime> viewedAt;
+  final Value<int> rowid;
+  const TripViewsCompanion({
+    this.tripId = const Value.absent(),
+    this.userId = const Value.absent(),
+    this.viewedAt = const Value.absent(),
+    this.rowid = const Value.absent(),
+  });
+  TripViewsCompanion.insert({
+    required String tripId,
+    required String userId,
+    required DateTime viewedAt,
+    this.rowid = const Value.absent(),
+  }) : tripId = Value(tripId),
+       userId = Value(userId),
+       viewedAt = Value(viewedAt);
+  static Insertable<TripView> custom({
+    Expression<String>? tripId,
+    Expression<String>? userId,
+    Expression<int>? viewedAt,
+    Expression<int>? rowid,
+  }) {
+    return RawValuesInsertable({
+      if (tripId != null) 'trip_id': tripId,
+      if (userId != null) 'user_id': userId,
+      if (viewedAt != null) 'viewed_at': viewedAt,
+      if (rowid != null) 'rowid': rowid,
+    });
+  }
+
+  TripViewsCompanion copyWith({
+    Value<String>? tripId,
+    Value<String>? userId,
+    Value<DateTime>? viewedAt,
+    Value<int>? rowid,
+  }) {
+    return TripViewsCompanion(
+      tripId: tripId ?? this.tripId,
+      userId: userId ?? this.userId,
+      viewedAt: viewedAt ?? this.viewedAt,
+      rowid: rowid ?? this.rowid,
+    );
+  }
+
+  @override
+  Map<String, Expression> toColumns(bool nullToAbsent) {
+    final map = <String, Expression>{};
+    if (tripId.present) {
+      map['trip_id'] = Variable<String>(tripId.value);
+    }
+    if (userId.present) {
+      map['user_id'] = Variable<String>(userId.value);
+    }
+    if (viewedAt.present) {
+      map['viewed_at'] = Variable<int>(
+        $TripViewsTable.$converterviewedAt.toSql(viewedAt.value),
+      );
+    }
+    if (rowid.present) {
+      map['rowid'] = Variable<int>(rowid.value);
+    }
+    return map;
+  }
+
+  @override
+  String toString() {
+    return (StringBuffer('TripViewsCompanion(')
+          ..write('tripId: $tripId, ')
+          ..write('userId: $userId, ')
+          ..write('viewedAt: $viewedAt, ')
+          ..write('rowid: $rowid')
+          ..write(')'))
+        .toString();
+  }
+}
+
 abstract class _$AppDatabase extends GeneratedDatabase {
   _$AppDatabase(QueryExecutor e) : super(e);
   $AppDatabaseManager get managers => $AppDatabaseManager(this);
@@ -7006,6 +7831,8 @@ abstract class _$AppDatabase extends GeneratedDatabase {
   late final $StopsTable stops = $StopsTable(this);
   late final $StopLabelsTable stopLabels = $StopLabelsTable(this);
   late final $ScheduleItemsTable scheduleItems = $ScheduleItemsTable(this);
+  late final $TripActivitiesTable tripActivities = $TripActivitiesTable(this);
+  late final $TripViewsTable tripViews = $TripViewsTable(this);
   @override
   Iterable<TableInfo<Table, Object?>> get allTables =>
       allSchemaEntities.whereType<TableInfo<Table, Object?>>();
@@ -7022,6 +7849,8 @@ abstract class _$AppDatabase extends GeneratedDatabase {
     stops,
     stopLabels,
     scheduleItems,
+    tripActivities,
+    tripViews,
   ];
   @override
   StreamQueryUpdateRules get streamUpdateRules => const StreamQueryUpdateRules([
@@ -7108,6 +7937,13 @@ abstract class _$AppDatabase extends GeneratedDatabase {
         limitUpdateKind: UpdateKind.delete,
       ),
       result: [TableUpdate('schedule_items', kind: UpdateKind.delete)],
+    ),
+    WritePropagation(
+      on: TableUpdateQuery.onTableName(
+        'trips',
+        limitUpdateKind: UpdateKind.delete,
+      ),
+      result: [TableUpdate('trip_activities', kind: UpdateKind.delete)],
     ),
   ]);
 }
@@ -10054,6 +10890,24 @@ final class $$TripsTableReferences
       manager.$state.copyWith(prefetchedData: cache),
     );
   }
+
+  static MultiTypedResultKey<$TripActivitiesTable, List<TripActivity>>
+  _tripActivitiesRefsTable(_$AppDatabase db) => MultiTypedResultKey.fromTable(
+    db.tripActivities,
+    aliasName: $_aliasNameGenerator(db.trips.id, db.tripActivities.tripId),
+  );
+
+  $$TripActivitiesTableProcessedTableManager get tripActivitiesRefs {
+    final manager = $$TripActivitiesTableTableManager(
+      $_db,
+      $_db.tripActivities,
+    ).filter((f) => f.tripId.id.sqlEquals($_itemColumn<String>('id')!));
+
+    final cache = $_typedResult.readTableOrNull(_tripActivitiesRefsTable($_db));
+    return ProcessedTableManager(
+      manager.$state.copyWith(prefetchedData: cache),
+    );
+  }
 }
 
 class $$TripsTableFilterComposer extends Composer<_$AppDatabase, $TripsTable> {
@@ -10192,6 +11046,31 @@ class $$TripsTableFilterComposer extends Composer<_$AppDatabase, $TripsTable> {
           }) => $$ScheduleItemsTableFilterComposer(
             $db: $db,
             $table: $db.scheduleItems,
+            $addJoinBuilderToRootComposer: $addJoinBuilderToRootComposer,
+            joinBuilder: joinBuilder,
+            $removeJoinBuilderFromRootComposer:
+                $removeJoinBuilderFromRootComposer,
+          ),
+    );
+    return f(composer);
+  }
+
+  Expression<bool> tripActivitiesRefs(
+    Expression<bool> Function($$TripActivitiesTableFilterComposer f) f,
+  ) {
+    final $$TripActivitiesTableFilterComposer composer = $composerBuilder(
+      composer: this,
+      getCurrentColumn: (t) => t.id,
+      referencedTable: $db.tripActivities,
+      getReferencedColumn: (t) => t.tripId,
+      builder:
+          (
+            joinBuilder, {
+            $addJoinBuilderToRootComposer,
+            $removeJoinBuilderFromRootComposer,
+          }) => $$TripActivitiesTableFilterComposer(
+            $db: $db,
+            $table: $db.tripActivities,
             $addJoinBuilderToRootComposer: $addJoinBuilderToRootComposer,
             joinBuilder: joinBuilder,
             $removeJoinBuilderFromRootComposer:
@@ -10395,6 +11274,31 @@ class $$TripsTableAnnotationComposer
     );
     return f(composer);
   }
+
+  Expression<T> tripActivitiesRefs<T extends Object>(
+    Expression<T> Function($$TripActivitiesTableAnnotationComposer a) f,
+  ) {
+    final $$TripActivitiesTableAnnotationComposer composer = $composerBuilder(
+      composer: this,
+      getCurrentColumn: (t) => t.id,
+      referencedTable: $db.tripActivities,
+      getReferencedColumn: (t) => t.tripId,
+      builder:
+          (
+            joinBuilder, {
+            $addJoinBuilderToRootComposer,
+            $removeJoinBuilderFromRootComposer,
+          }) => $$TripActivitiesTableAnnotationComposer(
+            $db: $db,
+            $table: $db.tripActivities,
+            $addJoinBuilderToRootComposer: $addJoinBuilderToRootComposer,
+            joinBuilder: joinBuilder,
+            $removeJoinBuilderFromRootComposer:
+                $removeJoinBuilderFromRootComposer,
+          ),
+    );
+    return f(composer);
+  }
 }
 
 class $$TripsTableTableManager
@@ -10414,6 +11318,7 @@ class $$TripsTableTableManager
             bool tripDaysRefs,
             bool stopsRefs,
             bool scheduleItemsRefs,
+            bool tripActivitiesRefs,
           })
         > {
   $$TripsTableTableManager(_$AppDatabase db, $TripsTable table)
@@ -10498,6 +11403,7 @@ class $$TripsTableTableManager
                 tripDaysRefs = false,
                 stopsRefs = false,
                 scheduleItemsRefs = false,
+                tripActivitiesRefs = false,
               }) {
                 return PrefetchHooks(
                   db: db,
@@ -10505,6 +11411,7 @@ class $$TripsTableTableManager
                     if (tripDaysRefs) db.tripDays,
                     if (stopsRefs) db.stops,
                     if (scheduleItemsRefs) db.scheduleItems,
+                    if (tripActivitiesRefs) db.tripActivities,
                   ],
                   addJoins: null,
                   getPrefetchedDataCallback: (items) async {
@@ -10560,6 +11467,27 @@ class $$TripsTableTableManager
                               ),
                           typedResults: items,
                         ),
+                      if (tripActivitiesRefs)
+                        await $_getPrefetchedData<
+                          Trip,
+                          $TripsTable,
+                          TripActivity
+                        >(
+                          currentTable: table,
+                          referencedTable: $$TripsTableReferences
+                              ._tripActivitiesRefsTable(db),
+                          managerFromTypedResult: (p0) =>
+                              $$TripsTableReferences(
+                                db,
+                                table,
+                                p0,
+                              ).tripActivitiesRefs,
+                          referencedItemsForCurrentItem:
+                              (item, referencedItems) => referencedItems.where(
+                                (e) => e.tripId == item.id,
+                              ),
+                          typedResults: items,
+                        ),
                     ];
                   },
                 );
@@ -10584,6 +11512,7 @@ typedef $$TripsTableProcessedTableManager =
         bool tripDaysRefs,
         bool stopsRefs,
         bool scheduleItemsRefs,
+        bool tripActivitiesRefs,
       })
     >;
 typedef $$TripDaysTableCreateCompanionBuilder =
@@ -12969,6 +13898,569 @@ typedef $$ScheduleItemsTableProcessedTableManager =
       ScheduleItem,
       PrefetchHooks Function({bool tripId, bool stopId, bool dayId})
     >;
+typedef $$TripActivitiesTableCreateCompanionBuilder =
+    TripActivitiesCompanion Function({
+      required String id,
+      required String tripId,
+      required String actorId,
+      required String action,
+      required String entityType,
+      required String entityId,
+      required String summary,
+      required DateTime createdAt,
+      Value<int> syncStatus,
+      Value<int> rowid,
+    });
+typedef $$TripActivitiesTableUpdateCompanionBuilder =
+    TripActivitiesCompanion Function({
+      Value<String> id,
+      Value<String> tripId,
+      Value<String> actorId,
+      Value<String> action,
+      Value<String> entityType,
+      Value<String> entityId,
+      Value<String> summary,
+      Value<DateTime> createdAt,
+      Value<int> syncStatus,
+      Value<int> rowid,
+    });
+
+final class $$TripActivitiesTableReferences
+    extends BaseReferences<_$AppDatabase, $TripActivitiesTable, TripActivity> {
+  $$TripActivitiesTableReferences(
+    super.$_db,
+    super.$_table,
+    super.$_typedResult,
+  );
+
+  static $TripsTable _tripIdTable(_$AppDatabase db) => db.trips.createAlias(
+    $_aliasNameGenerator(db.tripActivities.tripId, db.trips.id),
+  );
+
+  $$TripsTableProcessedTableManager get tripId {
+    final $_column = $_itemColumn<String>('trip_id')!;
+
+    final manager = $$TripsTableTableManager(
+      $_db,
+      $_db.trips,
+    ).filter((f) => f.id.sqlEquals($_column));
+    final item = $_typedResult.readTableOrNull(_tripIdTable($_db));
+    if (item == null) return manager;
+    return ProcessedTableManager(
+      manager.$state.copyWith(prefetchedData: [item]),
+    );
+  }
+}
+
+class $$TripActivitiesTableFilterComposer
+    extends Composer<_$AppDatabase, $TripActivitiesTable> {
+  $$TripActivitiesTableFilterComposer({
+    required super.$db,
+    required super.$table,
+    super.joinBuilder,
+    super.$addJoinBuilderToRootComposer,
+    super.$removeJoinBuilderFromRootComposer,
+  });
+  ColumnFilters<String> get id => $composableBuilder(
+    column: $table.id,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<String> get actorId => $composableBuilder(
+    column: $table.actorId,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<String> get action => $composableBuilder(
+    column: $table.action,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<String> get entityType => $composableBuilder(
+    column: $table.entityType,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<String> get entityId => $composableBuilder(
+    column: $table.entityId,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<String> get summary => $composableBuilder(
+    column: $table.summary,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnWithTypeConverterFilters<DateTime, DateTime, int> get createdAt =>
+      $composableBuilder(
+        column: $table.createdAt,
+        builder: (column) => ColumnWithTypeConverterFilters(column),
+      );
+
+  ColumnFilters<int> get syncStatus => $composableBuilder(
+    column: $table.syncStatus,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  $$TripsTableFilterComposer get tripId {
+    final $$TripsTableFilterComposer composer = $composerBuilder(
+      composer: this,
+      getCurrentColumn: (t) => t.tripId,
+      referencedTable: $db.trips,
+      getReferencedColumn: (t) => t.id,
+      builder:
+          (
+            joinBuilder, {
+            $addJoinBuilderToRootComposer,
+            $removeJoinBuilderFromRootComposer,
+          }) => $$TripsTableFilterComposer(
+            $db: $db,
+            $table: $db.trips,
+            $addJoinBuilderToRootComposer: $addJoinBuilderToRootComposer,
+            joinBuilder: joinBuilder,
+            $removeJoinBuilderFromRootComposer:
+                $removeJoinBuilderFromRootComposer,
+          ),
+    );
+    return composer;
+  }
+}
+
+class $$TripActivitiesTableOrderingComposer
+    extends Composer<_$AppDatabase, $TripActivitiesTable> {
+  $$TripActivitiesTableOrderingComposer({
+    required super.$db,
+    required super.$table,
+    super.joinBuilder,
+    super.$addJoinBuilderToRootComposer,
+    super.$removeJoinBuilderFromRootComposer,
+  });
+  ColumnOrderings<String> get id => $composableBuilder(
+    column: $table.id,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<String> get actorId => $composableBuilder(
+    column: $table.actorId,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<String> get action => $composableBuilder(
+    column: $table.action,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<String> get entityType => $composableBuilder(
+    column: $table.entityType,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<String> get entityId => $composableBuilder(
+    column: $table.entityId,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<String> get summary => $composableBuilder(
+    column: $table.summary,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<int> get createdAt => $composableBuilder(
+    column: $table.createdAt,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<int> get syncStatus => $composableBuilder(
+    column: $table.syncStatus,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  $$TripsTableOrderingComposer get tripId {
+    final $$TripsTableOrderingComposer composer = $composerBuilder(
+      composer: this,
+      getCurrentColumn: (t) => t.tripId,
+      referencedTable: $db.trips,
+      getReferencedColumn: (t) => t.id,
+      builder:
+          (
+            joinBuilder, {
+            $addJoinBuilderToRootComposer,
+            $removeJoinBuilderFromRootComposer,
+          }) => $$TripsTableOrderingComposer(
+            $db: $db,
+            $table: $db.trips,
+            $addJoinBuilderToRootComposer: $addJoinBuilderToRootComposer,
+            joinBuilder: joinBuilder,
+            $removeJoinBuilderFromRootComposer:
+                $removeJoinBuilderFromRootComposer,
+          ),
+    );
+    return composer;
+  }
+}
+
+class $$TripActivitiesTableAnnotationComposer
+    extends Composer<_$AppDatabase, $TripActivitiesTable> {
+  $$TripActivitiesTableAnnotationComposer({
+    required super.$db,
+    required super.$table,
+    super.joinBuilder,
+    super.$addJoinBuilderToRootComposer,
+    super.$removeJoinBuilderFromRootComposer,
+  });
+  GeneratedColumn<String> get id =>
+      $composableBuilder(column: $table.id, builder: (column) => column);
+
+  GeneratedColumn<String> get actorId =>
+      $composableBuilder(column: $table.actorId, builder: (column) => column);
+
+  GeneratedColumn<String> get action =>
+      $composableBuilder(column: $table.action, builder: (column) => column);
+
+  GeneratedColumn<String> get entityType => $composableBuilder(
+    column: $table.entityType,
+    builder: (column) => column,
+  );
+
+  GeneratedColumn<String> get entityId =>
+      $composableBuilder(column: $table.entityId, builder: (column) => column);
+
+  GeneratedColumn<String> get summary =>
+      $composableBuilder(column: $table.summary, builder: (column) => column);
+
+  GeneratedColumnWithTypeConverter<DateTime, int> get createdAt =>
+      $composableBuilder(column: $table.createdAt, builder: (column) => column);
+
+  GeneratedColumn<int> get syncStatus => $composableBuilder(
+    column: $table.syncStatus,
+    builder: (column) => column,
+  );
+
+  $$TripsTableAnnotationComposer get tripId {
+    final $$TripsTableAnnotationComposer composer = $composerBuilder(
+      composer: this,
+      getCurrentColumn: (t) => t.tripId,
+      referencedTable: $db.trips,
+      getReferencedColumn: (t) => t.id,
+      builder:
+          (
+            joinBuilder, {
+            $addJoinBuilderToRootComposer,
+            $removeJoinBuilderFromRootComposer,
+          }) => $$TripsTableAnnotationComposer(
+            $db: $db,
+            $table: $db.trips,
+            $addJoinBuilderToRootComposer: $addJoinBuilderToRootComposer,
+            joinBuilder: joinBuilder,
+            $removeJoinBuilderFromRootComposer:
+                $removeJoinBuilderFromRootComposer,
+          ),
+    );
+    return composer;
+  }
+}
+
+class $$TripActivitiesTableTableManager
+    extends
+        RootTableManager<
+          _$AppDatabase,
+          $TripActivitiesTable,
+          TripActivity,
+          $$TripActivitiesTableFilterComposer,
+          $$TripActivitiesTableOrderingComposer,
+          $$TripActivitiesTableAnnotationComposer,
+          $$TripActivitiesTableCreateCompanionBuilder,
+          $$TripActivitiesTableUpdateCompanionBuilder,
+          (TripActivity, $$TripActivitiesTableReferences),
+          TripActivity,
+          PrefetchHooks Function({bool tripId})
+        > {
+  $$TripActivitiesTableTableManager(
+    _$AppDatabase db,
+    $TripActivitiesTable table,
+  ) : super(
+        TableManagerState(
+          db: db,
+          table: table,
+          createFilteringComposer: () =>
+              $$TripActivitiesTableFilterComposer($db: db, $table: table),
+          createOrderingComposer: () =>
+              $$TripActivitiesTableOrderingComposer($db: db, $table: table),
+          createComputedFieldComposer: () =>
+              $$TripActivitiesTableAnnotationComposer($db: db, $table: table),
+          updateCompanionCallback:
+              ({
+                Value<String> id = const Value.absent(),
+                Value<String> tripId = const Value.absent(),
+                Value<String> actorId = const Value.absent(),
+                Value<String> action = const Value.absent(),
+                Value<String> entityType = const Value.absent(),
+                Value<String> entityId = const Value.absent(),
+                Value<String> summary = const Value.absent(),
+                Value<DateTime> createdAt = const Value.absent(),
+                Value<int> syncStatus = const Value.absent(),
+                Value<int> rowid = const Value.absent(),
+              }) => TripActivitiesCompanion(
+                id: id,
+                tripId: tripId,
+                actorId: actorId,
+                action: action,
+                entityType: entityType,
+                entityId: entityId,
+                summary: summary,
+                createdAt: createdAt,
+                syncStatus: syncStatus,
+                rowid: rowid,
+              ),
+          createCompanionCallback:
+              ({
+                required String id,
+                required String tripId,
+                required String actorId,
+                required String action,
+                required String entityType,
+                required String entityId,
+                required String summary,
+                required DateTime createdAt,
+                Value<int> syncStatus = const Value.absent(),
+                Value<int> rowid = const Value.absent(),
+              }) => TripActivitiesCompanion.insert(
+                id: id,
+                tripId: tripId,
+                actorId: actorId,
+                action: action,
+                entityType: entityType,
+                entityId: entityId,
+                summary: summary,
+                createdAt: createdAt,
+                syncStatus: syncStatus,
+                rowid: rowid,
+              ),
+          withReferenceMapper: (p0) => p0
+              .map(
+                (e) => (
+                  e.readTable(table),
+                  $$TripActivitiesTableReferences(db, table, e),
+                ),
+              )
+              .toList(),
+          prefetchHooksCallback: ({tripId = false}) {
+            return PrefetchHooks(
+              db: db,
+              explicitlyWatchedTables: [],
+              addJoins:
+                  <
+                    T extends TableManagerState<
+                      dynamic,
+                      dynamic,
+                      dynamic,
+                      dynamic,
+                      dynamic,
+                      dynamic,
+                      dynamic,
+                      dynamic,
+                      dynamic,
+                      dynamic,
+                      dynamic
+                    >
+                  >(state) {
+                    if (tripId) {
+                      state =
+                          state.withJoin(
+                                currentTable: table,
+                                currentColumn: table.tripId,
+                                referencedTable: $$TripActivitiesTableReferences
+                                    ._tripIdTable(db),
+                                referencedColumn:
+                                    $$TripActivitiesTableReferences
+                                        ._tripIdTable(db)
+                                        .id,
+                              )
+                              as T;
+                    }
+
+                    return state;
+                  },
+              getPrefetchedDataCallback: (items) async {
+                return [];
+              },
+            );
+          },
+        ),
+      );
+}
+
+typedef $$TripActivitiesTableProcessedTableManager =
+    ProcessedTableManager<
+      _$AppDatabase,
+      $TripActivitiesTable,
+      TripActivity,
+      $$TripActivitiesTableFilterComposer,
+      $$TripActivitiesTableOrderingComposer,
+      $$TripActivitiesTableAnnotationComposer,
+      $$TripActivitiesTableCreateCompanionBuilder,
+      $$TripActivitiesTableUpdateCompanionBuilder,
+      (TripActivity, $$TripActivitiesTableReferences),
+      TripActivity,
+      PrefetchHooks Function({bool tripId})
+    >;
+typedef $$TripViewsTableCreateCompanionBuilder =
+    TripViewsCompanion Function({
+      required String tripId,
+      required String userId,
+      required DateTime viewedAt,
+      Value<int> rowid,
+    });
+typedef $$TripViewsTableUpdateCompanionBuilder =
+    TripViewsCompanion Function({
+      Value<String> tripId,
+      Value<String> userId,
+      Value<DateTime> viewedAt,
+      Value<int> rowid,
+    });
+
+class $$TripViewsTableFilterComposer
+    extends Composer<_$AppDatabase, $TripViewsTable> {
+  $$TripViewsTableFilterComposer({
+    required super.$db,
+    required super.$table,
+    super.joinBuilder,
+    super.$addJoinBuilderToRootComposer,
+    super.$removeJoinBuilderFromRootComposer,
+  });
+  ColumnFilters<String> get tripId => $composableBuilder(
+    column: $table.tripId,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<String> get userId => $composableBuilder(
+    column: $table.userId,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnWithTypeConverterFilters<DateTime, DateTime, int> get viewedAt =>
+      $composableBuilder(
+        column: $table.viewedAt,
+        builder: (column) => ColumnWithTypeConverterFilters(column),
+      );
+}
+
+class $$TripViewsTableOrderingComposer
+    extends Composer<_$AppDatabase, $TripViewsTable> {
+  $$TripViewsTableOrderingComposer({
+    required super.$db,
+    required super.$table,
+    super.joinBuilder,
+    super.$addJoinBuilderToRootComposer,
+    super.$removeJoinBuilderFromRootComposer,
+  });
+  ColumnOrderings<String> get tripId => $composableBuilder(
+    column: $table.tripId,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<String> get userId => $composableBuilder(
+    column: $table.userId,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<int> get viewedAt => $composableBuilder(
+    column: $table.viewedAt,
+    builder: (column) => ColumnOrderings(column),
+  );
+}
+
+class $$TripViewsTableAnnotationComposer
+    extends Composer<_$AppDatabase, $TripViewsTable> {
+  $$TripViewsTableAnnotationComposer({
+    required super.$db,
+    required super.$table,
+    super.joinBuilder,
+    super.$addJoinBuilderToRootComposer,
+    super.$removeJoinBuilderFromRootComposer,
+  });
+  GeneratedColumn<String> get tripId =>
+      $composableBuilder(column: $table.tripId, builder: (column) => column);
+
+  GeneratedColumn<String> get userId =>
+      $composableBuilder(column: $table.userId, builder: (column) => column);
+
+  GeneratedColumnWithTypeConverter<DateTime, int> get viewedAt =>
+      $composableBuilder(column: $table.viewedAt, builder: (column) => column);
+}
+
+class $$TripViewsTableTableManager
+    extends
+        RootTableManager<
+          _$AppDatabase,
+          $TripViewsTable,
+          TripView,
+          $$TripViewsTableFilterComposer,
+          $$TripViewsTableOrderingComposer,
+          $$TripViewsTableAnnotationComposer,
+          $$TripViewsTableCreateCompanionBuilder,
+          $$TripViewsTableUpdateCompanionBuilder,
+          (TripView, BaseReferences<_$AppDatabase, $TripViewsTable, TripView>),
+          TripView,
+          PrefetchHooks Function()
+        > {
+  $$TripViewsTableTableManager(_$AppDatabase db, $TripViewsTable table)
+    : super(
+        TableManagerState(
+          db: db,
+          table: table,
+          createFilteringComposer: () =>
+              $$TripViewsTableFilterComposer($db: db, $table: table),
+          createOrderingComposer: () =>
+              $$TripViewsTableOrderingComposer($db: db, $table: table),
+          createComputedFieldComposer: () =>
+              $$TripViewsTableAnnotationComposer($db: db, $table: table),
+          updateCompanionCallback:
+              ({
+                Value<String> tripId = const Value.absent(),
+                Value<String> userId = const Value.absent(),
+                Value<DateTime> viewedAt = const Value.absent(),
+                Value<int> rowid = const Value.absent(),
+              }) => TripViewsCompanion(
+                tripId: tripId,
+                userId: userId,
+                viewedAt: viewedAt,
+                rowid: rowid,
+              ),
+          createCompanionCallback:
+              ({
+                required String tripId,
+                required String userId,
+                required DateTime viewedAt,
+                Value<int> rowid = const Value.absent(),
+              }) => TripViewsCompanion.insert(
+                tripId: tripId,
+                userId: userId,
+                viewedAt: viewedAt,
+                rowid: rowid,
+              ),
+          withReferenceMapper: (p0) => p0
+              .map((e) => (e.readTable(table), BaseReferences(db, table, e)))
+              .toList(),
+          prefetchHooksCallback: null,
+        ),
+      );
+}
+
+typedef $$TripViewsTableProcessedTableManager =
+    ProcessedTableManager<
+      _$AppDatabase,
+      $TripViewsTable,
+      TripView,
+      $$TripViewsTableFilterComposer,
+      $$TripViewsTableOrderingComposer,
+      $$TripViewsTableAnnotationComposer,
+      $$TripViewsTableCreateCompanionBuilder,
+      $$TripViewsTableUpdateCompanionBuilder,
+      (TripView, BaseReferences<_$AppDatabase, $TripViewsTable, TripView>),
+      TripView,
+      PrefetchHooks Function()
+    >;
 
 class $AppDatabaseManager {
   final _$AppDatabase _db;
@@ -12995,4 +14487,8 @@ class $AppDatabaseManager {
       $$StopLabelsTableTableManager(_db, _db.stopLabels);
   $$ScheduleItemsTableTableManager get scheduleItems =>
       $$ScheduleItemsTableTableManager(_db, _db.scheduleItems);
+  $$TripActivitiesTableTableManager get tripActivities =>
+      $$TripActivitiesTableTableManager(_db, _db.tripActivities);
+  $$TripViewsTableTableManager get tripViews =>
+      $$TripViewsTableTableManager(_db, _db.tripViews);
 }

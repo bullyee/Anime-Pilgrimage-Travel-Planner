@@ -277,3 +277,33 @@ class ScheduleItems extends Table {
   @override
   Set<Column> get primaryKey => {id};
 }
+
+/// A shared trip's activity log (What changed): one entry per change a member
+/// made, mirrored from `tripsV2/{tripId}/activity`. An entry made on this device
+/// waits with syncStatus 1 and goes up in the same batch as the change. Entries
+/// expire after 30 days, here and in Firestore (TTL on `expireAt`).
+class TripActivities extends Table {
+  TextColumn get id => text()();
+  TextColumn get tripId => text().references(Trips, #id, onDelete: KeyAction.cascade)();
+  TextColumn get actorId => text()();
+  TextColumn get action => text()(); // e.g. 'remove_stop', see TripActivityAction
+  TextColumn get entityType => text()(); // 'trip' | 'day' | 'stop'
+  TextColumn get entityId => text()();
+  TextColumn get summary => text()(); // "moved Uji Bridge to Day 3", without the actor
+  IntColumn get createdAt => integer().map(const MillisecondDateTimeConverter())();
+  IntColumn get syncStatus => integer().withDefault(const Constant(0))(); // 0: synced, 1: to push
+
+  @override
+  Set<Column> get primaryKey => {id};
+}
+
+/// When this device's user last opened a trip's activity, for the unread dot.
+/// Local only, per user so a shared phone keeps them apart.
+class TripViews extends Table {
+  TextColumn get tripId => text()();
+  TextColumn get userId => text()();
+  IntColumn get viewedAt => integer().map(const MillisecondDateTimeConverter())();
+
+  @override
+  Set<Column> get primaryKey => {tripId, userId};
+}
