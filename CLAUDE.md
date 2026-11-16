@@ -7,8 +7,8 @@ Built with Flutter (Dart). SQLite via Drift for local storage. Riverpod for stat
 ## Architecture
 - **Mobile App (Flutter)**: Primary execution environment. Offline-first, GPS, camera, AR.
 - **PC Web (Next.js/React)**: Deep planning environment (future phase).
-- **Sync Model**: two-way Firestore sync for shared trips (`lib/features/sync/`): personal library (`places`, `labels`, `photos`) remains private on device; shared trips (`tripsV2`) with day blocks, stops, and schedule items sync across group members (`lib/features/sharing/`): people join through an invite link, QR code or 6-letter code, and the owner, editor and viewer roles are enforced in `firestore.rules` and the screens.
-- **Data model**: unified `places` library and `trips` planner (schemaVersion 14).
+- **Sync Model**: two-way Firestore sync for shared trips (`lib/features/sync/`): personal library (`places`, `labels`, `photos`) remains private on device; shared trips (`tripsV2`) with day blocks, stops, and schedule items sync across group members (`lib/features/sharing/`): people join through an invite link, QR code or 6-letter code, and the owner, editor and viewer roles are enforced in `firestore.rules` and the screens. Deletes are soft (`deletedAt`); a pushed tombstone carries `expireAt` (30 days) for Firestore TTL policies on `tripsV2`, `days`, `stops`, `schedule_items` and `activity` (set up in the Firebase Console), and a device that missed a purged tombstone hides the row when a server snapshot no longer has it (`_markRowsGoneFromServer`). Each change to a shared trip also writes an activity entry (`TripActivityLog`, `trip_activities`) that goes up in the same batch, to `tripsV2/{id}/activity` (append-only).
+- **Data model**: unified `places` library and `trips` planner (schemaVersion 15).
 
 ## Core Modules
 1. **Library (`places`, `labels`, `photos`)**: Personal library of pilgrimage spots, anime & region labels, user photos and comparison frames. The library and trips don't change each other: a stop is the trip's own copy, so merging or removing library places never touches trip stops (a place a stop still uses is hidden as `trip_only`). `LibraryBackupService` exports and imports everything that doesn't sync (library, private trips, shared trips' local-only frames) as a `.pilgrimage` zip, from the Library's ⋮ menu (`library_backup_flow.dart`).
@@ -18,7 +18,7 @@ Built with Flutter (Dart). SQLite via Drift for local storage. Riverpod for stat
 5. **Home (`lib/features/home/`)**: a column of cards. The top card follows the date: today on a trip day (small map, next stop, Mark done), else the next trip, else Plan a pilgrimage. Then Photos to edit and Near you (library places within 3 km); Shoot sits in the bottom bar between Trips and Library. There's no sign-in on Home: sharing, inviting and joining ask for it, and sign-out is in My Trips.
 6. **VLM Pipeline**: planned, not implemented — Gemini API for parsing screenshots into POI data via share extension.
 
-## Database Schema (SQLite via Drift, schemaVersion 14)
+## Database Schema (SQLite via Drift, schemaVersion 15)
 Source of truth: `lib/core/database/tables_v10.dart`; migrations live in `lib/core/database/database.dart`, and the one-time copy from the v9 model (v0.1.x) in `lib/core/database/migrations/migration_v9_to_v10.dart`.
 - `places`: personal pilgrimage spot library (anitabi imports & custom user spots); `chinese_name` (v14) is filled from Anitabi on import, not shown yet
 - `labels`: unified tags, regions, and animes
@@ -31,6 +31,8 @@ Source of truth: `lib/core/database/tables_v10.dart`; migrations live in `lib/co
 - `stops`: spots added to trips
 - `stop_labels`: label associations for trip stops
 - `schedule_items`: scheduled visits within day blocks
+- `trip_activities`: a shared trip's activity log (What changed), 30 days
+- `trip_views`: when each user last opened a trip's activity (the unread dot), local only
 
 ## Tech Stack
 - Flutter / Dart

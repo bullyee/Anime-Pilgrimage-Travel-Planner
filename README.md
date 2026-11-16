@@ -174,6 +174,8 @@ Sharing needs a Google sign-in, for you and for the friends you invite.
 - Whoever leaves or is removed, or sees the owner stop sharing, **keeps their own copy** of the trip as it was. It just stops syncing.
 - **View only** members see the trip with "View only" under its name. They can't change the plan, but their own note and photos still work.
 - **A small cloud** next to a shared trip's name means it isn't in sync yet: you're offline, it's still sending, or a change was refused. Tap it to see which.
+- **What changed** (the clock at the top of a shared trip) lists who changed what in the last 30 days, newest first: "Mika moved Uji Bridge to Day 3", "Ken deleted Day 5". Tap an entry about a stop to open it. A dot on the trip's card and on the clock means someone else changed the trip since you last looked.
+- **Recently deleted** (the trip's **⋮** menu) keeps deleted days and stops for 30 days, with who deleted them and when. **Restore** puts one back where it was, with its schedule; view-only members can look but not restore. A deleted trip waits under **My Trips → Recently deleted** (the bin at the top, shown while there is one) for 30 days; only its owner can restore it, and a shared trip comes back for everyone.
 
 > 💡 If a link opens in a chat app's browser (LINE, Discord) and the app doesn't open, copy the 6-letter code from the page and enter it under **Join a trip**.
 
