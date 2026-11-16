@@ -266,7 +266,7 @@ class _PilgrimageDayMapScreenState extends ConsumerState<PilgrimageDayMapScreen>
       final result = await planner.setVisited(item.item.id, newDone);
       if (result is Failure) {
         if (mounted) {
-          ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text((result).error)));
+          ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(result.error)));
         }
         return;
       }

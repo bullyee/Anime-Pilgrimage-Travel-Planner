@@ -811,12 +811,12 @@ class PhotosCard extends ConsumerWidget {
           }, primary: true),
           ViewerAction('Save to device', () async {
             final result = await place.saveToGallery(photo.localPath);
-            messenger.showSnackBar(SnackBar(content: Text(result is Failure ? (result).error : 'Saved to your gallery.')));
+            messenger.showSnackBar(SnackBar(content: Text(result is Failure ? result.error : 'Saved to your gallery.')));
           }),
           ViewerAction('Delete', () async {
             Navigator.of(viewerContext).pop();
             final result = await place.deletePhoto(photo);
-            messenger.showSnackBar(SnackBar(content: Text(result is Failure ? (result).error : 'Deleted the photo.')));
+            messenger.showSnackBar(SnackBar(content: Text(result is Failure ? result.error : 'Deleted the photo.')));
           }),
         ],
       ),

@@ -98,12 +98,12 @@ dev_dependencies:
   # Test helpers (used to mock plugin platform implementations)
   path_provider_platform_interface: ^2.1.0
   plugin_platform_interface: ^2.1.0
+  sqlite3: ^2.9.4
 
 # For information on the generic Dart part of this file, see the
 # following page: https://dart.dev/tools/pub/pubspec
 
 # The following section is specific to Flutter packages.
-  sqlite3: any
 flutter:
 
   # The following line ensures that the Material Icons font is
