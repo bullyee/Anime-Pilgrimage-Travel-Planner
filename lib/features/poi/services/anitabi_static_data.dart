@@ -81,6 +81,7 @@ class AnitabiStaticData {
     _preferredBase = 0;
     _memIndex = null;
     _memPages.clear();
+    _cachedWorks.clear();
   }
 
   /// The work for [bangumiId] with its spots, or null when Anitabi has no
@@ -117,6 +118,65 @@ class AnitabiStaticData {
       );
     }
     return AnitabiStaticWork(title: title, spots: const []);
+  }
+
+  /// Works already read by [cachedWork], keyed by bangumi id and data
+  /// version, so a place page doesn't decode the 2 MB index every time.
+  static final Map<String, AnitabiStaticWork?> _cachedWorks = {};
+
+  /// The work for [bangumiId] from what is already on this device, or null
+  /// when the index or the work's detail page isn't cached. Never downloads:
+  /// this backs hints such as "Anitabi moved this spot", which must not cost
+  /// Anitabi a request (see CLAUDE.md's Anitabi rules). The cached index is
+  /// used at any age.
+  Future<AnitabiStaticWork?> cachedWork(String bangumiId) async {
+    final id = int.tryParse(bangumiId);
+    if (id == null) return null;
+    try {
+      final dir = kIsWeb ? null : await cacheDir();
+      final String? indexBody;
+      if (dir == null) {
+        indexBody = _memIndex?.body ?? await AnitabiWebCache.get('g.json');
+      } else {
+        final file = File(p.join(dir.path, 'g.json'));
+        indexBody = await file.exists() ? await file.readAsString() : null;
+      }
+      if (indexBody == null) return null;
+      final located = await compute(_locateWork, [indexBody, id]);
+      if (located == null) return null;
+      final (:workIndex, :workCount, :pageSize, :version, :title, :coords) = located;
+      final memoKey = '$id@$version';
+      if (_cachedWorks.containsKey(memoKey)) return _cachedWorks[memoKey];
+
+      final pageCount = (workCount / pageSize).ceil();
+      final guess = workIndex ~/ pageSize;
+      for (final page in [
+        guess,
+        for (var i = 0; i < pageCount; i++)
+          if (i != guess) i,
+      ]) {
+        final String? pageBody;
+        if (dir == null) {
+          final key = '$page.$version';
+          pageBody = _memPages[key] ?? await AnitabiWebCache.get(key);
+        } else {
+          final file = File(p.join(dir.path, 'g$page.$version.json'));
+          pageBody = await file.exists() ? await file.readAsString() : null;
+        }
+        if (pageBody == null) continue;
+        final rows = await compute(_workRows, [pageBody, id]);
+        if (rows == null) continue;
+        final work = AnitabiStaticWork(title: title, spots: [for (final row in rows) _spot(id, row, coords)]);
+        _cachedWorks
+          ..removeWhere((k, _) => k.startsWith('$id@'))
+          ..[memoKey] = work;
+        return work;
+      }
+      return null;
+    } catch (e) {
+      debugPrint('[AnitabiStaticData] cachedWork($bangumiId): $e');
+      return null;
+    }
   }
 
   Future<String> _index(Directory? dir) async {

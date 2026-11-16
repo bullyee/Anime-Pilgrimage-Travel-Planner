@@ -16,9 +16,13 @@ import '../controllers/library_controller.dart';
 import '../controllers/place_controller.dart';
 import '../models/frames.dart';
 import '../models/library_entry.dart';
+import '../models/place_diff.dart';
 import '../providers/library_providers.dart';
+import '../providers/place_comparison_providers.dart';
 import '../providers/place_providers.dart';
+import '../services/place_compare_kept.dart';
 import '../widgets/label_widgets.dart';
+import '../widgets/place_compare.dart';
 import '../widgets/place_page_parts.dart';
 import '../widgets/trip_picker.dart';
 
@@ -129,6 +133,8 @@ class _PlaceScreenState extends ConsumerState<PlaceScreen> {
     final current = visibleFrames.isEmpty ? null : visibleFrames[_frame];
     final draft = _draft;
     final facts = placeFacts(place);
+    // Anitabi changed the spot since the import (from data already on the phone).
+    final anitabiDiff = draft == null ? ref.watch(anitabiPlaceDiffProvider(_key)).valueOrNull : null;
     final entry = ref.watch(libraryEntriesProvider).valueOrNull?.where((e) => e.place.placeKey == _key).firstOrNull;
     final trips = [
       for (final t in ref.watch(tripSummariesProvider).valueOrNull ?? const <TripSummary>[])
@@ -197,6 +203,8 @@ class _PlaceScreenState extends ConsumerState<PlaceScreen> {
                   }),
                   const SizedBox(height: 14),
                   ...spaced([
+                    if (anitabiDiff != null)
+                      PlaceCompareHint(diff: anitabiDiff, sides: CompareSides.anitabi, onTap: () => _compareWithAnitabi(anitabiDiff)),
                     if (draft != null)
                       FactsFields(title: 'About this spot', draft: draft)
                     else if (anyFacts(facts))
@@ -325,6 +333,29 @@ class _PlaceScreenState extends ConsumerState<PlaceScreen> {
       _report(const Failure("Couldn't open a maps app."));
     }
   }
+
+  /// The side-by-side of the place and Anitabi's spot. Use this writes
+  /// Anitabi's value into the place; Keep mine hides the difference until
+  /// Anitabi changes it again.
+  Future<void> _compareWithAnitabi(PlaceDiff diff) => showCompareSheet(
+        context,
+        diff: diff,
+        sides: CompareSides.anitabi,
+        onKeep: (d) async {
+          await ref.read(placeCompareKeptProvider.notifier).keep(PlaceCompareKept.anitabi, _key, d.field, d.remoteValue);
+          return null;
+        },
+        onUse: (d) async {
+          final spot = await ref.read(cachedAnitabiSpotProvider(_key).future);
+          if (spot == null) return "Anitabi's data for this spot isn't on this phone any more.";
+          try {
+            await ref.read(placeComparisonServiceProvider).applyAnitabiToPlace(_key, spot, fieldsToUpdate: [d.field]);
+            return null;
+          } catch (e) {
+            return "Couldn't change the place: $e";
+          }
+        },
+      );
 
   Future<void> _addToTrip(Place place) async {
     final inTrips = ref.read(libraryEntriesProvider).valueOrNull?.where((e) => e.place.placeKey == _key).firstOrNull?.tripIds ?? const {};
