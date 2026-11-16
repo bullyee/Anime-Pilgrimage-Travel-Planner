@@ -134,7 +134,7 @@ class MainActivity : FlutterActivity() {
                                     channel?.invokeMethod("frameChanged", frame)
                                 }
                                 val placement = if (keepPlacement) lastPlacement else null
-                                if (shown.show(paths, index, opacity, placement)) {
+                                if (shown.show(paths, index, opacity, placement, floatOnly = !follow)) {
                                     overlay = shown
                                     if (follow) handler.post(followCamera)
                                     result.success(true)
