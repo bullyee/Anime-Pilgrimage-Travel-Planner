@@ -123,7 +123,7 @@ void main() {
     router.go('/photos');
     await tester.pumpAndSettle();
     expect(find.text('photos page'), findsOneWidget);
-    expect(tester.getSemantics(find.byKey(const Key('appTab:photos'))), containsSemantics(isSelected: true));
-    expect(tester.getSemantics(find.byKey(const Key('appTab:home'))), containsSemantics(isSelected: false));
+    expect(tester.getSemantics(find.byKey(const Key('appTab:photos'))), isSemantics(isSelected: true));
+    expect(tester.getSemantics(find.byKey(const Key('appTab:home'))), isSemantics(isSelected: false));
   });
 }

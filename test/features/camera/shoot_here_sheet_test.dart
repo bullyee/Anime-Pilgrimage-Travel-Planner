@@ -260,7 +260,7 @@ void main() {
     expect((choice.placeKey, choice.frame!.id), ('bench', 'f1'));
   });
 
-  testWidgets("one place, but not this one: Not this place stops the countdown", (tester) async {
+  testWidgets('one place, but not this one: Not this place stops the countdown', (tester) async {
     await open(
       tester,
       settle: false,

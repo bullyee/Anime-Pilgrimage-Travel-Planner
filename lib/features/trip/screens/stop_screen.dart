@@ -249,7 +249,7 @@ class _StopScreenState extends ConsumerState<StopScreen> {
             children: [
               Text(draft == null ? stop.name : 'Editing', maxLines: 1, overflow: TextOverflow.ellipsis),
               Text(
-                trip == null ? where : '${trip.title} · $where',
+                '${trip.title} · $where',
                 maxLines: 1,
                 overflow: TextOverflow.ellipsis,
                 style: theme.textTheme.bodySmall?.copyWith(color: theme.colorScheme.onSurfaceVariant),

@@ -348,7 +348,7 @@ class _PlaceScreenState extends ConsumerState<PlaceScreen> {
           tripId: trip.trip.id,
           placeKeys: [_key],
           repeat: again,
-          names: {if (name != null) _key: name},
+          names: {_key: ?name},
         );
     _report(result, 'Added to ${trip.trip.title}. It waits in the backlog until you plan it.');
   }

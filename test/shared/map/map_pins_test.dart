@@ -33,7 +33,7 @@ void main() {
     });
 
     test('never merges the next pin, so its ring shows', () {
-      final next = MapPin(id: 'b', point: const LatLng(34.8892, 135.8079), name: 'b', color: Colors.purple, next: true);
+      const next = MapPin(id: 'b', point: LatLng(34.8892, 135.8079), name: 'b', color: Colors.purple, next: true);
       final out = clusterPins([near[0], next, near[2]], zoom: 12);
       expect(out.where((c) => c.single && c.first.next), hasLength(1));
     });

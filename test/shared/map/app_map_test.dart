@@ -85,7 +85,7 @@ void main() {
     await pumpMap(
       tester,
       AppMap(pins: [
-        MapPin(id: 'n', point: const LatLng(34.8890, 135.8077), name: 'Next', color: Colors.purple, label: '1', next: true),
+        const MapPin(id: 'n', point: LatLng(34.8890, 135.8077), name: 'Next', color: Colors.purple, label: '1', next: true),
         pin('a', 34.8891, 135.8078, label: '2'),
         pin('b', 34.8892, 135.8079, label: '3'),
         pin('far', 34.95, 135.90, label: '4'),
@@ -121,10 +121,10 @@ void main() {
   testWidgets('a new tile cache (after Clear map tiles) gives the map a new tile layer', (tester) async {
     addTearDown(() => mapTileCache.value = null);
     // Zoomed past the layer's last level, so it asks for no tiles.
-    await tester.pumpWidget(MaterialApp(
+    await tester.pumpWidget(const MaterialApp(
       home: FlutterMap(
-        options: const MapOptions(initialCenter: LatLng(35, 135), initialZoom: 25),
-        children: const [AppTileLayer()],
+        options: MapOptions(initialCenter: LatLng(35, 135), initialZoom: 25),
+        children: [AppTileLayer()],
       ),
     ));
     final before = tester.widget<TileLayer>(find.byType(TileLayer));

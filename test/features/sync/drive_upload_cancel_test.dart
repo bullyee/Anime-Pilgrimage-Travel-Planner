@@ -37,7 +37,7 @@ class _SlowDrive extends http.BaseClient {
         ]
       });
     }
-    final trigger = request is http.Abortable ? (request as http.Abortable).abortTrigger : null;
+    final trigger = request is http.Abortable ? (request).abortTrigger : null;
     if (trigger == null) return Completer<http.StreamedResponse>().future; // hangs for good
     await trigger;
     aborted++;
