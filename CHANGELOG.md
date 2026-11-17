@@ -2,6 +2,59 @@
 
 Notable changes to Trip Planner. Builds are published as Android pre-releases on [GitHub Releases](https://github.com/bullyee/trip_planner/releases). Versions follow [Semantic Versioning](https://semver.org); before 1.0, minor versions may change behavior.
 
+## [0.3.1] - 2026-11-16
+
+Frames you add yourself now reach everyone in a shared trip, through your own Google Drive, and uploads and downloads run in the background. The app gets a bottom bar on every main screen with a Photos tab, a Settings page, maps that group, cluster and work offline where you've already looked, and a route export for other map apps. The same app also builds as a web app (not online yet).
+
+### Added
+- **Share your own frames with the trip** ([#158](https://github.com/bullyee/trip_planner/pull/158), [#162](https://github.com/bullyee/trip_planner/pull/162), [#152](https://github.com/bullyee/trip_planner/issues/152)). On a shared trip, **Members → Sync via my Google Drive** uploads the frames you added yourself to a folder of their own inside "Trip Planner Shared Frames" in your Drive and shares it by link, so everyone else in the trip sees them. Google asks once for access to the files the app creates; it can't see the rest of your Drive. **Anyone with the link can view these files.** Only people who can edit the trip can upload, and private trips never upload.
+  - **Frame upload quality** is your choice: **Original** (the default; up to 1920 px, sent as the original file when it already fits), **Smaller** or **Smallest** (1280 px). Measured on 40 real 1920 × 1080 frames: about 283, 195 and 141 KB per frame.
+  - **Taking them back:** deleting, unsharing or leaving a trip, or removing a stop or frame, deletes the Drive files nothing else needs; removals made offline wait and are retried. **Members → Remove my frames from Google Drive** does it for one trip, and **Settings → Remove shared frames from my Google Drive** for all of them.
+  - A frame whose Drive file was deleted by hand goes back to local-only and is uploaded again by the next **Sync via my Google Drive**.
+  - A stop's **⋮** menu can also upload one photo from your gallery, or add a frame from an image link. **Share local frames** and **Import local frames** pass frames as a file instead, with no Google account.
+- **Uploads and downloads run in the background** ([#161](https://github.com/bullyee/trip_planner/pull/161)). A notification shows the progress ("Uploading frames to Google Drive · 120 of 405") with **Cancel**, and the upload keeps going with the screen off, in another app, or after you swipe the app away. A slim bar at the bottom of every screen shows it too, and the app stays usable. If an upload stops, the next start offers **Resume** for the frames left.
+  - **Download frames for offline** (in Members) fetches every frame of a trip. Frames your friends shared download by themselves on Wi-Fi.
+- **A bottom bar on every main screen: Home, Trips, Shoot, Library, Photos** ([#160](https://github.com/bullyee/trip_planner/pull/160)). Each tab keeps where you were. Pages opened from a tab open full screen, and back returns to the tab.
+- **The Photos tab** ([#160](https://github.com/bullyee/trip_planner/pull/160)): every photo, newest first, by day (with the trip) or by place. Tap one to see it next to its frame, with **Edit** and **Open the place**. **To edit** is a filter there; Home's "N photos to edit" card opens it.
+- **Settings** ([#163](https://github.com/bullyee/trip_planner/pull/163)), from the gear on Home or the account button in My Trips: your account and **Sign out**, the frame upload quality, **Back up to a file** / **Restore from a file** (moved from the Library's ⋮ menu), how much space the app takes with **Clear map tiles** and **Delete** for the cutout model, and About (version, credits, privacy policy, licences).
+- **Export a trip's route** ([#171](https://github.com/bullyee/trip_planner/pull/171), [#78](https://github.com/bullyee/trip_planner/issues/78)): the trip's **⋮** menu → **Export route (GPX)** or **(GeoJSON)**, for apps such as OsmAnd, Organic Maps or Google My Maps. Each day is a route in visiting order, with the planned time in the stop's description; backup days and the backlog come along, marked as such. Stops without coordinates are left out.
+- **A web version of the app** ([#154](https://github.com/bullyee/trip_planner/pull/154), [#156](https://github.com/bullyee/trip_planner/pull/156)): the same app builds for the browser (`flutter build web`, also `--wasm`). The library and trips are kept in the browser's own storage, links such as `/join/<code>` open the right page, and the camera works where the browser has one. It isn't hosted anywhere yet.
+
+### Changed
+- **The maps** ([#159](https://github.com/bullyee/trip_planner/pull/159)): the day map, the library's, a place's, Home's and the new spot picker now share one map.
+  - **A group of stops is one pin** with a badge saying how many; its card steps through them. Pins are numbered in the day's order and turn grey with a check once visited.
+  - **Crowded pins merge into a bubble** labelled with their numbers ("1–4") or a count. Tapping it zooms in; stops on the very same spot open as a list.
+  - **The library's pins are coloured by anime.** Tapping one shows a small card instead of leaving the map.
+  - **Map tiles you've looked at stay on your phone** for two weeks (up to 300 MB), so they show without a connection on the day. Nothing is downloaded ahead.
+  - Pins no longer leave a trail behind while the map moves.
+- **Home's ⋮ menu is gone** ([#160](https://github.com/bullyee/trip_planner/pull/160)). **Edit a photo from the gallery** is a button on the Photos tab, and **Float a frame over any app** *(Android)* a button at the top of Home. The Library's ⋮ menu moved into Settings ([#163](https://github.com/bullyee/trip_planner/pull/163)).
+- **Uploading a trip's frames to Drive is faster** ([#162](https://github.com/bullyee/trip_planner/pull/162)): one request per frame instead of two, three at a time. On the 關西 trip's 405 frames: 403 Drive requests instead of 811, and no frame re-encoded.
+- **Wide and landscape screens** ([#172](https://github.com/bullyee/trip_planner/pull/172)): a place's and a stop's page keep the frame at 16:9 and at most 840 px wide, scrolling anywhere in the window. The floating frame starts top-left over the camera and top-right when floating over other apps.
+- Reopening the app after swiping it away returns to where you were, instead of starting over ([#161](https://github.com/bullyee/trip_planner/pull/161)).
+
+### Fixed
+- **Cancel during a Drive upload** no longer hangs on "Cancelling…": it stops the uploads in flight, and on a slow connection each file gets time in proportion to its size ([#162](https://github.com/bullyee/trip_planner/pull/162)).
+- **Signing in** from Settings, the invite sheet or Join keeps the screen you were on, with its back button ([#163](https://github.com/bullyee/trip_planner/pull/163)).
+- The "N frames to download" count updates after **Download frames for offline** finishes ([#165](https://github.com/bullyee/trip_planner/issues/165)).
+- **Compose** shows "Google ML Kit is downloading the segmentation model…" instead of a stack trace while the model downloads ([#166](https://github.com/bullyee/trip_planner/issues/166)).
+- **Shoot without it** (no overlay permission) says what it actually does ([#169](https://github.com/bullyee/trip_planner/issues/169)).
+- Home no longer shows the first-time **Plan a pilgrimage** card when all your trips are in the past ([#170](https://github.com/bullyee/trip_planner/issues/170)).
+- Settings' space used no longer counts the app's own files as your data ([#164](https://github.com/bullyee/trip_planner/issues/164), [#173](https://github.com/bullyee/trip_planner/pull/173)).
+
+### Known issues
+- **Google may warn that it hasn't verified the app** when you allow Drive access; the verification is in progress.
+- **The web version isn't online yet**, and in a private window it keeps nothing after the tab closes (it warns when you leave).
+- The other known issues of v0.3.0 still apply, except the one about your own frames.
+
+### Developer
+- `lib/shared/map/` (`AppMap`, `MapPin`, `clusterPins`) and `features/trip/widgets/day_map_pins.dart`; flutter_map 7.0.2 → 8.3.2 with its built-in tile cache set up in `main()` ([#159](https://github.com/bullyee/trip_planner/pull/159)).
+- `MainActivity` keeps one cached `FlutterEngine` that outlives the Activity; `TransferService.kt` is a `dataSync` foreground service driven over the `trip_planner/transfers` channel; `frame_transfer_queue.dart` runs the jobs ([#161](https://github.com/bullyee/trip_planner/pull/161)).
+- go_router `StatefulShellRoute` with four branches in `AppFrame` ([#160](https://github.com/bullyee/trip_planner/pull/160)); the router lives as long as the app and auth changes only re-run its redirect ([#163](https://github.com/bullyee/trip_planner/pull/163)).
+- `GoogleDriveFrameService` (`drive.file`), `DriveFrameCleanup`, `OnlineFrameMatcher`, `TripFramesPackService` and `archive_isolate.dart` ([#158](https://github.com/bullyee/trip_planner/pull/158), [#162](https://github.com/bullyee/trip_planner/pull/162)).
+- `lib/core/app_version.dart` holds the version shown in Settings; a test checks it against `pubspec.yaml` ([#163](https://github.com/bullyee/trip_planner/pull/163)).
+- Web: drift's `WasmDatabase` (`connection/web.dart`, files resolved against `document.baseURI`), `usePathUrlStrategy()`, `lib/core/utils/platform_media.dart` for `blob:` / `data:` / file paths, `package:web` + `dart:js_interop` only, and conditional exports on `dart.library.js_interop` so `--wasm` builds pick them ([#156](https://github.com/bullyee/trip_planner/pull/156), [#174](https://github.com/bullyee/trip_planner/issues/174)).
+- `TripRouteExportService` (GPX 1.1 and GeoJSON) ([#171](https://github.com/bullyee/trip_planner/pull/171)).
+
 ## [0.3.0] - 2026-11-12
 
 Pilgrimage mode: the app is now built for the day you're out at the spots. Home follows the date, **Shoot** finds the places around you, and the camera takes several shots against a spot's frames and keeps the ones you pick.
@@ -250,6 +303,7 @@ First Android demo build.
 ### Known issues
 - Photo re-edit overwrites the source (#17), camera crash on background/resume (#16), wrong trailing days in the calendar (#20), leaked dialog controllers (#19).
 
+[0.3.1]: https://github.com/bullyee/trip_planner/compare/v0.3.0...v0.3.1
 [0.3.0]: https://github.com/bullyee/trip_planner/compare/v0.2.0...v0.3.0
 [0.2.0]: https://github.com/bullyee/trip_planner/compare/v0.1.3...v0.2.0
 [0.1.3]: https://github.com/bullyee/trip_planner/compare/v0.1.2...v0.1.3
