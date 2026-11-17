@@ -210,6 +210,20 @@ void main() {
       expect(requests, isEmpty);
     });
 
+    test('a newer cached index is read again', () async {
+      final index = File('${cache.path}/g.json');
+      await index.writeAsString(_index([kOn], version: 'v7'));
+      await File('${cache.path}/g0.v7.json').writeAsString(_page(1424, [_row('a', 'Old name')]));
+      await index.setLastModified(DateTime.now().subtract(const Duration(days: 2)));
+      expect((await data(serve({})).cachedWork('1424'))!.spots.single['name'], 'Old name');
+
+      await index.writeAsString(_index([kOn], version: 'v8'));
+      await File('${cache.path}/g0.v8.json').writeAsString(_page(1424, [_row('a', 'New name')]));
+      await index.setLastModified(DateTime.now());
+      expect((await data(serve({})).cachedWork('1424'))!.spots.single['name'], 'New name');
+      expect(requests, isEmpty);
+    });
+
     test('is null when the work is in the index but its page is not cached', () async {
       await File('${cache.path}/g.json').writeAsString(_index([kOn]));
       expect(await data(serve({})).cachedWork('1424'), isNull);

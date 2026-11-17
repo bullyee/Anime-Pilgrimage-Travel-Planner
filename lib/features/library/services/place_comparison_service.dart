@@ -96,9 +96,9 @@ class PlaceComparisonService {
       if (location != null) diffs.add(location);
     }
 
-    final spotNote = spot.note?.trim();
-    final localDesc = place.description?.trim();
-    if (spotNote != null && spotNote.isNotEmpty && spotNote != localDesc) {
+    final spotNote = _clean(spot.note);
+    final localDesc = _clean(place.description);
+    if (spotNote != null && spotNote != localDesc) {
       diffs.add(PlaceFieldDiff(
         field: PlaceFieldType.description,
         fieldLabel: 'Description',
@@ -108,9 +108,9 @@ class PlaceComparisonService {
       ));
     }
 
-    final spotOriginUrl = spot.originUrl?.trim();
-    final localSourceUrl = place.sourceUrl?.trim();
-    if (spotOriginUrl != null && spotOriginUrl.isNotEmpty && spotOriginUrl != localSourceUrl) {
+    final spotOriginUrl = _clean(spot.originUrl);
+    final localSourceUrl = _clean(place.sourceUrl);
+    if (spotOriginUrl != null && spotOriginUrl != localSourceUrl) {
       diffs.add(PlaceFieldDiff(
         field: PlaceFieldType.sourceUrl,
         fieldLabel: 'Source link',
@@ -389,13 +389,15 @@ class PlaceComparisonService {
     final f = fieldsToUpdate ?? PlaceFieldType.values;
     final name = spot.name.trim();
     final moved = f.contains(PlaceFieldType.location) && spot.hasLocation;
+    final note = _clean(spot.note);
+    final originUrl = _clean(spot.originUrl);
     return _placeRepo.updatePlace(PlacesCompanion(
       placeKey: Value(placeKey),
       name: f.contains(PlaceFieldType.name) && name.isNotEmpty ? Value(name) : const Value.absent(),
       lat: moved ? Value(spot.lat!) : const Value.absent(),
       lng: moved ? Value(spot.lng!) : const Value.absent(),
-      description: f.contains(PlaceFieldType.description) && spot.note != null ? Value(spot.note) : const Value.absent(),
-      sourceUrl: f.contains(PlaceFieldType.sourceUrl) && spot.originUrl != null ? Value(spot.originUrl) : const Value.absent(),
+      description: f.contains(PlaceFieldType.description) && note != null ? Value(note) : const Value.absent(),
+      sourceUrl: f.contains(PlaceFieldType.sourceUrl) && originUrl != null ? Value(originUrl) : const Value.absent(),
     ));
   }
 }

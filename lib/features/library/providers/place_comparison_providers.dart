@@ -24,8 +24,10 @@ final placeComparisonServiceProvider = Provider<PlaceComparisonService>((ref) {
 
 /// A trip's stops sorted against the library: not in it, different, same.
 final tripLibraryDiffProvider = FutureProvider.autoDispose.family<TripLibraryDiffSummary, String>((ref, tripId) async {
-  // Recount when a stop changes (a joined trip's stops arrive over sync).
+  // Recount when a stop changes (a joined trip's stops arrive over sync), or
+  // a place in the library does.
   await ref.watch(tripStopsProvider(tripId).future);
+  await ref.watch(placesListProvider(null).future);
   return ref.watch(placeComparisonServiceProvider).compareTripWithLibrary(tripId);
 });
 

@@ -605,5 +605,27 @@ void main() {
       // Private note unaffected
       expect(updated.privateNote, 'My personal visit note');
     });
+
+    test('a blank Anitabi note or link is no difference, and never blanks the place', () async {
+      await placeRepo.upsertPlace(
+        PlacesCompanion.insert(
+          placeKey: 'anitabi:spot_98',
+          name: 'Bench',
+          lat: 34.0,
+          lng: 135.0,
+          description: const Value(''),
+          sourceUrl: const Value('https://anitabi.cn/spot/98'),
+          visibility: const Value('saved'),
+        ),
+      );
+      final spot = AnitabiSpot(id: 'spot_98', name: 'Bench', lat: 34.0, lng: 135.0, note: '   ', originUrl: ' ');
+      final place = (await placeRepo.getPlace('anitabi:spot_98'))!;
+      expect(comparisonService.comparePlaceWithAnitabi(place, spot), isNull);
+
+      await comparisonService.applyAnitabiToPlace('anitabi:spot_98', spot);
+      final after = (await placeRepo.getPlace('anitabi:spot_98'))!;
+      expect(after.sourceUrl, 'https://anitabi.cn/spot/98');
+      expect(after.description, '');
+    });
   });
 }

@@ -93,6 +93,8 @@ class StopScreen extends ConsumerStatefulWidget {
 }
 
 class _StopScreenState extends ConsumerState<StopScreen> {
+  /// While Save to my library / Save all runs, so a second tap does nothing.
+  bool _savingToLibrary = false;
   int _frame = 0;
 
   /// What edit mode is changing, or null outside it.
@@ -177,24 +179,34 @@ class _StopScreenState extends ConsumerState<StopScreen> {
   /// Puts this stop's place in the library, with the stop's facts, frames
   /// and labels, so it gets a My note, visits and photos.
   Future<void> _saveToLibrary(Stop stop) async {
+    if (_savingToLibrary) return;
+    setState(() => _savingToLibrary = true);
     try {
       await ref.read(placeComparisonServiceProvider).saveStopToLibrary(stop);
+      if (!mounted) return;
       ref.invalidate(tripLibraryDiffProvider(_tripId));
       _report(const Success(null), 'Saved to your library.');
     } catch (e) {
       _report(Failure("Couldn't save it to your library: $e"));
+    } finally {
+      if (mounted) setState(() => _savingToLibrary = false);
     }
   }
 
   /// [_saveToLibrary] for every stop of the trip not in the library yet.
   Future<void> _saveAllToLibrary(Trip trip) async {
+    if (_savingToLibrary) return;
+    setState(() => _savingToLibrary = true);
     try {
       final result = await ref.read(placeComparisonServiceProvider).saveAllTripStopsToLibrary(trip.id);
+      if (!mounted) return;
       ref.invalidate(tripLibraryDiffProvider(_tripId));
       final n = result.savedPlaceKeys.length;
       _report(const Success(null), n == 1 ? 'Saved 1 place to your library.' : 'Saved $n places to your library.');
     } catch (e) {
       _report(Failure("Couldn't save them to your library: $e"));
+    } finally {
+      if (mounted) setState(() => _savingToLibrary = false);
     }
   }
 
@@ -414,7 +426,11 @@ class _StopScreenState extends ConsumerState<StopScreen> {
                     else if (anyFacts(facts))
                       FactsCard(title: 'About this spot', facts: facts, scope: SectionScope.trip),
                     if (place == null)
-                      _SaveToLibraryCard(stop: stop, onSave: () => _saveToLibrary(stop), onSaveAll: () => _saveAllToLibrary(trip))
+                      _SaveToLibraryCard(
+                          stop: stop,
+                          busy: _savingToLibrary,
+                          onSave: () => _saveToLibrary(stop),
+                          onSaveAll: () => _saveAllToLibrary(trip))
                     else ...[
                       // With a plan, Mark visited records the visit; without one, the user says so here.
                       VisitsRow(
@@ -447,7 +463,11 @@ class _StopScreenState extends ConsumerState<StopScreen> {
                       if (place.visibility == 'saved')
                         _LibraryCard(placeKey: stop.placeKey)
                       else
-                        _SaveToLibraryCard(stop: stop, onSave: () => _saveToLibrary(stop), onSaveAll: () => _saveAllToLibrary(trip)),
+                        _SaveToLibraryCard(
+                          stop: stop,
+                          busy: _savingToLibrary,
+                          onSave: () => _saveToLibrary(stop),
+                          onSaveAll: () => _saveAllToLibrary(trip)),
                     ],
                     LocationCard(lat: stop.lat, lng: stop.lng),
                     if (stop.source != null) SourceNote('${sourceLine(stop.source!)} · copied into this trip'),
@@ -903,8 +923,9 @@ class _SaveToLibraryCard extends ConsumerWidget {
   final Stop stop;
   final VoidCallback onSave;
   final VoidCallback onSaveAll;
+  final bool busy;
 
-  const _SaveToLibraryCard({required this.stop, required this.onSave, required this.onSaveAll});
+  const _SaveToLibraryCard({required this.stop, required this.onSave, required this.onSaveAll, this.busy = false});
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
@@ -930,12 +951,12 @@ class _SaveToLibraryCard extends ConsumerWidget {
               if (missingPlaces > 1)
                 TextButton(
                   key: const Key('saveAllToLibrary'),
-                  onPressed: onSaveAll,
+                  onPressed: busy ? null : onSaveAll,
                   child: Text('Save all $missingPlaces'),
                 ),
               FilledButton.tonalIcon(
                 key: const Key('saveToLibrary'),
-                onPressed: onSave,
+                onPressed: busy ? null : onSave,
                 icon: const Icon(Icons.bookmark_add_outlined, size: 18),
                 label: const Text('Save to my library'),
               ),
