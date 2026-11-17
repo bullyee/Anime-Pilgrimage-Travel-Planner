@@ -178,7 +178,7 @@ class ShotSeries {
     var frames = <SeriesFrame>[
       if (frameList is List)
         for (final frame in frameList.map(SeriesFrame.fromJson))
-          if (frame != null) frame,
+          ?frame,
     ];
     // A file from before frame switching: one frame, the series' reference.
     final legacyPath = text('referencePath');
@@ -195,7 +195,7 @@ class ShotSeries {
     ).withShots([
       if (shots is List)
         for (final shot in shots.map(SeriesShot.fromJson))
-          if (shot != null) shot,
+          ?shot,
     ]).withKept([
       if (kept is List)
         for (final path in kept)

@@ -103,7 +103,7 @@ class MigrationV9ToV10 {
     Set<String> poiColumns = const {};
     if (hasPois) {
       poiColumns = (await db.customSelect(
-        "PRAGMA table_info(pois)",
+        'PRAGMA table_info(pois)',
       ).get()).map((r) => r.read<String>('name')).toSet();
     }
     final hasPoiIsDeleted = poiColumns.contains('is_deleted');
@@ -230,7 +230,7 @@ class MigrationV9ToV10 {
     // 6. Migrate ReferenceImages -> v10_reference_images (only for active places)
     if (hasRefImages) {
       final refColumns = (await db.customSelect(
-        "PRAGMA table_info(reference_images)",
+        'PRAGMA table_info(reference_images)',
       ).get()).map((r) => r.read<String>('name')).toSet();
 
       final localCol = refColumns.contains('local_path')
@@ -266,7 +266,7 @@ class MigrationV9ToV10 {
     // 7. Migrate MediaAssets (only for active places)
     if (hasMediaAssets) {
       final mediaColumns = (await db.customSelect(
-        "PRAGMA table_info(media_assets)",
+        'PRAGMA table_info(media_assets)',
       ).get()).map((r) => r.read<String>('name')).toSet();
 
       final localCol = mediaColumns.contains('local_path')

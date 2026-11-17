@@ -21,7 +21,7 @@ String? firstLink(String text) => RegExp(r'https?://\S+').firstMatch(text)?.grou
 bool isShortMapsLink(String url) =>
     RegExp(r'^https?://(maps\.app\.goo\.gl|goo\.gl/maps)/', caseSensitive: false).hasMatch(url);
 
-final _number = r'(-?\d{1,3}(?:\.\d+)?)';
+const _number = r'(-?\d{1,3}(?:\.\d+)?)';
 
 LatLng? _valid(String? lat, String? lng) {
   final a = double.tryParse(lat ?? '');

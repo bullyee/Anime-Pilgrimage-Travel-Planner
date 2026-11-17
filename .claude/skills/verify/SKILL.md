@@ -39,6 +39,12 @@ By default, this runs Flutter unit tests using `--reporter=failures-only` (summa
   ```powershell
   powershell -ExecutionPolicy Bypass -File tool\verify.ps1 -UnitOnly
   ```
+* **Run Specific Test File(s) or Directories** (`-TestPath`):
+  ```powershell
+  powershell -ExecutionPolicy Bypass -File tool\verify.ps1 -TestPath test/core/utils/platform_media_test.dart
+  ```
+* **Wasm Conditional-Export Guard**:
+  During unit verification, `verify.ps1` automatically scans `lib/**/*.dart` for `dart.library.html` (which evaluates to `false` under `flutter build web --wasm` and silently selects non-Web stubs; use `dart.library.js_interop` instead) and fails the run if any match is found.
 
 ## Why This Saves Tokens
 

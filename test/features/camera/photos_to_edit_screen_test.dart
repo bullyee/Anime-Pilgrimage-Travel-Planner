@@ -115,7 +115,7 @@ void main() {
     expect(find.text('editor'), findsOneWidget);
     final args = edited.single;
     expect((args.photoId, args.placeKey, args.tripId, args.path), ('a', 'uji', kyoto.id, '/photos/a.jpg'));
-    expect(args.referenceImageId, isNull, reason: "the frame has no picture on this phone");
+    expect(args.referenceImageId, isNull, reason: 'the frame has no picture on this phone');
     await close(tester);
   });
 

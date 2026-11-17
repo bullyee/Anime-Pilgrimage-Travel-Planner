@@ -42,7 +42,7 @@ void main() {
         stayMinutes: 90,
         transitMinutes: 20,
       );
-      final scheduledB = await repo.scheduleStop(
+      await repo.scheduleStop(
         tripId: trip.id,
         stopId: stopB.id,
         dayId: day.id,

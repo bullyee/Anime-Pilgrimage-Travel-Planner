@@ -28,7 +28,8 @@ With `MSYS_NO_PATHCONV=1`, *host* paths handed to `adb.exe` are no longer transl
 ```
 
 - **Phone:** enable USB debugging and accept the PC's key prompt; it then lists as `device`.
-- **No device:** boot the emulator. Both commands below must run with `run_in_background: true` — the Bash tool blocks foreground `sleep`, and the emulator never exits. Wait for the second one's completion notification.
+- **WSA (Windows Subsystem for Android):** connect via `"$ADB" connect 127.0.0.1:58526` (runs as a `1920x1080` landscape window without GMS — useful for testing landscape responsiveness, overlay placement, and no-GMS fallbacks).
+- **No device:** boot an emulator. List available AVDs with `"$EMU" -list-avds` (for example `Pixel_Test` or `Pixel_8`). Both commands below must run with `run_in_background: true` — the Bash tool blocks foreground `sleep`, and the emulator never exits. Wait for the second one's completion notification.
 
 ```bash
 "$EMU" -avd Pixel_Test -no-boot-anim -no-snapshot-save
@@ -37,7 +38,7 @@ With `MSYS_NO_PATHCONV=1`, *host* paths handed to `adb.exe` are no longer transl
 "$ADB" wait-for-device; until [ "$("$ADB" shell getprop sys.boot_completed | tr -d '\r')" = 1 ]; do sleep 2; done; "$ADB" devices -l
 ```
 
-`Pixel_Test` is Android 15, x86_64, 1080×2400. List AVDs with `"$EMU" -list-avds`.
+`Pixel_Test` is Android 15, x86_64, 1080×2400. Always pass `-s <serial>` to `adb` when multiple targets (e.g., emulator + WSA or phone) are connected.
 
 ## 2. Build, install, launch
 
@@ -66,13 +67,13 @@ flutter build apk --debug          # ~2.5 min cold; run_in_background
 ## 3. Look at the screen
 
 ```bash
-ui() {   # visible widgets with their tap bounds
-  "$ADB" shell uiautomator dump /sdcard/ui.xml >/dev/null 2>&1
-  "$ADB" shell cat /sdcard/ui.xml \
+ui() {   # visible widgets with their tap bounds (/data/local/tmp works on Android 14+/15 and WSA)
+  "$ADB" shell uiautomator dump /data/local/tmp/ui.xml >/dev/null 2>&1
+  "$ADB" shell cat /data/local/tmp/ui.xml \
     | grep -o '\(content-desc\|text\)="[^"]\+"[^>]*bounds="[^"]*"' \
     | sed -E 's/ (resource-id|class|package|checkable|checked|clickable|enabled|focusable|focused|scrollable|long-clickable|password|selected|index|hint)="[^"]*"//g'
 }
-shot() { "$ADB" exec-out screencap -p > "$1"; }   # then Read the PNG
+shot() { "$ADB" exec-out screencap -p > "$1"; }   # then Read the PNG (in Windows PowerShell 5.1, wrap in `cmd /c` so `>` does not UTF-16-corrupt binary PNGs)
 ```
 
 - Flutter exposes widgets through accessibility, so labels appear as `content-desc`, e.g. `content-desc="Library&#10;Your saved places, by anime, tag and region" bounds="[42,567][1038,798]"`. Tap the center of `bounds`.
@@ -101,7 +102,7 @@ Observed on Pixel_Test with a small database; positions move with content, so co
 
 | Goal | Path (tap centers) |
 |---|---|
-| Home cards | Library (540,682) · My Trips (540,934) · Anime Camera (540,1176) · Floating Reference (540,1427) · Edit Photo (540,1690) |
+| Home & main tabs | Bottom navigation bar: **Home**, **Trips**, center **Shoot** button, **Library**, **Photos**; top-right **Settings** button on **Home** (confirm bounds with `ui` — landscape WSA/tablet positions differ from portrait phones) |
 | New place | Library → **Add a place** (empty library) or the **Add place** FAB → type `lat,lng` in the search box (parsed on the device, no Nominatim call) and press Enter → Name (540,1544) → **Save to library** |
 | Import from Anitabi | Library → **Import from Anitabi** (app bar, or the empty library's button) → search a title → tick spots → save. Confirm the labels with `ui`; the Anitabi rules in CLAUDE.md apply |
 | New trip | My Trips → **New trip** → title field (540,745) → **Decide later** opens the date picker → **Create trip** |

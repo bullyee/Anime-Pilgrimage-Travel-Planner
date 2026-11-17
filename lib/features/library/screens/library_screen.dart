@@ -393,7 +393,7 @@ class _BulkLabelSheet extends ConsumerWidget {
                     onPressed: () async {
                       final result = await controller.removeLabelFromPlaces(placeKeys, l.id);
                       messenger.showSnackBar(SnackBar(
-                        content: Text(result is Failure ? (result as Failure).error : 'Took “${l.name}” off ${_placesText(counts[l.id] ?? 0)}.'),
+                        content: Text(result is Failure ? result.error : 'Took “${l.name}” off ${_placesText(counts[l.id] ?? 0)}.'),
                       ));
                     },
                     child: const Text('Remove from all'),

@@ -799,6 +799,7 @@ class PhotosCard extends ConsumerWidget {
         actions: [
           ViewerAction('Edit', () async {
             final frameRefPath = frame == null ? null : await framePathOnDevice(ref, frame);
+            if (!viewerContext.mounted) return;
             viewerContext.push(PhotoEditArgs(
               path: photo.localPath,
               placeKey: placeKey,
@@ -810,12 +811,12 @@ class PhotosCard extends ConsumerWidget {
           }, primary: true),
           ViewerAction('Save to device', () async {
             final result = await place.saveToGallery(photo.localPath);
-            messenger.showSnackBar(SnackBar(content: Text(result is Failure ? (result as Failure).error : 'Saved to your gallery.')));
+            messenger.showSnackBar(SnackBar(content: Text(result is Failure ? result.error : 'Saved to your gallery.')));
           }),
           ViewerAction('Delete', () async {
             Navigator.of(viewerContext).pop();
             final result = await place.deletePhoto(photo);
-            messenger.showSnackBar(SnackBar(content: Text(result is Failure ? (result as Failure).error : 'Deleted the photo.')));
+            messenger.showSnackBar(SnackBar(content: Text(result is Failure ? result.error : 'Deleted the photo.')));
           }),
         ],
       ),

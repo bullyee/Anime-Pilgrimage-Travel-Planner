@@ -43,7 +43,7 @@ void main() {
     expect(result.index, 1);
   });
 
-  test("the starting frame missing: nothing to shoot against", () async {
+  test('the starting frame missing: nothing to shoot against', () async {
     expect(
       await seriesFrames(frames, 0, start: (f) async => null, other: (f) async => '/device/${f.id}.jpg'),
       isNull,

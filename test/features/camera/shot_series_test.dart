@@ -773,7 +773,7 @@ void main() {
       await close(tester);
     });
 
-    testWidgets("a big spot shot against two of its frames: both count once their shots are kept", (tester) async {
+    testWidgets('a big spot shot against two of its frames: both count once their shots are kept', (tester) async {
       await tester.runAsync(() => _place(db, 'bridge'));
       for (final id in ['bridge-1', 'bridge-2', 'bridge-3']) {
         await frame(tester, id, 'bridge');
