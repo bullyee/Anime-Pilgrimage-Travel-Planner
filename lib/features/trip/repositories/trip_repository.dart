@@ -1169,7 +1169,7 @@ class DriftTripRepository implements TripRepository {
     if (movedDays) {
       final names = [for (final i in before) await _activity.stopName(i.stopId)];
       await _log(tripId, TripActivityAction.moveStop, 'stop', before.first.stopId,
-          'moved ${stopNames(names)} to ${await _activity.dayLabel(tripId, targetDayId!)}');
+          'moved ${stopNames(names)} to ${await _activity.dayLabel(tripId, targetDayId)}');
     } else {
       final dayId = before.first.dayId;
       await _log(tripId, TripActivityAction.moveDay, 'day', dayId, 'reordered ${await _activity.dayLabel(tripId, dayId)}');
