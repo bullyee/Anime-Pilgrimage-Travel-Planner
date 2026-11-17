@@ -296,9 +296,13 @@ flutter test
 
 # Run the Firestore rules tests on the emulator (needs firebase-tools and Java)
 firebase emulators:exec "python test/rules_v2_emulator_test.py" --only firestore --project trip-planner-2775c
+
+# Build and deploy the Web app (PWA) to Firebase Hosting
+flutter build web --wasm --release
+firebase deploy --only hosting
 ```
 
-Source is organized feature-first under `lib/features/` (`library`, `trip`, `planner`, `sharing`, `sync`, `camera`, `anime`, `poi`, `auth`, `home`), with shared infrastructure under `lib/core/` (`database`, `router`, `providers`, `services`). `firestore.rules` holds the cloud rules, and `public/` is the Firebase Hosting site (the invite page, App Links, privacy policy and terms). See `CLAUDE.md` for the architecture and conventions, and `CHANGELOG.md` for release history. GitHub Actions runs the tests and the rules tests on every pull request and builds the APK when a version tag is pushed.
+Source is organized feature-first under `lib/features/` (`library`, `trip`, `planner`, `sharing`, `sync`, `camera`, `anime`, `poi`, `auth`, `home`), with shared infrastructure under `lib/core/` (`database`, `router`, `providers`, `services`). `firestore.rules` holds the cloud rules, and `web/` holds the web client, PWA manifest, App Links (`.well-known/assetlinks.json`), privacy policy and terms. See `CLAUDE.md` for the architecture and conventions, and `CHANGELOG.md` for release history. GitHub Actions runs the tests and the rules tests on every pull request and builds the APK when a version tag is pushed.
 
 Contributors using Claude Code get three project skills: `run-app` (build, launch, and drive the app on the Android emulator), `verify` (`tool/verify.ps1`: the unit tests with compact output, and the rules tests with `-WithEmulator`), and `release` (version, docs, build, smoke test, and a confirmation checklist before anything is published).
 
