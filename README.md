@@ -96,6 +96,7 @@ Tap a place to open its page. The anime frames lead; swipe between them.
 - **Add to trip** adds the place to a trip as a stop.
 - Below: its labels, your visits (**I'm here** records one), what's known about the spot, the trips it's in, **My note**, **My photos** grouped by trip, and its location.
 - The **pencil** turns the page into a form: edit the name, facts, labels and your note, then tap **Done**.
+- **When Anitabi has changed the spot** since you imported it, a line under the title says so, such as "Anitabi moved this spot 120 m SE". Tap it to see both versions side by side and pick, field by field, **Use this** or **Keep mine**. It only looks at Anitabi data already on your phone, so it never downloads anything for this.
 
 My note, your visits and your photos are only yours, even on a shared trip.
 
@@ -148,6 +149,8 @@ Tap a stop to open its page. It looks like a place's page, with the trip's parts
 - **Trip note**: a note everyone in the trip sees, such as where to meet.
 - **About this spot**: the trip's own copy of the facts. Editing it changes the trip, not your library.
 - Then your own note, visits and photos, from your library place.
+- **When your library has this spot differently** (another position, name or facts), a line says so; tap it to compare and pick **Use this** (the trip takes your library's version) or **Keep mine**. Your library is never changed from here.
+- **A spot that isn't in your library** (from a trip you joined) offers **Save to my library**, or **Save all** for the trip's other missing places. Then your note, visits and photos work for it too.
 
 The **⋮** menu renames the stop, moves it to another day or the backlog, takes it out of its group, or removes it from the trip.
 

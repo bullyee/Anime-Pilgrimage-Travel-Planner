@@ -176,6 +176,62 @@ void main() {
     });
   });
 
+  group('AnitabiStaticData.cachedWork', () {
+    AnitabiStaticData data(http.Client client) =>
+        AnitabiStaticData(client: client, cacheDir: () async => cache);
+
+    test('reads only what is cached, and never downloads', () async {
+      final client = serve({
+        'g.json': _index([kOn]),
+        'g0.json': _page(1424, [_row('a', '修学院駅')]),
+      });
+
+      // Nothing cached yet: no hint, and no request either.
+      expect(await data(client).cachedWork('1424'), isNull);
+      expect(requests, isEmpty);
+
+      // An import caches the index and the page; the lookup then finds them.
+      await data(client).work('1424');
+      final sent = requests.length;
+      final work = await data(client).cachedWork('1424');
+      expect(work!.spots.single['id'], 'a');
+      expect(work.spots.single['geo'], [35.05, 135.79]);
+      expect(requests, hasLength(sent));
+    });
+
+    test('uses an index older than a day without fetching a new one', () async {
+      await File('${cache.path}/g.json').writeAsString(_index([kOn], version: 'v7'));
+      await File('${cache.path}/g0.json').writeAsString('stale page of another version');
+      await File('${cache.path}/g0.v7.json').writeAsString(_page(1424, [_row('a', '修学院駅')]));
+      await File('${cache.path}/g.json').setLastModified(DateTime.now().subtract(const Duration(days: 40)));
+
+      final work = await data(serve({})).cachedWork('1424');
+      expect(work!.spots.single['name'], '修学院駅');
+      expect(requests, isEmpty);
+    });
+
+    test('a newer cached index is read again', () async {
+      final index = File('${cache.path}/g.json');
+      await index.writeAsString(_index([kOn], version: 'v7'));
+      await File('${cache.path}/g0.v7.json').writeAsString(_page(1424, [_row('a', 'Old name')]));
+      await index.setLastModified(DateTime.now().subtract(const Duration(days: 2)));
+      expect((await data(serve({})).cachedWork('1424'))!.spots.single['name'], 'Old name');
+
+      await index.writeAsString(_index([kOn], version: 'v8'));
+      await File('${cache.path}/g0.v8.json').writeAsString(_page(1424, [_row('a', 'New name')]));
+      await index.setLastModified(DateTime.now());
+      expect((await data(serve({})).cachedWork('1424'))!.spots.single['name'], 'New name');
+      expect(requests, isEmpty);
+    });
+
+    test('is null when the work is in the index but its page is not cached', () async {
+      await File('${cache.path}/g.json').writeAsString(_index([kOn]));
+      expect(await data(serve({})).cachedWork('1424'), isNull);
+      expect(await data(serve({})).cachedWork('not a number'), isNull);
+      expect(requests, isEmpty);
+    });
+  });
+
   group('AnitabiApiService.downloadReferenceImage', () {
     const url = 'https://image.anitabi.cn/points/1424/a.jpg?plan=h360';
 

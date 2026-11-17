@@ -12,9 +12,13 @@ import '../../library/controllers/library_controller.dart';
 import '../../library/controllers/place_controller.dart';
 import '../../library/models/frames.dart';
 import '../../library/models/library_entry.dart' show labelKinds;
+import '../../library/models/place_diff.dart';
+import '../../library/providers/place_comparison_providers.dart';
 import '../../library/providers/place_providers.dart';
+import '../../library/services/place_compare_kept.dart';
 import '../../library/screens/place_screen.dart' show openDirections, sourceLine;
 import '../../library/widgets/label_widgets.dart';
+import '../../library/widgets/place_compare.dart';
 import '../../library/widgets/place_page_parts.dart';
 import '../../planner/controllers/day_planner_controller.dart';
 import '../../planner/models/planner_view.dart';
@@ -89,6 +93,8 @@ class StopScreen extends ConsumerStatefulWidget {
 }
 
 class _StopScreenState extends ConsumerState<StopScreen> {
+  /// While Save to my library / Save all runs, so a second tap does nothing.
+  bool _savingToLibrary = false;
   int _frame = 0;
 
   /// What edit mode is changing, or null outside it.
@@ -142,6 +148,66 @@ class _StopScreenState extends ConsumerState<StopScreen> {
           notes: {'trip': stop.note, if (place != null) 'mine': place.privateNote},
         );
       });
+  }
+
+  /// The side-by-side of this stop and the user's library place. Use this
+  /// writes the library's value into the stop, for everyone in the trip, so
+  /// only people who can edit the trip get it; Keep mine hides the
+  /// difference until the library changes it again.
+  Future<void> _compareWithLibrary(Stop stop, PlaceDiff diff, bool canEdit) => showCompareSheet(
+        context,
+        diff: diff,
+        sides: CompareSides.library,
+        onKeep: (d) async {
+          await ref.read(placeCompareKeptProvider.notifier).keep(PlaceCompareKept.library, stop.id, d.field, d.localValue);
+          return null;
+        },
+        onUse: !canEdit
+            ? null
+            : (d) async {
+                final place = await ref.read(placeDetailProvider(stop.placeKey).future);
+                if (place == null) return 'This place is no longer in your library.';
+                try {
+                  await ref.read(placeComparisonServiceProvider).applyPlaceToStop(_tripId, stop.id, place, fieldsToUpdate: [d.field]);
+                  return null;
+                } catch (e) {
+                  return "Couldn't change the stop: $e";
+                }
+              },
+      );
+
+  /// Puts this stop's place in the library, with the stop's facts, frames
+  /// and labels, so it gets a My note, visits and photos.
+  Future<void> _saveToLibrary(Stop stop) async {
+    if (_savingToLibrary) return;
+    setState(() => _savingToLibrary = true);
+    try {
+      await ref.read(placeComparisonServiceProvider).saveStopToLibrary(stop);
+      if (!mounted) return;
+      ref.invalidate(tripLibraryDiffProvider(_tripId));
+      _report(const Success(null), 'Saved to your library.');
+    } catch (e) {
+      _report(Failure("Couldn't save it to your library: $e"));
+    } finally {
+      if (mounted) setState(() => _savingToLibrary = false);
+    }
+  }
+
+  /// [_saveToLibrary] for every stop of the trip not in the library yet.
+  Future<void> _saveAllToLibrary(Trip trip) async {
+    if (_savingToLibrary) return;
+    setState(() => _savingToLibrary = true);
+    try {
+      final result = await ref.read(placeComparisonServiceProvider).saveAllTripStopsToLibrary(trip.id);
+      if (!mounted) return;
+      ref.invalidate(tripLibraryDiffProvider(_tripId));
+      final n = result.savedPlaceKeys.length;
+      _report(const Success(null), n == 1 ? 'Saved 1 place to your library.' : 'Saved $n places to your library.');
+    } catch (e) {
+      _report(Failure("Couldn't save them to your library: $e"));
+    } finally {
+      if (mounted) setState(() => _savingToLibrary = false);
+    }
   }
 
   void _leaveEdit() => setState(() {
@@ -225,6 +291,8 @@ class _StopScreenState extends ConsumerState<StopScreen> {
     final isShared = trip.sharing == 'group';
     final tripDraft = canEdit ? draft : null;
     final facts = stopFacts(stop);
+    // The user's library place of this spot says something else.
+    final libraryDiff = draft == null ? ref.watch(stopLibraryDiffProvider(stop.id)).valueOrNull : null;
     final tripNote = stop.note?.trim() ?? '';
     final myNote = place?.privateNote?.trim() ?? '';
     final syncedStopPaths = {
@@ -315,6 +383,12 @@ class _StopScreenState extends ConsumerState<StopScreen> {
                   _StopTitle(stop: stop, draft: tripDraft, nameError: _nameError),
                   const SizedBox(height: 14),
                   ...spaced([
+                    if (libraryDiff != null)
+                      PlaceCompareHint(
+                        diff: libraryDiff,
+                        sides: CompareSides.library,
+                        onTap: () => _compareWithLibrary(stop, libraryDiff, canEdit),
+                      ),
                     if (localOnlyCount > 0)
                       LocalFramesSyncNote(
                         count: localOnlyCount,
@@ -352,10 +426,11 @@ class _StopScreenState extends ConsumerState<StopScreen> {
                     else if (anyFacts(facts))
                       FactsCard(title: 'About this spot', facts: facts, scope: SectionScope.trip),
                     if (place == null)
-                      Text(
-                        "This spot isn't in your library, so there's no note, visit or photo of your own here.",
-                        style: theme.textTheme.bodyMedium?.copyWith(color: theme.colorScheme.onSurfaceVariant),
-                      )
+                      _SaveToLibraryCard(
+                          stop: stop,
+                          busy: _savingToLibrary,
+                          onSave: () => _saveToLibrary(stop),
+                          onSaveAll: () => _saveAllToLibrary(trip))
                     else ...[
                       // With a plan, Mark visited records the visit; without one, the user says so here.
                       VisitsRow(
@@ -385,7 +460,14 @@ class _StopScreenState extends ConsumerState<StopScreen> {
                         frames: frames,
                         onAdd: () async => _report(await _place.addPhotosFromGallery(stop.placeKey)),
                       ),
-                      _LibraryCard(placeKey: stop.placeKey),
+                      if (place.visibility == 'saved')
+                        _LibraryCard(placeKey: stop.placeKey)
+                      else
+                        _SaveToLibraryCard(
+                          stop: stop,
+                          busy: _savingToLibrary,
+                          onSave: () => _saveToLibrary(stop),
+                          onSaveAll: () => _saveAllToLibrary(trip)),
                     ],
                     LocationCard(lat: stop.lat, lng: stop.lng),
                     if (stop.source != null) SourceNote('${sourceLine(stop.source!)} · copied into this trip'),
@@ -834,6 +916,58 @@ class _PlanCard extends StatelessWidget {
 }
 
 /// Points to the library place that the user's own parts of the page come from.
+/// For a stop whose place isn't in the user's library, as in a trip they
+/// joined: saving it gives them a My note, visits and photos of it. With
+/// more of the trip's stops missing, they can save them all at once.
+class _SaveToLibraryCard extends ConsumerWidget {
+  final Stop stop;
+  final VoidCallback onSave;
+  final VoidCallback onSaveAll;
+  final bool busy;
+
+  const _SaveToLibraryCard({required this.stop, required this.onSave, required this.onSaveAll, this.busy = false});
+
+  @override
+  Widget build(BuildContext context, WidgetRef ref) {
+    final theme = Theme.of(context);
+    final missing = ref.watch(tripLibraryDiffProvider(stop.tripId)).valueOrNull?.missingFromLibrary ?? const <Stop>[];
+    final missingPlaces = {for (final s in missing) s.placeKey}.length;
+    return PageSection(
+      title: 'Not in your library',
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          Text(
+            'Save this spot to your library for a note, visits and photos of your own, in every trip. '
+            'The trip keeps its own copy either way.',
+            style: theme.textTheme.bodyMedium?.copyWith(color: theme.colorScheme.onSurfaceVariant),
+          ),
+          const SizedBox(height: 8),
+          Wrap(
+            alignment: WrapAlignment.end,
+            spacing: 8,
+            runSpacing: 4,
+            children: [
+              if (missingPlaces > 1)
+                TextButton(
+                  key: const Key('saveAllToLibrary'),
+                  onPressed: busy ? null : onSaveAll,
+                  child: Text('Save all $missingPlaces'),
+                ),
+              FilledButton.tonalIcon(
+                key: const Key('saveToLibrary'),
+                onPressed: busy ? null : onSave,
+                icon: const Icon(Icons.bookmark_add_outlined, size: 18),
+                label: const Text('Save to my library'),
+              ),
+            ],
+          ),
+        ],
+      ),
+    );
+  }
+}
+
 class _LibraryCard extends StatelessWidget {
   final String placeKey;
 

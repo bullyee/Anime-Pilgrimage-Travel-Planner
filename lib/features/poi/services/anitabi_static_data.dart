@@ -81,6 +81,7 @@ class AnitabiStaticData {
     _preferredBase = 0;
     _memIndex = null;
     _memPages.clear();
+    _cachedWorks.clear();
   }
 
   /// The work for [bangumiId] with its spots, or null when Anitabi has no
@@ -117,6 +118,84 @@ class AnitabiStaticData {
       );
     }
     return AnitabiStaticWork(title: title, spots: const []);
+  }
+
+  /// Works already read by [cachedWork], keyed by bangumi id and data
+  /// version, so a place page doesn't decode the 2 MB index every time.
+  static final Map<String, AnitabiStaticWork?> _cachedWorks = {};
+
+  /// Where [cachedWork] found each work in the cached index (null: not in
+  /// it), keyed by bangumi id and that index file's identity, so a second
+  /// look doesn't decode the index again until a newer one is downloaded.
+  static final Map<String, _LocatedWork?> _locatedWorks = {};
+
+  /// The work for [bangumiId] from what is already on this device, or null
+  /// when the index or the work's detail page isn't cached. Never downloads:
+  /// this backs hints such as "Anitabi moved this spot", which must not cost
+  /// Anitabi a request (see CLAUDE.md's Anitabi rules). The cached index is
+  /// used at any age.
+  Future<AnitabiStaticWork?> cachedWork(String bangumiId) async {
+    final id = int.tryParse(bangumiId);
+    if (id == null) return null;
+    try {
+      final dir = kIsWeb ? null : await cacheDir();
+      final _LocatedWork? located;
+      if (dir == null) {
+        final indexBody = _memIndex?.body ?? await AnitabiWebCache.get('g.json');
+        if (indexBody == null) return null;
+        located = await _locate('$id@web:${indexBody.length}:${indexBody.hashCode}', () async => indexBody, id);
+      } else {
+        final file = File(p.join(dir.path, 'g.json'));
+        if (!await file.exists()) return null;
+        final stat = await file.stat();
+        located = await _locate(
+            '$id@${file.path}:${stat.modified.millisecondsSinceEpoch}:${stat.size}', file.readAsString, id);
+      }
+      if (located == null) return null;
+      final (:workIndex, :workCount, :pageSize, :version, :title, :coords) = located;
+      final memoKey = '$id@$version';
+      if (_cachedWorks.containsKey(memoKey)) return _cachedWorks[memoKey];
+
+      final pageCount = (workCount / pageSize).ceil();
+      final guess = workIndex ~/ pageSize;
+      for (final page in [
+        guess,
+        for (var i = 0; i < pageCount; i++)
+          if (i != guess) i,
+      ]) {
+        final String? pageBody;
+        if (dir == null) {
+          final key = '$page.$version';
+          pageBody = _memPages[key] ?? await AnitabiWebCache.get(key);
+        } else {
+          final file = File(p.join(dir.path, 'g$page.$version.json'));
+          pageBody = await file.exists() ? await file.readAsString() : null;
+        }
+        if (pageBody == null) continue;
+        final rows = await compute(_workRows, [pageBody, id]);
+        if (rows == null) continue;
+        final work = AnitabiStaticWork(title: title, spots: [for (final row in rows) _spot(id, row, coords)]);
+        _cachedWorks
+          ..removeWhere((k, _) => k.startsWith('$id@'))
+          ..[memoKey] = work;
+        return work;
+      }
+      return null;
+    } catch (e) {
+      debugPrint('[AnitabiStaticData] cachedWork($bangumiId): $e');
+      return null;
+    }
+  }
+
+  static Future<_LocatedWork?> _locate(String key, Future<String> Function() indexBody, int id) async {
+    if (_locatedWorks.containsKey(key)) return _locatedWorks[key];
+    final located = await compute(_locateWork, [await indexBody(), id]);
+    // One index at a time: drop what an older index said about this work.
+    final prefix = '$id@';
+    _locatedWorks
+      ..removeWhere((k, _) => k.startsWith(prefix))
+      ..[key] = located;
+    return located;
   }
 
   Future<String> _index(Directory? dir) async {
@@ -259,18 +338,20 @@ class AnitabiStaticData {
   }
 }
 
-/// Runs off the UI isolate: the index is ~2 MB of JSON, and only one work
-/// of it is needed. Index layout: `[works, pageSize, version]`; a work is
-/// `[0]` bangumi id, `[1]` Chinese title, `[3]` original title, `[12]` its
-/// spots as a flat `[id, lat, lng, priority, …]` list.
-({
+typedef _LocatedWork = ({
   int workIndex,
   int workCount,
   int pageSize,
   String version,
   String? title,
   Map<String, List<double>> coords,
-})? _locateWork(List<Object> args) {
+});
+
+/// Runs off the UI isolate: the index is ~2 MB of JSON, and only one work
+/// of it is needed. Index layout: `[works, pageSize, version]`; a work is
+/// `[0]` bangumi id, `[1]` Chinese title, `[3]` original title, `[12]` its
+/// spots as a flat `[id, lat, lng, priority, …]` list.
+_LocatedWork? _locateWork(List<Object> args) {
   final index = jsonDecode(args[0] as String) as List<dynamic>;
   final id = args[1] as int;
   final works = index[0] as List<dynamic>;
