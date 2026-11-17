@@ -385,7 +385,7 @@ void main() {
 
       expect(find.textContaining('View only'), findsOneWidget);
       expect(find.byTooltip('Invite people'), findsNothing);
-      expect(await menuItems(tester), ['export_gpx', 'export_geojson', 'leave']);
+      expect(await menuItems(tester), ['export_gpx', 'export_geojson', 'trash', 'leave']);
 
       expect(find.byTooltip('Edit the plan'), findsNothing);
 
@@ -405,7 +405,7 @@ void main() {
       await pump(tester, tripRouter());
 
       expect(find.textContaining('View only'), findsNothing);
-      expect(await menuItems(tester), ['edit', 'export_gpx', 'export_geojson', 'leave']);
+      expect(await menuItems(tester), ['edit', 'export_gpx', 'export_geojson', 'trash', 'leave']);
       expect(find.byTooltip('Edit the plan'), findsOneWidget);
       await done(tester);
     });
@@ -430,7 +430,7 @@ void main() {
       await addTrip();
       await pump(tester, tripRouter());
 
-      expect(await menuItems(tester), ['edit', 'export_gpx', 'export_geojson', 'delete']);
+      expect(await menuItems(tester), ['edit', 'export_gpx', 'export_geojson', 'trash', 'delete']);
       await done(tester);
     });
   });

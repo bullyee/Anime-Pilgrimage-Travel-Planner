@@ -16,6 +16,7 @@ import '../services/trip_route_export_service.dart';
 import '../widgets/trip_card.dart';
 import '../widgets/trip_form_sheet.dart';
 import '../widgets/trip_sync_icon.dart';
+import 'trip_activity_screen.dart';
 import 'trip_members_tab.dart';
 import 'trip_stops_tab.dart';
 
@@ -101,6 +102,7 @@ class _TripScreenState extends ConsumerState<TripScreen> with SingleTickerProvid
         const PopupMenuItem(value: 'export_gpx', child: Text('Export route (GPX)')),
         const PopupMenuItem(value: 'export_geojson', child: Text('Export route (GeoJSON)')),
       ],
+      if (hasAccess) const PopupMenuItem(value: 'trash', child: Text('Recently deleted')),
       if (role == TripMemberRole.owner) const PopupMenuItem(value: 'delete', child: Text('Delete trip')),
       if (shared && role != null && role != TripMemberRole.owner)
         const PopupMenuItem(value: 'leave', child: Text('Leave trip')),
@@ -141,6 +143,7 @@ class _TripScreenState extends ConsumerState<TripScreen> with SingleTickerProvid
                     icon: const Icon(Icons.edit_outlined),
                     onPressed: () => setState(() => _editing = true),
                   ),
+          if (shared && hasAccess) TripActivityButton(tripId: trip.id),
           IconButton(
             tooltip: 'Pilgrimage map',
             icon: const Icon(Icons.map_outlined),
@@ -158,6 +161,7 @@ class _TripScreenState extends ConsumerState<TripScreen> with SingleTickerProvid
                 if (value == 'edit') _editTrip(context, trip);
                 if (value == 'export_gpx') _exportRoute(context, trip, isGeoJson: false);
                 if (value == 'export_geojson') _exportRoute(context, trip, isGeoJson: true);
+                if (value == 'trash') context.push('/trips/${trip.id}/trash');
                 if (value == 'delete') _deleteTrip(context, trip);
                 if (value == 'leave') leaveTrip(context, ref, trip);
               },
@@ -238,7 +242,11 @@ class _TripScreenState extends ConsumerState<TripScreen> with SingleTickerProvid
       context: context,
       builder: (context) => AlertDialog(
         title: Text('Delete “${trip.title}”?'),
-        content: const Text("Its days, stops and schedule are deleted too. You can't undo this yet."),
+        content: Text(
+          trip.sharing == 'group'
+              ? 'Its days, stops and schedule go too, for everyone in it. For 30 days you can restore it from My Trips → Recently deleted.'
+              : 'Its days, stops and schedule go too. For 30 days you can restore it from My Trips → Recently deleted.',
+        ),
         actions: [
           TextButton(onPressed: () => Navigator.pop(context, false), child: const Text('Cancel')),
           FilledButton(onPressed: () => Navigator.pop(context, true), child: const Text('Delete')),

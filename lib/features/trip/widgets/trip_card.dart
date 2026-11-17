@@ -9,6 +9,7 @@ import '../../sharing/models/trip_member.dart';
 import '../../sharing/providers/group_sharing_providers.dart';
 import '../../sharing/widgets/member_avatar.dart';
 import '../models/trip_summary.dart';
+import '../screens/trip_activity_screen.dart';
 import 'trip_sync_icon.dart';
 
 /// "Apr 29 – May 4", or "No dates yet". The year is added when the trip
@@ -69,8 +70,10 @@ class TripCard extends StatelessWidget {
                             overflow: TextOverflow.ellipsis,
                           ),
                         ),
-                        if (shared)
+                        if (shared) ...[
+                          TripUnreadDot(tripId: summary.trip.id, padding: const EdgeInsets.only(left: 8, top: 6)),
                           TripSyncIcon(tripId: summary.trip.id, padding: const EdgeInsets.only(left: 8, top: 2)),
+                        ],
                       ],
                     ),
                     if (description.isNotEmpty) ...[

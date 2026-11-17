@@ -12,6 +12,8 @@ class FakeFirestoreSyncV2Service implements FirestoreSyncV2Service {
   final Map<String, Map<String, Map<String, dynamic>>> tripDays = {};
   final Map<String, Map<String, Map<String, dynamic>>> tripStops = {};
   final Map<String, Map<String, Map<String, dynamic>>> tripScheduleItems = {};
+  final Map<String, Map<String, Map<String, dynamic>>> tripActivity = {};
+  final Map<String, StreamController<List<Map<String, dynamic>>>> activityControllers = {};
 
   final StreamController<UserTripsSnapshot> userTripsController =
       StreamController<UserTripsSnapshot>.broadcast();
@@ -36,6 +38,32 @@ class FakeFirestoreSyncV2Service implements FirestoreSyncV2Service {
 
   void emitScheduleItems(String tripId, List<Map<String, dynamic>> items) {
     itemsControllers.putIfAbsent(tripId, () => StreamController.broadcast()).add(items);
+  }
+
+  void emitActivity(String tripId, List<Map<String, dynamic>> entries) {
+    activityControllers.putIfAbsent(tripId, () => StreamController.broadcast()).add(entries);
+  }
+
+  @override
+  void buildActivityBatchOperation(WriteBatch batch, TripActivity entry) {
+    final fakeBatch = batch as _FakeV2WriteBatch;
+    fakeBatch.addOp(() {
+      tripActivity.putIfAbsent(entry.tripId, () => {})[entry.id] = {
+        'id': entry.id,
+        'tripId': entry.tripId,
+        'actorId': entry.actorId,
+        'action': entry.action,
+        'entityType': entry.entityType,
+        'entityId': entry.entityId,
+        'summary': entry.summary,
+        'createdAt': entry.createdAt,
+      };
+    });
+  }
+
+  @override
+  Stream<List<Map<String, dynamic>>> watchTripActivity(String tripId, {int limit = 200}) {
+    return activityControllers.putIfAbsent(tripId, () => StreamController.broadcast()).stream;
   }
 
   @override

@@ -8,6 +8,7 @@ import '../../auth/providers/auth_provider.dart';
 import '../../sharing/providers/group_sharing_providers.dart' show guestUserId;
 import '../controllers/trips_controller.dart';
 import '../models/trip_summary.dart';
+import '../providers/plan_together_providers.dart';
 import '../providers/trip_list_providers.dart';
 import '../widgets/trip_card.dart';
 import '../widgets/trip_form_sheet.dart';
@@ -32,6 +33,13 @@ class _TripListScreenState extends ConsumerState<TripListScreen> {
       appBar: AppBar(
         title: const Text('My Trips'),
         actions: [
+          if (ref.watch(deletedTripsProvider).valueOrNull?.isNotEmpty ?? false)
+            IconButton(
+              key: const Key('tripListDeleted'),
+              tooltip: 'Recently deleted',
+              icon: const Icon(Icons.restore_from_trash_outlined),
+              onPressed: () => context.push('/trips/deleted'),
+            ),
           IconButton(
             tooltip: 'Join a trip',
             icon: const Icon(Icons.group_add_outlined),

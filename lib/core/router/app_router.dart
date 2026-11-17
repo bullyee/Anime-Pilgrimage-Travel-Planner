@@ -27,7 +27,9 @@ import '../../features/trip/screens/new_spot_screen.dart';
 import '../../features/trip/screens/pilgrimage_day_map_screen.dart';
 import '../../features/trip/screens/stop_screen.dart';
 import '../../features/trip/screens/trip_list_screen.dart';
+import '../../features/trip/screens/trip_activity_screen.dart';
 import '../../features/trip/screens/trip_screen.dart';
+import '../../features/trip/screens/trip_trash_screen.dart';
 
 import '../database/database.dart';
 import '../providers/database_provider.dart';
@@ -106,6 +108,15 @@ GoRouter router(RouterRef ref) {
         ],
       ),
       GoRoute(path: '/settings', builder: (context, state) => const SettingsScreen()),
+      GoRoute(path: '/trips/deleted', builder: (context, state) => const DeletedTripsScreen()),
+      GoRoute(
+        path: '/trips/:tripId/trash',
+        builder: (context, state) => TripTrashScreen(tripId: state.pathParameters['tripId']!),
+      ),
+      GoRoute(
+        path: '/trips/:tripId/activity',
+        builder: (context, state) => TripActivityScreen(tripId: state.pathParameters['tripId']!),
+      ),
       GoRoute(
         path: '/trips/:tripId',
         builder: (context, state) => TripScreen(

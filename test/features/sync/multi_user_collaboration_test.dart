@@ -241,6 +241,28 @@ class SharedCollaborativeCloud extends Fake implements FirestoreSyncV2Service {
     final controller = itemsControllers.putIfAbsent(tripId, () => StreamController.broadcast());
     yield* controller.stream;
   }
+
+  /// Activity entries pushed by any member, per trip.
+  final Map<String, Map<String, Map<String, dynamic>>> tripActivity = {};
+
+  @override
+  void buildActivityBatchOperation(WriteBatch batch, TripActivity entry) {
+    tripActivity.putIfAbsent(entry.tripId, () => {})[entry.id] = {
+      'id': entry.id,
+      'tripId': entry.tripId,
+      'actorId': entry.actorId,
+      'action': entry.action,
+      'entityType': entry.entityType,
+      'entityId': entry.entityId,
+      'summary': entry.summary,
+      'createdAt': entry.createdAt,
+    };
+  }
+
+  @override
+  Stream<List<Map<String, dynamic>>> watchTripActivity(String tripId, {int limit = 200}) async* {
+    yield (tripActivity[tripId]?.values ?? []).map((a) => Map<String, dynamic>.from(a)).toList();
+  }
 }
 
 class _SharedCloudWriteBatch implements WriteBatch {

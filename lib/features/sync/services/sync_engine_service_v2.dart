@@ -5,6 +5,7 @@ import 'package:flutter/foundation.dart';
 import 'package:uuid/uuid.dart';
 
 import '../../../../core/database/database.dart';
+import '../../trip/services/trip_activity_log.dart';
 import 'firestore_sync_v2_service.dart';
 
 enum TripSyncStatus {
@@ -32,6 +33,7 @@ class SyncEngineServiceV2 {
   StreamSubscription? _dayWatcherSub;
   StreamSubscription? _stopWatcherSub;
   StreamSubscription? _scheduleWatcherSub;
+  StreamSubscription? _activityWatcherSub;
   StreamSubscription? _userTripsSub;
 
   final Map<String, StreamSubscription> _subcollectionSubs = {};
@@ -154,6 +156,28 @@ class SyncEngineServiceV2 {
       _scheduleDebouncedPush();
     }, onError: (error, stack) {
       debugPrint('[SyncEngineV2] Error watching dirty schedule items: $error\n$stack');
+    });
+
+    // 4b. Activity entries waiting to go up (they normally ride with a change,
+    // but one left behind, say by a crash between the two, still gets pushed).
+    final activityQuery = localDb.select(localDb.tripActivities).join([
+      innerJoin(localDb.trips, localDb.trips.id.equalsExp(localDb.tripActivities.tripId)),
+    ])
+      ..where(localDb.tripActivities.syncStatus.equals(1) &
+          localDb.tripActivities.actorId.equals(currentUserId) &
+          localDb.trips.sharing.equals('group'));
+    _activityWatcherSub = activityQuery.watch().listen((rows) {
+      if (_isStopped || rows.isEmpty) return;
+      for (final row in rows) {
+        _pendingTripIdsToPush.add(row.readTable(localDb.tripActivities).tripId);
+      }
+      _scheduleDebouncedPush();
+    }, onError: (error, stack) {
+      debugPrint('[SyncEngineV2] Error watching activity entries: $error\n$stack');
+    });
+    TripActivityLog(localDb).expireOld().catchError((Object e) {
+      debugPrint('[SyncEngineV2] Expiring old activity failed: $e');
+      return 0;
     });
 
     // 5. Downstream watchUserTrips listener (serialized)
@@ -322,7 +346,15 @@ class SyncEngineServiceV2 {
               ..where((i) => i.tripId.equals(tripId) & i.syncStatus.equals(1)))
             .get();
 
-        if (trip.syncStatus != 1 && dirtyDays.isEmpty && dirtyStops.isEmpty && dirtyItems.isEmpty) {
+        final dirtyActivities = await (localDb.select(localDb.tripActivities)
+              ..where((a) => a.tripId.equals(tripId) & a.actorId.equals(currentUserId) & a.syncStatus.equals(1)))
+            .get();
+
+        if (trip.syncStatus != 1 &&
+            dirtyDays.isEmpty &&
+            dirtyStops.isEmpty &&
+            dirtyItems.isEmpty &&
+            dirtyActivities.isEmpty) {
           _updateStatus(tripId, TripSyncStatus.synced);
           continue;
         }
@@ -392,6 +424,13 @@ class SyncEngineServiceV2 {
           await flushIfFull();
         }
 
+        // 5. Activity entries, in the same batch as the changes they describe
+        for (final entry in dirtyActivities) {
+          firestoreSync.buildActivityBatchOperation(batch, entry);
+          opCount++;
+          await flushIfFull();
+        }
+
         // Remote commit outside transaction
         if (opCount > 0) {
           await firestoreSync.commitBatch(batch);
@@ -425,6 +464,20 @@ class SyncEngineServiceV2 {
                   ..where((i) => i.id.equals(item.id) & i.updatedAt.equalsValue(item.updatedAt)))
                 .write(const ScheduleItemsCompanion(syncStatus: Value(0)));
           }
+
+          // An entry merged with a newer edit while in flight (new createdAt)
+          // stays waiting under a new id: the log is append-only in Firestore,
+          // so writing the pushed id again would be refused as an update.
+          for (final entry in dirtyActivities) {
+            final done = await (localDb.update(localDb.tripActivities)
+                  ..where((a) => a.id.equals(entry.id) & a.createdAt.equalsValue(entry.createdAt)))
+                .write(const TripActivitiesCompanion(syncStatus: Value(0)));
+            if (done == 0) {
+              await (localDb.update(localDb.tripActivities)
+                    ..where((a) => a.id.equals(entry.id) & a.syncStatus.equals(1)))
+                  .write(TripActivitiesCompanion(id: Value(const Uuid().v4())));
+            }
+          }
         });
 
         // Check if any concurrent edits occurred while the batch was in flight
@@ -441,10 +494,15 @@ class SyncEngineServiceV2 {
               ..where((i) => i.tripId.equals(tripId) & i.syncStatus.equals(1)))
             .get();
 
+        final remainingActivities = await (localDb.select(localDb.tripActivities)
+              ..where((a) => a.tripId.equals(tripId) & a.actorId.equals(currentUserId) & a.syncStatus.equals(1)))
+            .get();
+
         final hasRemainingDirty = remainingDirtyTrip != null ||
             remainingDirtyDays.isNotEmpty ||
             remainingDirtyStops.isNotEmpty ||
-            remainingDirtyItems.isNotEmpty;
+            remainingDirtyItems.isNotEmpty ||
+            remainingActivities.isNotEmpty;
 
         if (hasRemainingDirty) {
           _pendingTripIdsToPush.add(tripId);
@@ -496,6 +554,8 @@ class SyncEngineServiceV2 {
     _stopWatcherSub = null;
     _scheduleWatcherSub?.cancel();
     _scheduleWatcherSub = null;
+    _activityWatcherSub?.cancel();
+    _activityWatcherSub = null;
     _userTripsSub?.cancel();
     _userTripsSub = null;
 
@@ -615,7 +675,7 @@ class SyncEngineServiceV2 {
   }
 
   void _cancelSubcollectionWatchers(String tripId) {
-    for (final suffix in ['days', 'stops', 'items']) {
+    for (final suffix in ['days', 'stops', 'items', 'activity']) {
       _subcollectionSubs.remove('$tripId:$suffix')?.cancel();
       _subcollectionChains.remove('$tripId:$suffix');
     }
@@ -639,6 +699,7 @@ class SyncEngineServiceV2 {
             debugPrint('[SyncEngineV2] Error applying remote day: $e\n$stack');
           }
         }
+        await _markRowsGoneFromServer(tripId, 'days', daysList);
       }).catchError((Object e, StackTrace stack) {
         debugPrint('[SyncEngineV2] Error in days chain for $tripId: $e\n$stack');
       });
@@ -663,6 +724,7 @@ class SyncEngineServiceV2 {
             debugPrint('[SyncEngineV2] Error applying remote stop: $e\n$stack');
           }
         }
+        await _markRowsGoneFromServer(tripId, 'stops', stopsList);
       }).catchError((Object e, StackTrace stack) {
         debugPrint('[SyncEngineV2] Error in stops chain for $tripId: $e\n$stack');
       });
@@ -687,6 +749,7 @@ class SyncEngineServiceV2 {
             debugPrint('[SyncEngineV2] Error applying remote schedule item: $e\n$stack');
           }
         }
+        await _markRowsGoneFromServer(tripId, 'items', itemsList);
       }).catchError((Object e, StackTrace stack) {
         debugPrint('[SyncEngineV2] Error in items chain for $tripId: $e\n$stack');
       });
@@ -694,6 +757,126 @@ class SyncEngineServiceV2 {
       debugPrint('[SyncEngineV2] Error in watchTripScheduleItems for $tripId: $error');
       if (_isPermanentError(error)) {
         _subcollectionSubs.remove('$tripId:items')?.cancel();
+      }
+    });
+
+    // Activity log watcher (What changed)
+    _subcollectionChains['$tripId:activity'] = Future.value();
+    _subcollectionSubs['$tripId:activity'] = firestoreSync.watchTripActivity(tripId).listen((entries) {
+      if (_isStopped) return;
+      final chain = _subcollectionChains['$tripId:activity'] ?? Future.value();
+      _subcollectionChains['$tripId:activity'] = chain.then((_) async {
+        if (_isStopped) return;
+        await _applyRemoteActivity(tripId, entries);
+      }).catchError((Object e, StackTrace stack) {
+        debugPrint('[SyncEngineV2] Error in activity chain for $tripId: $e\n$stack');
+      });
+    }, onError: (error, stack) {
+      debugPrint('[SyncEngineV2] Error in watchTripActivity for $tripId: $error');
+      if (_isPermanentError(error)) {
+        _subcollectionSubs.remove('$tripId:activity')?.cancel();
+      }
+    });
+  }
+
+  /// Copies other members' activity entries into the local log. Entries never
+  /// change once written, so one already here (our own, pushed) is left as is.
+  Future<void> _applyRemoteActivity(String tripId, List<Map<String, dynamic>> entries) async {
+    final cutoff = DateTime.now().subtract(TripActivityLog.lifetime);
+    await localDb.transaction(() async {
+      final trip = await (localDb.select(localDb.trips)..where((t) => t.id.equals(tripId))).getSingleOrNull();
+      if (trip == null || trip.sharing != 'group') return;
+      for (final data in entries) {
+        final id = data['id'];
+        final createdAt = _parseTimestamp(data['createdAt']);
+        if (id is! String || id.isEmpty || createdAt == null || createdAt.isBefore(cutoff)) continue;
+        if (data['tripId'] != null && data['tripId'] != tripId) continue;
+        await localDb.into(localDb.tripActivities).insert(
+              TripActivitiesCompanion.insert(
+                id: id,
+                tripId: tripId,
+                actorId: data['actorId'] as String? ?? '',
+                action: data['action'] as String? ?? '',
+                entityType: data['entityType'] as String? ?? '',
+                entityId: data['entityId'] as String? ?? '',
+                summary: data['summary'] as String? ?? '',
+                createdAt: createdAt,
+                syncStatus: const Value(0),
+              ),
+              mode: InsertMode.insertOrIgnore,
+            );
+      }
+    });
+  }
+
+  /// How old a clean local row must be before its absence on the server is
+  /// read as "Firestore purged its tombstone". Tombstones live 30 days
+  /// ([FirestoreSyncV2Service.tombstoneLifetime]), so anything changed within
+  /// that time is still on the server, deleted or not.
+  static const _goneAfter = Duration(days: 29);
+
+  /// A device that was away longer than a tombstone's 30 days never sees the
+  /// deletion: the document is simply gone. A snapshot from the server lists the
+  /// whole subcollection, so a clean row (pushed, not edited since) that is old
+  /// enough and isn't in it was deleted by someone else: hide it here too.
+  /// Rows with local changes (syncStatus 1) are left alone; they're pushed next.
+  Future<void> _markRowsGoneFromServer(String tripId, String kind, List<Map<String, dynamic>> docs) async {
+    if (docs is! RemoteDocList || docs.isFromCache || _isStopped) return;
+    final remoteIds = {for (final d in docs) if (d['id'] is String) d['id'] as String};
+    final cutoff = DateTime.now().subtract(_goneAfter).millisecondsSinceEpoch;
+    final now = DateTime.now();
+    await localDb.transaction(() async {
+      final trip = await (localDb.select(localDb.trips)..where((t) => t.id.equals(tripId))).getSingleOrNull();
+      if (trip == null || trip.sharing != 'group') return;
+      switch (kind) {
+        case 'days':
+          final gone = (await (localDb.select(localDb.tripDays)
+                    ..where((d) =>
+                        d.tripId.equals(tripId) &
+                        d.syncStatus.equals(0) &
+                        d.deletedAt.isNull() &
+                        d.updatedAt.isSmallerThanValue(cutoff)))
+                  .get())
+              .where((d) => !remoteIds.contains(d.id))
+              .map((d) => d.id)
+              .toList();
+          if (gone.isEmpty) return;
+          await (localDb.update(localDb.tripDays)..where((d) => d.id.isIn(gone) & d.tripId.equals(tripId)))
+              .write(TripDaysCompanion(deletedAt: Value(now), updatedBy: const Value(null)));
+          await (localDb.update(localDb.scheduleItems)
+                ..where((i) => i.dayId.isIn(gone) & i.tripId.equals(tripId) & i.syncStatus.equals(0) & i.deletedAt.isNull()))
+              .write(ScheduleItemsCompanion(deletedAt: Value(now), updatedBy: const Value(null)));
+        case 'stops':
+          final gone = (await (localDb.select(localDb.stops)
+                    ..where((s) =>
+                        s.tripId.equals(tripId) &
+                        s.syncStatus.equals(0) &
+                        s.deletedAt.isNull() &
+                        s.updatedAt.isSmallerThanValue(cutoff)))
+                  .get())
+              .where((s) => !remoteIds.contains(s.id))
+              .map((s) => s.id)
+              .toList();
+          if (gone.isEmpty) return;
+          await (localDb.update(localDb.stops)..where((s) => s.id.isIn(gone) & s.tripId.equals(tripId)))
+              .write(StopsCompanion(deletedAt: Value(now), updatedBy: const Value(null)));
+          await (localDb.update(localDb.scheduleItems)
+                ..where((i) => i.stopId.isIn(gone) & i.tripId.equals(tripId) & i.syncStatus.equals(0) & i.deletedAt.isNull()))
+              .write(ScheduleItemsCompanion(deletedAt: Value(now), updatedBy: const Value(null)));
+        case 'items':
+          final gone = (await (localDb.select(localDb.scheduleItems)
+                    ..where((i) =>
+                        i.tripId.equals(tripId) &
+                        i.syncStatus.equals(0) &
+                        i.deletedAt.isNull() &
+                        i.updatedAt.isSmallerThanValue(cutoff)))
+                  .get())
+              .where((i) => !remoteIds.contains(i.id))
+              .map((i) => i.id)
+              .toList();
+          if (gone.isEmpty) return;
+          await (localDb.update(localDb.scheduleItems)..where((i) => i.id.isIn(gone) & i.tripId.equals(tripId)))
+              .write(ScheduleItemsCompanion(deletedAt: Value(now), updatedBy: const Value(null)));
       }
     });
   }

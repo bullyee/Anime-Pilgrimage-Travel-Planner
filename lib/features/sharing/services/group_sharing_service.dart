@@ -107,6 +107,14 @@ class GroupSharingService {
             .write(const StopsCompanion(syncStatus: Value(1)));
         await (_db.update(_db.scheduleItems)..where((i) => i.tripId.equals(tripId)))
             .write(const ScheduleItemsCompanion(syncStatus: Value(1)));
+        // Rows deleted before the trip was shared go up as tombstones with a
+        // TTL, which the rules accept only in the name of the person pushing.
+        await (_db.update(_db.tripDays)..where((d) => d.tripId.equals(tripId) & d.deletedAt.isNotNull()))
+            .write(TripDaysCompanion(updatedBy: Value(currentUserId)));
+        await (_db.update(_db.stops)..where((s) => s.tripId.equals(tripId) & s.deletedAt.isNotNull()))
+            .write(StopsCompanion(updatedBy: Value(currentUserId)));
+        await (_db.update(_db.scheduleItems)..where((i) => i.tripId.equals(tripId) & i.deletedAt.isNotNull()))
+            .write(ScheduleItemsCompanion(updatedBy: Value(currentUserId)));
       });
       trip = await (_db.select(_db.trips)..where((t) => t.id.equals(tripId))).getSingleOrNull();
     }
