@@ -394,6 +394,28 @@ void main() {
       expect(invite.expiresAt.isAfter(limit.subtract(const Duration(hours: 1))), isTrue);
     });
 
+    test("sharing a trip pushes its earlier tombstones in the sharer's name", () async {
+      await db.into(db.trips).insert(
+            TripsCompanion.insert(id: 'trip_1', title: 'Kyoto Trip', ownerId: currentUserId),
+          );
+      // Deleted while signed out, so not in anyone's name yet.
+      await db.into(db.stops).insert(StopsCompanion.insert(
+            id: 'gone', tripId: 'trip_1', placeKey: 'anitabi:2', name: 'Gone', lat: 35.0, lng: 135.0,
+            addedBy: 'guest_local_user', updatedBy: const Value('guest_local_user'), deletedAt: Value(DateTime.now()),
+          ));
+      await db.into(db.stops).insert(StopsCompanion.insert(
+            id: 'live', tripId: 'trip_1', placeKey: 'anitabi:1', name: 'Live', lat: 35.0, lng: 135.0,
+            addedBy: 'guest_local_user', updatedBy: const Value('guest_local_user'),
+          ));
+
+      await sharingService.createInvite(tripId: 'trip_1', role: TripMemberRole.viewer);
+
+      final rows = {for (final s in await db.select(db.stops).get()) s.id: s};
+      expect(rows['gone']!.updatedBy, currentUserId);
+      expect(rows['gone']!.syncStatus, 1);
+      expect(rows['live']!.updatedBy, 'guest_local_user');
+    });
+
     test('the first invite creates the cloud trip and its owner before the trip is marked shared', () async {
       await db.into(db.trips).insert(
             TripsCompanion.insert(id: 'trip_1', title: 'Kyoto Trip', ownerId: currentUserId),

@@ -246,6 +246,7 @@ class DriftTripRepository implements TripRepository {
   Future<void> updateTrip(TripsCompanion trip) {
     final now = _now();
     return _db.transaction(() async {
+      final before = await (_db.select(_db.trips)..where((tbl) => tbl.id.equals(trip.id.value))).getSingleOrNull();
       await (_db.update(_db.trips)..where((tbl) => tbl.id.equals(trip.id.value))).write(
         trip.copyWith(
           updatedAt: Value(now),
@@ -253,12 +254,15 @@ class DriftTripRepository implements TripRepository {
           syncStatus: const Value(1),
         ),
       );
+      if (before == null) return;
+      // The edit sheet sends every field, so log only what actually changed.
       final String summary;
-      if (trip.title.present) {
+      if (trip.title.present && trip.title.value != before.title) {
         summary = 'renamed the trip to "${trip.title.value}"';
-      } else if (trip.startDate.present || trip.dayCount.present) {
+      } else if ((trip.startDate.present && trip.startDate.value != before.startDate) ||
+          (trip.dayCount.present && trip.dayCount.value != before.dayCount)) {
         summary = "changed the trip's dates";
-      } else if (trip.description.present) {
+      } else if (trip.description.present && (trip.description.value ?? '') != (before.description ?? '')) {
         summary = "edited the trip's description";
       } else {
         return;
@@ -1288,12 +1292,18 @@ class DriftTripRepository implements TripRepository {
 
       await _log(stop.tripId, TripActivityAction.restoreStop, 'stop', stopId, 'restored ${stop.name}');
 
-      // Revive schedule items that were deleted at the same time as this stop
+      // Revive schedule items that were deleted at the same time as this stop,
+      // on days that are still there (a day deleted since stays in the trash).
+      final liveDays = await (_db.select(_db.tripDays)
+            ..where((tbl) => tbl.tripId.equals(stop.tripId) & tbl.deletedAt.isNull()))
+          .get();
+      if (liveDays.isEmpty) return;
       await (_db.update(_db.scheduleItems)
             ..where((tbl) =>
                 tbl.stopId.equals(stopId) &
                 tbl.tripId.equals(stop.tripId) &
-                tbl.deletedAt.equals(deletedAt.millisecondsSinceEpoch)))
+                tbl.deletedAt.equals(deletedAt.millisecondsSinceEpoch) &
+                tbl.dayId.isIn(liveDays.map((d) => d.id))))
           .write(
         ScheduleItemsCompanion(
           deletedAt: const Value(null),
@@ -1371,8 +1381,14 @@ class DriftTripRepository implements TripRepository {
         ),
       );
 
+      // What went with the trip comes back, and what this device still has
+      // live goes up again too: if the trip was deleted on another device,
+      // this one may never have pulled its tombstones, and they would hide
+      // everything again once the trip's watchers restart.
       await (_db.update(_db.tripDays)
-            ..where((tbl) => tbl.tripId.equals(tripId) & tbl.deletedAt.equals(deletedAt.millisecondsSinceEpoch)))
+            ..where((tbl) =>
+                tbl.tripId.equals(tripId) &
+                (tbl.deletedAt.equals(deletedAt.millisecondsSinceEpoch) | tbl.deletedAt.isNull())))
           .write(TripDaysCompanion(
         deletedAt: const Value(null),
         updatedAt: Value(now),
@@ -1381,7 +1397,9 @@ class DriftTripRepository implements TripRepository {
       ));
 
       await (_db.update(_db.stops)
-            ..where((tbl) => tbl.tripId.equals(tripId) & tbl.deletedAt.equals(deletedAt.millisecondsSinceEpoch)))
+            ..where((tbl) =>
+                tbl.tripId.equals(tripId) &
+                (tbl.deletedAt.equals(deletedAt.millisecondsSinceEpoch) | tbl.deletedAt.isNull())))
           .write(StopsCompanion(
         deletedAt: const Value(null),
         updatedAt: Value(now),
@@ -1390,7 +1408,9 @@ class DriftTripRepository implements TripRepository {
       ));
 
       await (_db.update(_db.scheduleItems)
-            ..where((tbl) => tbl.tripId.equals(tripId) & tbl.deletedAt.equals(deletedAt.millisecondsSinceEpoch)))
+            ..where((tbl) =>
+                tbl.tripId.equals(tripId) &
+                (tbl.deletedAt.equals(deletedAt.millisecondsSinceEpoch) | tbl.deletedAt.isNull())))
           .write(ScheduleItemsCompanion(
         deletedAt: const Value(null),
         updatedAt: Value(now),

@@ -111,6 +111,36 @@ void main() {
       expect(merged, ['merged Uji Bridge (night) into Uji Bridge']);
     });
 
+    test('a trip edit is logged by what changed, and not at all when nothing did', () async {
+      final repo = DriftTripRepository(db, null, me);
+      final trip = await newTrip(repo);
+      // The edit sheet sends every field.
+      await repo.updateTrip(TripsCompanion(id: Value(trip.id), title: const Value('Uji'), description: const Value('Tea')));
+      await repo.updateTrip(TripsCompanion(id: Value(trip.id), title: const Value('Uji'), description: const Value('Tea')));
+      expect((await log()).map((e) => e.summary), ["edited the trip's description"]);
+      // A rename soon after merges into the same entry.
+      await repo.updateTrip(TripsCompanion(id: Value(trip.id), title: const Value('Uji 2')));
+      expect((await log()).map((e) => e.summary), ['renamed the trip to "Uji 2"']);
+    });
+
+    test('long summaries are clipped, also when a repeat merges, without splitting an emoji', () async {
+      final repo = DriftTripRepository(db, null, me);
+      final trip = await newTrip(repo);
+      final activity = TripActivityLog(db);
+      final long = '${'a' * 478}😀${'b' * 100}';
+      final clipped = TripActivityLog.clipSummary(long);
+      expect(clipped.length, lessThanOrEqualTo(480));
+      expect(clipped, '${'a' * 478}…');
+      for (final s in ['short', long]) {
+        await activity.record(
+          tripId: trip.id, actorId: me, action: TripActivityAction.updateStop,
+          entityType: 'stop', entityId: 's', summary: s,
+        );
+      }
+      final entry = (await log()).single;
+      expect(entry.summary.length, lessThanOrEqualTo(480));
+    });
+
     test('expireOld drops entries older than 30 days', () async {
       final repo = DriftTripRepository(db, null, me);
       final trip = await newTrip(repo);
@@ -134,6 +164,42 @@ void main() {
       );
       expect(await activity.expireOld(), 1);
       expect((await log()).map((e) => e.summary), ['added Daikichiyama']);
+    });
+  });
+
+  group('restore', () {
+    test('restoring a stop leaves its plan on a day deleted since in the trash', () async {
+      final repo = DriftTripRepository(db, null, me);
+      final trip = await newTrip(repo);
+      final days = await repo.getDaysForTrip(trip.id);
+      final stop = await repo.createTripOnlySpot(tripId: trip.id, name: 'Uji Bridge', lat: 34.89, lng: 135.80, addedBy: me);
+      final onDay2 = await repo.scheduleStop(tripId: trip.id, stopId: stop.id, dayId: days[1].id);
+      await repo.deleteStop(stop.id);
+      await Future<void>.delayed(const Duration(milliseconds: 5));
+      await repo.deleteDayBlock(days[1].id);
+
+      await repo.restoreStop(stop.id);
+      final restored = await (db.select(db.stops)..where((s) => s.id.equals(stop.id))).getSingle();
+      expect(restored.deletedAt, isNull);
+      final item = await (db.select(db.scheduleItems)..where((i) => i.id.equals(onDay2.id))).getSingle();
+      expect(item.deletedAt, isNotNull);
+    });
+
+    test('restoring a trip also re-sends what this device still has live', () async {
+      final repo = DriftTripRepository(db, null, me);
+      final trip = await newTrip(repo);
+      final stop = await repo.createTripOnlySpot(tripId: trip.id, name: 'Uji Bridge', lat: 34.89, lng: 135.80, addedBy: me);
+      // Deleted on another of the owner's devices: this one pulled the trip's
+      // tombstone, but not its stops'.
+      await (db.update(db.stops)..where((s) => s.id.equals(stop.id))).write(const StopsCompanion(syncStatus: Value(0)));
+      await (db.update(db.trips)..where((t) => t.id.equals(trip.id)))
+          .write(TripsCompanion(deletedAt: Value(DateTime.now()), syncStatus: const Value(0)));
+
+      await repo.restoreTrip(trip.id);
+      final again = await (db.select(db.stops)..where((s) => s.id.equals(stop.id))).getSingle();
+      expect(again.deletedAt, isNull);
+      expect(again.syncStatus, 1);
+      expect(again.updatedBy, me);
     });
   });
 
@@ -175,6 +241,30 @@ void main() {
         at: DateTime.now().add(const Duration(seconds: 1)),
       );
       expect(await unread(), isTrue);
+    });
+
+    test("a member's clock running ahead doesn't leave the dot on", () async {
+      final repo = DriftTripRepository(db, null, me);
+      final trip = await newTrip(repo);
+      final container = ProviderContainer(overrides: [
+        databaseProvider.overrideWithValue(db),
+        currentUserIdProvider.overrideWithValue(me),
+      ]);
+      addTearDown(container.dispose);
+      final sub = container.listen(tripHasUnreadProvider(trip.id), (_, _) {});
+      addTearDown(sub.close);
+
+      await TripActivityLog(db).record(
+        tripId: trip.id, actorId: bob, action: TripActivityAction.addStop,
+        entityType: 'stop', entityId: 's', summary: 'added Kosei',
+        at: DateTime.now().add(const Duration(minutes: 3)),
+      );
+      await Future<void>.delayed(const Duration(milliseconds: 50));
+      expect(container.read(tripHasUnreadProvider(trip.id)), isTrue);
+
+      await markTripActivitySeen(db, trip.id, me);
+      await Future<void>.delayed(const Duration(milliseconds: 50));
+      expect(container.read(tripHasUnreadProvider(trip.id)), isFalse);
     });
   });
 

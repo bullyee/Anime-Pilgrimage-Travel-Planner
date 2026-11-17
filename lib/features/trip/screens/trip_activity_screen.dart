@@ -50,7 +50,7 @@ class _TripActivityScreenState extends ConsumerState<TripActivityScreen> {
     super.dispose();
   }
 
-  void _markSeen() => markTripActivitySeen(_db, widget.tripId, _me);
+  void _markSeen() => markTripActivitySeen(_db, widget.tripId, _me).catchError((Object _) {});
 
   @override
   Widget build(BuildContext context) {
@@ -120,7 +120,7 @@ class _ActivityTile extends ConsumerWidget {
     final members = ref.watch(tripMembersProvider(entry.tripId)).valueOrNull;
     final avatarUrl = members?.where((m) => m.userId == entry.actorId).firstOrNull?.avatarUrl;
     final stopExists = entry.entityType == 'stop'
-        ? ref.watch(_liveStopProvider(entry.entityId)).valueOrNull ?? false
+        ? ref.watch(_liveStopProvider((tripId: entry.tripId, stopId: entry.entityId))).valueOrNull ?? false
         : false;
     return ListTile(
       key: Key('activity_${entry.id}'),
@@ -139,9 +139,11 @@ class _ActivityTile extends ConsumerWidget {
 }
 
 /// Whether a stop is still in the trip, so an entry about it can open it.
-final _liveStopProvider = StreamProvider.autoDispose.family<bool, String>((ref, stopId) {
+final _liveStopProvider =
+    StreamProvider.autoDispose.family<bool, ({String tripId, String stopId})>((ref, key) {
   final db = ref.watch(databaseProvider);
-  return (db.select(db.stops)..where((s) => s.id.equals(stopId) & s.deletedAt.isNull()))
+  return (db.select(db.stops)
+        ..where((s) => s.id.equals(key.stopId) & s.tripId.equals(key.tripId) & s.deletedAt.isNull()))
       .watchSingleOrNull()
       .map((s) => s != null);
 });

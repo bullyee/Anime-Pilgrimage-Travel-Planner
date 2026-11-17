@@ -169,9 +169,19 @@ final _latestByOthersProvider =
   return TripActivityLog(ref.watch(databaseProvider)).watchLatestByOthers(key.tripId, key.userId);
 });
 
-/// Marks the trip's activity as seen now, which clears its dot.
-Future<void> markTripActivitySeen(AppDatabase db, String tripId, String userId, {DateTime? at}) {
-  return db.into(db.tripViews).insertOnConflictUpdate(
-        TripViewsCompanion.insert(tripId: tripId, userId: userId, viewedAt: at ?? DateTime.now()),
+/// Marks the trip's activity as seen now, which clears its dot. Never earlier
+/// than the newest entry already here, so a member whose clock runs ahead
+/// doesn't leave the dot on.
+Future<void> markTripActivitySeen(AppDatabase db, String tripId, String userId, {DateTime? at}) async {
+  var seen = at ?? DateTime.now();
+  final newest = db.tripActivities.createdAt.max();
+  final row = await (db.selectOnly(db.tripActivities)
+        ..addColumns([newest])
+        ..where(db.tripActivities.tripId.equals(tripId)))
+      .getSingle();
+  final ms = row.read(newest);
+  if (ms != null && ms > seen.millisecondsSinceEpoch) seen = DateTime.fromMillisecondsSinceEpoch(ms);
+  await db.into(db.tripViews).insertOnConflictUpdate(
+        TripViewsCompanion.insert(tripId: tripId, userId: userId, viewedAt: seen),
       );
 }

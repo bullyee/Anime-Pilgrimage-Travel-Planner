@@ -89,6 +89,57 @@ void main() {
       expect(local.syncStatus, 0);
     });
 
+    test('an entry merged while its push is in flight goes up again under a new id', () async {
+      await sharedTrip('t1');
+      await stop('s1', 't1', updatedAt: DateTime.now());
+      cloud.trips['t1'] = {'id': 't1'};
+      final repo = DriftTripRepository(db, null, me);
+      var editedMidFlight = false;
+      cloud.onBeforeCommit = () async {
+        if (editedMidFlight) return;
+        editedMidFlight = true;
+        await repo.updateStop(const StopsCompanion(id: Value('s1'), note: Value('Meet here')));
+      };
+      engine.startSync();
+
+      await repo.updateStop(const StopsCompanion(id: Value('s1'), note: Value('Meet')));
+      await settle(2000);
+
+      // The log is append-only in Firestore: the merged entry is a second
+      // document, never a rewrite of the first.
+      final pushed = cloud.tripActivity['t1']!;
+      expect(pushed, hasLength(2));
+      final local = await db.select(db.tripActivities).getSingle();
+      expect(local.syncStatus, 0);
+      expect(pushed.keys, contains(local.id));
+    });
+
+    test("only the signed-in user's entries go up", () async {
+      await sharedTrip('t1');
+      await stop('s1', 't1', updatedAt: DateTime.now());
+      cloud.trips['t1'] = {'id': 't1'};
+      // Left behind by another account on this device.
+      await db.into(db.tripActivities).insert(TripActivitiesCompanion.insert(
+            id: 'theirs',
+            tripId: 't1',
+            actorId: 'user_bob',
+            action: 'add_stop',
+            entityType: 'stop',
+            entityId: 's9',
+            summary: 'added Kosei',
+            createdAt: DateTime.now(),
+            syncStatus: const Value(1),
+          ));
+      engine.startSync();
+
+      await DriftTripRepository(db, null, me).deleteStop('s1');
+      await settle(1500);
+
+      expect(cloud.tripActivity['t1']!.values.map((e) => e['actorId']), [me]);
+      final theirs = await (db.select(db.tripActivities)..where((a) => a.id.equals('theirs'))).getSingle();
+      expect(theirs.syncStatus, 1);
+    });
+
     test("other members' entries come down into the local log; old ones are skipped", () async {
       await sharedTrip('t1', owner: 'user_bob');
       engine.startSync();

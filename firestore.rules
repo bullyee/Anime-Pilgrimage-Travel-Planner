@@ -120,9 +120,10 @@ service cloud.firestore {
     }
 
     // Deleting or restoring the trip itself is the owner's (members only leave).
+    // A missing deletedAt counts as null on both sides, so removing the field
+    // (an update mask without it in the body) is a restore too.
     function isTripDeletionByOwner(tripId) {
-      return !('deletedAt' in request.resource.data)
-        || request.resource.data.deletedAt == resource.data.get('deletedAt', null)
+      return request.resource.data.get('deletedAt', null) == resource.data.get('deletedAt', null)
         || isTripOwner(tripId);
     }
 

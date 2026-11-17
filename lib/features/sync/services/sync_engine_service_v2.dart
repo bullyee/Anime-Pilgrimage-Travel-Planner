@@ -163,7 +163,9 @@ class SyncEngineServiceV2 {
     final activityQuery = localDb.select(localDb.tripActivities).join([
       innerJoin(localDb.trips, localDb.trips.id.equalsExp(localDb.tripActivities.tripId)),
     ])
-      ..where(localDb.tripActivities.syncStatus.equals(1) & localDb.trips.sharing.equals('group'));
+      ..where(localDb.tripActivities.syncStatus.equals(1) &
+          localDb.tripActivities.actorId.equals(currentUserId) &
+          localDb.trips.sharing.equals('group'));
     _activityWatcherSub = activityQuery.watch().listen((rows) {
       if (_isStopped || rows.isEmpty) return;
       for (final row in rows) {
@@ -345,7 +347,7 @@ class SyncEngineServiceV2 {
             .get();
 
         final dirtyActivities = await (localDb.select(localDb.tripActivities)
-              ..where((a) => a.tripId.equals(tripId) & a.syncStatus.equals(1)))
+              ..where((a) => a.tripId.equals(tripId) & a.actorId.equals(currentUserId) & a.syncStatus.equals(1)))
             .get();
 
         if (trip.syncStatus != 1 &&
@@ -464,11 +466,17 @@ class SyncEngineServiceV2 {
           }
 
           // An entry merged with a newer edit while in flight (new createdAt)
-          // stays waiting, and goes up again with its new text.
+          // stays waiting under a new id: the log is append-only in Firestore,
+          // so writing the pushed id again would be refused as an update.
           for (final entry in dirtyActivities) {
-            await (localDb.update(localDb.tripActivities)
+            final done = await (localDb.update(localDb.tripActivities)
                   ..where((a) => a.id.equals(entry.id) & a.createdAt.equalsValue(entry.createdAt)))
                 .write(const TripActivitiesCompanion(syncStatus: Value(0)));
+            if (done == 0) {
+              await (localDb.update(localDb.tripActivities)
+                    ..where((a) => a.id.equals(entry.id) & a.syncStatus.equals(1)))
+                  .write(TripActivitiesCompanion(id: Value(const Uuid().v4())));
+            }
           }
         });
 
@@ -487,7 +495,7 @@ class SyncEngineServiceV2 {
             .get();
 
         final remainingActivities = await (localDb.select(localDb.tripActivities)
-              ..where((a) => a.tripId.equals(tripId) & a.syncStatus.equals(1)))
+              ..where((a) => a.tripId.equals(tripId) & a.actorId.equals(currentUserId) & a.syncStatus.equals(1)))
             .get();
 
         final hasRemainingDirty = remainingDirtyTrip != null ||
@@ -833,10 +841,10 @@ class SyncEngineServiceV2 {
               .map((d) => d.id)
               .toList();
           if (gone.isEmpty) return;
-          await (localDb.update(localDb.tripDays)..where((d) => d.id.isIn(gone)))
+          await (localDb.update(localDb.tripDays)..where((d) => d.id.isIn(gone) & d.tripId.equals(tripId)))
               .write(TripDaysCompanion(deletedAt: Value(now), updatedBy: const Value(null)));
           await (localDb.update(localDb.scheduleItems)
-                ..where((i) => i.dayId.isIn(gone) & i.syncStatus.equals(0) & i.deletedAt.isNull()))
+                ..where((i) => i.dayId.isIn(gone) & i.tripId.equals(tripId) & i.syncStatus.equals(0) & i.deletedAt.isNull()))
               .write(ScheduleItemsCompanion(deletedAt: Value(now), updatedBy: const Value(null)));
         case 'stops':
           final gone = (await (localDb.select(localDb.stops)
@@ -850,10 +858,10 @@ class SyncEngineServiceV2 {
               .map((s) => s.id)
               .toList();
           if (gone.isEmpty) return;
-          await (localDb.update(localDb.stops)..where((s) => s.id.isIn(gone)))
+          await (localDb.update(localDb.stops)..where((s) => s.id.isIn(gone) & s.tripId.equals(tripId)))
               .write(StopsCompanion(deletedAt: Value(now), updatedBy: const Value(null)));
           await (localDb.update(localDb.scheduleItems)
-                ..where((i) => i.stopId.isIn(gone) & i.syncStatus.equals(0) & i.deletedAt.isNull()))
+                ..where((i) => i.stopId.isIn(gone) & i.tripId.equals(tripId) & i.syncStatus.equals(0) & i.deletedAt.isNull()))
               .write(ScheduleItemsCompanion(deletedAt: Value(now), updatedBy: const Value(null)));
         case 'items':
           final gone = (await (localDb.select(localDb.scheduleItems)
@@ -867,7 +875,7 @@ class SyncEngineServiceV2 {
               .map((i) => i.id)
               .toList();
           if (gone.isEmpty) return;
-          await (localDb.update(localDb.scheduleItems)..where((i) => i.id.isIn(gone)))
+          await (localDb.update(localDb.scheduleItems)..where((i) => i.id.isIn(gone) & i.tripId.equals(tripId)))
               .write(ScheduleItemsCompanion(deletedAt: Value(now), updatedBy: const Value(null)));
       }
     });

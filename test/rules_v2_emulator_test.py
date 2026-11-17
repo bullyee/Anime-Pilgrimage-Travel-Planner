@@ -816,6 +816,13 @@ def main():
                                             'updatedBy': {'stringValue': 'tina'}}, 'tina')
     assert_status("Trip deletion: owner deletes the trip (200)", 200, code, resp=resp)
 
+    # Removing the fields (in the update mask, not in the body) is a restore too.
+    code, resp = api_request('PATCH', 'tripsV2/trip_ttl?updateMask.fieldPaths=deletedAt&updateMask.fieldPaths=expireAt'
+                             '&updateMask.fieldPaths=updatedAt&updateMask.fieldPaths=updatedBy',
+                             {'fields': {'updatedAt': {'integerValue': '4000'}, 'updatedBy': {'stringValue': 'eddie'}}},
+                             user_id='eddie')
+    assert_status("Trip deletion: editor cannot restore the trip by removing deletedAt (403)", 403, code, resp=resp)
+
     code, resp = patch('tripsV2/trip_ttl', {'deletedAt': {'nullValue': None}, 'expireAt': {'nullValue': None},
                                             'updatedAt': {'integerValue': '4000'}, 'updatedBy': {'stringValue': 'eddie'}}, 'eddie')
     assert_status("Trip deletion: editor cannot restore the trip (403)", 403, code, resp=resp)

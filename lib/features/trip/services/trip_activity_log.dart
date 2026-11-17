@@ -96,8 +96,8 @@ class TripActivityLog {
             ..limit(1))
           .getSingleOrNull();
       if (waiting != null) {
-        await (_db.update(_db.tripActivities)..where((a) => a.id.equals(waiting.id)))
-            .write(TripActivitiesCompanion(summary: Value(summary), createdAt: Value(now)));
+        await (_db.update(_db.tripActivities)..where((a) => a.id.equals(waiting.id) & a.tripId.equals(tripId)))
+            .write(TripActivitiesCompanion(summary: Value(clipSummary(summary)), createdAt: Value(now)));
         return;
       }
     }
@@ -109,7 +109,7 @@ class TripActivityLog {
           action: action.value,
           entityType: entityType,
           entityId: entityId,
-          summary: _clip(summary),
+          summary: clipSummary(summary),
           createdAt: now,
           syncStatus: const Value(1),
         ));
@@ -169,7 +169,14 @@ class TripActivityLog {
     return (_db.delete(_db.tripActivities)..where((a) => a.createdAt.isSmallerThanValue(cutoff))).go();
   }
 
-  static String _clip(String s) => s.length <= 480 ? s : '${s.substring(0, 479)}…';
+  /// At most 480 UTF-16 units (the rules allow 500), never cutting an emoji in half.
+  static String clipSummary(String s) {
+    if (s.length <= 480) return s;
+    var end = 479;
+    final last = s.codeUnitAt(end - 1);
+    if (last >= 0xD800 && last <= 0xDBFF) end--;
+    return '${s.substring(0, end)}…';
+  }
 }
 
 /// "Uji Bridge", "Uji Bridge and Daikichiyama", "Uji Bridge and 2 more".
