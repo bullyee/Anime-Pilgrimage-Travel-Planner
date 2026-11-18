@@ -16,6 +16,8 @@ import '../invite_links.dart';
 import '../models/trip_invite.dart';
 import '../models/trip_member.dart';
 import '../providers/group_sharing_providers.dart';
+import '../web_join_help.dart';
+import '../widgets/web_join_help.dart';
 import '../widgets/member_avatar.dart';
 
 /// How long a joined trip's days and stops may take to come down before the
@@ -187,8 +189,13 @@ class _JoinTripScreenState extends ConsumerState<JoinTripScreen> {
         break;
     }
     if (invite == null) return const _StateView.busy(title: 'Finding the trip…', text: '');
+    final browser = ref.watch(webJoinBrowserProvider);
+    final help = browser != null && WebJoinHelp.shows(browser, signedIn: signedIn)
+        ? WebJoinHelp(browser: browser, token: invite.token, signedIn: signedIn)
+        : null;
     if (!signedIn) {
       return _StateView(
+        lead: help,
         icon: Icons.account_circle_outlined,
         color: p.wisteria,
         background: p.wisteriaSoft,
@@ -202,7 +209,7 @@ class _JoinTripScreenState extends ConsumerState<JoinTripScreen> {
         ),
       );
     }
-    return _preview(context, invite);
+    return _preview(context, invite, help: help);
   }
 
   Widget _entry(BuildContext context, JoinTripState state) {
@@ -290,7 +297,7 @@ class _JoinTripScreenState extends ConsumerState<JoinTripScreen> {
     );
   }
 
-  Widget _preview(BuildContext context, TripInvite invite) {
+  Widget _preview(BuildContext context, TripInvite invite, {Widget? help}) {
     final theme = Theme.of(context);
     final muted = theme.colorScheme.onSurfaceVariant;
     final editing = invite.role != TripMemberRole.viewer;
@@ -304,6 +311,7 @@ class _JoinTripScreenState extends ConsumerState<JoinTripScreen> {
         child: ListView(
           padding: const EdgeInsets.fromLTRB(24, 16, 24, 32),
           children: [
+            if (help != null) ...[help, const SizedBox(height: 20)],
             Row(
               children: [
                 MemberAvatar(name: invite.inviterName),
@@ -464,6 +472,9 @@ class _StateView extends StatelessWidget {
   final String text;
   final Widget? action;
 
+  /// Shown above the icon, such as the web's help for Android browsers.
+  final Widget? lead;
+
   const _StateView({
     required IconData this.icon,
     required Color this.color,
@@ -471,13 +482,15 @@ class _StateView extends StatelessWidget {
     required this.title,
     required this.text,
     this.action,
+    this.lead,
   });
 
   const _StateView.busy({required this.title, required this.text})
       : icon = null,
         color = null,
         background = null,
-        action = null;
+        action = null,
+        lead = null;
 
   @override
   Widget build(BuildContext context) {
@@ -490,6 +503,7 @@ class _StateView extends StatelessWidget {
           child: Column(
             mainAxisSize: MainAxisSize.min,
             children: [
+              if (lead != null) ...[lead!, const SizedBox(height: 28)],
               if (icon == null)
                 const SizedBox(width: 56, height: 56, child: CircularProgressIndicator())
               else
