@@ -16,6 +16,7 @@ import 'package:trip_planner/features/sharing/models/trip_member.dart';
 import 'package:trip_planner/features/sharing/providers/group_sharing_providers.dart';
 import 'package:trip_planner/features/sharing/screens/join_trip_screen.dart';
 import 'package:trip_planner/features/sharing/services/group_sharing_service.dart';
+import 'package:trip_planner/features/sharing/web_join_help.dart';
 import 'package:trip_planner/features/trip/screens/trip_members_tab.dart';
 import 'package:trip_planner/features/trip/screens/trip_screen.dart';
 import 'package:trip_planner/features/trip/widgets/trip_card.dart';
@@ -161,7 +162,8 @@ void main() {
     return (db.select(db.trips)..where((t) => t.id.equals('t1'))).getSingle();
   }
 
-  Future<void> pump(WidgetTester tester, RouterConfig<Object> router, {String userId = 'u1'}) async {
+  Future<void> pump(WidgetTester tester, RouterConfig<Object> router,
+      {String userId = 'u1', WebJoinBrowser? browser}) async {
     await tester.binding.setSurfaceSize(const Size(800, 1400));
     addTearDown(() => tester.binding.setSurfaceSize(null));
     await tester.pumpWidget(ProviderScope(
@@ -170,6 +172,7 @@ void main() {
         currentUserIdProvider.overrideWithValue(userId),
         groupSharingServiceProvider.overrideWithValue(sharing),
         sharingProfileProvider.overrideWithValue((name: 'Bea', avatarUrl: null)),
+        webJoinBrowserProvider.overrideWithValue(browser),
       ],
       child: MaterialApp.router(routerConfig: router),
     ));
@@ -561,7 +564,77 @@ void main() {
       expect(find.text('Sign in to join Kansai with friends'), findsOneWidget);
       expect(find.text('Sign in with Google'), findsOneWidget);
       expect(find.text('Join trip'), findsNothing);
+      expect(find.text('Open in the app'), findsNothing);
+      expect(find.text('Open this in Chrome or Safari'), findsNothing);
       await done(tester);
+    });
+
+    group('on the web', () {
+      const androidChrome = WebJoinBrowser(android: true, inApp: false);
+      const androidLine = WebJoinBrowser(android: true, inApp: true);
+      const iPhoneInstagram = WebJoinBrowser(android: false, inApp: true);
+      const iPhoneSafari = WebJoinBrowser(android: false, inApp: false);
+
+      testWidgets('an Android browser offers the app and its APK next to signing in', (tester) async {
+        sharing.preview = _invite();
+        await pump(tester, joinRouter('/join?token=$_token'), userId: guestUserId, browser: androidChrome);
+
+        expect(find.text('Have the Android app?'), findsOneWidget);
+        expect(find.text('Open in the app'), findsOneWidget);
+        expect(find.text('Get the APK'), findsOneWidget);
+        expect(find.text('Sign in with Google'), findsOneWidget);
+        expect(find.text('Open this in Chrome or Safari'), findsNothing);
+        await done(tester);
+      });
+
+      testWidgets("an app's own browser says to open the link elsewhere, and copies it", (tester) async {
+        String? copied;
+        tester.binding.defaultBinaryMessenger.setMockMethodCallHandler(SystemChannels.platform, (call) async {
+          if (call.method == 'Clipboard.setData') copied = (call.arguments as Map)['text'] as String?;
+          return null;
+        });
+        addTearDown(() => tester.binding.defaultBinaryMessenger.setMockMethodCallHandler(SystemChannels.platform, null));
+        sharing.preview = _invite();
+        await pump(tester, joinRouter('/join?token=$_token'), userId: guestUserId, browser: iPhoneInstagram);
+
+        expect(find.text('Open this in Chrome or Safari'), findsOneWidget);
+        expect(find.text('Open in the app'), findsNothing);
+
+        await tester.tap(find.text('Copy link'));
+        await tester.pumpAndSettle();
+        expect(copied, inviteLink(_token));
+        expect(find.text('Link copied. Paste it in Chrome or Safari.'), findsOneWidget);
+        await done(tester);
+      });
+
+      testWidgets('signed in, only the app is offered, above the preview', (tester) async {
+        sharing.preview = _invite();
+        await pump(tester, joinRouter('/join?token=$_token'), browser: androidLine);
+
+        expect(find.text('Have the Android app?'), findsOneWidget);
+        expect(find.text('Open this in Chrome or Safari'), findsNothing);
+        expect(find.text('Join trip'), findsOneWidget);
+        await done(tester);
+      });
+
+      testWidgets('Safari on an iPhone needs nothing extra', (tester) async {
+        sharing.preview = _invite();
+        await pump(tester, joinRouter('/join?token=$_token'), userId: guestUserId, browser: iPhoneSafari);
+
+        expect(find.text('Sign in with Google'), findsOneWidget);
+        expect(find.text('Have the Android app?'), findsNothing);
+        expect(find.text('Open this in Chrome or Safari'), findsNothing);
+        await done(tester);
+      });
+
+      testWidgets("an invite that can't be used offers nothing", (tester) async {
+        sharing.preview = _invite(expiresIn: const Duration(days: -1));
+        await pump(tester, joinRouter('/join?token=$_token'), browser: androidChrome);
+
+        expect(find.text('This invite has expired'), findsOneWidget);
+        expect(find.text('Open in the app'), findsNothing);
+        await done(tester);
+      });
     });
 
     testWidgets('offline, it says so, and trying again finds the trip', (tester) async {
