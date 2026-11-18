@@ -105,7 +105,7 @@ void main() {
         updatedAt: DateTime.now(),
       );
 
-      final spot = AnitabiSpot(
+      const spot = AnitabiSpot(
         id: 'spot_1',
         name: 'Kumiko Bench',
         lat: 34.891111,
@@ -130,7 +130,7 @@ void main() {
         updatedAt: DateTime.now(),
       );
 
-      final spot = AnitabiSpot(
+      const spot = AnitabiSpot(
         id: 'spot_1',
         name: 'Kumiko Bench',
         // Moved ~110m north
@@ -163,7 +163,7 @@ void main() {
       );
 
       // Moved ~1 meter only
-      final spot = AnitabiSpot(
+      const spot = AnitabiSpot(
         id: 'spot_1',
         name: 'Kumiko Bench',
         lat: 34.891119,
@@ -586,7 +586,7 @@ void main() {
         ),
       );
 
-      final spot = AnitabiSpot(
+      const spot = AnitabiSpot(
         id: 'spot_99',
         name: 'Refined Official Name',
         lat: 34.005,
@@ -618,7 +618,7 @@ void main() {
           visibility: const Value('saved'),
         ),
       );
-      final spot = AnitabiSpot(id: 'spot_98', name: 'Bench', lat: 34.0, lng: 135.0, note: '   ', originUrl: ' ');
+      const spot = AnitabiSpot(id: 'spot_98', name: 'Bench', lat: 34.0, lng: 135.0, note: '   ', originUrl: ' ');
       final place = (await placeRepo.getPlace('anitabi:spot_98'))!;
       expect(comparisonService.comparePlaceWithAnitabi(place, spot), isNull);
 

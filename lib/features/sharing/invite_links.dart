@@ -3,8 +3,8 @@ import 'package:intl/intl.dart';
 import 'models/trip_invite.dart';
 
 /// The hosts whose `/join` links open the app (see the App Link intent filter
-/// in `AndroidManifest.xml`). The web page there, `public/index.html`, shows
-/// the code to people who don't have the app yet.
+/// in `AndroidManifest.xml`). On the web, it opens the Trip Planner web app
+/// to preview and join the trip.
 const inviteLinkHosts = {'trip-planner-2775c.web.app', 'trip-planner-2775c.firebaseapp.com'};
 
 /// The link an invite is shared as. It carries the invite's long token rather
