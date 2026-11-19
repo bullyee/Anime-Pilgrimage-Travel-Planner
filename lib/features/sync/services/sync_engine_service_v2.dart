@@ -334,6 +334,8 @@ class SyncEngineServiceV2 {
           continue;
         }
 
+        await _claimTombstones(tripId);
+
         final dirtyDays = await (localDb.select(localDb.tripDays)
               ..where((d) => d.tripId.equals(tripId) & d.syncStatus.equals(1)))
             .get();
@@ -533,6 +535,46 @@ class SyncEngineServiceV2 {
     } else if (_pendingTripIdsToPush.isNotEmpty) {
       _scheduleDebouncedPush();
     }
+  }
+
+  /// Puts this user's name on the trip's deleted rows waiting to go up.
+  ///
+  /// A tombstone goes up with `expireAt`, which the rules accept only from the
+  /// row's `updatedBy`. A row deleted before the trip was shared, signed out,
+  /// or by a build older than `createInvite`'s stamping, can carry someone
+  /// else's id or none, and then the rules refuse the whole batch on every
+  /// try. Rows waiting on this device were deleted here, so they're ours.
+  Future<void> _claimTombstones(String tripId) async {
+    await localDb.transaction(() async {
+      await (localDb.update(localDb.trips)
+            ..where((t) =>
+                t.id.equals(tripId) &
+                t.syncStatus.equals(1) &
+                t.deletedAt.isNotNull() &
+                (t.updatedBy.isNull() | t.updatedBy.equals(currentUserId).not())))
+          .write(TripsCompanion(updatedBy: Value(currentUserId)));
+      await (localDb.update(localDb.tripDays)
+            ..where((d) =>
+                d.tripId.equals(tripId) &
+                d.syncStatus.equals(1) &
+                d.deletedAt.isNotNull() &
+                (d.updatedBy.isNull() | d.updatedBy.equals(currentUserId).not())))
+          .write(TripDaysCompanion(updatedBy: Value(currentUserId)));
+      await (localDb.update(localDb.stops)
+            ..where((s) =>
+                s.tripId.equals(tripId) &
+                s.syncStatus.equals(1) &
+                s.deletedAt.isNotNull() &
+                (s.updatedBy.isNull() | s.updatedBy.equals(currentUserId).not())))
+          .write(StopsCompanion(updatedBy: Value(currentUserId)));
+      await (localDb.update(localDb.scheduleItems)
+            ..where((i) =>
+                i.tripId.equals(tripId) &
+                i.syncStatus.equals(1) &
+                i.deletedAt.isNotNull() &
+                (i.updatedBy.isNull() | i.updatedBy.equals(currentUserId).not())))
+          .write(ScheduleItemsCompanion(updatedBy: Value(currentUserId)));
+    });
   }
 
   /// Stop all listeners and timers.

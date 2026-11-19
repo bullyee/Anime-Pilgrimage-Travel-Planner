@@ -179,6 +179,31 @@ void main() {
     });
   });
 
+  group("tombstones in someone else's name", () {
+    test('a deleted row waiting on this device goes up in its user\'s name; others are left alone', () async {
+      await sharedTrip('t1');
+      final now = DateTime.now();
+      // Deleted before the trip was shared (or by an older build): someone
+      // else's updatedBy, so the rules would refuse its expireAt.
+      await stop('waiting', 't1', updatedAt: now, syncStatus: 1, deletedAt: now);
+      // Bob's own deletion, already in the cloud.
+      await stop('bobs', 't1', updatedAt: now, deletedAt: now);
+      // A live row Bob edited, waiting to go up: not a tombstone.
+      await stop('live', 't1', updatedAt: now, syncStatus: 1);
+      cloud.trips['t1'] = {'id': 't1'};
+      engine.startSync();
+      await settle(1500);
+
+      expect(cloud.tripStops['t1']!['waiting']!['updatedBy'], me);
+      expect(cloud.tripStops['t1']!['live']!['updatedBy'], 'user_bob');
+      final rows = {for (final r in await db.select(db.stops).get()) r.id: r};
+      expect(rows['waiting']!.updatedBy, me);
+      expect(rows['waiting']!.syncStatus, 0);
+      expect(rows['bobs']!.updatedBy, 'user_bob');
+      expect(rows['live']!.updatedBy, 'user_bob');
+    });
+  });
+
   group('tombstones purged while away', () {
     test('a server snapshot without an old clean stop hides it; recent, dirty and cached cases are left alone', () async {
       final old = DateTime.now().subtract(const Duration(days: 45));
