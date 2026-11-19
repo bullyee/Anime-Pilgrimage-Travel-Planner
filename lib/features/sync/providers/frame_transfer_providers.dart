@@ -59,6 +59,14 @@ final pendingFrameDownloadCountProvider = StreamProvider.autoDispose.family<int,
   return _recountOnChange(db, () async => (await downloader.pendingUrls(db, tripId)).length);
 });
 
+/// How many of [tripId]'s Google Drive frames aren't on this phone yet.
+final pendingDriveFrameDownloadCountProvider = StreamProvider.autoDispose.family<int, String>((ref, tripId) {
+  final db = ref.watch(databaseProvider);
+  final downloader = ref.watch(tripFrameDownloaderProvider);
+  ref.watch(frameTransferQueueProvider.select((q) => q.jobsForTrip(tripId).length));
+  return _recountOnChange(db, () async => (await downloader.pendingUrls(db, tripId, include: isGoogleDriveUrl)).length);
+});
+
 /// After a sync pull brings frames a teammate put on Drive to a shared trip,
 /// downloads them for offline in the background, on an unmetered network.
 ///

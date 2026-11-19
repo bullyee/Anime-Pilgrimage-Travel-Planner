@@ -1,8 +1,10 @@
 import 'package:cloud_firestore/cloud_firestore.dart';
+import 'package:flutter/foundation.dart' show kIsWeb;
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:riverpod_annotation/riverpod_annotation.dart';
 
 import '../../../core/providers/database_provider.dart';
+import '../../../core/utils/browser_info.dart';
 import '../../auth/providers/auth_provider.dart';
 import '../services/firestore_sync_v2_service.dart';
 import '../services/sync_engine_service_v2.dart';
@@ -28,9 +30,15 @@ SyncEngineServiceV2? syncEngineServiceV2(Ref ref) {
     localDb: db,
     firestoreSync: firestoreSync,
     currentUserId: user.uid,
+    confirmEveryTrip: kIsWeb,
   );
 
+  // On the web, closing the tab while a trip is still coming down asks first.
+  final arriving = kIsWeb ? service.arrivingStream.listen((trips) => warnBeforeLeaving(trips.isNotEmpty)) : null;
+
   ref.onDispose(() {
+    arriving?.cancel();
+    if (kIsWeb) warnBeforeLeaving(false);
     service.stopSync();
   });
 

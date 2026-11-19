@@ -29,6 +29,12 @@ class SyncEngineServiceV2 {
   final FirestoreSyncV2Service firestoreSync;
   final String currentUserId;
 
+  /// Treat every trip as arriving until the server's days, stops and schedule
+  /// have been applied, even one with days here already. On the web the
+  /// local database (IndexedDB) keeps no promise of durability, so a tab
+  /// closed mid-download can leave a trip half there.
+  final bool confirmEveryTrip;
+
   StreamSubscription? _tripWatcherSub;
   StreamSubscription? _dayWatcherSub;
   StreamSubscription? _stopWatcherSub;
@@ -61,13 +67,56 @@ class SyncEngineServiceV2 {
   Future<void> _userTripsChain = Future.value();
   final Map<String, Future<void>> _subcollectionChains = {};
 
+  /// Trips whose days, stops and schedule are coming down to this device for
+  /// the first time (just joined), until the server has sent all three.
+  final Set<String> _arriving = {};
+  final Map<String, Set<String>> _arrivedParts = {};
+  final StreamController<Set<String>> _arrivingController = StreamController<Set<String>>.broadcast();
+  static const _parts = {'days', 'stops', 'items'};
+
   SyncEngineServiceV2({
     required this.localDb,
     required this.firestoreSync,
     required this.currentUserId,
+    this.confirmEveryTrip = false,
   });
 
   Stream<Map<String, TripSyncStatus>> get statusStream => _statusController.stream;
+
+  /// Changes to [isTripArriving], as the set of arriving trips.
+  Stream<Set<String>> get arrivingStream => _arrivingController.stream;
+
+  /// Whether [tripId] is new on this device and its plan is still coming down.
+  bool isTripArriving(String tripId) => _arriving.contains(tripId);
+
+  void _emitArriving() {
+    if (!_arrivingController.isClosed) _arrivingController.add(Set.unmodifiable(_arriving));
+  }
+
+  /// A trip with no days here yet (any trip, with [confirmEveryTrip]) is
+  /// arriving until each of its parts has come from the server. Parts may
+  /// land before this check finishes.
+  Future<void> _watchArrival(String tripId) async {
+    if (!confirmEveryTrip) {
+      final hasDays = await (localDb.select(localDb.tripDays)
+            ..where((d) => d.tripId.equals(tripId))
+            ..limit(1))
+          .getSingleOrNull();
+      if (hasDays != null) return;
+    }
+    if (_isStopped) return;
+    if ((_arrivedParts[tripId] ?? const {}).containsAll(_parts)) return;
+    _arriving.add(tripId);
+    _emitArriving();
+  }
+
+  /// [part] of [tripId] is here: from the server, or given up on. A snapshot
+  /// from the local cache doesn't count; a plain list (tests) does.
+  void _partArrived(String tripId, String part, {List<Map<String, dynamic>>? docs}) {
+    if (docs is RemoteDocList && docs.isFromCache) return;
+    final parts = _arrivedParts.putIfAbsent(tripId, () => {})..add(part);
+    if (parts.containsAll(_parts) && _arriving.remove(tripId)) _emitArriving();
+  }
 
   TripSyncStatus getTripSyncStatus(String tripId) {
     return _tripStatuses[tripId] ?? TripSyncStatus.synced;
@@ -564,6 +613,8 @@ class SyncEngineServiceV2 {
     }
     _subcollectionSubs.clear();
     _subcollectionChains.clear();
+    _arriving.clear();
+    _arrivedParts.clear();
   }
 
   /// Parse Firestore Timestamp or ISO8601 string or DateTime.
@@ -679,11 +730,15 @@ class SyncEngineServiceV2 {
       _subcollectionSubs.remove('$tripId:$suffix')?.cancel();
       _subcollectionChains.remove('$tripId:$suffix');
     }
+    _arrivedParts.remove(tripId);
+    if (_arriving.remove(tripId)) _emitArriving();
   }
 
   /// Ensure downstream watchers for subcollections (days, stops, schedule_items).
   void _ensureSubcollectionWatchers(String tripId) {
     if (_subcollectionSubs.containsKey('$tripId:days')) return;
+    _arrivedParts.remove(tripId);
+    unawaited(_watchArrival(tripId));
 
     // Days watcher
     _subcollectionChains['$tripId:days'] = Future.value();
@@ -692,14 +747,18 @@ class SyncEngineServiceV2 {
       final chain = _subcollectionChains['$tripId:days'] ?? Future.value();
       _subcollectionChains['$tripId:days'] = chain.then((_) async {
         if (_isStopped) return;
-        for (final dayData in daysList) {
-          try {
-            await _applyRemoteDay(tripId, dayData);
-          } catch (e, stack) {
-            debugPrint('[SyncEngineV2] Error applying remote day: $e\n$stack');
+        // One transaction per snapshot, so its rows show up together.
+        await localDb.transaction(() async {
+          for (final dayData in daysList) {
+            try {
+              await _applyRemoteDay(tripId, dayData);
+            } catch (e, stack) {
+              debugPrint('[SyncEngineV2] Error applying remote day: $e\n$stack');
+            }
           }
-        }
-        await _markRowsGoneFromServer(tripId, 'days', daysList);
+          await _markRowsGoneFromServer(tripId, 'days', daysList);
+        });
+        _partArrived(tripId, 'days', docs: daysList);
       }).catchError((Object e, StackTrace stack) {
         debugPrint('[SyncEngineV2] Error in days chain for $tripId: $e\n$stack');
       });
@@ -707,6 +766,7 @@ class SyncEngineServiceV2 {
       debugPrint('[SyncEngineV2] Error in watchTripDays for $tripId: $error');
       if (_isPermanentError(error)) {
         _subcollectionSubs.remove('$tripId:days')?.cancel();
+        _partArrived(tripId, 'days');
       }
     });
 
@@ -717,14 +777,18 @@ class SyncEngineServiceV2 {
       final chain = _subcollectionChains['$tripId:stops'] ?? Future.value();
       _subcollectionChains['$tripId:stops'] = chain.then((_) async {
         if (_isStopped) return;
-        for (final stopData in stopsList) {
-          try {
-            await _applyRemoteStop(tripId, stopData);
-          } catch (e, stack) {
-            debugPrint('[SyncEngineV2] Error applying remote stop: $e\n$stack');
+        // One transaction per snapshot, so its rows show up together.
+        await localDb.transaction(() async {
+          for (final stopData in stopsList) {
+            try {
+              await _applyRemoteStop(tripId, stopData);
+            } catch (e, stack) {
+              debugPrint('[SyncEngineV2] Error applying remote stop: $e\n$stack');
+            }
           }
-        }
-        await _markRowsGoneFromServer(tripId, 'stops', stopsList);
+          await _markRowsGoneFromServer(tripId, 'stops', stopsList);
+        });
+        _partArrived(tripId, 'stops', docs: stopsList);
       }).catchError((Object e, StackTrace stack) {
         debugPrint('[SyncEngineV2] Error in stops chain for $tripId: $e\n$stack');
       });
@@ -732,6 +796,7 @@ class SyncEngineServiceV2 {
       debugPrint('[SyncEngineV2] Error in watchTripStops for $tripId: $error');
       if (_isPermanentError(error)) {
         _subcollectionSubs.remove('$tripId:stops')?.cancel();
+        _partArrived(tripId, 'stops');
       }
     });
 
@@ -742,14 +807,18 @@ class SyncEngineServiceV2 {
       final chain = _subcollectionChains['$tripId:items'] ?? Future.value();
       _subcollectionChains['$tripId:items'] = chain.then((_) async {
         if (_isStopped) return;
-        for (final itemData in itemsList) {
-          try {
-            await _applyRemoteScheduleItem(tripId, itemData);
-          } catch (e, stack) {
-            debugPrint('[SyncEngineV2] Error applying remote schedule item: $e\n$stack');
+        // One transaction per snapshot, so its rows show up together.
+        await localDb.transaction(() async {
+          for (final itemData in itemsList) {
+            try {
+              await _applyRemoteScheduleItem(tripId, itemData);
+            } catch (e, stack) {
+              debugPrint('[SyncEngineV2] Error applying remote schedule item: $e\n$stack');
+            }
           }
-        }
-        await _markRowsGoneFromServer(tripId, 'items', itemsList);
+          await _markRowsGoneFromServer(tripId, 'items', itemsList);
+        });
+        _partArrived(tripId, 'items', docs: itemsList);
       }).catchError((Object e, StackTrace stack) {
         debugPrint('[SyncEngineV2] Error in items chain for $tripId: $e\n$stack');
       });
@@ -757,6 +826,7 @@ class SyncEngineServiceV2 {
       debugPrint('[SyncEngineV2] Error in watchTripScheduleItems for $tripId: $error');
       if (_isPermanentError(error)) {
         _subcollectionSubs.remove('$tripId:items')?.cancel();
+        _partArrived(tripId, 'items');
       }
     });
 

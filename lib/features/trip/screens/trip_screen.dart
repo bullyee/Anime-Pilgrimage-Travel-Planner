@@ -13,6 +13,7 @@ import '../../sharing/widgets/invite_sheet.dart';
 import '../controllers/trips_controller.dart';
 import '../providers/trip_providers.dart';
 import '../services/trip_route_export_service.dart';
+import '../widgets/trip_arrival_banner.dart';
 import '../widgets/trip_card.dart';
 import '../widgets/trip_form_sheet.dart';
 import '../widgets/trip_sync_icon.dart';
@@ -173,43 +174,50 @@ class _TripScreenState extends ConsumerState<TripScreen> with SingleTickerProvid
           tabs: const [Tab(text: 'Plan'), Tab(text: 'Stops'), Tab(text: 'Members')],
         ),
       ),
-      body: TabBarView(
-        controller: _tabs,
-        // Swiping belongs to the planner's days, so tabs change by tapping.
-        physics: const NeverScrollableScrollPhysics(),
+      body: Column(
         children: [
-          Column(
-            children: [
-              if (editing)
-                Container(
-                  width: double.infinity,
-                  color: theme.trip.teaSoft,
-                  padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
-                  child: Row(
-                    children: [
-                      Icon(Icons.edit_outlined, size: 18, color: theme.trip.tea),
-                      const SizedBox(width: 10),
-                      Expanded(
-                        child: Text(
-                          'Editing the plan. Hold a stop to move it. Changes are saved as you go.',
-                          style: theme.textTheme.bodySmall?.copyWith(color: theme.colorScheme.onSurface),
+          if (shared) TripArrivalBanner(trip: trip),
+          Expanded(
+            child: TabBarView(
+              controller: _tabs,
+              // Swiping belongs to the planner's days, so tabs change by tapping.
+              physics: const NeverScrollableScrollPhysics(),
+              children: [
+                Column(
+                  children: [
+                    if (editing)
+                      Container(
+                        width: double.infinity,
+                        color: theme.trip.teaSoft,
+                        padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+                        child: Row(
+                          children: [
+                            Icon(Icons.edit_outlined, size: 18, color: theme.trip.tea),
+                            const SizedBox(width: 10),
+                            Expanded(
+                              child: Text(
+                                'Editing the plan. Hold a stop to move it. Changes are saved as you go.',
+                                style: theme.textTheme.bodySmall?.copyWith(color: theme.colorScheme.onSurface),
+                              ),
+                            ),
+                          ],
                         ),
                       ),
-                    ],
-                  ),
+                    Expanded(
+                      child: DayPlanner(
+                        tripId: trip.id,
+                        grid: _grid,
+                        editing: editing,
+                        onGridChanged: (grid) => setState(() => _grid = grid),
+                      ),
+                    ),
+                  ],
                 ),
-              Expanded(
-                child: DayPlanner(
-                  tripId: trip.id,
-                  grid: _grid,
-                  editing: editing,
-                  onGridChanged: (grid) => setState(() => _grid = grid),
-                ),
-              ),
-            ],
+                TripStopsTab(tripId: trip.id),
+                TripMembersTab(trip: trip),
+              ],
+            ),
           ),
-          TripStopsTab(tripId: trip.id),
-          TripMembersTab(trip: trip),
         ],
       ),
       floatingActionButton: tab == TripTab.stops && hasStops && canEdit
