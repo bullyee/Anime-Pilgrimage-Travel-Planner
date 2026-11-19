@@ -22,6 +22,10 @@ class FakeFirestoreSyncV2Service implements FirestoreSyncV2Service {
   final Map<String, StreamController<List<Map<String, dynamic>>>> itemsControllers = {};
 
   bool failCommit = false;
+
+  /// Activity entry ids the "rules" refuse: a batch holding one fails whole,
+  /// with permission-denied, as Firestore does.
+  final Set<String> refusedActivityIds = {};
   Future<void> Function()? onBeforeCommit;
 
   void emitUserTrips(List<Map<String, dynamic>> data, {bool isFromCache = false}) {
@@ -47,6 +51,7 @@ class FakeFirestoreSyncV2Service implements FirestoreSyncV2Service {
   @override
   void buildActivityBatchOperation(WriteBatch batch, TripActivity entry) {
     final fakeBatch = batch as _FakeV2WriteBatch;
+    fakeBatch.activityIds.add(entry.id);
     fakeBatch.addOp(() {
       tripActivity.putIfAbsent(entry.tripId, () => {})[entry.id] = {
         'id': entry.id,
@@ -98,6 +103,9 @@ class FakeFirestoreSyncV2Service implements FirestoreSyncV2Service {
       throw Exception('Simulated Firestore network timeout / offline failure');
     }
     final fakeBatch = batch as _FakeV2WriteBatch;
+    if (fakeBatch.activityIds.any(refusedActivityIds.contains)) {
+      throw Exception('[cloud_firestore/permission-denied] The caller does not have permission');
+    }
     fakeBatch.execute();
   }
 
@@ -246,6 +254,7 @@ class FakeFirestoreSyncV2Service implements FirestoreSyncV2Service {
 class _FakeV2WriteBatch implements WriteBatch {
   final FakeFirestoreSyncV2Service service;
   final List<void Function()> operations = [];
+  final List<String> activityIds = [];
 
   _FakeV2WriteBatch(this.service);
 

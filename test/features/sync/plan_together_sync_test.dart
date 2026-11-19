@@ -204,6 +204,33 @@ void main() {
     });
   });
 
+  group('an entry the rules refuse', () {
+    test("doesn't hold the trip back: the changes and the other entries go up, it stays on this phone", () async {
+      await sharedTrip('t1');
+      await stop('s1', 't1', updatedAt: DateTime.now());
+      await stop('s2', 't1', updatedAt: DateTime.now());
+      cloud.trips['t1'] = {'id': 't1'};
+      final repo = DriftTripRepository(db, null, me);
+      await repo.deleteStop('s1');
+      await repo.deleteStop('s2');
+      final entries = await db.select(db.tripActivities).get();
+      expect(entries, hasLength(2));
+      final refused = entries.first.id;
+      cloud.refusedActivityIds.add(refused);
+
+      engine.startSync();
+      await settle(1500);
+
+      expect(cloud.tripStops['t1']!['s1']!['deletedAt'], isNotNull);
+      expect(cloud.tripStops['t1']!['s2']!['deletedAt'], isNotNull);
+      expect(cloud.tripActivity['t1']!.keys, [entries.last.id]);
+      final local = await db.select(db.tripActivities).get();
+      expect(local.map((a) => a.syncStatus), everyElement(0));
+      expect(local.map((a) => a.id), containsAll([refused, entries.last.id]));
+      expect(engine.getTripSyncStatus('t1'), TripSyncStatus.synced);
+    });
+  });
+
   group('tombstones purged while away', () {
     test('a server snapshot without an old clean stop hides it; recent, dirty and cached cases are left alone', () async {
       final old = DateTime.now().subtract(const Duration(days: 45));
