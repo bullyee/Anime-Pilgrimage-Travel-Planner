@@ -56,12 +56,19 @@ class JoinTripState {
 }
 
 class JoinTripController extends StateNotifier<JoinTripState> {
-  final GroupSharingService _sharingService;
+  final GroupSharingService Function() _readSharingService;
 
   JoinTripController({
-    required GroupSharingService sharingService,
-  })  : _sharingService = sharingService,
+    GroupSharingService? sharingService,
+    GroupSharingService Function()? readSharingService,
+  })  : assert(
+          sharingService != null || readSharingService != null,
+          'Provide either sharingService or readSharingService.',
+        ),
+        _readSharingService = readSharingService ?? (() => sharingService!),
         super(const JoinTripState());
+
+  GroupSharingService get _sharingService => _readSharingService();
 
   /// Update input code (strips whitespace, capitalizes 6-char alphanumeric short codes
   /// while preserving case for full UUID tokens).
@@ -117,6 +124,7 @@ class JoinTripController extends StateNotifier<JoinTripState> {
       }
     } catch (e) {
       if (!mounted) return;
+      if (state.code != target) return;
       state = state.copyWith(
         isLoading: false,
         clearInvite: true,
@@ -187,8 +195,15 @@ class JoinTripController extends StateNotifier<JoinTripState> {
 }
 
 /// Provider for JoinTripController.
+///
+/// Reads [groupSharingServiceProvider] on demand rather than watching it so
+/// signing in while on the join screen (which rebuilds
+/// [groupSharingServiceProvider] with the authenticated UID) preserves the
+/// loaded invite preview instead of resetting the controller to an empty
+/// state, while still using the fresh authenticated service when joining.
 final joinTripControllerProvider =
     StateNotifierProvider.autoDispose<JoinTripController, JoinTripState>((ref) {
-  final sharingService = ref.watch(groupSharingServiceProvider);
-  return JoinTripController(sharingService: sharingService);
+  return JoinTripController(
+    readSharingService: () => ref.read(groupSharingServiceProvider),
+  );
 });
