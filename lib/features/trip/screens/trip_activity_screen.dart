@@ -11,6 +11,7 @@ import '../../sharing/providers/group_sharing_providers.dart';
 import '../../sharing/widgets/member_avatar.dart';
 import '../providers/plan_together_providers.dart';
 import '../providers/trip_providers.dart';
+import '../../../shared/widgets/up_button.dart';
 
 /// "Today", "Yesterday", or "Sat, May 2".
 String activityDayHeader(DateTime at, {DateTime? now}) {
@@ -59,6 +60,7 @@ class _TripActivityScreenState extends ConsumerState<TripActivityScreen> {
     final trip = ref.watch(tripDetailProvider(widget.tripId)).valueOrNull;
     return Scaffold(
       appBar: AppBar(
+        leading: UpButton.ifAlone(context, fallback: '/trips/${widget.tripId}'),
         title: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           mainAxisSize: MainAxisSize.min,

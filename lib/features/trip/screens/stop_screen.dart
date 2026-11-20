@@ -31,6 +31,7 @@ import '../models/stop_group.dart';
 import '../providers/trip_providers.dart';
 import '../widgets/trip_frames_pack_flow.dart';
 import '../../auth/providers/auth_provider.dart';
+import '../../../shared/widgets/up_button.dart';
 
 /// Where a stop sits in the plan: its day and its item there.
 typedef StopSlot = ({PlannerDay day, PlannerItem item});
@@ -254,7 +255,7 @@ class _StopScreenState extends ConsumerState<StopScreen> {
     final stop = stopAsync.valueOrNull;
     if (stop == null || stop.deletedAt != null) {
       return Scaffold(
-        appBar: AppBar(),
+        appBar: AppBar(leading: UpButton.ifAlone(context, fallback: '/trips/$_tripId')),
         body: Center(
           child: stopAsync.isLoading ? const CircularProgressIndicator() : const Text('This stop is no longer in the trip.'),
         ),
@@ -265,7 +266,7 @@ class _StopScreenState extends ConsumerState<StopScreen> {
     final trip = tripAsync.valueOrNull;
     if (trip == null) {
       return Scaffold(
-        appBar: AppBar(),
+        appBar: AppBar(leading: UpButton.ifAlone(context, fallback: '/trips/$_tripId')),
         body: Center(
           child: tripAsync.isLoading
               ? const CircularProgressIndicator()
@@ -311,6 +312,7 @@ class _StopScreenState extends ConsumerState<StopScreen> {
       },
       child: Scaffold(
         appBar: AppBar(
+          leading: UpButton.ifAlone(context, fallback: '/trips/$_tripId'),
           centerTitle: false,
           title: Column(
             crossAxisAlignment: CrossAxisAlignment.start,

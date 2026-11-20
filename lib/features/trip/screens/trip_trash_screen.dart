@@ -7,6 +7,7 @@ import '../../../core/database/database.dart';
 import '../../sharing/providers/group_sharing_providers.dart';
 import '../providers/plan_together_providers.dart';
 import '../providers/trip_providers.dart';
+import '../../../shared/widgets/up_button.dart';
 
 /// "today", "yesterday", "3 days ago", or the date.
 String deletedWhen(DateTime at, {DateTime? now}) {
@@ -34,6 +35,7 @@ class TripTrashScreen extends ConsumerWidget {
     final trip = ref.watch(tripDetailProvider(tripId)).valueOrNull;
     return Scaffold(
       appBar: AppBar(
+        leading: UpButton.ifAlone(context, fallback: '/trips/$tripId'),
         title: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           mainAxisSize: MainAxisSize.min,
@@ -145,7 +147,7 @@ class DeletedTripsScreen extends ConsumerWidget {
     final theme = Theme.of(context);
     final trips = ref.watch(deletedTripsProvider);
     return Scaffold(
-      appBar: AppBar(title: const Text('Recently deleted trips')),
+      appBar: AppBar(leading: UpButton.ifAlone(context, fallback: '/trips'), title: const Text('Recently deleted trips')),
       body: trips.when(
         loading: () => const Center(child: CircularProgressIndicator()),
         error: (e, _) => Center(child: Text("Couldn't load the deleted trips: $e")),
