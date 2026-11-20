@@ -26,7 +26,7 @@ final firestoreSyncV2ServiceProvider =
 // ignore: unused_element
 typedef FirestoreSyncV2ServiceRef = ProviderRef<FirestoreSyncV2Service>;
 String _$syncEngineServiceV2Hash() =>
-    r'fb5255d006c3d216534123c23a8bd1cd429798f9';
+    r'7a2b05c582a4c88828165f22c7bfd6ab0b8b976e';
 
 /// See also [syncEngineServiceV2].
 @ProviderFor(syncEngineServiceV2)

@@ -23,11 +23,11 @@ class TripArrivalBanner extends ConsumerWidget {
     final theme = Theme.of(context);
     final arriving = ref.watch(tripArrivingProvider(trip.id)).valueOrNull ?? false;
     if (arriving) {
-      return _Strip(
-        key: const ValueKey('arriving'),
-        leading: const SizedBox(width: 18, height: 18, child: CircularProgressIndicator(strokeWidth: 2)),
+      return const _Strip(
+        key: ValueKey('arriving'),
+        leading: SizedBox(width: 18, height: 18, child: CircularProgressIndicator(strokeWidth: 2)),
         text: "Getting this trip's days and stops…",
-        bottom: const LinearProgressIndicator(minHeight: 2),
+        bottom: LinearProgressIndicator(minHeight: 2),
       );
     }
     if (kIsWeb) return const SizedBox.shrink();
