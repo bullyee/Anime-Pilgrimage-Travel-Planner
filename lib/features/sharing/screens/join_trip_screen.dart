@@ -46,6 +46,7 @@ class _JoinTripScreenState extends ConsumerState<JoinTripScreen> {
   String? _joinedTripId;
   bool _slow = false;
   bool _opened = false;
+  bool _signingIn = false;
   Timer? _slowTimer;
 
   JoinTripController get _controller => ref.read(joinTripControllerProvider.notifier);
@@ -58,6 +59,28 @@ class _JoinTripScreenState extends ConsumerState<JoinTripScreen> {
       // After the first build, which mustn't change a provider.
       WidgetsBinding.instance.addPostFrameCallback((_) {
         if (mounted) _controller.updateCode(invite);
+      });
+    }
+  }
+
+  @override
+  void didUpdateWidget(covariant JoinTripScreen oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    if (widget.invite != oldWidget.invite) {
+      _slowTimer?.cancel();
+      _joinedTripId = null;
+      _slow = false;
+      _opened = false;
+      _fromLink = widget.invite != null;
+      final invite = widget.invite;
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        if (!mounted) return;
+        if (invite != null) {
+          _controller.updateCode(invite);
+        } else {
+          _controller.reset();
+          _code.clear();
+        }
       });
     }
   }
@@ -203,9 +226,11 @@ class _JoinTripScreenState extends ConsumerState<JoinTripScreen> {
         text: 'A shared trip belongs to your Google account, so the others can see who joined. '
             'Then you come back to this invite.',
         action: FilledButton.icon(
-          onPressed: () => _signIn(invite),
-          icon: const Icon(Icons.login),
-          label: const Text('Sign in with Google'),
+          onPressed: _signingIn ? null : _signIn,
+          icon: _signingIn
+              ? const SizedBox.square(dimension: 18, child: CircularProgressIndicator(strokeWidth: 2))
+              : const Icon(Icons.login),
+          label: Text(_signingIn ? 'Signing in…' : 'Sign in with Google'),
         ),
       );
     }
@@ -406,12 +431,16 @@ class _JoinTripScreenState extends ConsumerState<JoinTripScreen> {
   }
 
   /// Signing in keeps this screen, which then shows the invite's Join.
-  Future<void> _signIn(TripInvite invite) async {
+  Future<void> _signIn() async {
+    if (_signingIn) return;
+    setState(() => _signingIn = true);
     try {
       await ref.read(authControllerProvider.notifier).signInWithGoogle();
     } catch (e) {
       if (!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text("Couldn't sign in: $e")));
+    } finally {
+      if (mounted) setState(() => _signingIn = false);
     }
   }
 

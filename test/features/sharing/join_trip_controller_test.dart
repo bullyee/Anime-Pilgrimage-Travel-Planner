@@ -1,11 +1,16 @@
+import 'dart:async';
+
 import 'package:cloud_firestore/cloud_firestore.dart';
 
 import 'package:drift/native.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:trip_planner/core/database/database.dart';
+import 'package:trip_planner/features/auth/providers/auth_provider.dart';
 import 'package:trip_planner/features/sharing/controllers/join_trip_controller.dart';
 import 'package:trip_planner/features/sharing/models/trip_invite.dart';
 import 'package:trip_planner/features/sharing/models/trip_member.dart';
+import 'package:trip_planner/features/sharing/providers/group_sharing_providers.dart';
 import 'package:trip_planner/features/sharing/services/group_sharing_service.dart';
 
 import 'fake_sharing_firestore.dart';
@@ -18,6 +23,24 @@ class _OfflineSharingService extends GroupSharingService {
   @override
   Future<TripInvite?> getInvitePreview(String tokenOrCode) async =>
       throw FirebaseException(plugin: 'cloud_firestore', code: 'unavailable');
+}
+
+/// Sharing service that holds [getInvitePreview] open until [waitForPreview] completes.
+class _DeferredPreviewSharingService extends GroupSharingService {
+  final Future<void> Function() waitForPreview;
+
+  _DeferredPreviewSharingService({
+    required super.firestore,
+    required super.db,
+    required super.currentUserId,
+    required this.waitForPreview,
+  });
+
+  @override
+  Future<TripInvite?> getInvitePreview(String tokenOrCode) async {
+    await waitForPreview();
+    return super.getInvitePreview(tokenOrCode);
+  }
 }
 
 void main() {
@@ -229,6 +252,120 @@ void main() {
       await controller.updateCode('NOPE2');
 
       expect(controller.state.problem, isNull);
+    });
+  });
+
+  group('joinTripControllerProvider across auth transitions', () {
+    void seedInvite({
+      required String token,
+      required String shortCode,
+    }) {
+      final now = DateTime.now();
+      fakeFirestore.inviteCodes[shortCode] = {
+        'token': token,
+        'createdAt': Timestamp.fromDate(now),
+      };
+      fakeFirestore.invites[token] = {
+        'token': token,
+        'shortCode': shortCode,
+        'tripId': 'trip_joinable',
+        'role': 'editor',
+        'createdBy': 'user_alice',
+        'inviterName': 'Alice',
+        'tripTitle': 'Summer Comiket',
+        'stopCount': 4,
+        'createdAt': Timestamp.fromDate(now),
+        'expiresAt': Timestamp.fromDate(now.add(const Duration(days: 7))),
+        'isRevoked': false,
+        'emailAllowlist': <String>[],
+      };
+    }
+
+    test('preserves loaded preview on sign-in and joins using the authenticated UID', () async {
+      const testToken = 'token_auth_000000000001';
+      seedInvite(token: testToken, shortCode: 'JOIN02');
+
+      final uidProvider = StateProvider<String>((ref) => guestUserId);
+      final container = ProviderContainer(
+        overrides: [
+          currentUserIdProvider.overrideWith((ref) => ref.watch(uidProvider)),
+          groupSharingServiceProvider.overrideWith((ref) {
+            return GroupSharingService(
+              firestore: fakeFirestore,
+              db: db,
+              currentUserId: ref.watch(currentUserIdProvider),
+            );
+          }),
+        ],
+      );
+      addTearDown(container.dispose);
+
+      // Keep the autoDispose provider alive while signing in, as JoinTripScreen does.
+      final sub = container.listen(joinTripControllerProvider, (_, _) {});
+      addTearDown(sub.close);
+
+      await container.read(joinTripControllerProvider.notifier).updateCode(testToken);
+      expect(container.read(joinTripControllerProvider).invite?.tripTitle, 'Summer Comiket');
+
+      // Signing in rebuilds groupSharingServiceProvider with the authenticated UID.
+      container.read(uidProvider.notifier).state = 'user_bob';
+      expect(container.read(groupSharingServiceProvider).currentUserId, 'user_bob');
+
+      final afterSignIn = container.read(joinTripControllerProvider);
+      expect(afterSignIn.code, testToken);
+      expect(afterSignIn.invite?.token, testToken);
+      expect(afterSignIn.isLoading, isFalse);
+
+      final member = await container.read(joinTripControllerProvider.notifier).joinTrip(displayName: 'Bob');
+      expect(member?.userId, 'user_bob');
+      expect(fakeFirestore.members['trip_joinable']?['user_bob'], isNotNull);
+      expect(fakeFirestore.members['trip_joinable']?[guestUserId], isNull);
+    });
+
+    test('completes in-flight preview if Firebase Auth restores mid-lookup', () async {
+      const testToken = 'token_race_000000000002';
+      seedInvite(token: testToken, shortCode: 'JOIN03');
+
+      final previewGate = Completer<void>();
+      final uidProvider = StateProvider<String>((ref) => guestUserId);
+      final container = ProviderContainer(
+        overrides: [
+          currentUserIdProvider.overrideWith((ref) => ref.watch(uidProvider)),
+          groupSharingServiceProvider.overrideWith((ref) {
+            return _DeferredPreviewSharingService(
+              firestore: fakeFirestore,
+              db: db,
+              currentUserId: ref.watch(currentUserIdProvider),
+              waitForPreview: () => previewGate.future,
+            );
+          }),
+        ],
+      );
+      addTearDown(container.dispose);
+
+      final sub = container.listen(joinTripControllerProvider, (_, _) {});
+      addTearDown(sub.close);
+
+      final updateFuture = container.read(joinTripControllerProvider.notifier).updateCode(testToken);
+      await Future<void>.delayed(Duration.zero);
+      expect(container.read(joinTripControllerProvider).isLoading, isTrue);
+
+      // Auth finishes restoring before the invite fetch returns.
+      container.read(uidProvider.notifier).state = 'user_bob';
+      expect(container.read(groupSharingServiceProvider).currentUserId, 'user_bob');
+
+      previewGate.complete();
+      await updateFuture;
+
+      final loaded = container.read(joinTripControllerProvider);
+      expect(loaded.isLoading, isFalse);
+      expect(loaded.code, testToken);
+      expect(loaded.invite?.tripTitle, 'Summer Comiket');
+
+      final member = await container.read(joinTripControllerProvider.notifier).joinTrip(displayName: 'Bob');
+      expect(member?.userId, 'user_bob');
+      expect(fakeFirestore.members['trip_joinable']?['user_bob'], isNotNull);
+      expect(fakeFirestore.members['trip_joinable']?[guestUserId], isNull);
     });
   });
 }
