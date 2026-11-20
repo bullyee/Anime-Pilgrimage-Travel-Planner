@@ -9,6 +9,54 @@ import 'package:trip_planner/features/trip/repositories/trip_repository.dart';
 
 import 'sync_engine_v2_test.dart' show FakeFirestoreSyncV2Service;
 
+class _CountingQueryInterceptor extends QueryInterceptor {
+  int selects = 0;
+  int inserts = 0;
+  int updates = 0;
+  int deletes = 0;
+  int batched = 0;
+
+  int get totalCalls => selects + inserts + updates + deletes + batched;
+
+  void reset() {
+    selects = 0;
+    inserts = 0;
+    updates = 0;
+    deletes = 0;
+    batched = 0;
+  }
+
+  @override
+  Future<List<Map<String, Object?>>> runSelect(QueryExecutor executor, String statement, List<Object?> args) {
+    selects++;
+    return super.runSelect(executor, statement, args);
+  }
+
+  @override
+  Future<int> runInsert(QueryExecutor executor, String statement, List<Object?> args) {
+    inserts++;
+    return super.runInsert(executor, statement, args);
+  }
+
+  @override
+  Future<int> runUpdate(QueryExecutor executor, String statement, List<Object?> args) {
+    updates++;
+    return super.runUpdate(executor, statement, args);
+  }
+
+  @override
+  Future<int> runDelete(QueryExecutor executor, String statement, List<Object?> args) {
+    deletes++;
+    return super.runDelete(executor, statement, args);
+  }
+
+  @override
+  Future<void> runBatched(QueryExecutor executor, BatchedStatements statements) {
+    batched++;
+    return super.runBatched(executor, statements);
+  }
+}
+
 /// The cloud half of v0.4.0's trash and activity log: tombstones get a TTL,
 /// activity entries go up with their change and come down from others, and a
 /// device that missed a purged tombstone hides the row anyway.
@@ -393,6 +441,111 @@ void main() {
       cloud.emitStops('t1', []);
       await settle(200);
       expect((await (db.select(db.stops)..where((s) => s.id.equals('gone'))).getSingle()).deletedAt, isNull);
+    });
+  });
+
+  group('batch snapshot ingestion cost', () {
+    test('50 stops with shared labels/frames and 50 pre-emitted items land in constant SQLite calls', () async {
+      final previousWarnSetting = driftRuntimeOptions.dontWarnAboutMultipleDatabases;
+      driftRuntimeOptions.dontWarnAboutMultipleDatabases = true;
+      addTearDown(() => driftRuntimeOptions.dontWarnAboutMultipleDatabases = previousWarnSetting);
+
+      final counter = _CountingQueryInterceptor();
+      final countedDb = AppDatabase.forTesting(NativeDatabase.memory().interceptWith(counter));
+      final countedCloud = FakeFirestoreSyncV2Service();
+      final countedEngine = SyncEngineServiceV2(localDb: countedDb, firestoreSync: countedCloud, currentUserId: me);
+      addTearDown(() async {
+        countedEngine.stopSync();
+        await countedDb.close();
+      });
+
+      final now = DateTime.now();
+      await countedDb.into(countedDb.trips).insert(TripsCompanion.insert(
+            id: 't1',
+            title: 'Big Trip',
+            ownerId: 'user_bob',
+            sharing: const Value('group'),
+            dayCount: const Value(5),
+            updatedAt: Value(now),
+          ));
+
+      countedEngine.startSync();
+      countedCloud.emitUserTrips([
+        {'id': 't1', 'title': 'Big Trip', 'ownerId': 'user_bob', 'sharing': 'group', 'dayCount': 5, 'updatedAt': now},
+      ]);
+      await settle(200);
+      counter.reset();
+
+      // Schedule items arrive BEFORE their days and stops (worst-case pending flush order).
+      final itemDocs = RemoteDocList([
+        for (var i = 0; i < 50; i++)
+          {
+            'id': 'item_$i',
+            'tripId': 't1',
+            'dayId': 'day_${i % 5}',
+            'stopId': 'stop_$i',
+            'sortKey': 'a$i',
+            'updatedAt': now,
+          },
+      ], isFromCache: false);
+      final dayDocs = RemoteDocList([
+        for (var d = 0; d < 5; d++)
+          {
+            'id': 'day_$d',
+            'tripId': 't1',
+            'sortKey': 'a$d',
+            'updatedAt': now,
+          },
+      ], isFromCache: false);
+      final stopDocs = RemoteDocList([
+        for (var i = 0; i < 50; i++)
+          {
+            'id': 'stop_$i',
+            'tripId': 't1',
+            'placeKey': 'anitabi:$i',
+            'name': 'Stop $i',
+            'lat': 34.9,
+            'lng': 135.8,
+            'addedBy': 'user_bob',
+            'updatedAt': now,
+            'labels': [
+              {'id': 'sender_anime_1', 'kind': 'anime', 'name': 'Sound! Euphonium', 'bangumiId': '115908'},
+            ],
+            'referenceImages': [
+              {
+                'id': 'ref_$i',
+                'remoteUrl': 'https://example.com/frame_$i.jpg',
+                'animeLabelId': 'sender_anime_1',
+              },
+            ],
+          },
+      ], isFromCache: false);
+
+      countedCloud.emitScheduleItems('t1', itemDocs);
+      countedCloud.emitDays('t1', dayDocs);
+      countedCloud.emitStops('t1', stopDocs);
+      await settle(400);
+
+      expect(countedEngine.isTripArriving('t1'), isFalse);
+      expect(await countedDb.select(countedDb.tripDays).get(), hasLength(5));
+      expect(await countedDb.select(countedDb.stops).get(), hasLength(50));
+      expect(await countedDb.select(countedDb.labels).get(), hasLength(1));
+      expect(await countedDb.select(countedDb.stopLabels).get(), hasLength(50));
+      final refs = await countedDb.select(countedDb.newReferenceImages).get();
+      expect(refs, hasLength(50));
+      expect(refs.map((r) => r.animeLabelId).every((id) => id != null), isTrue);
+      expect(await countedDb.select(countedDb.scheduleItems).get(), hasLength(50));
+      expect(
+        counter.totalCalls,
+        lessThan(60),
+        reason: 'batched ingestion must avoid O(N) per-row queries and O(N^2) pending flushes',
+      );
+
+      // Re-emitting unchanged 50 stops must short-circuit via LWW without touching labels or frames.
+      counter.reset();
+      countedCloud.emitStops('t1', stopDocs);
+      await settle(250);
+      expect(counter.totalCalls, lessThan(10));
     });
   });
 }

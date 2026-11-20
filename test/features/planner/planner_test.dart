@@ -1,5 +1,8 @@
 import 'package:drift/native.dart';
+import 'package:flutter/foundation.dart' show debugDefaultTargetPlatformOverride;
+import 'package:flutter/gestures.dart' show PointerDeviceKind;
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart' show LogicalKeyboardKey;
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:go_router/go_router.dart';
@@ -483,6 +486,113 @@ void main() {
       await tester.pumpAndSettle();
       expect(find.text('Moved Bridge to the backlog.'), findsNothing);
       await disposeApp(tester);
+    });
+
+    Future<String> createDesktopMultiDayTrip() async {
+      final r = DriftTripRepository(db);
+      final trip = await r.createTrip(title: 'Uji', ownerId: 'u1', startDate: '2027-04-29', dayCount: 3);
+      final days = await r.getDaysForTrip(trip.id);
+      final bridge = await r.createTripOnlySpot(tripId: trip.id, name: 'Bridge', lat: 0, lng: 0, addedBy: 'u1');
+      final shrine = await r.createTripOnlySpot(tripId: trip.id, name: 'Shrine', lat: 0, lng: 0, addedBy: 'u1');
+      await r.scheduleStop(tripId: trip.id, stopId: bridge.id, dayId: days[0].id, fixedTime: 10 * 60);
+      await r.scheduleStop(tripId: trip.id, stopId: shrine.id, dayId: days[1].id, fixedTime: 11 * 60);
+      return trip.id;
+    }
+
+    testWidgets('desktop day switcher chevrons and chips switch between days and backlog', (tester) async {
+      tester.view.physicalSize = const Size(1280, 800);
+      tester.view.devicePixelRatio = 1;
+      addTearDown(tester.view.reset);
+      final tripId = await createDesktopMultiDayTrip();
+
+      await pump(tester, tripId);
+      expect(tester.getTopLeft(find.text('DAY 1')).dx, inInclusiveRange(0, 250));
+      expect(tester.widget<IconButton>(find.widgetWithIcon(IconButton, Icons.chevron_left)).onPressed, isNull);
+
+      await tester.tap(find.byTooltip('Next day'));
+      await tester.pumpAndSettle();
+      expect(tester.getTopLeft(find.text('DAY 2')).dx, inInclusiveRange(0, 250));
+
+      await tester.tap(find.text('Day 3'));
+      await tester.pumpAndSettle();
+      expect(tester.getTopLeft(find.text('DAY 3')).dx, inInclusiveRange(0, 250));
+
+      await tester.tap(find.text('Backlog'));
+      await tester.pumpAndSettle();
+      expect(tester.getTopLeft(find.text('BACKLOG')).dx, inInclusiveRange(0, 250));
+      expect(tester.widget<IconButton>(find.widgetWithIcon(IconButton, Icons.chevron_right)).onPressed, isNull);
+
+      await tester.tap(find.byTooltip('Previous day'));
+      await tester.pumpAndSettle();
+      expect(tester.getTopLeft(find.text('DAY 3')).dx, inInclusiveRange(0, 250));
+
+      await disposeApp(tester);
+    });
+
+    testWidgets('desktop arrow keys, mouse drag, and clicking the peeking card switch days', (tester) async {
+      tester.view.physicalSize = const Size(1280, 800);
+      tester.view.devicePixelRatio = 1;
+      addTearDown(tester.view.reset);
+      final tripId = await createDesktopMultiDayTrip();
+
+      await pump(tester, tripId);
+      expect(tester.getTopLeft(find.text('DAY 1')).dx, inInclusiveRange(0, 250));
+
+      // ArrowRight / ArrowLeft keyboard navigation.
+      await tester.sendKeyEvent(LogicalKeyboardKey.arrowRight);
+      await tester.pumpAndSettle();
+      expect(tester.getTopLeft(find.text('DAY 2')).dx, inInclusiveRange(0, 250));
+
+      await tester.sendKeyEvent(LogicalKeyboardKey.arrowLeft);
+      await tester.pumpAndSettle();
+      expect(tester.getTopLeft(find.text('DAY 1')).dx, inInclusiveRange(0, 250));
+
+      // Click the peeking next-day card on the right edge.
+      await tester.tapAt(const Offset(1250, 420));
+      await tester.pumpAndSettle();
+      expect(tester.getTopLeft(find.text('DAY 2')).dx, inInclusiveRange(0, 250));
+
+      // Mouse drag right goes back to Day 1.
+      final gesture = await tester.startGesture(const Offset(640, 420), kind: PointerDeviceKind.mouse);
+      await gesture.moveBy(const Offset(700, 0));
+      await gesture.up();
+      await tester.pumpAndSettle();
+      expect(tester.getTopLeft(find.text('DAY 1')).dx, inInclusiveRange(0, 250));
+
+      await disposeApp(tester);
+    });
+
+    testWidgets('hides the day switcher bar on phones while still paging on peeking tap, and keeps it on narrow desktop',
+        (tester) async {
+      tester.view.physicalSize = const Size(1080, 2400);
+      tester.view.devicePixelRatio = 3; // 360x800 logical phone viewport
+      addTearDown(tester.view.reset);
+      final tripId = await createDesktopMultiDayTrip();
+
+      await pump(tester, tripId);
+      expect(find.byTooltip('Previous day'), findsNothing);
+      expect(find.byTooltip('Next day'), findsNothing);
+      expect(tester.getTopLeft(find.text('DAY 1')).dx, inInclusiveRange(0, 80));
+
+      // Tapping the peeking right edge still switches to Day 2 on phones.
+      await tester.tapAt(const Offset(350, 420));
+      await tester.pumpAndSettle();
+      expect(tester.getTopLeft(find.text('DAY 2')).dx, inInclusiveRange(0, 80));
+
+      await disposeApp(tester);
+
+      // Narrow desktop browser window (< 600dp wide) keeps the switcher bar.
+      tester.view.physicalSize = const Size(480, 800);
+      tester.view.devicePixelRatio = 1;
+      debugDefaultTargetPlatformOverride = TargetPlatform.windows;
+      try {
+        await pump(tester, tripId);
+        expect(find.byTooltip('Previous day'), findsOneWidget);
+        expect(find.byTooltip('Next day'), findsOneWidget);
+        await disposeApp(tester);
+      } finally {
+        debugDefaultTargetPlatformOverride = null;
+      }
     });
   });
 
