@@ -21,6 +21,7 @@ import 'trip_activity_screen.dart';
 import 'trip_members_tab.dart';
 import 'trip_stops_tab.dart';
 import '../../../shared/widgets/up_button.dart';
+import '../../sharing/widgets/signed_out_trip_notice.dart';
 
 enum TripTab {
   plan,
@@ -178,6 +179,7 @@ class _TripScreenState extends ConsumerState<TripScreen> with SingleTickerProvid
       ),
       body: Column(
         children: [
+          if (shared && ref.watch(signedOutProvider)) const SignedOutTripStrip(),
           if (shared) TripArrivalBanner(trip: trip),
           Expanded(
             child: TabBarView(

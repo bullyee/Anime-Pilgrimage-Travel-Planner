@@ -76,7 +76,10 @@ class _JoinTripScreenState extends ConsumerState<JoinTripScreen> {
     final signedIn = ref.watch(currentUserIdProvider) != guestUserId;
     final tripId = _joinedTripId ?? invite?.tripId;
     final localTrip = tripId == null ? null : ref.watch(tripDetailProvider(tripId)).valueOrNull;
-    final tripHere = localTrip != null && localTrip.deletedAt == null && localTrip.sharing == 'group';
+    // A shared trip stays on the device after signing out, so being here
+    // only counts once someone is signed in: until then the invite asks
+    // them to sign in, as for a trip that isn't here.
+    final tripHere = signedIn && localTrip != null && localTrip.deletedAt == null && localTrip.sharing == 'group';
 
     if (_joinedTripId != null && tripHere && !_opened) {
       _opened = true;

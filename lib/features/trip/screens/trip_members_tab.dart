@@ -18,6 +18,7 @@ import '../../sync/services/frame_transfer_queue.dart';
 import '../../sync/widgets/drive_cleanup_flow.dart';
 import '../../sync/widgets/frame_transfer_widgets.dart';
 import '../widgets/trip_frames_pack_flow.dart';
+import '../../sharing/widgets/signed_out_trip_notice.dart';
 
 /// Who the trip is shared with. Before it's shared: what sharing sends and
 /// what stays private, and a button to invite people. Once it is: who's in
@@ -32,6 +33,8 @@ class TripMembersTab extends ConsumerWidget {
   Widget build(BuildContext context, WidgetRef ref) {
     final role = ref.watch(myTripRoleProvider(trip.id));
     if (trip.sharing != 'group') return _NotShared(trip: trip, canInvite: role == TripMemberRole.owner);
+    // Who's in it lives in Firestore, which only a signed-in member can read.
+    if (ref.watch(signedOutProvider)) return const _SignedOut();
     return ref.watch(tripMembersProvider(trip.id)).when(
           loading: () => const Center(child: CircularProgressIndicator()),
           error: (e, _) => Center(
@@ -42,6 +45,30 @@ class TripMembersTab extends ConsumerWidget {
           ),
           data: (members) => _Shared(trip: trip, members: members, role: role),
         );
+  }
+}
+
+class _SignedOut extends ConsumerWidget {
+  const _SignedOut();
+
+  @override
+  Widget build(BuildContext context, WidgetRef ref) {
+    final theme = Theme.of(context);
+    return Center(
+      child: SingleChildScrollView(
+        padding: const EdgeInsets.all(24),
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Icon(Icons.group_outlined, size: 40, color: theme.colorScheme.onSurfaceVariant),
+            const SizedBox(height: 12),
+            const Text(signedOutTripText, textAlign: TextAlign.center),
+            const SizedBox(height: 16),
+            FilledButton(onPressed: () => signInForSharedTrip(context, ref), child: const Text('Sign in')),
+          ],
+        ),
+      ),
+    );
   }
 }
 
