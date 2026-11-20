@@ -20,6 +20,7 @@ import '../widgets/trip_sync_icon.dart';
 import 'trip_activity_screen.dart';
 import 'trip_members_tab.dart';
 import 'trip_stops_tab.dart';
+import '../../../shared/widgets/up_button.dart';
 
 enum TripTab {
   plan,
@@ -70,11 +71,11 @@ class _TripScreenState extends ConsumerState<TripScreen> with SingleTickerProvid
   Widget build(BuildContext context) {
     final tripAsync = ref.watch(tripDetailProvider(widget.tripId));
     return tripAsync.when(
-      loading: () => Scaffold(appBar: AppBar(), body: const Center(child: CircularProgressIndicator())),
-      error: (e, _) => Scaffold(appBar: AppBar(), body: Center(child: Text("Couldn't load this trip: $e"))),
+      loading: () => Scaffold(appBar: AppBar(leading: UpButton.ifAlone(context, fallback: '/trips')), body: const Center(child: CircularProgressIndicator())),
+      error: (e, _) => Scaffold(appBar: AppBar(leading: UpButton.ifAlone(context, fallback: '/trips')), body: Center(child: Text("Couldn't load this trip: $e"))),
       data: (trip) {
         if (trip == null || trip.deletedAt != null) {
-          return Scaffold(appBar: AppBar(), body: const Center(child: Text('This trip was deleted.')));
+          return Scaffold(appBar: AppBar(leading: UpButton.ifAlone(context, fallback: '/trips')), body: const Center(child: Text('This trip was deleted.')));
         }
         return _scaffold(context, trip);
       },
@@ -111,6 +112,7 @@ class _TripScreenState extends ConsumerState<TripScreen> with SingleTickerProvid
 
     return Scaffold(
       appBar: AppBar(
+        leading: UpButton.ifAlone(context, fallback: '/trips'),
         centerTitle: false,
         title: Column(
           crossAxisAlignment: CrossAxisAlignment.start,

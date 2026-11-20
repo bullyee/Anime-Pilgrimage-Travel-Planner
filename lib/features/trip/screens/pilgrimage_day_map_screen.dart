@@ -28,6 +28,7 @@ import '../../sharing/providers/group_sharing_providers.dart';
 import '../providers/trip_providers.dart';
 import '../widgets/day_map_pins.dart';
 import 'stop_screen.dart' show stopFrames;
+import '../../../shared/widgets/up_button.dart';
 
 /// Pilgrimage mode's main screen: the day's stops on a map with the user's
 /// current position, visited stops marked, and instant photo/check-in actions.
@@ -554,7 +555,7 @@ class _PilgrimageDayMapScreenState extends ConsumerState<PilgrimageDayMapScreen>
                 backgroundColor: theme.colorScheme.surface.withValues(alpha: 0.9),
                 child: IconButton(
                   icon: const Icon(Icons.arrow_back),
-                  onPressed: () => context.pop(),
+                  onPressed: () => goUp(context, '/trips/${widget.tripId}'),
                   tooltip: 'Back',
                 ),
               ),

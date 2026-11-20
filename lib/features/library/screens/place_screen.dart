@@ -25,6 +25,7 @@ import '../widgets/label_widgets.dart';
 import '../widgets/place_compare.dart';
 import '../widgets/place_page_parts.dart';
 import '../widgets/trip_picker.dart';
+import '../../../shared/widgets/up_button.dart';
 
 /// One place in the library: its anime frames first, with the camera one
 /// tap away, then its facts, and then what is only the user's own: their
@@ -121,7 +122,7 @@ class _PlaceScreenState extends ConsumerState<PlaceScreen> {
     final place = placeAsync.valueOrNull;
     if (place == null) {
       return Scaffold(
-        appBar: AppBar(),
+        appBar: AppBar(leading: UpButton.ifAlone(context, fallback: '/library')),
         body: Center(
           child: placeAsync.isLoading ? const CircularProgressIndicator() : const Text('This place is no longer in your library.'),
         ),
@@ -150,6 +151,7 @@ class _PlaceScreenState extends ConsumerState<PlaceScreen> {
       },
       child: Scaffold(
         appBar: AppBar(
+          leading: UpButton.ifAlone(context, fallback: '/library'),
           centerTitle: false,
           title: Text(draft == null ? place.name : 'Editing', maxLines: 1, overflow: TextOverflow.ellipsis),
           actions: [
