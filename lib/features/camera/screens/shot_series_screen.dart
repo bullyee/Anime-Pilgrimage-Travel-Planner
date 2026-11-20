@@ -2,6 +2,7 @@ import 'dart:async';
 import 'dart:io' show Platform;
 
 import 'package:flutter/foundation.dart' show kIsWeb;
+import 'package:flutter/gestures.dart' show PointerDeviceKind;
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
@@ -537,19 +538,24 @@ class _ShotSeriesScreenState extends ConsumerState<ShotSeriesScreen> {
                       ),
                     Expanded(
                       flex: 3,
-                      child: PageView.builder(
-                        controller: _pages,
-                        itemCount: shots.length,
-                        onPageChanged: (i) => setState(() => _current = i),
-                        itemBuilder: (context, i) {
-                          final shot = shots[i];
-                          return _Pane(
-                            label: 'Shot ${i + 1} of ${shots.length}',
-                            onTap: busy ? null : () => _toggle(shot),
-                            trailing: _KeepMark(kept: _kept.contains(shot.path), large: true),
-                            child: _Photo(path: shot.path),
-                          );
-                        },
+                      child: ScrollConfiguration(
+                        behavior: ScrollConfiguration.of(context).copyWith(
+                          dragDevices: {...ScrollConfiguration.of(context).dragDevices, PointerDeviceKind.mouse},
+                        ),
+                        child: PageView.builder(
+                          controller: _pages,
+                          itemCount: shots.length,
+                          onPageChanged: (i) => setState(() => _current = i),
+                          itemBuilder: (context, i) {
+                            final shot = shots[i];
+                            return _Pane(
+                              label: 'Shot ${i + 1} of ${shots.length}',
+                              onTap: busy ? null : () => _toggle(shot),
+                              trailing: _KeepMark(kept: _kept.contains(shot.path), large: true),
+                              child: _Photo(path: shot.path),
+                            );
+                          },
+                        ),
                       ),
                     ),
                     if (shots.length > 1)

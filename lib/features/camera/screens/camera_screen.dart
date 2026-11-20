@@ -11,6 +11,8 @@ import 'package:image_picker/image_picker.dart';
 
 import '../../../core/database/database.dart' show NewReferenceImage;
 import '../../../core/utils/platform_media.dart';
+import '../../library/providers/place_providers.dart' show placeRepositoryProvider;
+import '../../library/widgets/place_page_parts.dart' show framePath, framePathOnDevice;
 import '../providers/camera_provider.dart';
 import '../widgets/capture_sheets.dart';
 
@@ -63,10 +65,19 @@ class CameraScreen extends ConsumerStatefulWidget {
   /// The trip the shot is filed under; see [openCaptureInEditor].
   final String? tripId;
 
+  /// The trip stop the shot is for (holds synced frames scoped by stop ID).
+  final String? stopId;
+
   /// The place's frame to start on, when the camera was opened from one.
   final String? frameId;
 
-  const CameraScreen({super.key, this.placeKey, this.tripId, this.frameId});
+  const CameraScreen({
+    super.key,
+    this.placeKey,
+    this.tripId,
+    this.stopId,
+    this.frameId,
+  });
 
   @override
   ConsumerState<CameraScreen> createState() => _CameraScreenState();
@@ -93,6 +104,7 @@ class _CameraScreenState extends ConsumerState<CameraScreen>
   /// The place's frames on the device, to switch between with ‹ › once one
   /// of them is the reference.
   List<NewReferenceImage> _placeFrames = const [];
+  Map<String, String> _resolvedFramePaths = const {};
 
   @override
   void initState() {
@@ -102,20 +114,74 @@ class _CameraScreenState extends ConsumerState<CameraScreen>
       SystemChrome.setEnabledSystemUIMode(SystemUiMode.immersiveSticky);
     }
     Future.microtask(() {
+      if (!mounted) return;
       ref.read(cameraProvider.notifier).initialize(widget.placeKey);
       _initializeCameras();
-      final placeKey = widget.placeKey;
-      if (placeKey != null) _loadPlaceFrames(placeKey, startOn: widget.frameId);
+      if (widget.placeKey != null ||
+          widget.stopId != null ||
+          widget.frameId != null) {
+        _loadPlaceFrames(
+          widget.placeKey,
+          stopId: widget.stopId,
+          tripId: widget.tripId,
+          startOn: widget.frameId,
+        );
+      }
     });
   }
 
-  /// Loads [placeKey]'s frames for ‹ ›, and starts on [startOn] when given.
-  Future<void> _loadPlaceFrames(String placeKey, {String? startOn}) async {
-    final frames = await placeFramesOnDevice(ref, placeKey);
+  /// Loads [placeKey] and/or [stopId]'s frames for ‹ ›, and starts on
+  /// [startOn] (or the first available frame when omitted).
+  Future<void> _loadPlaceFrames(
+    String? placeKey, {
+    String? stopId,
+    String? tripId,
+    String? startOn,
+  }) async {
+    var frames = await spotFramesOnDevice(
+      ref,
+      placeKey: placeKey,
+      stopId: stopId,
+      tripId: tripId,
+    );
     if (!mounted) return;
-    setState(() => _placeFrames = frames);
-    final start = frames.where((f) => f.id == startOn).firstOrNull;
-    final startPath = start == null ? null : _framePathOrUrl(start);
+
+    NewReferenceImage? start;
+    if (startOn != null) {
+      start = frames.where((f) => f.id == startOn).firstOrNull;
+      if (start == null) {
+        final direct =
+            await ref.read(placeRepositoryProvider).getReferenceImage(startOn);
+        if (!mounted) return;
+        if (direct != null) {
+          final directPath = await framePath(ref, direct);
+          if (!mounted) return;
+          if (directPath != null) {
+            start = direct;
+            frames = [direct, ...frames];
+          }
+        }
+      }
+    } else if (frames.isNotEmpty) {
+      start = frames.first;
+    }
+
+    final resolvedPaths = <String, String>{};
+    for (final f in frames) {
+      final path = (start != null && f.id == start.id)
+          ? await framePath(ref, f)
+          : await framePathOnDevice(ref, f);
+      if (!mounted) return;
+      final resolved = path ?? _framePathOrUrl(f);
+      if (resolved != null) resolvedPaths[f.id] = resolved;
+    }
+
+    setState(() {
+      _placeFrames = frames;
+      _resolvedFramePaths = {..._resolvedFramePaths, ...resolvedPaths};
+    });
+
+    final startPath = start == null ? null : resolvedPaths[start.id];
     if (start != null &&
         startPath != null &&
         ref.read(cameraProvider).effectiveReferencePath == null) {
@@ -147,7 +213,7 @@ class _CameraScreenState extends ConsumerState<CameraScreen>
     final i = _frameIndex(camState);
     if (i == null || _placeFrames.length < 2) return;
     final next = _placeFrames[(i + step) % _placeFrames.length];
-    final nextPath = _framePathOrUrl(next);
+    final nextPath = _resolvedFramePaths[next.id] ?? _framePathOrUrl(next);
     if (nextPath == null) return;
     ref
         .read(cameraProvider.notifier)
@@ -596,6 +662,22 @@ class _CameraScreenState extends ConsumerState<CameraScreen>
                     camState.effectiveReferencePath!,
                     fit: BoxFit.contain,
                     cacheWidth: 1080,
+                    errorBuilder: (_, _, _) => Container(
+                      padding: const EdgeInsets.all(16),
+                      color: Colors.black87,
+                      child: const Column(
+                        mainAxisSize: MainAxisSize.min,
+                        children: [
+                          Icon(Icons.broken_image_outlined, color: Colors.white70, size: 32),
+                          SizedBox(height: 8),
+                          Text(
+                            "Couldn't load reference frame",
+                            style: TextStyle(color: Colors.white70, fontSize: 12),
+                            textAlign: TextAlign.center,
+                          ),
+                        ],
+                      ),
+                    ),
                   ),
                 ),
               ),
@@ -817,15 +899,30 @@ class _CameraScreenState extends ConsumerState<CameraScreen>
     final placeKey = await _resolvePlaceForFrame();
     if (placeKey == null || !mounted) return;
 
-    final picked = await pickPlaceFrame(context, ref, placeKey);
-    if (picked == null) return;
-    final path = _framePathOrUrl(picked);
-    if (path == null) return;
+    final samePlace = placeKey == widget.placeKey;
+    final picked = await pickPlaceFrame(
+      context,
+      ref,
+      placeKey,
+      stopId: samePlace ? widget.stopId : null,
+      tripId: samePlace ? widget.tripId : null,
+    );
+    if (picked == null || !mounted) return;
+    final path = await framePath(ref, picked) ?? _framePathOrUrl(picked);
+    if (path == null || !mounted) return;
 
+    _resolvedFramePaths = {..._resolvedFramePaths, picked.id: path};
     ref
         .read(cameraProvider.notifier)
         .setReferencePath(path, referenceImageId: picked.id);
-    if (_placeFrames.every((f) => f.id != picked.id)) await _loadPlaceFrames(placeKey);
+    if (_placeFrames.every((f) => f.id != picked.id)) {
+      await _loadPlaceFrames(
+        placeKey,
+        stopId: samePlace ? widget.stopId : null,
+        tripId: samePlace ? widget.tripId : null,
+        startOn: picked.id,
+      );
+    }
   }
 
   Future<String?> _resolvePlaceForFrame() async {
