@@ -767,7 +767,7 @@ class _StopTitle extends ConsumerWidget {
 /// it lasts and the travel on, and whether it was visited. Times are changed
 /// in edit mode; marking it visited works any time, except for a viewer,
 /// who gets null [onVisited] and [onAddToDay].
-class _PlanCard extends StatelessWidget {
+class _PlanCard extends StatefulWidget {
   final StopSlot? slot;
   final bool loading;
   final bool editing;
@@ -791,21 +791,31 @@ class _PlanCard extends StatelessWidget {
   });
 
   @override
+  State<_PlanCard> createState() => _PlanCardState();
+}
+
+class _PlanCardState extends State<_PlanCard> {
+  bool _showTiming = false;
+
+  @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
     final p = theme.trip;
     final muted = theme.textTheme.bodySmall?.copyWith(color: theme.colorScheme.onSurfaceVariant);
-    final slot = this.slot;
+    final slot = widget.slot;
+    final editing = widget.editing;
+    final onVisited = widget.onVisited;
     if (slot == null) {
       return PageSection(
         title: 'Plan',
         scope: SectionScope.trip,
-        child: loading
+        child: widget.loading
             ? const SizedBox(height: 48, child: Center(child: CircularProgressIndicator()))
             : Row(
                 children: [
                   Expanded(child: Text('Not on a day yet. It waits in the backlog.', style: theme.textTheme.bodyMedium)),
-                  if (onAddToDay != null) FilledButton.tonal(onPressed: onAddToDay, child: const Text('Add to a day')),
+                  if (widget.onAddToDay != null)
+                    FilledButton.tonal(onPressed: widget.onAddToDay, child: const Text('Add to a day')),
                 ],
               ),
       );
@@ -818,6 +828,8 @@ class _PlanCard extends StatelessWidget {
     final isLast = index == items.length - 1;
     final followsAt = previous == null ? null : previous.endMinutes + previous.item.transitMinutes;
     final transit = item.item.transitMinutes;
+    final hasTimes = slot.day.hasTimes;
+    final showTiming = _showTiming || hasTimes;
 
     Widget row(String label, Widget value) => Padding(
           padding: const EdgeInsets.symmetric(vertical: 4),
@@ -839,6 +851,10 @@ class _PlanCard extends StatelessWidget {
       [formatTimelineMinutes(item.startMinutes), if (item.fixed) 'fixed'].join(' · '),
       style: theme.textTheme.titleSmall?.copyWith(color: item.conflict ? p.vermilion : item.fixed ? p.tea : null),
     );
+    final footerParts = [
+      if (showTiming) '${formatTimelineMinutes(item.startMinutes)}–${formatTimelineMinutes(item.endMinutes)}.',
+      if (onVisited != null) 'Marking it visited shows for everyone in the trip, and also adds a visit to your own history.',
+    ];
 
     return PageSection(
       title: 'Plan',
@@ -870,8 +886,20 @@ class _PlanCard extends StatelessWidget {
               ),
             ],
           ),
-          const SizedBox(height: 8),
-          if (editing) ...[
+          if (editing || showTiming) const SizedBox(height: 8),
+          if (editing && !showTiming)
+            row(
+              'Time',
+              Align(
+                alignment: Alignment.centerLeft,
+                child: OutlinedButton.icon(
+                  onPressed: () => setState(() => _showTiming = true),
+                  icon: const Icon(Icons.schedule, size: 18),
+                  label: const Text('Add time (optional)'),
+                ),
+              ),
+            )
+          else if (editing && showTiming) ...[
             row(
               'Starts',
               Wrap(
@@ -881,23 +909,23 @@ class _PlanCard extends StatelessWidget {
                 children: [
                   start,
                   OutlinedButton.icon(
-                    onPressed: onStartTime,
+                    onPressed: widget.onStartTime,
                     icon: const Icon(Icons.schedule, size: 18),
                     label: Text(item.fixed ? 'Change time' : 'Set a time'),
                   ),
-                  if (item.fixed) TextButton(onPressed: onClearStart, child: const Text('Clear')),
+                  if (item.fixed) TextButton(onPressed: widget.onClearStart, child: const Text('Clear')),
                 ],
               ),
             ),
-            row('Stay', stepper(value: item.item.stayMinutes, min: 5, less: '5 minutes shorter', more: '5 minutes longer', onChanged: onStay)),
+            row('Stay', stepper(value: item.item.stayMinutes, min: 5, less: '5 minutes shorter', more: '5 minutes longer', onChanged: widget.onStay)),
             if (!isLast)
-              row('Travel on', stepper(value: transit, min: 0, less: '5 minutes less travel', more: '5 minutes more travel', onChanged: onTransit)),
-          ] else ...[
+              row('Travel on', stepper(value: transit, min: 0, less: '5 minutes less travel', more: '5 minutes more travel', onChanged: widget.onTransit)),
+          ] else if (showTiming) ...[
             row('Starts', start),
             row('Stay', Text('${item.item.stayMinutes} min', style: theme.textTheme.titleSmall)),
             if (!isLast && transit > 0) row('Travel on', Text('$transit min', style: theme.textTheme.titleSmall)),
           ],
-          if (item.conflict && followsAt != null)
+          if (showTiming && item.conflict && followsAt != null)
             Padding(
               padding: const EdgeInsets.only(left: 84, bottom: 4),
               child: Text(
@@ -905,12 +933,10 @@ class _PlanCard extends StatelessWidget {
                 style: theme.textTheme.bodySmall?.copyWith(color: p.vermilion),
               ),
             ),
-          const SizedBox(height: 6),
-          Text(
-            '${formatTimelineMinutes(item.startMinutes)}–${formatTimelineMinutes(item.endMinutes)}.'
-            '${onVisited == null ? '' : ' Marking it visited shows for everyone in the trip, and also adds a visit to your own history.'}',
-            style: muted,
-          ),
+          if (footerParts.isNotEmpty) ...[
+            const SizedBox(height: 6),
+            Text(footerParts.join(' '), style: muted),
+          ],
         ],
       ),
     );

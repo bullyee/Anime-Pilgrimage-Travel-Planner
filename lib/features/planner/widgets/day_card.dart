@@ -146,10 +146,12 @@ class _DayCardState extends State<DayCard> {
     final d = widget.day;
     final first = d.items.isEmpty ? null : d.items.first;
     final last = d.items.isEmpty ? null : d.items.last;
+    final stopSummary = d.items.length == 1 ? '1 stop' : '${d.items.length} stops';
     final meta = first == null
         ? 'Nothing planned yet'
-        : '${d.items.length == 1 ? '1 stop' : '${d.items.length} stops'} · '
-            '${formatTimelineMinutes(first.startMinutes)}–${formatTimelineMinutes(last!.endMinutes)}';
+        : d.hasTimes
+            ? '$stopSummary · ${formatTimelineMinutes(first.startMinutes)}–${formatTimelineMinutes(last!.endMinutes)}'
+            : stopSummary;
 
     final today = !d.isBackup && d.date == normalizeDateOnly(DateTime.now());
     return Card(
@@ -205,14 +207,22 @@ class _DayCardState extends State<DayCard> {
     final draggedIds = _draggedIds;
     final here = dragging != null && slot != null && slot.dayId == _dayId;
 
+    final showTimes = d.hasTimes;
     Widget between(PlannerItem previous) => previous.item.transitMinutes > 0
         ? _TravelLine(minutes: previous.item.transitMinutes)
-        : Divider(height: 1, indent: 72, endIndent: 12, color: theme.colorScheme.outlineVariant.withValues(alpha: 0.5));
+        : Divider(
+            height: 1,
+            indent: showTimes ? 72 : 48,
+            endIndent: 12,
+            color: theme.colorScheme.outlineVariant.withValues(alpha: 0.5),
+          );
     // A group's stops are dragged with their group, not on their own.
-    StopRow stopRow(PlannerItem it, {required bool inGroup}) => StopRow(
+    StopRow stopRow(PlannerItem it, {required bool inGroup, int? orderNumber}) => StopRow(
           item: it,
           dayId: _dayId,
           editing: widget.editing && !inGroup,
+          showTimes: showTimes,
+          orderNumber: orderNumber,
           dimmed: !inGroup && draggedIds.contains(it.item.id),
           drag: widget.drag,
           group: inGroup ? null : it.group,
@@ -225,7 +235,7 @@ class _DayCardState extends State<DayCard> {
 
     final rows = <Widget>[];
     PlannerItem? previous;
-    for (final block in d.blocks) {
+    for (final (blockIndex, block) in d.blocks.indexed) {
       if (here && slot.beforeItemId == block.first.item.id) rows.add(const _InsertLine());
       if (previous != null) rows.add(between(previous));
       previous = block.items.last;
@@ -236,6 +246,8 @@ class _DayCardState extends State<DayCard> {
           block: block,
           dayId: _dayId,
           editing: widget.editing,
+          showTimes: showTimes,
+          orderNumber: blockIndex + 1,
           expanded: widget.actions.isGroupExpanded(key),
           dimmed: draggedIds.contains(block.first.item.id),
           drag: widget.drag,
@@ -248,7 +260,7 @@ class _DayCardState extends State<DayCard> {
           ],
         );
       } else {
-        child = stopRow(block.first, inGroup: false);
+        child = stopRow(block.first, inGroup: false, orderNumber: blockIndex + 1);
       }
       rows.add(KeyedSubtree(key: _rowKeys.putIfAbsent(block.first.item.id, GlobalKey.new), child: child));
     }
@@ -274,12 +286,30 @@ class _DayCardState extends State<DayCard> {
         ));
       }
     } else if (d.items.isEmpty) {
+      final canEdit = widget.actions.onToggleVisited != null;
       rows.add(Padding(
-        padding: const EdgeInsets.symmetric(vertical: 24),
-        child: Text(
-          'Tap the pencil to plan this day.',
-          textAlign: TextAlign.center,
-          style: theme.textTheme.bodyMedium?.copyWith(color: theme.colorScheme.onSurfaceVariant),
+        padding: const EdgeInsets.symmetric(vertical: 24, horizontal: 16),
+        child: Column(
+          children: [
+            if (canEdit) ...[
+              FilledButton.tonalIcon(
+                onPressed: () => widget.actions.onAddFromBacklog(d),
+                icon: const Icon(Icons.add),
+                label: const Text('Add stops to this day'),
+              ),
+              const SizedBox(height: 8),
+              Text(
+                'Add places now — dates and times are optional.',
+                textAlign: TextAlign.center,
+                style: theme.textTheme.bodySmall?.copyWith(color: theme.colorScheme.onSurfaceVariant),
+              ),
+            ] else
+              Text(
+                'Nothing planned for this day yet.',
+                textAlign: TextAlign.center,
+                style: theme.textTheme.bodyMedium?.copyWith(color: theme.colorScheme.onSurfaceVariant),
+              ),
+          ],
         ),
       ));
     }
@@ -304,12 +334,19 @@ class _DayHeader extends StatelessWidget {
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
     final date = day.date;
-    final heading = day.isBackup
-        ? (day.day.title ?? 'Backup')
-        : date == null
-            ? 'No date yet'
-            : DateFormat.MMMEd().format(date);
-    final title = !day.isBackup && day.day.title != null ? day.day.title! : null;
+    final rawTitle = day.day.title?.trim();
+    final customTitle = (rawTitle != null && rawTitle.isNotEmpty) ? rawTitle : null;
+    final eyebrow = switch ((day.isBackup, date != null, customTitle != null)) {
+      (true, _, _) => 'BACKUP DAY',
+      (false, true, _) || (false, false, true) => dayLabel(day).toUpperCase(),
+      (false, false, false) => null,
+    };
+    final heading = switch ((day.isBackup, date)) {
+      (true, _) => customTitle ?? 'Backup',
+      (false, final d?) => DateFormat.MMMEd().format(d),
+      (false, null) => customTitle ?? dayLabel(day),
+    };
+    final title = !day.isBackup && date != null ? customTitle : null;
     final p = theme.trip;
     final today = !day.isBackup && date == normalizeDateOnly(DateTime.now());
 
@@ -325,30 +362,32 @@ class _DayHeader extends StatelessWidget {
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  Row(
-                    children: [
-                      Text(
-                        dayLabel(day).toUpperCase(),
-                        style: theme.textTheme.labelSmall?.copyWith(
-                          letterSpacing: 1.1,
-                          fontWeight: FontWeight.w700,
-                          color: day.isBackup ? theme.colorScheme.onSurfaceVariant : p.tea,
-                        ),
-                      ),
-                      if (today) ...[
-                        const SizedBox(width: 8),
-                        Container(
-                          padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 1),
-                          decoration: BoxDecoration(color: p.tea, borderRadius: BorderRadius.circular(999)),
-                          child: Text(
-                            'TODAY',
-                            style: theme.textTheme.labelSmall
-                                ?.copyWith(color: theme.colorScheme.surface, fontWeight: FontWeight.w800, letterSpacing: 1),
+                  if (eyebrow != null || today)
+                    Row(
+                      children: [
+                        if (eyebrow != null)
+                          Text(
+                            eyebrow,
+                            style: theme.textTheme.labelSmall?.copyWith(
+                              letterSpacing: 1.1,
+                              fontWeight: FontWeight.w700,
+                              color: day.isBackup ? theme.colorScheme.onSurfaceVariant : p.tea,
+                            ),
                           ),
-                        ),
+                        if (today) ...[
+                          const SizedBox(width: 8),
+                          Container(
+                            padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 1),
+                            decoration: BoxDecoration(color: p.tea, borderRadius: BorderRadius.circular(999)),
+                            child: Text(
+                              'TODAY',
+                              style: theme.textTheme.labelSmall
+                                  ?.copyWith(color: theme.colorScheme.surface, fontWeight: FontWeight.w800, letterSpacing: 1),
+                            ),
+                          ),
+                        ],
                       ],
-                    ],
-                  ),
+                    ),
                   Text(heading, style: theme.textTheme.headlineSmall?.copyWith(fontWeight: FontWeight.w700)),
                   if (freeDaysLabel(day) case final free?)
                     Text(free, style: theme.textTheme.labelLarge?.copyWith(color: p.vermilion)),
@@ -407,11 +446,14 @@ class _DayHeader extends StatelessWidget {
   }
 }
 
-/// A stop on a day: start time, name, and whether it was visited.
+/// A stop on a day: start time (or order badge when no times are set), name,
+/// and whether it was visited.
 class StopRow extends StatelessWidget {
   final PlannerItem item;
   final String dayId;
   final bool editing;
+  final bool showTimes;
+  final int? orderNumber;
   final bool dimmed;
   final PlannerDragState drag;
   final VoidCallback onTap;
@@ -429,6 +471,8 @@ class StopRow extends StatelessWidget {
     required this.item,
     required this.dayId,
     required this.editing,
+    this.showTimes = true,
+    this.orderNumber,
     required this.dimmed,
     required this.drag,
     required this.onTap,
@@ -458,7 +502,7 @@ class StopRow extends StatelessWidget {
       onDraggableCanceled: (_, _) => drag.end(),
       feedback: DragFeedbackCard(
         title: item.stop.name,
-        subtitle: formatTimelineMinutes(item.startMinutes),
+        subtitle: showTimes ? formatTimelineMinutes(item.startMinutes) : null,
       ),
       childWhenDragging: Opacity(opacity: 0.3, child: row),
       child: dimmed ? Opacity(opacity: 0.3, child: row) : row,
@@ -476,35 +520,38 @@ class StopRow extends StatelessWidget {
           padding: const EdgeInsets.fromLTRB(8, 4, 0, 4),
           child: Row(
             children: [
-              SizedBox(
-                width: 64,
-                child: FittedBox(
-                  fit: BoxFit.scaleDown,
-                  alignment: Alignment.centerLeft,
-                  child: Row(
-                  mainAxisSize: MainAxisSize.min,
-                  children: [
-                    if (item.fixed)
-                      Padding(
-                        padding: const EdgeInsets.only(right: 2),
-                        child: Icon(Icons.schedule, size: 14, color: theme.trip.tea),
-                      ),
-                    Text(
-                      formatTimelineMinutes(item.startMinutes),
-                      style: theme.textTheme.bodyMedium?.copyWith(
-                        fontFeatures: const [FontFeature.tabularFigures()],
-                        fontWeight: FontWeight.w600,
-                        color: item.conflict
-                            ? theme.trip.vermilion
-                            : item.fixed
-                                ? theme.trip.tea
-                                : theme.colorScheme.onSurfaceVariant,
-                      ),
+              if (showTimes)
+                SizedBox(
+                  width: 64,
+                  child: FittedBox(
+                    fit: BoxFit.scaleDown,
+                    alignment: Alignment.centerLeft,
+                    child: Row(
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        if (item.fixed)
+                          Padding(
+                            padding: const EdgeInsets.only(right: 2),
+                            child: Icon(Icons.schedule, size: 14, color: theme.trip.tea),
+                          ),
+                        Text(
+                          formatTimelineMinutes(item.startMinutes),
+                          style: theme.textTheme.bodyMedium?.copyWith(
+                            fontFeatures: const [FontFeature.tabularFigures()],
+                            fontWeight: FontWeight.w600,
+                            color: item.conflict
+                                ? theme.trip.vermilion
+                                : item.fixed
+                                    ? theme.trip.tea
+                                    : theme.colorScheme.onSurfaceVariant,
+                          ),
+                        ),
+                      ],
                     ),
-                  ],
                   ),
-                ),
-              ),
+                )
+              else
+                _OrderBadge(number: orderNumber),
               Expanded(
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
@@ -546,6 +593,8 @@ class GroupBlock extends StatelessWidget {
   final PlannerBlock block;
   final String dayId;
   final bool editing;
+  final bool showTimes;
+  final int? orderNumber;
   final bool expanded;
   final bool dimmed;
   final PlannerDragState drag;
@@ -559,6 +608,8 @@ class GroupBlock extends StatelessWidget {
     required this.block,
     required this.dayId,
     required this.editing,
+    this.showTimes = true,
+    this.orderNumber,
     required this.expanded,
     required this.dimmed,
     required this.drag,
@@ -618,34 +669,37 @@ class GroupBlock extends StatelessWidget {
           padding: const EdgeInsets.fromLTRB(8, 6, 0, 6),
           child: Row(
             children: [
-              SizedBox(
-                width: 64,
-                child: FittedBox(
-                  fit: BoxFit.scaleDown,
-                  alignment: Alignment.centerLeft,
-                  child: Column(
-                    mainAxisSize: MainAxisSize.min,
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      Text(
-                        formatTimelineMinutes(block.startMinutes),
-                        style: theme.textTheme.bodyMedium?.copyWith(
-                          fontFeatures: const [FontFeature.tabularFigures()],
-                          fontWeight: FontWeight.w600,
-                          color: muted,
+              if (showTimes)
+                SizedBox(
+                  width: 64,
+                  child: FittedBox(
+                    fit: BoxFit.scaleDown,
+                    alignment: Alignment.centerLeft,
+                    child: Column(
+                      mainAxisSize: MainAxisSize.min,
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Text(
+                          formatTimelineMinutes(block.startMinutes),
+                          style: theme.textTheme.bodyMedium?.copyWith(
+                            fontFeatures: const [FontFeature.tabularFigures()],
+                            fontWeight: FontWeight.w600,
+                            color: muted,
+                          ),
                         ),
-                      ),
-                      Text(
-                        '–${formatTimelineMinutes(block.endMinutes)}',
-                        style: theme.textTheme.bodySmall?.copyWith(
-                          fontFeatures: const [FontFeature.tabularFigures()],
-                          color: muted,
+                        Text(
+                          '–${formatTimelineMinutes(block.endMinutes)}',
+                          style: theme.textTheme.bodySmall?.copyWith(
+                            fontFeatures: const [FontFeature.tabularFigures()],
+                            color: muted,
+                          ),
                         ),
-                      ),
-                    ],
+                      ],
+                    ),
                   ),
-                ),
-              ),
+                )
+              else
+                _OrderBadge(number: orderNumber),
               Expanded(
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
@@ -773,6 +827,39 @@ class _TravelLine extends StatelessWidget {
           const SizedBox(width: 4),
           Text('$minutes min', style: theme.textTheme.bodySmall?.copyWith(color: muted)),
         ],
+      ),
+    );
+  }
+}
+
+class _OrderBadge extends StatelessWidget {
+  final int? number;
+
+  const _OrderBadge({required this.number});
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    final p = theme.trip;
+    if (number == null) {
+      return SizedBox(
+        width: 36,
+        child: Center(child: Icon(Icons.circle, size: 6, color: theme.colorScheme.outlineVariant)),
+      );
+    }
+    return SizedBox(
+      width: 36,
+      child: Center(
+        child: Container(
+          width: 24,
+          height: 24,
+          alignment: Alignment.center,
+          decoration: BoxDecoration(color: p.teaSoft, shape: BoxShape.circle),
+          child: Text(
+            '$number',
+            style: theme.textTheme.labelMedium?.copyWith(color: p.tea, fontWeight: FontWeight.w700),
+          ),
+        ),
       ),
     );
   }

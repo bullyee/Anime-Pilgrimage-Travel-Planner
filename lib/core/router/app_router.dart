@@ -142,6 +142,7 @@ GoRouter router(RouterRef ref) {
         path: '/trips/:tripId/stops/add',
         builder: (context, state) => LibraryPickerScreen(
           tripId: state.pathParameters['tripId']!,
+          initialDayId: state.uri.queryParameters['day'],
         ),
       ),
       GoRoute(

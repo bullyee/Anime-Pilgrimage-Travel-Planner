@@ -87,13 +87,21 @@ class _TripScreenState extends ConsumerState<TripScreen> with SingleTickerProvid
     final theme = Theme.of(context);
     final blocks = ref.watch(tripResolvedBlockDatesProvider(trip.id));
     final dated = blocks.where((b) => !b.isBackup && b.date != null).toList();
-    final subtitle = tripDateLine(
-      firstDate: dated.isEmpty ? null : dated.first.date,
-      lastDate: dated.isEmpty ? null : dated.last.date,
-    );
+    final dayCount = blocks.where((b) => !b.isBackup).length;
+    final subtitle = dated.isNotEmpty
+        ? tripDateLine(firstDate: dated.first.date, lastDate: dated.last.date)
+        : switch (dayCount) {
+            0 => '',
+            1 => '1 day',
+            final n => '$n days',
+          };
     final tab = TripTab.values[_tabs.index];
     final hasStops = ref.watch(tripStopsProvider(trip.id)).valueOrNull?.isNotEmpty ?? false;
     final role = ref.watch(myTripRoleProvider(trip.id));
+    final subline = [
+      if (subtitle.isNotEmpty) subtitle,
+      if (role == TripMemberRole.viewer) 'View only',
+    ].join(' · ');
     final canEdit = ref.watch(canEditTripProvider(trip.id));
     // A viewer's role can change while they're on the page.
     final editing = _editing && canEdit;
@@ -126,10 +134,11 @@ class _TripScreenState extends ConsumerState<TripScreen> with SingleTickerProvid
                   TripSyncIcon(tripId: trip.id, padding: const EdgeInsets.only(left: 6)),
               ],
             ),
-            Text(
-              role == TripMemberRole.viewer ? '$subtitle · View only' : subtitle,
-              style: theme.textTheme.bodySmall?.copyWith(color: theme.colorScheme.onSurfaceVariant),
-            ),
+            if (subline.isNotEmpty)
+              Text(
+                subline,
+                style: theme.textTheme.bodySmall?.copyWith(color: theme.colorScheme.onSurfaceVariant),
+              ),
           ],
         ),
         actions: [

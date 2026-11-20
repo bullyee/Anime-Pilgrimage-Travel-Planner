@@ -69,7 +69,7 @@ class PlannerGrid extends StatelessWidget {
             _AddTile(
               key: const Key('addDayTile'),
               label: 'Add Day ${view.datedDays.length + 1}',
-              detail: next == null ? 'No date yet' : DateFormat.MMMEd().format(next),
+              detail: next == null ? null : DateFormat.MMMEd().format(next),
               dropHint: 'Drop to add it to the trip',
               accepts: (id) => view.dayById(id)?.isBackup ?? false,
               onDrop: (id) => onMoveToTrip(view.dayById(id)!),
@@ -89,7 +89,6 @@ class PlannerGrid extends StatelessWidget {
               _AddTile(
                 key: const Key('addBackupTile'),
                 label: 'Add a backup day',
-                detail: 'No date',
                 dropHint: 'Drop to make it a backup day',
                 accepts: (id) {
                   final d = view.dayById(id);
@@ -118,11 +117,15 @@ class PlannerGrid extends StatelessWidget {
 
   Widget _block(BuildContext context, PlannerDay day) {
     final date = day.date;
+    final rawTitle = day.day.title?.trim();
+    final title = (rawTitle != null && rawTitle.isNotEmpty) ? rawTitle : null;
+    final detailParts = <String>[
+      if (date != null) DateFormat.MMMEd().format(date),
+      ?title,
+    ];
     final summary = _Summary(
       title: day.isBackup ? 'Backup' : dayLabel(day),
-      detail: day.isBackup
-          ? (day.day.title ?? 'No date')
-          : [date == null ? 'No date yet' : DateFormat.MMMEd().format(date), ?day.day.title].join(' · '),
+      detail: day.isBackup ? title : (detailParts.isEmpty ? null : detailParts.join(' · ')),
       note: freeDaysLabel(day),
       pinned: day.isPinned,
       pinConflict: day.pinConflict,
@@ -179,7 +182,7 @@ class PlannerGrid extends StatelessWidget {
 
 class _Summary extends StatelessWidget {
   final String title;
-  final String detail;
+  final String? detail;
   final String? note;
   final bool pinned;
   final bool pinConflict;
@@ -187,7 +190,7 @@ class _Summary extends StatelessWidget {
 
   const _Summary({
     required this.title,
-    required this.detail,
+    this.detail,
     required this.lines,
     this.note,
     this.pinned = false,
@@ -208,7 +211,7 @@ class _Summary extends StatelessWidget {
             if (pinned) Icon(Icons.lock, size: 16, color: pinConflict ? theme.colorScheme.error : p.vermilion),
           ],
         ),
-        Text(detail, style: theme.textTheme.bodySmall?.copyWith(color: muted)),
+        if (detail case final d? when d.isNotEmpty) Text(d, style: theme.textTheme.bodySmall?.copyWith(color: muted)),
         if (note != null) Text(note!, style: theme.textTheme.bodySmall?.copyWith(color: p.vermilion)),
         const SizedBox(height: 6),
         if (lines.isEmpty) Text('Nothing planned', style: theme.textTheme.bodySmall?.copyWith(color: muted)),
@@ -276,7 +279,7 @@ class _Tile extends StatelessWidget {
 
 class _AddTile extends StatelessWidget {
   final String label;
-  final String detail;
+  final String? detail;
   final String dropHint;
   final bool Function(String dayId) accepts;
   final void Function(String dayId) onDrop;
@@ -285,7 +288,7 @@ class _AddTile extends StatelessWidget {
   const _AddTile({
     super.key,
     required this.label,
-    required this.detail,
+    this.detail,
     required this.dropHint,
     required this.accepts,
     required this.onDrop,
@@ -329,8 +332,8 @@ class _AddTile extends StatelessWidget {
                     overflow: TextOverflow.ellipsis,
                     style: theme.textTheme.titleSmall?.copyWith(color: p.tea, fontWeight: FontWeight.w700),
                   ),
-                  if (!hovering)
-                    Text(detail, style: theme.textTheme.bodySmall?.copyWith(color: theme.colorScheme.onSurfaceVariant)),
+                  if (!hovering && detail != null)
+                    Text(detail!, style: theme.textTheme.bodySmall?.copyWith(color: theme.colorScheme.onSurfaceVariant)),
                 ],
               ),
             ),

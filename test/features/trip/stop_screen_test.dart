@@ -371,5 +371,27 @@ void main() {
       expect(find.text('Uji day trip · Day 1'), findsOneWidget);
       await disposeApp(tester);
     });
+
+    testWidgets('an untimed stop hides synthetic start and stay times until opted in', (tester) async {
+      final (trip, stop) = await uji(planned: false);
+      final day = (await trips.getDaysForTrip(trip.id)).single;
+      await trips.scheduleStop(tripId: trip.id, stopId: stop.id, dayId: day.id);
+
+      await pump(tester, '/trips/${trip.id}/stops/${stop.id}');
+      expect(find.text('09:00'), findsNothing);
+      expect(find.text('60 min'), findsNothing);
+      expect(find.textContaining('09:00–10:00'), findsNothing);
+
+      await tester.tap(find.byTooltip('Edit'));
+      await tester.pumpAndSettle();
+      expect(find.text('Add time (optional)'), findsOneWidget);
+      expect(find.text('Set a time'), findsNothing);
+
+      await tester.tap(find.text('Add time (optional)'));
+      await tester.pumpAndSettle();
+      expect(find.text('Set a time'), findsOneWidget);
+      expect(find.byTooltip('5 minutes longer'), findsOneWidget);
+      await disposeApp(tester);
+    });
   });
 }

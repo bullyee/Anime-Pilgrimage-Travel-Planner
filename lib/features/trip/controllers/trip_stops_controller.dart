@@ -55,6 +55,7 @@ class TripStopsController extends Notifier<AsyncValue<void>> {
     required List<String> placeKeys,
     bool repeat = false,
     Map<String, String> names = const {},
+    String? dayId,
   }) {
     return _run(() async {
       final repo = ref.read(tripRepositoryProvider);
@@ -62,7 +63,7 @@ class TripStopsController extends Notifier<AsyncValue<void>> {
       final stops = await repo.getStopsForTrip(tripId);
       final inTrip = stops.map((s) => s.placeKey).toSet();
       final takenNames = stops.map((s) => s.name).toSet();
-      var added = 0;
+      final addedStopIds = <String>[];
       for (final key in placeKeys) {
         final again = !inTrip.add(key);
         if (again && !repeat) continue;
@@ -75,9 +76,12 @@ class TripStopsController extends Notifier<AsyncValue<void>> {
                 : stop.name;
         if (name != stop.name) await repo.updateStop(StopsCompanion(id: Value(stop.id), name: Value(name)));
         takenNames.add(name);
-        added++;
+        addedStopIds.add(stop.id);
       }
-      return added;
+      if (dayId != null && addedStopIds.isNotEmpty) {
+        await repo.scheduleStops(tripId: tripId, dayId: dayId, stopIds: addedStopIds);
+      }
+      return addedStopIds.length;
     });
   }
 
