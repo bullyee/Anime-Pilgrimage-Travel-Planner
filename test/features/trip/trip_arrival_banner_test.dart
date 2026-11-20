@@ -47,7 +47,7 @@ void main() {
     await tester.pump();
   }
 
-  testWidgets("while the trip is coming down, it says so and offers nothing else", (tester) async {
+  testWidgets('while the trip is coming down, it says so and offers nothing else', (tester) async {
     await pump(tester, arriving: true, driveFrames: 3);
 
     expect(find.text("Getting this trip's days and stops…"), findsOneWidget);

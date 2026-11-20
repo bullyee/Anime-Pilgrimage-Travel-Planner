@@ -6,9 +6,13 @@ part of 'app_router.dart';
 // RiverpodGenerator
 // **************************************************************************
 
-String _$routerHash() => r'00389b384d58bbca68732a3ed05aec2c34c53e05';
+String _$routerHash() => r'd5ab64bfdedc9bd78cdef40b211efaa7e7292ce1';
 
-/// Wrap the existing router in a Provider to react to Auth state changes.
+/// The app's one router. It lives as long as the app: signing in or out
+/// only re-runs [GoRouter.redirect] (through `refreshListenable`), so the
+/// screen the user signed in from, and everything under it, stays where it
+/// was, with its back button. (Rebuilding the router on sign-in used to
+/// restart navigation at that screen with nothing to go back to.)
 ///
 /// Copied from [router].
 @ProviderFor(router)

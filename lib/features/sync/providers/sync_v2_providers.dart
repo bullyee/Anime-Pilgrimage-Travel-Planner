@@ -1,5 +1,5 @@
 import 'package:cloud_firestore/cloud_firestore.dart';
-import 'package:flutter/foundation.dart' show kIsWeb;
+import 'package:flutter/foundation.dart' show debugPrint, kIsWeb;
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:riverpod_annotation/riverpod_annotation.dart';
 
@@ -34,7 +34,14 @@ SyncEngineServiceV2? syncEngineServiceV2(Ref ref) {
   );
 
   // On the web, closing the tab while a trip is still coming down asks first.
-  final arriving = kIsWeb ? service.arrivingStream.listen((trips) => warnBeforeLeaving(trips.isNotEmpty)) : null;
+  final arriving = kIsWeb
+      ? service.arrivingStream.listen(
+          (trips) => warnBeforeLeaving(trips.isNotEmpty),
+          onError: (Object error, StackTrace stack) {
+            debugPrint('[SyncEngineV2] Error watching arriving trips: $error\n$stack');
+          },
+        )
+      : null;
 
   ref.onDispose(() {
     arriving?.cancel();
