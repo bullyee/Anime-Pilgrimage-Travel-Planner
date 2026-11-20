@@ -126,7 +126,13 @@ class TodayCard extends ConsumerWidget {
               ],
             )
           else
-            _NextStop(tripId: tripId, number: _blockNumber(items, items[nextIndex].stop.id), item: items[nextIndex], canEdit: canEdit),
+            _NextStop(
+              tripId: tripId,
+              number: _blockNumber(items, items[nextIndex].stop.id),
+              item: items[nextIndex],
+              canEdit: canEdit,
+              showTime: day?.hasTimes ?? false,
+            ),
         ],
       ],
     );
@@ -141,8 +147,15 @@ class _NextStop extends ConsumerWidget {
   final int number;
   final PlannerItem item;
   final bool canEdit;
+  final bool showTime;
 
-  const _NextStop({required this.tripId, required this.number, required this.item, required this.canEdit});
+  const _NextStop({
+    required this.tripId,
+    required this.number,
+    required this.item,
+    required this.canEdit,
+    required this.showTime,
+  });
 
   Future<void> _markDone(BuildContext context, WidgetRef ref) async {
     final repo = ref.read(tripRepositoryProvider);
@@ -171,7 +184,7 @@ class _NextStop extends ConsumerWidget {
       stop: ref.watch(stopReferenceImagesProvider(item.stop.id)).valueOrNull ?? const [],
     );
     final details = [
-      formatTimelineMinutes(item.startMinutes),
+      if (showTime) formatTimelineMinutes(item.startMinutes),
       if (frames.isNotEmpty) frames.length == 1 ? '1 frame' : '${frames.length} frames',
     ].join(' · ');
 
@@ -209,8 +222,9 @@ class _NextStop extends ConsumerWidget {
                         maxLines: 1,
                         overflow: TextOverflow.ellipsis,
                         style: theme.textTheme.titleMedium?.copyWith(fontWeight: FontWeight.w700)),
-                    Text(details,
-                        style: theme.textTheme.bodySmall?.copyWith(color: theme.colorScheme.onSurfaceVariant)),
+                    if (details.isNotEmpty)
+                      Text(details,
+                          style: theme.textTheme.bodySmall?.copyWith(color: theme.colorScheme.onSurfaceVariant)),
                   ],
                 ),
               ),

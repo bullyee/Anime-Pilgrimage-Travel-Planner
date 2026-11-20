@@ -93,6 +93,28 @@ void main() {
       expect(last.min, _utc(2027, 5, 2));
       expect(last.max, isNull);
     });
+
+    test('PlannerDay.hasTimes stays false for default scheduled items until timing is set', () async {
+      final trip = await repo.createTrip(title: 'Uji', ownerId: 'u1', dayCount: 1);
+      final day = (await repo.getDaysForTrip(trip.id)).single;
+      final a = await spot(trip.id, 'A');
+      final scheduled = await repo.scheduleStop(tripId: trip.id, stopId: a.id, dayId: day.id);
+
+      expect((await view(trip.id)).days.single.hasTimes, isFalse);
+
+      await controller().setFixedTime(scheduled.id, 10 * 60);
+      expect((await view(trip.id)).days.single.hasTimes, isTrue);
+
+      await controller().setFixedTime(scheduled.id, null);
+      expect((await view(trip.id)).days.single.hasTimes, isFalse);
+
+      await controller().setTransit(scheduled.id, 15);
+      expect((await view(trip.id)).days.single.hasTimes, isTrue);
+
+      await controller().setTransit(scheduled.id, 0);
+      await controller().setStay(scheduled.id, 45);
+      expect((await view(trip.id)).days.single.hasTimes, isTrue);
+    });
   });
 
   group('DayPlannerController', () {
@@ -482,6 +504,85 @@ void main() {
       await tester.pump(const Duration(seconds: 5));
       await tester.pumpAndSettle();
       expect(find.text('Moved Bridge to the backlog.'), findsNothing);
+      await disposeApp(tester);
+    });
+
+    testWidgets('undated and untimed trips show day numbers and order badges without synthetic times', (tester) async {
+      tester.view.physicalSize = const Size(1080, 2400);
+      tester.view.devicePixelRatio = 3;
+      addTearDown(tester.view.reset);
+      final r = DriftTripRepository(db);
+      final trip = await r.createTrip(title: 'Uji', ownerId: 'u1', dayCount: 2);
+      final days = await r.getDaysForTrip(trip.id);
+      final bridge = await r.createTripOnlySpot(tripId: trip.id, name: 'Bridge', lat: 0, lng: 0, addedBy: 'u1');
+      final shrine = await r.createTripOnlySpot(tripId: trip.id, name: 'Shrine', lat: 0, lng: 0, addedBy: 'u1');
+      await r.scheduleStop(tripId: trip.id, stopId: bridge.id, dayId: days[0].id);
+      await r.scheduleStop(tripId: trip.id, stopId: shrine.id, dayId: days[0].id);
+
+      await pump(tester, trip.id);
+      expect(find.text('2 days'), findsOneWidget);
+      expect(find.text('No dates yet'), findsNothing);
+      expect(find.text('No date yet'), findsNothing);
+      expect(find.text('Day 1'), findsOneWidget);
+      expect(find.text('2 stops'), findsOneWidget);
+      expect(find.text('09:00'), findsNothing);
+      expect(find.text('10:00'), findsNothing);
+      expect(find.text('1'), findsOneWidget);
+      expect(find.text('2'), findsOneWidget);
+
+      // Empty Day 2 lets editors add stops directly without toggling edit mode.
+      await tester.tap(find.byTooltip('Edit the plan'));
+      await tester.pumpAndSettle();
+      await tester.tap(find.text('Done'));
+      await tester.pumpAndSettle();
+
+      // In edit mode, the stop sheet hides timing under "Add time (optional)" and offers Move down.
+      await tester.tap(find.byTooltip('Edit the plan'));
+      await tester.pumpAndSettle();
+      await tester.tap(find.text('Bridge'));
+      await tester.pumpAndSettle();
+      expect(find.text('Day 1 · Stop #1'), findsOneWidget);
+      expect(find.text('Add time (optional)'), findsOneWidget);
+      expect(find.text('Set a time'), findsNothing);
+
+      await tester.tap(find.text('Move down'));
+      await tester.pumpAndSettle();
+      expect(find.text('Day 1 · Stop #2'), findsOneWidget);
+
+      await tester.tap(find.text('Add time (optional)'));
+      await tester.pumpAndSettle();
+      expect(find.text('Set a time'), findsOneWidget);
+
+      await tester.dragUntilVisible(
+        find.widgetWithText(FilledButton, 'Done'),
+        find.byType(ListView).last,
+        const Offset(0, -200),
+      );
+      await tester.pumpAndSettle();
+      await tester.tap(find.widgetWithText(FilledButton, 'Done'));
+      await tester.pumpAndSettle();
+
+      // Verify Bridge moved after Shrine while keeping order badges instead of times.
+      expect(tester.getTopLeft(find.text('Shrine')).dy, lessThan(tester.getTopLeft(find.text('Bridge')).dy));
+      await disposeApp(tester);
+    });
+
+    testWidgets('empty day card offers quick Add stops button outside edit mode', (tester) async {
+      tester.view.physicalSize = const Size(1080, 2400);
+      tester.view.devicePixelRatio = 3;
+      addTearDown(tester.view.reset);
+      final r = DriftTripRepository(db);
+      final trip = await r.createTrip(title: 'Uji', ownerId: 'u1', dayCount: 1);
+
+      await pump(tester, trip.id);
+      expect(find.text('Add stops to this day'), findsOneWidget);
+      expect(find.text('Add from backlog'), findsNothing);
+
+      await tester.tap(find.text('Add stops to this day'));
+      await tester.pumpAndSettle();
+      expect(find.text('Add to Day 1'), findsOneWidget);
+      await tester.tap(find.widgetWithText(FilledButton, 'Done'));
+      await tester.pumpAndSettle();
       await disposeApp(tester);
     });
   });

@@ -57,7 +57,7 @@ Future<void> showPlannerStopSheet(
   );
 }
 
-class _StopSheet extends ConsumerWidget {
+class _StopSheet extends ConsumerStatefulWidget {
   final String tripId;
   final String stopId;
   final bool editing;
@@ -65,7 +65,17 @@ class _StopSheet extends ConsumerWidget {
   const _StopSheet({required this.tripId, required this.stopId, required this.editing});
 
   @override
-  Widget build(BuildContext context, WidgetRef ref) {
+  ConsumerState<_StopSheet> createState() => _StopSheetState();
+}
+
+class _StopSheetState extends ConsumerState<_StopSheet> {
+  bool _showTiming = false;
+
+  @override
+  Widget build(BuildContext context) {
+    final tripId = widget.tripId;
+    final stopId = widget.stopId;
+    final editing = widget.editing;
     final theme = Theme.of(context);
     final view = ref.watch(plannerViewProvider(tripId)).valueOrNull;
     if (view == null) return const SizedBox(height: 160, child: Center(child: CircularProgressIndicator()));
@@ -109,17 +119,21 @@ class _StopSheet extends ConsumerWidget {
         );
     Widget text(String? value) => Text(value ?? '', style: theme.textTheme.bodyMedium);
 
-    final when = item == null
-        ? 'Not on a day yet'
-        : '${dayWithDate(day!)} · ${formatTimelineMinutes(item.startMinutes)}–${formatTimelineMinutes(item.endMinutes)}'
-            '${item.fixed ? ' (fixed time)' : ''}';
-
     // The stop before this one on its day, and when this stop would start
     // after it: its end plus the travel time from it.
     final index = item == null ? -1 : day!.items.indexOf(item);
     final previous = index > 0 ? day!.items[index - 1] : null;
     final followsAt = previous == null ? null : previous.endMinutes + previous.item.transitMinutes;
     final isLast = item != null && index == day!.items.length - 1;
+    final hasTimes = day?.hasTimes ?? false;
+    final showTiming = _showTiming || hasTimes;
+
+    final when = item == null
+        ? 'Not on a day yet'
+        : hasTimes
+            ? '${dayWithDate(day!)} · ${formatTimelineMinutes(item.startMinutes)}–${formatTimelineMinutes(item.endMinutes)}'
+                '${item.fixed ? ' (fixed time)' : ''}'
+            : '${dayWithDate(day!)} · Stop #${index + 1}';
 
     Widget stepper({
       required int value,
@@ -174,10 +188,25 @@ class _StopSheet extends ConsumerWidget {
                   ],
                 ),
               ),
-            if (item != null && editing)
+            if (item != null && editing && !showTiming)
+              fact(
+                'Time',
+                Align(
+                  alignment: Alignment.centerLeft,
+                  child: TextButton.icon(
+                    onPressed: () => setState(() => _showTiming = true),
+                    icon: const Icon(Icons.schedule, size: 18),
+                    label: const Text('Add time (optional)'),
+                  ),
+                ),
+              ),
+            if (item != null && editing && showTiming)
               fact(
                 'Starts',
-                Row(
+                Wrap(
+                  spacing: 8,
+                  runSpacing: 4,
+                  crossAxisAlignment: WrapCrossAlignment.center,
                   children: [
                     Text(
                       formatTimelineMinutes(item.startMinutes),
@@ -185,12 +214,9 @@ class _StopSheet extends ConsumerWidget {
                         color: item.conflict ? theme.trip.vermilion : item.fixed ? theme.trip.tea : null,
                       ),
                     ),
-                    const SizedBox(width: 8),
-                    Expanded(
-                      child: Text(
-                        item.fixed ? 'fixed' : previous == null ? 'start of the day' : 'after the stop before',
-                        style: theme.textTheme.bodySmall?.copyWith(color: theme.colorScheme.onSurfaceVariant),
-                      ),
+                    Text(
+                      item.fixed ? 'fixed' : previous == null ? 'start of the day' : 'after the stop before',
+                      style: theme.textTheme.bodySmall?.copyWith(color: theme.colorScheme.onSurfaceVariant),
                     ),
                     TextButton(
                       onPressed: () async {
@@ -208,7 +234,7 @@ class _StopSheet extends ConsumerWidget {
                   ],
                 ),
               ),
-            if (item != null && item.conflict && followsAt != null)
+            if (item != null && showTiming && item.conflict && followsAt != null)
               Padding(
                 padding: const EdgeInsets.only(left: 96, bottom: 4),
                 child: Text(
@@ -216,7 +242,7 @@ class _StopSheet extends ConsumerWidget {
                   style: theme.textTheme.bodySmall?.copyWith(color: theme.trip.vermilion),
                 ),
               ),
-            if (item != null)
+            if (item != null && showTiming)
               fact(
                 'Stay',
                 editing
@@ -230,7 +256,7 @@ class _StopSheet extends ConsumerWidget {
                       )
                     : text('${item.item.stayMinutes} min'),
               ),
-            if (item != null && !isLast && (editing || item.item.transitMinutes > 0))
+            if (item != null && showTiming && !isLast && (editing || item.item.transitMinutes > 0))
               fact(
                 'Travel on',
                 editing
@@ -270,6 +296,35 @@ class _StopSheet extends ConsumerWidget {
                     icon: Icon(item.done ? Icons.check_circle : Icons.radio_button_unchecked),
                     label: Text(item.done ? 'Mark as not visited' : 'Mark as visited'),
                   ),
+                if (editing && item != null && !movesWithGroup && day!.items.length > 1) ...[
+                  if (index > 0)
+                    OutlinedButton.icon(
+                      onPressed: () async {
+                        final result = await controller.moveItem(
+                          itemId: item.item.id,
+                          toDayId: day.day.id,
+                          beforeItemId: day.items[index - 1].item.id,
+                        );
+                        if (context.mounted && result is Failure) reportResult(context, result);
+                      },
+                      icon: const Icon(Icons.arrow_upward),
+                      label: const Text('Move up'),
+                    ),
+                  if (!isLast)
+                    OutlinedButton.icon(
+                      onPressed: () async {
+                        final beforeId = index + 2 < day.items.length ? day.items[index + 2].item.id : null;
+                        final result = await controller.moveItem(
+                          itemId: item.item.id,
+                          toDayId: day.day.id,
+                          beforeItemId: beforeId,
+                        );
+                        if (context.mounted && result is Failure) reportResult(context, result);
+                      },
+                      icon: const Icon(Icons.arrow_downward),
+                      label: const Text('Move down'),
+                    ),
+                ],
                 if (editing && item != null && !movesWithGroup)
                   OutlinedButton.icon(
                     onPressed: () async {
@@ -511,9 +566,39 @@ class _AddFromBacklogSheet extends ConsumerWidget {
             if (view.backlog.isEmpty)
               Padding(
                 padding: const EdgeInsets.fromLTRB(20, 8, 20, 16),
-                child: Text(
-                  'Every stop in this trip is on a day. Add more stops in the Stops tab.',
-                  style: theme.textTheme.bodyMedium?.copyWith(color: theme.colorScheme.onSurfaceVariant),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.stretch,
+                  children: [
+                    Text(
+                      'Every stop in this trip is on a day. Add places from your library or pick a new spot on the map.',
+                      style: theme.textTheme.bodyMedium?.copyWith(color: theme.colorScheme.onSurfaceVariant),
+                    ),
+                    const SizedBox(height: 12),
+                    Wrap(
+                      spacing: 8,
+                      runSpacing: 8,
+                      children: [
+                        FilledButton.tonalIcon(
+                          onPressed: () {
+                            final router = GoRouter.of(context);
+                            Navigator.pop(context);
+                            router.push('/trips/$tripId/stops/add?day=${Uri.encodeQueryComponent(dayId)}');
+                          },
+                          icon: const Icon(Icons.collections_bookmark_outlined),
+                          label: const Text('From my library'),
+                        ),
+                        OutlinedButton.icon(
+                          onPressed: () {
+                            final router = GoRouter.of(context);
+                            Navigator.pop(context);
+                            router.push('/trips/$tripId/stops/new');
+                          },
+                          icon: const Icon(Icons.add_location_alt_outlined),
+                          label: const Text('New spot'),
+                        ),
+                      ],
+                    ),
+                  ],
                 ),
               )
             else
@@ -555,9 +640,21 @@ class _AddFromBacklogSheet extends ConsumerWidget {
               ),
             Padding(
               padding: const EdgeInsets.fromLTRB(20, 8, 20, 12),
-              child: Align(
-                alignment: Alignment.centerRight,
-                child: FilledButton(onPressed: () => Navigator.pop(context), child: const Text('Done')),
+              child: Row(
+                children: [
+                  if (view.backlog.isNotEmpty)
+                    TextButton.icon(
+                      onPressed: () {
+                        final router = GoRouter.of(context);
+                        Navigator.pop(context);
+                        router.push('/trips/$tripId/stops/add?day=${Uri.encodeQueryComponent(dayId)}');
+                      },
+                      icon: const Icon(Icons.collections_bookmark_outlined, size: 18),
+                      label: const Text('From my library'),
+                    ),
+                  const Spacer(),
+                  FilledButton(onPressed: () => Navigator.pop(context), child: const Text('Done')),
+                ],
               ),
             ),
           ],

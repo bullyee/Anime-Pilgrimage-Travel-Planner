@@ -2,6 +2,15 @@ import '../../../core/database/database.dart';
 import '../../../core/utils/schedule_logic.dart';
 import '../../trip/models/stop_group.dart';
 
+/// Default stay length assigned in storage when a stop is put on a day without
+/// picking times.
+const defaultStayMinutes = 60;
+
+/// Whether [item] carries any user-chosen timing (a fixed start time, a
+/// non-default stay length, or travel time).
+bool itemHasCustomTiming(ScheduleItem item) =>
+    item.fixedTime != null || item.transitMinutes > 0 || item.stayMinutes != defaultStayMinutes;
+
 /// A stop on a day, with the times worked out from the order, stays and
 /// transits.
 class PlannerItem {
@@ -108,6 +117,10 @@ class PlannerDay {
   });
 
   bool get isPinned => day.pinnedDate != null;
+
+  /// Whether any stop on this day has explicit timing. When false, the UI
+  /// shows a clean ordered list instead of synthetic 09:00 / 10:00 times.
+  bool get hasTimes => items.any((it) => itemHasCustomTiming(it.item));
 
   /// [items] as the day shows them, with a group's consecutive stops as one
   /// block. [items] stays flat for everything that counts or maps stops.

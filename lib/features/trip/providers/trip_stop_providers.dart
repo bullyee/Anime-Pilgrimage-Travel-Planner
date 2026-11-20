@@ -2,6 +2,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../../core/database/database.dart';
 import '../../../core/utils/schedule_logic.dart';
+import '../../planner/models/planner_view.dart' show itemHasCustomTiming;
 import '../models/stop_group.dart';
 import 'trip_providers.dart';
 
@@ -128,7 +129,9 @@ List<TripStopEntry> buildStopEntries({
   final startOf = <String, int>{};
   final positionOf = <String, int>{};
   for (var i = 0; i < ordered.length; i++) {
-    final dayItems = items.where((it) => it.dayId == ordered[i].id).map((it) => ScheduleItemInfo(
+    final dayRawItems = items.where((it) => it.dayId == ordered[i].id && it.status != 'skipped').toList();
+    final dayHasTimes = dayRawItems.any(itemHasCustomTiming);
+    final dayItems = dayRawItems.map((it) => ScheduleItemInfo(
           id: it.id,
           stopId: it.stopId,
           dayId: it.dayId,
@@ -141,7 +144,7 @@ List<TripStopEntry> buildStopEntries({
     for (final (position, t) in ScheduleLogicEngine.computeScheduleTimes(dayItems.toList()).indexed) {
       if (t.item.status == 'skipped' || dayOf.containsKey(t.item.stopId)) continue;
       dayOf[t.item.stopId] = i;
-      startOf[t.item.stopId] = t.startMinutes;
+      if (dayHasTimes) startOf[t.item.stopId] = t.startMinutes;
       positionOf[t.item.stopId] = position;
     }
   }
@@ -161,8 +164,8 @@ List<TripStopEntry> buildStopEntries({
     if (a.isPlanned) {
       final byDay = a.dayIndex!.compareTo(b.dayIndex!);
       if (byDay != 0) return byDay;
-      final byTime = a.startMinutes!.compareTo(b.startMinutes!);
-      if (byTime != 0) return byTime;
+      final byPosition = (a.position ?? 0).compareTo(b.position ?? 0);
+      if (byPosition != 0) return byPosition;
     }
     return a.stop.name.compareTo(b.stop.name);
   });

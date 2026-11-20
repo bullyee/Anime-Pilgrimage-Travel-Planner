@@ -156,8 +156,8 @@ void main() {
       expect(entries.map((e) => e.stop.name), ['Zoo', 'Café', 'Bridge', 'Aquarium', 'Skipped']);
       expect(stopWhenLine(entries[0]), 'Day 1 · 09:00');
       expect(stopWhenLine(entries[1]), 'Day 1 · 10:30');
-      expect(stopWhenLine(entries[2]), 'Day 2 · 09:00');
-      expect(stopWhenLine(entries[3]), 'Backup day · 09:00');
+      expect(stopWhenLine(entries[2]), 'Day 2');
+      expect(stopWhenLine(entries[3]), 'Backup day');
       expect(stopWhenLine(entries[4]), 'Not on a day yet');
     });
 
@@ -256,6 +256,26 @@ void main() {
       await tester.tap(find.text('Name'));
       await tester.pumpAndSettle();
       expect(top('Aquarium'), lessThan(top('Zoo')));
+      await disposeApp(tester);
+    });
+
+    testWidgets('picking library places can schedule them straight onto a chosen day', (tester) async {
+      final repo = DriftTripRepository(db);
+      final trip = await repo.createTrip(title: 'Uji', ownerId: 'u1', dayCount: 2);
+      final days = await repo.getDaysForTrip(trip.id);
+      await _savePlace(db, 'anitabi:1', '宇治橋');
+      await _savePlace(db, 'anitabi:2', '朝霧橋');
+      await pump(tester, '/trips/${trip.id}/stops/add');
+
+      await tester.tap(find.text('宇治橋'));
+      await tester.tap(find.text('朝霧橋'));
+      await tester.tap(find.text('Day 1'));
+      await tester.pump();
+      await tester.tap(find.text('Add 2 stops'));
+      await tester.pumpAndSettle();
+
+      final items = await repo.getScheduleItemsForDay(days[0].id);
+      expect(items, hasLength(2));
       await disposeApp(tester);
     });
   });
