@@ -1,6 +1,9 @@
+import 'dart:async';
+
 import 'package:cloud_firestore/cloud_firestore.dart' show FirebaseException;
 import 'package:drift/drift.dart' show Value;
 import 'package:drift/native.dart';
+import 'package:firebase_auth/firebase_auth.dart' show User;
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
@@ -22,6 +25,7 @@ import 'package:trip_planner/features/trip/screens/trip_screen.dart';
 import 'package:trip_planner/features/trip/widgets/trip_card.dart';
 
 import 'fake_sharing_firestore.dart';
+import 'package:trip_planner/features/sharing/widgets/signed_out_trip_notice.dart';
 
 const _token = '8f3c41d2-5b6e-4a7f-9c0d-1e2f3a4b5c6d';
 
@@ -138,6 +142,26 @@ class _FakeSharing extends GroupSharingService {
       joinedAt: DateTime.now(),
     );
   }
+}
+
+class _FakeAuthController extends AuthController {
+  _FakeAuthController({required this.uidProvider, required this.onSignIn});
+
+  final StateProvider<String> uidProvider;
+  final Future<void> Function(void Function(String uid) setUid) onSignIn;
+
+  @override
+  AsyncValue<User?> build() => const AsyncData(null);
+
+  @override
+  Future<void> signInWithGoogle({
+    Duration? desktopTimeout,
+    DesktopAuthConsentRunner? consentRunner,
+    String? testDesktopClientId,
+    String? testDesktopClientSecret,
+    BrowserLauncher? testBrowserLauncher,
+  }) =>
+      onSignIn((uid) => ref.read(uidProvider.notifier).state = uid);
 }
 
 void main() {
@@ -429,6 +453,33 @@ void main() {
       await done(tester);
     });
 
+    testWidgets("signed out, a shared trip still here says so, and Members asks to sign in", (tester) async {
+      // Signing out leaves the trip on the device, but its members are in
+      // Firestore, which only a signed-in member can read.
+      await addTrip(ownerId: 'aki', sharingMode: 'group');
+      sharing.members = [_member('aki', 'Aki', TripMemberRole.owner)];
+      await pump(tester, tripRouter(), userId: guestUserId);
+
+      expect(find.byKey(const Key('signedOutTripStrip')), findsOneWidget);
+      expect(find.text(signedOutTripText), findsOneWidget);
+
+      await tester.tap(find.text('Members'));
+      await tester.pumpAndSettle();
+      expect(find.textContaining("Couldn't load who's in this trip"), findsNothing);
+      expect(find.text(signedOutTripText), findsNWidgets(2));
+      expect(find.widgetWithText(FilledButton, 'Sign in'), findsOneWidget);
+      await done(tester);
+    });
+
+    testWidgets('signed in, a shared trip has no signed-out strip', (tester) async {
+      await addTrip(ownerId: 'aki', sharingMode: 'group');
+      sharing.members = [_member('aki', 'Aki', TripMemberRole.owner), _member('u1', 'Bea', TripMemberRole.editor, minutes: 1)];
+      await pump(tester, tripRouter());
+
+      expect(find.byKey(const Key('signedOutTripStrip')), findsNothing);
+      await done(tester);
+    });
+
     testWidgets('the owner can edit and delete the trip', (tester) async {
       await addTrip();
       await pump(tester, tripRouter());
@@ -557,6 +608,19 @@ void main() {
       await done(tester);
     });
 
+    testWidgets("signed out, a trip still here from before asks to sign in, not that you're in it", (tester) async {
+      // Joined, then signed out: the trip stayed on the device, but whoever
+      // signs in next may not be in it, and nothing syncs until someone does.
+      await addTrip(ownerId: 'aki', sharingMode: 'group');
+      sharing.preview = _invite();
+      await pump(tester, joinRouter('/join?token=$_token'), userId: guestUserId);
+
+      expect(find.text("You're already in this trip"), findsNothing);
+      expect(find.text('Sign in to join Kansai with friends'), findsOneWidget);
+      expect(find.text('Sign in with Google'), findsOneWidget);
+      await done(tester);
+    });
+
     testWidgets('signed out, it asks to sign in before joining', (tester) async {
       sharing.preview = _invite();
       await pump(tester, joinRouter('/join?token=$_token'), userId: guestUserId);
@@ -659,6 +723,141 @@ void main() {
       await tester.pumpAndSettle();
 
       expect(find.text('No invite matches this code or link. Check it and try again.'), findsOneWidget);
+      await done(tester);
+    });
+
+    Future<List<_FakeSharing>> pumpDynamicAuth(
+      WidgetTester tester,
+      RouterConfig<Object> router, {
+      required Future<void> Function(void Function(String uid) setUid) onSignIn,
+      bool watchService = false,
+    }) async {
+      await tester.binding.setSurfaceSize(const Size(800, 1400));
+      addTearDown(() => tester.binding.setSurfaceSize(null));
+      final uidProvider = StateProvider<String>((ref) => guestUserId);
+      final services = <_FakeSharing>[];
+      await tester.pumpWidget(ProviderScope(
+        overrides: [
+          databaseProvider.overrideWithValue(db),
+          currentUserIdProvider.overrideWith((ref) => ref.watch(uidProvider)),
+          groupSharingServiceProvider.overrideWith((ref) {
+            final uid = ref.watch(uidProvider);
+            final service = _FakeSharing(db, userId: uid)..preview = _invite();
+            services.add(service);
+            return service;
+          }),
+          sharingProfileProvider.overrideWithValue((name: 'Bea', avatarUrl: null)),
+          webJoinBrowserProvider.overrideWithValue(null),
+          authControllerProvider.overrideWith(
+            () => _FakeAuthController(uidProvider: uidProvider, onSignIn: onSignIn),
+          ),
+        ],
+        child: Consumer(
+          builder: (context, ref, child) {
+            if (watchService) ref.watch(groupSharingServiceProvider);
+            return child!;
+          },
+          child: MaterialApp.router(routerConfig: router),
+        ),
+      ));
+      await tester.pumpAndSettle();
+      return services;
+    }
+
+    testWidgets('signing in from an invite link reveals the preview instead of sticking on Finding the trip',
+        (tester) async {
+      final services = await pumpDynamicAuth(
+        tester,
+        joinRouter('/join?token=$_token'),
+        onSignIn: (setUid) async => setUid('u1'),
+      );
+
+      expect(find.text('Sign in to join Kansai with friends'), findsOneWidget);
+
+      await tester.tap(find.text('Sign in with Google'));
+      await tester.pumpAndSettle();
+
+      expect(find.text('Finding the trip…'), findsNothing);
+      expect(find.text('Join trip'), findsOneWidget);
+
+      await tester.tap(find.text('Join trip'));
+      await tester.pumpAndSettle();
+
+      expect(services.length, 2, reason: 'groupSharingServiceProvider rebuilt with authenticated UID on join');
+      expect(services.last.currentUserId, 'u1');
+      expect(services.last.calls, contains('join $_token as Bea'));
+      expect(find.text('trip t1'), findsOneWidget);
+      await done(tester);
+    });
+
+    testWidgets('signing in after entering a short code stays on the invite preview', (tester) async {
+      final services = await pumpDynamicAuth(
+        tester,
+        joinRouter('/join'),
+        watchService: true,
+        onSignIn: (setUid) async => setUid('u1'),
+      );
+
+      await tester.enterText(find.byType(TextField), 'k7mq2p');
+      await tester.pumpAndSettle();
+      expect(find.text('Sign in to join Kansai with friends'), findsOneWidget);
+
+      await tester.tap(find.text('Sign in with Google'));
+      await tester.pumpAndSettle();
+
+      expect(services.length, 2, reason: 'groupSharingServiceProvider rebuilt immediately on auth transition');
+      expect(find.text('Enter the code from your invite.'), findsNothing);
+      expect(find.text('Finding the trip…'), findsNothing);
+      expect(find.text('Aki invited you to edit'), findsOneWidget);
+      expect(find.text('Join trip'), findsOneWidget);
+
+      await tester.tap(find.text('Join trip'));
+      await tester.pumpAndSettle();
+
+      expect(services.last.currentUserId, 'u1');
+      expect(services.last.calls, contains('join $_token as Bea'));
+      expect(find.text('trip t1'), findsOneWidget);
+      await done(tester);
+    });
+
+    testWidgets('guards against double-tap during sign-in and recovers after a sign-in error', (tester) async {
+      var attempts = 0;
+      Completer<void>? firstAttempt;
+      await pumpDynamicAuth(
+        tester,
+        joinRouter('/join?token=$_token'),
+        onSignIn: (setUid) async {
+          attempts++;
+          if (attempts == 1) {
+            firstAttempt = Completer<void>();
+            return firstAttempt!.future;
+          }
+          setUid('u1');
+        },
+      );
+
+      await tester.tap(find.text('Sign in with Google'));
+      await tester.pump();
+      expect(attempts, 1);
+      expect(find.text('Signing in…'), findsOneWidget);
+
+      // Rapid second tap while sign-in is in flight is ignored.
+      await tester.tap(find.text('Signing in…'));
+      await tester.pump();
+      expect(attempts, 1);
+
+      firstAttempt!.completeError(Exception('popup closed'));
+      await tester.pumpAndSettle();
+
+      expect(find.textContaining("Couldn't sign in"), findsOneWidget);
+      expect(find.text('Sign in to join Kansai with friends'), findsOneWidget);
+      expect(find.text('Sign in with Google'), findsOneWidget);
+
+      // Re-enabled button succeeds on retry.
+      await tester.tap(find.text('Sign in with Google'));
+      await tester.pumpAndSettle();
+      expect(attempts, 2);
+      expect(find.text('Join trip'), findsOneWidget);
       await done(tester);
     });
   });

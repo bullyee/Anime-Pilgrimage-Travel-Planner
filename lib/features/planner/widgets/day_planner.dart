@@ -1,6 +1,8 @@
 import 'dart:async';
+import 'dart:ui' show PointerDeviceKind;
 
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart' show LogicalKeyboardKey;
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:intl/intl.dart';
 
@@ -380,47 +382,249 @@ class _DayPlannerState extends ConsumerState<DayPlanner> {
       },
     );
     final pageCount = view.days.length + (widget.editing ? 2 : 1);
+    final currentPage = _page.clamp(0, pageCount - 1);
+    final platform = Theme.of(context).platform;
+    final isDesktopPlatform = platform == TargetPlatform.macOS ||
+        platform == TargetPlatform.windows ||
+        platform == TargetPlatform.linux;
+    final showSwitcherBar = isDesktopPlatform || MediaQuery.sizeOf(context).width >= 600;
+    final baseScroll = ScrollConfiguration.of(context);
+    final desktopScroll = baseScroll.copyWith(
+      dragDevices: {...baseScroll.dragDevices, PointerDeviceKind.mouse},
+    );
 
-    return Stack(
-      children: [
-        PageView.builder(
-          controller: _pages,
-          itemCount: pageCount,
-          onPageChanged: (i) => _page = i,
-          itemBuilder: (context, i) {
-            final Widget page;
-            if (i < view.days.length) {
-              page = DayCard(day: view.days[i], editing: widget.editing, drag: _drag, actions: actions);
-            } else if (widget.editing && i == view.days.length) {
-              page = _AddDayPage(view: view, onAddDay: () => _addDay(backup: false), onAddBackup: () => _addDay(backup: true), onDrop: _dropOnNewDay);
-            } else {
-              page = _BacklogPage(
-                view: view,
-                tripId: widget.tripId,
-                editing: widget.editing,
-                drag: _drag,
-                onDrop: (drag) => _toBacklog(drag, view),
-                isGroupExpanded: _openGroups.contains,
-                onToggleGroup: _toggleGroup,
-              );
-            }
-            return Padding(padding: const EdgeInsets.fromLTRB(5, 12, 5, 16), child: page);
-          },
+    return CallbackShortcuts(
+      bindings: {
+        const SingleActivator(LogicalKeyboardKey.arrowLeft): () {
+          if (currentPage > 0) _goToPage(currentPage - 1, pageCount);
+        },
+        const SingleActivator(LogicalKeyboardKey.arrowRight): () {
+          if (currentPage < pageCount - 1) _goToPage(currentPage + 1, pageCount);
+        },
+      },
+      child: Focus(
+        autofocus: true,
+        debugLabel: 'DayPlanner',
+        child: ScrollConfiguration(
+          behavior: desktopScroll,
+          child: Column(
+            children: [
+              if (showSwitcherBar)
+                _DaySwitcherBar(
+                  view: view,
+                  editing: widget.editing,
+                  currentPage: currentPage,
+                  pageCount: pageCount,
+                  onSelectPage: (i) => _goToPage(i, pageCount),
+                ),
+              Expanded(
+                child: Stack(
+                  children: [
+                    PageView.builder(
+                      controller: _pages,
+                      itemCount: pageCount,
+                      onPageChanged: (i) => setState(() => _page = i),
+                      itemBuilder: (context, i) {
+                        final Widget page;
+                        if (i < view.days.length) {
+                          page = DayCard(day: view.days[i], editing: widget.editing, drag: _drag, actions: actions);
+                        } else if (widget.editing && i == view.days.length) {
+                          page = _AddDayPage(
+                            view: view,
+                            onAddDay: () => _addDay(backup: false),
+                            onAddBackup: () => _addDay(backup: true),
+                            onDrop: _dropOnNewDay,
+                          );
+                        } else {
+                          page = _BacklogPage(
+                            view: view,
+                            tripId: widget.tripId,
+                            editing: widget.editing,
+                            drag: _drag,
+                            onDrop: (drag) => _toBacklog(drag, view),
+                            isGroupExpanded: _openGroups.contains,
+                            onToggleGroup: _toggleGroup,
+                          );
+                        }
+                        final padded =
+                            Padding(padding: EdgeInsets.fromLTRB(5, showSwitcherBar ? 8 : 12, 5, 16), child: page);
+                        if (i == currentPage) return padded;
+                        return ListenableBuilder(
+                          listenable: _drag,
+                          builder: (context, child) {
+                            if (_drag.active != null) return child!;
+                            return MouseRegion(
+                              cursor: SystemMouseCursors.click,
+                              child: GestureDetector(
+                                behavior: HitTestBehavior.opaque,
+                                onTap: () => _goToPage(i, pageCount),
+                                child: AbsorbPointer(child: child),
+                              ),
+                            );
+                          },
+                          child: padded,
+                        );
+                      },
+                    ),
+                    ListenableBuilder(
+                      listenable: _drag,
+                      builder: (context, _) {
+                        final drag = _drag.active;
+                        if (drag == null || !_fromDay(drag)) return const SizedBox.shrink();
+                        return Positioned(
+                          left: 16,
+                          right: 16,
+                          bottom: 16,
+                          child: _DropBar(onDrop: (d) => _toBacklog(d, view)),
+                        );
+                      },
+                    ),
+                  ],
+                ),
+              ),
+            ],
+          ),
         ),
-        ListenableBuilder(
-          listenable: _drag,
-          builder: (context, _) {
-            final drag = _drag.active;
-            if (drag == null || !_fromDay(drag)) return const SizedBox.shrink();
-            return Positioned(
-              left: 16,
-              right: 16,
-              bottom: 16,
-              child: _DropBar(onDrop: (d) => _toBacklog(d, view)),
-            );
-          },
+      ),
+    );
+  }
+
+  void _goToPage(int target, int pageCount) {
+    if (pageCount <= 0) return;
+    final clamped = target.clamp(0, pageCount - 1);
+    if (clamped == _page) return;
+    setState(() => _page = clamped);
+    if (_pages.hasClients) {
+      _pages.animateToPage(
+        clamped,
+        duration: const Duration(milliseconds: 260),
+        curve: Curves.easeOut,
+      );
+    }
+  }
+}
+
+/// Horizontal day strip with previous/next controls for desktop pointers and
+/// quick jumping across long trips.
+class _DaySwitcherBar extends StatefulWidget {
+  final PlannerView view;
+  final bool editing;
+  final int currentPage;
+  final int pageCount;
+  final ValueChanged<int> onSelectPage;
+
+  const _DaySwitcherBar({
+    required this.view,
+    required this.editing,
+    required this.currentPage,
+    required this.pageCount,
+    required this.onSelectPage,
+  });
+
+  @override
+  State<_DaySwitcherBar> createState() => _DaySwitcherBarState();
+}
+
+class _DaySwitcherBarState extends State<_DaySwitcherBar> {
+  late List<GlobalKey> _pillKeys = List.generate(widget.pageCount, (_) => GlobalKey());
+
+  @override
+  void didUpdateWidget(covariant _DaySwitcherBar oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    if (widget.pageCount != _pillKeys.length) {
+      _pillKeys = List.generate(widget.pageCount, (i) => i < _pillKeys.length ? _pillKeys[i] : GlobalKey());
+    }
+    if (oldWidget.currentPage != widget.currentPage || oldWidget.pageCount != widget.pageCount) {
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        if (!mounted || widget.currentPage >= _pillKeys.length) return;
+        final ctx = _pillKeys[widget.currentPage].currentContext;
+        if (ctx != null) {
+          Scrollable.ensureVisible(
+            ctx,
+            alignment: 0.5,
+            duration: const Duration(milliseconds: 220),
+            curve: Curves.easeOut,
+          );
+        }
+      });
+    }
+  }
+
+  String _labelFor(int index) {
+    if (index < widget.view.days.length) {
+      final day = widget.view.days[index];
+      return day.isBackup ? 'Backup' : dayLabel(day);
+    }
+    if (widget.editing && index == widget.view.days.length) {
+      return '+ Day';
+    }
+    return 'Backlog';
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    final p = theme.trip;
+    final canPrev = widget.currentPage > 0;
+    final canNext = widget.currentPage < widget.pageCount - 1;
+
+    return Padding(
+      padding: const EdgeInsets.fromLTRB(4, 6, 4, 0),
+      child: SizedBox(
+        height: 40,
+        child: Row(
+          children: [
+            IconButton(
+              tooltip: 'Previous day',
+              visualDensity: VisualDensity.compact,
+              onPressed: canPrev ? () => widget.onSelectPage(widget.currentPage - 1) : null,
+              icon: const Icon(Icons.chevron_left),
+            ),
+            Expanded(
+              child: ListView.separated(
+                scrollDirection: Axis.horizontal,
+                padding: const EdgeInsets.symmetric(horizontal: 4, vertical: 4),
+                itemCount: widget.pageCount,
+                separatorBuilder: (_, _) => const SizedBox(width: 6),
+                itemBuilder: (context, i) {
+                  final selected = i == widget.currentPage;
+                  return Semantics(
+                    key: _pillKeys[i],
+                    button: true,
+                    selected: selected,
+                    child: Material(
+                      color: selected ? p.tea : theme.colorScheme.surfaceContainerHighest.withValues(alpha: 0.65),
+                      borderRadius: BorderRadius.circular(999),
+                      clipBehavior: Clip.antiAlias,
+                      child: InkWell(
+                        onTap: () => widget.onSelectPage(i),
+                        child: Padding(
+                          padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+                          child: Center(
+                            child: Text(
+                              _labelFor(i),
+                              style: theme.textTheme.labelMedium?.copyWith(
+                                fontWeight: selected ? FontWeight.w700 : FontWeight.w500,
+                                color: selected ? theme.colorScheme.surface : theme.colorScheme.onSurfaceVariant,
+                              ),
+                            ),
+                          ),
+                        ),
+                      ),
+                    ),
+                  );
+                },
+              ),
+            ),
+            IconButton(
+              tooltip: 'Next day',
+              visualDensity: VisualDensity.compact,
+              onPressed: canNext ? () => widget.onSelectPage(widget.currentPage + 1) : null,
+              icon: const Icon(Icons.chevron_right),
+            ),
+          ],
         ),
-      ],
+      ),
     );
   }
 }

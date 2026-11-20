@@ -3,6 +3,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 
 import '../../features/camera/services/anime_camera_launcher.dart';
+import '../l10n/l10n.dart';
 
 /// The main tabs, in the order of [AppFrame]'s branches.
 enum AppTab {
@@ -16,6 +17,13 @@ enum AppTab {
   final IconData selectedIcon;
 
   const AppTab(this.label, this.icon, this.selectedIcon);
+
+  String labelFor(AppLocalizations l10n) => switch (this) {
+        AppTab.home => l10n.navHome,
+        AppTab.trips => l10n.navTrips,
+        AppTab.library => l10n.navLibrary,
+        AppTab.photos => l10n.navPhotos,
+      };
 }
 
 /// The app's frame (roadmap v0.4.0): a bottom bar on every main screen with
@@ -50,7 +58,7 @@ class AppFrame extends ConsumerWidget {
         floatingActionButton: shoot
             ? FloatingActionButton.large(
                 key: const Key('appFrameShoot'),
-                tooltip: 'Shoot',
+                tooltip: context.l10n.navShoot,
                 onPressed: () => openAnimeCamera(context, ref),
                 child: const Icon(Icons.photo_camera),
               )
@@ -87,12 +95,13 @@ class _TabButton extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final label = tab.labelFor(context.l10n);
     final scheme = Theme.of(context).colorScheme;
     final color = selected ? scheme.primary : scheme.onSurfaceVariant;
     return Semantics(
       selected: selected,
       button: true,
-      label: tab.label,
+      label: label,
       excludeSemantics: true,
       child: InkResponse(
         key: Key('appTab:${tab.name}'),
@@ -106,7 +115,7 @@ class _TabButton extends StatelessWidget {
               Icon(selected ? tab.selectedIcon : tab.icon, color: color),
               const SizedBox(height: 2),
               Text(
-                tab.label,
+                label,
                 maxLines: 1,
                 overflow: TextOverflow.fade,
                 softWrap: false,

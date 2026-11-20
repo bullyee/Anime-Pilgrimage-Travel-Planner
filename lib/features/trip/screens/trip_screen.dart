@@ -21,6 +21,7 @@ import 'trip_activity_screen.dart';
 import 'trip_members_tab.dart';
 import 'trip_stops_tab.dart';
 import '../../../shared/widgets/up_button.dart';
+import '../../sharing/widgets/signed_out_trip_notice.dart';
 
 enum TripTab {
   plan,
@@ -89,10 +90,18 @@ class _TripScreenState extends ConsumerState<TripScreen> with SingleTickerProvid
     final dayCount = blocks.where((b) => !b.isBackup).length;
     final subtitle = dated.isNotEmpty
         ? tripDateLine(firstDate: dated.first.date, lastDate: dated.last.date)
-        : (dayCount == 1 ? '1 day' : '$dayCount days');
+        : switch (dayCount) {
+            0 => '',
+            1 => '1 day',
+            final n => '$n days',
+          };
     final tab = TripTab.values[_tabs.index];
     final hasStops = ref.watch(tripStopsProvider(trip.id)).valueOrNull?.isNotEmpty ?? false;
     final role = ref.watch(myTripRoleProvider(trip.id));
+    final subline = [
+      if (subtitle.isNotEmpty) subtitle,
+      if (role == TripMemberRole.viewer) 'View only',
+    ].join(' · ');
     final canEdit = ref.watch(canEditTripProvider(trip.id));
     // A viewer's role can change while they're on the page.
     final editing = _editing && canEdit;
@@ -125,10 +134,11 @@ class _TripScreenState extends ConsumerState<TripScreen> with SingleTickerProvid
                   TripSyncIcon(tripId: trip.id, padding: const EdgeInsets.only(left: 6)),
               ],
             ),
-            Text(
-              role == TripMemberRole.viewer ? '$subtitle · View only' : subtitle,
-              style: theme.textTheme.bodySmall?.copyWith(color: theme.colorScheme.onSurfaceVariant),
-            ),
+            if (subline.isNotEmpty)
+              Text(
+                subline,
+                style: theme.textTheme.bodySmall?.copyWith(color: theme.colorScheme.onSurfaceVariant),
+              ),
           ],
         ),
         actions: [
@@ -178,6 +188,7 @@ class _TripScreenState extends ConsumerState<TripScreen> with SingleTickerProvid
       ),
       body: Column(
         children: [
+          if (shared && ref.watch(signedOutProvider)) const SignedOutTripStrip(),
           if (shared) TripArrivalBanner(trip: trip),
           Expanded(
             child: TabBarView(

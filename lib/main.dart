@@ -6,6 +6,9 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:firebase_core/firebase_core.dart';
 import 'firebase_options.dart';
 
+import 'core/l10n/app_locale.dart';
+import 'core/l10n/l10n.dart';
+import 'core/l10n/locale_provider.dart';
 import 'core/router/app_router.dart';
 import 'features/poi/services/background_photo_save.dart';
 import 'features/sync/providers/drive_cleanup_providers.dart';
@@ -78,6 +81,7 @@ class TripPlannerApp extends ConsumerWidget {
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     final goRouter = ref.watch(routerProvider);
+    final appLocale = ref.watch(appLocaleProvider);
     ref.watch(syncEngineServiceV2Provider);
     // Background frame transfers on phones: offer to resume what the system
     // cut short, and fetch frames teammates put on Drive for offline.
@@ -90,8 +94,12 @@ class TripPlannerApp extends ConsumerWidget {
     if (!kIsWeb) ref.watch(driveCleanupRunnerProvider);
 
     return MaterialApp.router(
-      title: 'Trip Planner',
+      onGenerateTitle: (context) => context.l10n.appTitle,
       debugShowCheckedModeBanner: false,
+      locale: appLocale.locale,
+      localizationsDelegates: AppLocalizations.localizationsDelegates,
+      supportedLocales: AppLocalizations.supportedLocales,
+      localeResolutionCallback: resolveAppLocale,
       theme: AppTheme.light,
       darkTheme: AppTheme.dark,
       themeMode: ThemeMode.system,

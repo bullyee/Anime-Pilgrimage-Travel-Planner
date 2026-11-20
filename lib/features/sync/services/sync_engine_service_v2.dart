@@ -770,7 +770,9 @@ class SyncEngineServiceV2 {
     await localDb.transaction(() async {
       final current = await (localDb.select(localDb.trips)..where((t) => t.id.equals(tripId))).getSingleOrNull();
       if (current != null) {
-        if (!isRejoining && remoteUpdatedAt != null && !remoteUpdatedAt.isAfter(current.updatedAt)) {
+        if (!isRejoining &&
+            remoteUpdatedAt != null &&
+            remoteUpdatedAt.millisecondsSinceEpoch <= current.updatedAt.millisecondsSinceEpoch) {
           return;
         }
         await (localDb.update(localDb.trips)..where((t) => t.id.equals(tripId))).write(tripCompanion);
@@ -792,6 +794,22 @@ class SyncEngineServiceV2 {
     if (_arriving.remove(tripId)) _emitArriving();
   }
 
+  static const _sqlInChunkSize = 400;
+
+  Future<List<T>> _queryInChunks<T>(
+    Iterable<String> ids,
+    Future<List<T>> Function(List<String> chunk) query,
+  ) async {
+    final list = ids.toSet().toList();
+    if (list.isEmpty) return const [];
+    final out = <T>[];
+    for (var i = 0; i < list.length; i += _sqlInChunkSize) {
+      final end = i + _sqlInChunkSize > list.length ? list.length : i + _sqlInChunkSize;
+      out.addAll(await query(list.sublist(i, end)));
+    }
+    return out;
+  }
+
   /// Ensure downstream watchers for subcollections (days, stops, schedule_items).
   void _ensureSubcollectionWatchers(String tripId) {
     if (_subcollectionSubs.containsKey('$tripId:days')) return;
@@ -807,14 +825,11 @@ class SyncEngineServiceV2 {
         if (_isStopped) return;
         // One transaction per snapshot, so its rows show up together.
         await localDb.transaction(() async {
-          for (final dayData in daysList) {
-            try {
-              await _applyRemoteDay(tripId, dayData);
-            } catch (e, stack) {
-              debugPrint('[SyncEngineV2] Error applying remote day: $e\n$stack');
-            }
+          final applied = await _applyRemoteDaysBatchInTx(tripId, daysList);
+          if (applied) {
+            await _markRowsGoneFromServerInTx(tripId, 'days', daysList);
+            await _flushPendingScheduleItemsInTx(tripId);
           }
-          await _markRowsGoneFromServer(tripId, 'days', daysList);
         });
         _partArrived(tripId, 'days', docs: daysList);
       }).catchError((Object e, StackTrace stack) {
@@ -837,14 +852,11 @@ class SyncEngineServiceV2 {
         if (_isStopped) return;
         // One transaction per snapshot, so its rows show up together.
         await localDb.transaction(() async {
-          for (final stopData in stopsList) {
-            try {
-              await _applyRemoteStop(tripId, stopData);
-            } catch (e, stack) {
-              debugPrint('[SyncEngineV2] Error applying remote stop: $e\n$stack');
-            }
+          final applied = await _applyRemoteStopsBatchInTx(tripId, stopsList);
+          if (applied) {
+            await _markRowsGoneFromServerInTx(tripId, 'stops', stopsList);
+            await _flushPendingScheduleItemsInTx(tripId);
           }
-          await _markRowsGoneFromServer(tripId, 'stops', stopsList);
         });
         _partArrived(tripId, 'stops', docs: stopsList);
       }).catchError((Object e, StackTrace stack) {
@@ -867,14 +879,10 @@ class SyncEngineServiceV2 {
         if (_isStopped) return;
         // One transaction per snapshot, so its rows show up together.
         await localDb.transaction(() async {
-          for (final itemData in itemsList) {
-            try {
-              await _applyRemoteScheduleItem(tripId, itemData);
-            } catch (e, stack) {
-              debugPrint('[SyncEngineV2] Error applying remote schedule item: $e\n$stack');
-            }
+          final applied = await _applyRemoteScheduleItemsBatchInTx(tripId, itemsList);
+          if (applied) {
+            await _markRowsGoneFromServerInTx(tripId, 'items', itemsList);
           }
-          await _markRowsGoneFromServer(tripId, 'items', itemsList);
         });
         _partArrived(tripId, 'items', docs: itemsList);
       }).catchError((Object e, StackTrace stack) {
@@ -914,25 +922,34 @@ class SyncEngineServiceV2 {
     await localDb.transaction(() async {
       final trip = await (localDb.select(localDb.trips)..where((t) => t.id.equals(tripId))).getSingleOrNull();
       if (trip == null || trip.sharing != 'group') return;
+      final companions = <TripActivitiesCompanion>[];
+      final seenIds = <String>{};
       for (final data in entries) {
         final id = data['id'];
         final createdAt = _parseTimestamp(data['createdAt']);
         if (id is! String || id.isEmpty || createdAt == null || createdAt.isBefore(cutoff)) continue;
         if (data['tripId'] != null && data['tripId'] != tripId) continue;
-        await localDb.into(localDb.tripActivities).insert(
-              TripActivitiesCompanion.insert(
-                id: id,
-                tripId: tripId,
-                actorId: data['actorId'] as String? ?? '',
-                action: data['action'] as String? ?? '',
-                entityType: data['entityType'] as String? ?? '',
-                entityId: data['entityId'] as String? ?? '',
-                summary: data['summary'] as String? ?? '',
-                createdAt: createdAt,
-                syncStatus: const Value(0),
-              ),
+        if (!seenIds.add(id)) continue;
+        companions.add(
+          TripActivitiesCompanion.insert(
+            id: id,
+            tripId: tripId,
+            actorId: data['actorId'] as String? ?? '',
+            action: data['action'] as String? ?? '',
+            entityType: data['entityType'] as String? ?? '',
+            entityId: data['entityId'] as String? ?? '',
+            summary: data['summary'] as String? ?? '',
+            createdAt: createdAt,
+            syncStatus: const Value(0),
+          ),
+        );
+      }
+      if (companions.isNotEmpty) {
+        await localDb.batch((b) => b.insertAll(
+              localDb.tripActivities,
+              companions,
               mode: InsertMode.insertOrIgnore,
-            );
+            ));
       }
     });
   }
@@ -948,443 +965,655 @@ class SyncEngineServiceV2 {
   /// whole subcollection, so a clean row (pushed, not edited since) that is old
   /// enough and isn't in it was deleted by someone else: hide it here too.
   /// Rows with local changes (syncStatus 1) are left alone; they're pushed next.
-  Future<void> _markRowsGoneFromServer(String tripId, String kind, List<Map<String, dynamic>> docs) async {
+  ///
+  /// Must run inside the caller's open transaction.
+  Future<void> _markRowsGoneFromServerInTx(String tripId, String kind, List<Map<String, dynamic>> docs) async {
     if (docs is! RemoteDocList || docs.isFromCache || _isStopped) return;
     final remoteIds = {for (final d in docs) if (d['id'] is String) d['id'] as String};
     final cutoff = DateTime.now().subtract(_goneAfter).millisecondsSinceEpoch;
     final now = DateTime.now();
-    await localDb.transaction(() async {
-      final trip = await (localDb.select(localDb.trips)..where((t) => t.id.equals(tripId))).getSingleOrNull();
-      if (trip == null || trip.sharing != 'group') return;
-      switch (kind) {
-        case 'days':
-          final gone = (await (localDb.select(localDb.tripDays)
-                    ..where((d) =>
-                        d.tripId.equals(tripId) &
-                        d.syncStatus.equals(0) &
-                        d.deletedAt.isNull() &
-                        d.updatedAt.isSmallerThanValue(cutoff)))
-                  .get())
-              .where((d) => !remoteIds.contains(d.id))
-              .map((d) => d.id)
-              .toList();
-          if (gone.isEmpty) return;
-          await (localDb.update(localDb.tripDays)..where((d) => d.id.isIn(gone) & d.tripId.equals(tripId)))
+    final trip = await (localDb.select(localDb.trips)..where((t) => t.id.equals(tripId))).getSingleOrNull();
+    if (trip == null || trip.sharing != 'group') return;
+    switch (kind) {
+      case 'days':
+        final gone = (await (localDb.select(localDb.tripDays)
+                  ..where((d) =>
+                      d.tripId.equals(tripId) &
+                      d.syncStatus.equals(0) &
+                      d.deletedAt.isNull() &
+                      d.updatedAt.isSmallerThanValue(cutoff)))
+                .get())
+            .where((d) => !remoteIds.contains(d.id))
+            .map((d) => d.id)
+            .toList();
+        for (var i = 0; i < gone.length; i += _sqlInChunkSize) {
+          final chunk = gone.sublist(i, i + _sqlInChunkSize > gone.length ? gone.length : i + _sqlInChunkSize);
+          await (localDb.update(localDb.tripDays)..where((d) => d.id.isIn(chunk) & d.tripId.equals(tripId)))
               .write(TripDaysCompanion(deletedAt: Value(now), updatedBy: const Value(null)));
           await (localDb.update(localDb.scheduleItems)
-                ..where((i) => i.dayId.isIn(gone) & i.tripId.equals(tripId) & i.syncStatus.equals(0) & i.deletedAt.isNull()))
+                ..where((item) => item.dayId.isIn(chunk) & item.tripId.equals(tripId) & item.syncStatus.equals(0) & item.deletedAt.isNull()))
               .write(ScheduleItemsCompanion(deletedAt: Value(now), updatedBy: const Value(null)));
-        case 'stops':
-          final gone = (await (localDb.select(localDb.stops)
-                    ..where((s) =>
-                        s.tripId.equals(tripId) &
-                        s.syncStatus.equals(0) &
-                        s.deletedAt.isNull() &
-                        s.updatedAt.isSmallerThanValue(cutoff)))
-                  .get())
-              .where((s) => !remoteIds.contains(s.id))
-              .map((s) => s.id)
-              .toList();
-          if (gone.isEmpty) return;
-          await (localDb.update(localDb.stops)..where((s) => s.id.isIn(gone) & s.tripId.equals(tripId)))
+        }
+      case 'stops':
+        final gone = (await (localDb.select(localDb.stops)
+                  ..where((s) =>
+                      s.tripId.equals(tripId) &
+                      s.syncStatus.equals(0) &
+                      s.deletedAt.isNull() &
+                      s.updatedAt.isSmallerThanValue(cutoff)))
+                .get())
+            .where((s) => !remoteIds.contains(s.id))
+            .map((s) => s.id)
+            .toList();
+        for (var i = 0; i < gone.length; i += _sqlInChunkSize) {
+          final chunk = gone.sublist(i, i + _sqlInChunkSize > gone.length ? gone.length : i + _sqlInChunkSize);
+          await (localDb.update(localDb.stops)..where((s) => s.id.isIn(chunk) & s.tripId.equals(tripId)))
               .write(StopsCompanion(deletedAt: Value(now), updatedBy: const Value(null)));
           await (localDb.update(localDb.scheduleItems)
-                ..where((i) => i.stopId.isIn(gone) & i.tripId.equals(tripId) & i.syncStatus.equals(0) & i.deletedAt.isNull()))
+                ..where((item) => item.stopId.isIn(chunk) & item.tripId.equals(tripId) & item.syncStatus.equals(0) & item.deletedAt.isNull()))
               .write(ScheduleItemsCompanion(deletedAt: Value(now), updatedBy: const Value(null)));
-        case 'items':
-          final gone = (await (localDb.select(localDb.scheduleItems)
-                    ..where((i) =>
-                        i.tripId.equals(tripId) &
-                        i.syncStatus.equals(0) &
-                        i.deletedAt.isNull() &
-                        i.updatedAt.isSmallerThanValue(cutoff)))
-                  .get())
-              .where((i) => !remoteIds.contains(i.id))
-              .map((i) => i.id)
-              .toList();
-          if (gone.isEmpty) return;
-          await (localDb.update(localDb.scheduleItems)..where((i) => i.id.isIn(gone) & i.tripId.equals(tripId)))
+        }
+      case 'items':
+        final gone = (await (localDb.select(localDb.scheduleItems)
+                  ..where((item) =>
+                      item.tripId.equals(tripId) &
+                      item.syncStatus.equals(0) &
+                      item.deletedAt.isNull() &
+                      item.updatedAt.isSmallerThanValue(cutoff)))
+                .get())
+            .where((item) => !remoteIds.contains(item.id))
+            .map((item) => item.id)
+            .toList();
+        for (var i = 0; i < gone.length; i += _sqlInChunkSize) {
+          final chunk = gone.sublist(i, i + _sqlInChunkSize > gone.length ? gone.length : i + _sqlInChunkSize);
+          await (localDb.update(localDb.scheduleItems)..where((item) => item.id.isIn(chunk) & item.tripId.equals(tripId)))
               .write(ScheduleItemsCompanion(deletedAt: Value(now), updatedBy: const Value(null)));
-      }
-    });
+        }
+    }
   }
 
   /// Flushes any buffered subcollection documents for [tripId] whose parent rows now exist.
   Future<void> _flushPendingForTrip(String tripId) async {
-    final pendingDays = _pendingRemoteDays.values
-        .where((d) => d['tripId'] == tripId)
-        .toList();
-    for (final dayData in pendingDays) {
-      await _applyRemoteDay(tripId, dayData);
-    }
-
-    final pendingStops = _pendingRemoteStops.values
-        .where((s) => s['tripId'] == tripId)
-        .toList();
-    for (final stopData in pendingStops) {
-      await _applyRemoteStop(tripId, stopData);
-    }
-
-    final pendingItems = _pendingRemoteItems.values
-        .where((i) => i['tripId'] == tripId)
-        .toList();
-    for (final itemData in pendingItems) {
-      await _applyRemoteScheduleItem(tripId, itemData);
-    }
-  }
-
-  Future<void> _applyRemoteDay(String tripId, Map<String, dynamic> data) async {
-    final dayId = data['id'] as String?;
-    if (dayId == null || dayId.isEmpty) return;
-
-    // Ensure parent trip exists locally before inserting child day
-    final parentTrip = await (localDb.select(localDb.trips)..where((t) => t.id.equals(tripId))).getSingleOrNull();
-    if (parentTrip == null) {
-      _pendingRemoteDays[dayId] = data;
-      return;
-    }
-    if (parentTrip.sharing == 'private') {
-      return;
-    }
-    _pendingRemoteDays.remove(dayId);
-
-    final remoteUpdatedAt = _parseTimestamp(data['updatedAt']);
-    final deletedAt = _parseTimestamp(data['deletedAt']);
-
-    final companion = TripDaysCompanion(
-      id: Value(dayId),
-      tripId: Value(tripId),
-      sortKey: Value(data['sortKey'] as String? ?? 'a0'),
-      title: Value(data['title'] as String?),
-      pinnedDate: Value(data['pinnedDate'] as String?),
-      updatedAt: Value(remoteUpdatedAt ?? DateTime.now()),
-      updatedBy: Value(data['updatedBy'] as String?),
-      deletedAt: Value(deletedAt),
-      syncStatus: const Value(0),
-    );
+    final pendingDays = _pendingRemoteDays.values.where((d) => d['tripId'] == tripId).toList();
+    final pendingStops = _pendingRemoteStops.values.where((s) => s['tripId'] == tripId).toList();
+    final hasPendingItems = _pendingRemoteItems.values.any((i) => i['tripId'] == tripId);
+    if (pendingDays.isEmpty && pendingStops.isEmpty && !hasPendingItems) return;
 
     await localDb.transaction(() async {
-      final currentTrip = await (localDb.select(localDb.trips)..where((t) => t.id.equals(tripId))).getSingleOrNull();
-      if (currentTrip == null || currentTrip.sharing == 'private') return;
-
-      final localDay = await (localDb.select(localDb.tripDays)..where((d) => d.id.equals(dayId))).getSingleOrNull();
-      if (localDay != null) {
-        if (localDay.tripId != tripId) return;
-        if (remoteUpdatedAt != null && !remoteUpdatedAt.isAfter(localDay.updatedAt)) {
-          return;
-        }
-        await (localDb.update(localDb.tripDays)
-              ..where((d) => d.id.equals(dayId) & d.tripId.equals(tripId) & d.updatedAt.isSmallerThanValue((remoteUpdatedAt ?? DateTime.now()).millisecondsSinceEpoch)))
-            .write(companion);
-      } else {
-        await localDb.into(localDb.tripDays).insert(companion, mode: InsertMode.insertOrIgnore);
+      if (pendingDays.isNotEmpty) {
+        await _applyRemoteDaysBatchInTx(tripId, pendingDays);
       }
+      if (pendingStops.isNotEmpty) {
+        await _applyRemoteStopsBatchInTx(tripId, pendingStops);
+      }
+      await _flushPendingScheduleItemsInTx(tripId);
     });
-
-    await _flushPendingScheduleItemsForParent(tripId);
   }
 
-  Future<void> _applyRemoteStop(String tripId, Map<String, dynamic> data) async {
-    final stopId = data['id'] as String?;
-    if (stopId == null || stopId.isEmpty) return;
+  Future<void> _flushPendingScheduleItemsInTx(String tripId) async {
+    final pendingItems = _pendingRemoteItems.values.where((i) => i['tripId'] == tripId).toList();
+    if (pendingItems.isEmpty) return;
+    await _applyRemoteScheduleItemsBatchInTx(tripId, pendingItems);
+  }
 
-    // Ensure parent trip exists locally before inserting child stop
+  /// Applies a snapshot of remote days inside the caller's open transaction.
+  /// Returns true when the parent trip exists locally and is shared.
+  Future<bool> _applyRemoteDaysBatchInTx(String tripId, List<Map<String, dynamic>> daysList) async {
     final parentTrip = await (localDb.select(localDb.trips)..where((t) => t.id.equals(tripId))).getSingleOrNull();
     if (parentTrip == null) {
-      _pendingRemoteStops[stopId] = data;
-      return;
-    }
-    if (parentTrip.sharing == 'private') {
-      return;
-    }
-    _pendingRemoteStops.remove(stopId);
-
-    final remoteUpdatedAt = _parseTimestamp(data['updatedAt']);
-    final deletedAt = _parseTimestamp(data['deletedAt']);
-
-    final companion = StopsCompanion(
-      id: Value(stopId),
-      tripId: Value(tripId),
-      placeKey: Value(data['placeKey'] as String? ?? ''),
-      name: Value(data['name'] as String? ?? ''),
-      lat: Value((data['lat'] as num?)?.toDouble() ?? 0.0),
-      lng: Value((data['lng'] as num?)?.toDouble() ?? 0.0),
-      description: Value(data['description'] as String?),
-      address: Value(data['address'] as String?),
-      businessHours: Value(data['businessHours'] as String?),
-      contactInfo: Value(data['contactInfo'] as String?),
-      accessTips: Value(data['accessTips'] as String?),
-      links: Value(data['links'] as String?),
-      coverRemoteUrl: Value(data['coverRemoteUrl'] as String?),
-      source: Value(data['source'] as String?),
-      sourceUrl: Value(data['sourceUrl'] as String?),
-      area: Value(data['area'] as String?),
-      note: Value(data['note'] as String?),
-      addedBy: Value(data['addedBy'] as String? ?? currentUserId),
-      updatedAt: Value(remoteUpdatedAt ?? DateTime.now()),
-      updatedBy: Value(data['updatedBy'] as String?),
-      deletedAt: Value(deletedAt),
-      syncStatus: const Value(0),
-    );
-
-    await localDb.transaction(() async {
-      final currentTrip = await (localDb.select(localDb.trips)..where((t) => t.id.equals(tripId))).getSingleOrNull();
-      if (currentTrip == null || currentTrip.sharing == 'private') return;
-
-      final localStop = await (localDb.select(localDb.stops)..where((s) => s.id.equals(stopId))).getSingleOrNull();
-      if (localStop != null) {
-        if (localStop.tripId != tripId) return;
-        if (remoteUpdatedAt != null && !remoteUpdatedAt.isAfter(localStop.updatedAt)) {
-          return;
+      for (final data in daysList) {
+        final dayId = data['id'];
+        if (dayId is String && dayId.isNotEmpty) {
+          _pendingRemoteDays[dayId] = data;
         }
-        final updated = await (localDb.update(localDb.stops)
-              ..where((s) => s.id.equals(stopId) & s.tripId.equals(tripId) & s.updatedAt.isSmallerThanValue((remoteUpdatedAt ?? DateTime.now()).millisecondsSinceEpoch)))
-            .write(companion);
-        if (updated == 0) return;
-      } else {
-        await localDb.into(localDb.stops).insert(companion, mode: InsertMode.insertOrIgnore);
       }
+      return false;
+    }
+    if (parentTrip.sharing == 'private') return false;
 
-      // Sync labels by natural key inside the same transaction
-      final senderToLocalLabelId = <String, String>{};
-      final matchedAnimeLabelIds = <String>[];
-      final labelsRaw = data['labels'] as List?;
-      if (labelsRaw != null) {
-        await (localDb.delete(localDb.stopLabels)..where((sl) => sl.stopId.equals(stopId))).go();
+    final dayIds = <String>{};
+    for (final data in daysList) {
+      final dayId = data['id'];
+      if (dayId is String && dayId.isNotEmpty) {
+        _pendingRemoteDays.remove(dayId);
+        dayIds.add(dayId);
+      }
+    }
+    if (dayIds.isEmpty) return true;
 
-        for (final raw in labelsRaw) {
-          if (raw is! Map) continue;
-          final kind = raw['kind'] as String? ?? 'tag';
-          final name = raw['name'] as String? ?? '';
-          final bangumiId = raw['bangumiId'] as String?;
+    // Query without tripId filter so cross-trip PK collisions are still detected.
+    final existingRows = await _queryInChunks(
+      dayIds,
+      (chunk) => (localDb.select(localDb.tripDays)..where((d) => d.id.isIn(chunk))).get(),
+    );
+    final existingById = {for (final d in existingRows) d.id: d};
 
-          // Lookup existing label first with limit(1) to avoid Bad state: Too many elements (N1, N1b)
-          Label? label;
-          if (bangumiId != null && bangumiId.isNotEmpty) {
-            label = await (localDb.select(localDb.labels)
-                  ..where((l) => l.bangumiId.equals(bangumiId))
-                  ..limit(1))
-                .getSingleOrNull();
+    final daysToInsert = <String, TripDaysCompanion>{};
+    for (final data in daysList) {
+      try {
+        final dayId = data['id'];
+        if (dayId is! String || dayId.isEmpty) continue;
+
+        final remoteUpdatedAt = _parseTimestamp(data['updatedAt']);
+        final deletedAt = _parseTimestamp(data['deletedAt']);
+        final effectiveUpdatedAt = remoteUpdatedAt ?? DateTime.now();
+
+        final companion = TripDaysCompanion(
+          id: Value(dayId),
+          tripId: Value(tripId),
+          sortKey: Value(data['sortKey'] as String? ?? 'a0'),
+          title: Value(data['title'] as String?),
+          pinnedDate: Value(data['pinnedDate'] as String?),
+          updatedAt: Value(effectiveUpdatedAt),
+          updatedBy: Value(data['updatedBy'] as String?),
+          deletedAt: Value(deletedAt),
+          syncStatus: const Value(0),
+        );
+
+        final localDay = existingById[dayId];
+        if (localDay != null) {
+          if (localDay.tripId != tripId) continue;
+          if (remoteUpdatedAt != null &&
+              remoteUpdatedAt.millisecondsSinceEpoch <= localDay.updatedAt.millisecondsSinceEpoch) {
+            continue;
           }
-          if (label == null) {
-            label = await (localDb.select(localDb.labels)
-                  ..where((l) => l.kind.equals(kind) & l.name.equals(name))
-                  ..limit(1))
-                .getSingleOrNull();
-            if (label != null && label.bangumiId == null && bangumiId != null && bangumiId.isNotEmpty) {
-              await (localDb.update(localDb.labels)..where((l) => l.id.equals(label!.id)))
-                  .write(LabelsCompanion(bangumiId: Value(bangumiId)));
-              label = label.copyWith(bangumiId: Value(bangumiId));
+          await (localDb.update(localDb.tripDays)
+                ..where((d) =>
+                    d.id.equals(dayId) &
+                    d.tripId.equals(tripId) &
+                    d.updatedAt.isSmallerThanValue(effectiveUpdatedAt.millisecondsSinceEpoch)))
+              .write(companion);
+        } else {
+          daysToInsert[dayId] = companion;
+        }
+      } catch (e, stack) {
+        debugPrint('[SyncEngineV2] Error applying remote day: $e\n$stack');
+      }
+    }
+
+    if (daysToInsert.isNotEmpty) {
+      await localDb.batch((b) => b.insertAll(
+            localDb.tripDays,
+            daysToInsert.values.toList(),
+            mode: InsertMode.insertOrIgnore,
+          ));
+    }
+    return true;
+  }
+
+  /// Applies a snapshot of remote stops (with preloaded labels & reference images)
+  /// inside the caller's open transaction. Returns true when parent trip is shared.
+  Future<bool> _applyRemoteStopsBatchInTx(String tripId, List<Map<String, dynamic>> stopsList) async {
+    final parentTrip = await (localDb.select(localDb.trips)..where((t) => t.id.equals(tripId))).getSingleOrNull();
+    if (parentTrip == null) {
+      for (final data in stopsList) {
+        final stopId = data['id'];
+        if (stopId is String && stopId.isNotEmpty) {
+          _pendingRemoteStops[stopId] = data;
+        }
+      }
+      return false;
+    }
+    if (parentTrip.sharing == 'private') return false;
+
+    final stopIds = <String>{};
+    for (final data in stopsList) {
+      final stopId = data['id'];
+      if (stopId is String && stopId.isNotEmpty) {
+        _pendingRemoteStops.remove(stopId);
+        stopIds.add(stopId);
+      }
+    }
+    if (stopIds.isEmpty) return true;
+
+    // Query without tripId filter so cross-trip PK collisions are still detected.
+    final existingRows = await _queryInChunks(
+      stopIds,
+      (chunk) => (localDb.select(localDb.stops)..where((s) => s.id.isIn(chunk))).get(),
+    );
+    final existingById = {for (final s in existingRows) s.id: s};
+
+    final actionable = <({String stopId, Map<String, dynamic> data, Stop? localStop, DateTime? remoteUpdatedAt})>[];
+    for (final data in stopsList) {
+      try {
+        final stopId = data['id'];
+        if (stopId is! String || stopId.isEmpty) continue;
+        final localStop = existingById[stopId];
+        final remoteUpdatedAt = _parseTimestamp(data['updatedAt']);
+        if (localStop != null) {
+          if (localStop.tripId != tripId) continue;
+          if (remoteUpdatedAt != null &&
+              remoteUpdatedAt.millisecondsSinceEpoch <= localStop.updatedAt.millisecondsSinceEpoch) {
+            continue;
+          }
+        }
+        actionable.add((stopId: stopId, data: data, localStop: localStop, remoteUpdatedAt: remoteUpdatedAt));
+      } catch (e, stack) {
+        debugPrint('[SyncEngineV2] Error preparing remote stop: $e\n$stack');
+      }
+    }
+    if (actionable.isEmpty) return true;
+
+    final needsLabels = actionable.any((r) => r.data['labels'] is List);
+    final refStopIds = <String>[
+      for (final r in actionable)
+        if (r.data['referenceImages'] is List) r.stopId,
+    ];
+
+    final labelsById = <String, Label>{};
+    final labelsByBangumiId = <String, Label>{};
+    final labelsByKindAndName = <(String, String), Label>{};
+    if (needsLabels || refStopIds.isNotEmpty) {
+      final allLabels = await localDb.select(localDb.labels).get();
+      for (final label in allLabels) {
+        labelsById[label.id] = label;
+        final bId = label.bangumiId;
+        if (bId != null && bId.isNotEmpty) {
+          labelsByBangumiId.putIfAbsent(bId, () => label);
+        }
+        labelsByKindAndName.putIfAbsent((label.kind, label.name), () => label);
+      }
+    }
+
+    final existingRefsByStop = <String, List<NewReferenceImage>>{};
+    if (refStopIds.isNotEmpty) {
+      final existingRefs = await _queryInChunks(
+        refStopIds,
+        (chunk) => (localDb.select(localDb.newReferenceImages)..where((r) => r.stopId.isIn(chunk))).get(),
+      );
+      for (final ref in existingRefs) {
+        final sid = ref.stopId;
+        if (sid != null) {
+          existingRefsByStop.putIfAbsent(sid, () => []).add(ref);
+        }
+      }
+    }
+
+    final stopsToInsert = <String, StopsCompanion>{};
+    final labelsToInsert = <LabelsCompanion>[];
+    final labelBangumiBackfills = <({String id, String bangumiId})>[];
+    final stopLabelClearIds = <String>[];
+    final stopLabelsToInsert = <StopLabelsCompanion>[];
+    final refImagesToUpsert = <NewReferenceImagesCompanion>[];
+    final refImageIdsToDelete = <String>[];
+
+    for (final entry in actionable) {
+      final stopId = entry.stopId;
+      final data = entry.data;
+      final localStop = entry.localStop;
+      final remoteUpdatedAt = entry.remoteUpdatedAt;
+
+      try {
+        final deletedAt = _parseTimestamp(data['deletedAt']);
+        final effectiveUpdatedAt = remoteUpdatedAt ?? DateTime.now();
+
+        final companion = StopsCompanion(
+          id: Value(stopId),
+          tripId: Value(tripId),
+          placeKey: Value(data['placeKey'] as String? ?? ''),
+          name: Value(data['name'] as String? ?? ''),
+          lat: Value((data['lat'] as num?)?.toDouble() ?? 0.0),
+          lng: Value((data['lng'] as num?)?.toDouble() ?? 0.0),
+          description: Value(data['description'] as String?),
+          address: Value(data['address'] as String?),
+          businessHours: Value(data['businessHours'] as String?),
+          contactInfo: Value(data['contactInfo'] as String?),
+          accessTips: Value(data['accessTips'] as String?),
+          links: Value(data['links'] as String?),
+          coverRemoteUrl: Value(data['coverRemoteUrl'] as String?),
+          source: Value(data['source'] as String?),
+          sourceUrl: Value(data['sourceUrl'] as String?),
+          area: Value(data['area'] as String?),
+          note: Value(data['note'] as String?),
+          addedBy: Value(data['addedBy'] as String? ?? currentUserId),
+          updatedAt: Value(effectiveUpdatedAt),
+          updatedBy: Value(data['updatedBy'] as String?),
+          deletedAt: Value(deletedAt),
+          syncStatus: const Value(0),
+        );
+
+        if (localStop != null) {
+          final updated = await (localDb.update(localDb.stops)
+                ..where((s) =>
+                    s.id.equals(stopId) &
+                    s.tripId.equals(tripId) &
+                    s.updatedAt.isSmallerThanValue(effectiveUpdatedAt.millisecondsSinceEpoch)))
+              .write(companion);
+          if (updated == 0) continue;
+        }
+
+        final senderToLocalLabelId = <String, String>{};
+        final matchedAnimeLabelIds = <String>[];
+        final pendingStopLabels = <StopLabelsCompanion>[];
+        final pendingRefUpserts = <NewReferenceImagesCompanion>[];
+        final pendingRefDeletes = <String>[];
+
+        final labelsRaw = data['labels'] as List?;
+        if (labelsRaw != null) {
+          final seenStopLabelIds = <String>{};
+          for (final raw in labelsRaw) {
+            if (raw is! Map) continue;
+            final kind = raw['kind'] as String? ?? 'tag';
+            final name = raw['name'] as String? ?? '';
+            final bangumiId = raw['bangumiId'] as String?;
+
+            Label? label;
+            if (bangumiId != null && bangumiId.isNotEmpty) {
+              label = labelsByBangumiId[bangumiId];
             }
-          }
+            if (label == null) {
+              label = labelsByKindAndName[(kind, name)];
+              if (label != null && label.bangumiId == null && bangumiId != null && bangumiId.isNotEmpty) {
+                label = label.copyWith(bangumiId: Value(bangumiId));
+                labelsById[label.id] = label;
+                labelsByBangumiId.putIfAbsent(bangumiId, () => label!);
+                labelsByKindAndName[(kind, name)] = label;
+                labelBangumiBackfills.add((id: label.id, bangumiId: bangumiId));
+              }
+            }
 
-          if (label == null) {
-            final newId = const Uuid().v4();
-            await localDb.into(localDb.labels).insert(
-                  LabelsCompanion(
-                    id: Value(newId),
-                    kind: Value(kind),
-                    name: Value(name),
-                    bangumiId: Value(bangumiId),
-                    createdAt: Value(DateTime.now()),
-                  ),
-                  mode: InsertMode.insertOrIgnore,
-                );
-            label = await (localDb.select(localDb.labels)
-                  ..where((l) => l.id.equals(newId))
-                  ..limit(1))
-                .getSingleOrNull();
-          }
+            if (label == null) {
+              final newId = const Uuid().v4();
+              final now = DateTime.now();
+              final created = Label(
+                id: newId,
+                kind: kind,
+                name: name,
+                bangumiId: bangumiId,
+                createdAt: now,
+              );
+              labelsById[newId] = created;
+              if (bangumiId != null && bangumiId.isNotEmpty) {
+                labelsByBangumiId.putIfAbsent(bangumiId, () => created);
+              }
+              labelsByKindAndName.putIfAbsent((kind, name), () => created);
+              labelsToInsert.add(
+                LabelsCompanion(
+                  id: Value(newId),
+                  kind: Value(kind),
+                  name: Value(name),
+                  bangumiId: Value(bangumiId),
+                  createdAt: Value(now),
+                ),
+              );
+              label = created;
+            }
 
-          if (label != null) {
             if (raw['id'] is String) {
               senderToLocalLabelId[raw['id'] as String] = label.id;
             }
             if (kind == 'anime') {
               matchedAnimeLabelIds.add(label.id);
             }
-            await localDb.into(localDb.stopLabels).insert(
-                  StopLabelsCompanion(
-                    stopId: Value(stopId),
-                    labelId: Value(label.id),
-                  ),
-                  mode: InsertMode.insertOrIgnore,
-                );
-          }
-        }
-      }
-
-      // Sync URL-backed reference images
-      final refImagesRaw = data['referenceImages'] as List?;
-      if (refImagesRaw != null) {
-        final existingRefs = await (localDb.select(localDb.newReferenceImages)
-              ..where((r) => r.stopId.equals(stopId)))
-            .get();
-        final existingById = {for (final r in existingRefs) r.id: r};
-        final existingByUrl = {
-          for (final r in existingRefs)
-            if (r.remoteUrl != null && r.remoteUrl!.isNotEmpty) r.remoteUrl!: r,
-        };
-
-        final incomingIds = <String>{};
-        for (final raw in refImagesRaw) {
-          if (raw is! Map) continue;
-          final remoteUrl = raw['remoteUrl'] as String?;
-          if (remoteUrl == null || remoteUrl.isEmpty) continue;
-          final existingMatch = (raw['id'] is String ? existingById[raw['id']] : null) ??
-              existingByUrl[remoteUrl];
-          final imgId = existingMatch?.id ?? (raw['id'] as String?) ?? const Uuid().v4();
-          incomingIds.add(imgId);
-
-          // Resolve sender's animeLabelId to a valid local Labels.id
-          final rawAnimeLabelId = raw['animeLabelId'] as String?;
-          String? resolvedAnimeLabelId;
-          if (rawAnimeLabelId != null && rawAnimeLabelId.isNotEmpty) {
-            resolvedAnimeLabelId = senderToLocalLabelId[rawAnimeLabelId];
-            if (resolvedAnimeLabelId == null) {
-              final localLabel = await (localDb.select(localDb.labels)
-                    ..where((l) => l.id.equals(rawAnimeLabelId))
-                    ..limit(1))
-                  .getSingleOrNull();
-              resolvedAnimeLabelId = localLabel?.id;
-            }
-          }
-          resolvedAnimeLabelId ??=
-              matchedAnimeLabelIds.length == 1 ? matchedAnimeLabelIds.first : null;
-
-          await localDb.into(localDb.newReferenceImages).insertOnConflictUpdate(
-                NewReferenceImagesCompanion.insert(
-                  id: imgId,
-                  placeKey: Value(existingMatch?.placeKey),
+            if (seenStopLabelIds.add(label.id)) {
+              pendingStopLabels.add(
+                StopLabelsCompanion(
                   stopId: Value(stopId),
-                  localPath: Value(existingMatch?.localPath),
-                  remoteUrl: Value(remoteUrl),
-                  animeLabelId: Value(resolvedAnimeLabelId),
-                  episode: Value(raw['episode'] as String?),
-                  timestampS: Value((raw['timestampS'] as num?)?.toInt()),
-                  source: Value(raw['source'] as String?),
-                  sourceUrl: Value(raw['sourceUrl'] as String?),
+                  labelId: Value(label.id),
                 ),
               );
-        }
-
-        // Remove URL-backed reference images that were deleted remotely, keeping local-only ones
-        for (final existing in existingRefs) {
-          final isUrlBacked = existing.remoteUrl != null && existing.remoteUrl!.isNotEmpty;
-          if (isUrlBacked && !incomingIds.contains(existing.id)) {
-            await (localDb.delete(localDb.newReferenceImages)
-                  ..where((r) => r.id.equals(existing.id)))
-                .go();
+            }
           }
         }
+
+        final refImagesRaw = data['referenceImages'] as List?;
+        if (refImagesRaw != null) {
+          final existingRefs = existingRefsByStop[stopId] ?? const <NewReferenceImage>[];
+          final existingById = {for (final r in existingRefs) r.id: r};
+          final existingByUrl = {
+            for (final r in existingRefs)
+              if (r.remoteUrl != null && r.remoteUrl!.isNotEmpty) r.remoteUrl!: r,
+          };
+
+          final incomingIds = <String>{};
+          for (final raw in refImagesRaw) {
+            if (raw is! Map) continue;
+            final remoteUrl = raw['remoteUrl'] as String?;
+            if (remoteUrl == null || remoteUrl.isEmpty) continue;
+            final existingMatch =
+                (raw['id'] is String ? existingById[raw['id']] : null) ?? existingByUrl[remoteUrl];
+            final imgId = existingMatch?.id ?? (raw['id'] as String?) ?? const Uuid().v4();
+            incomingIds.add(imgId);
+
+            final rawAnimeLabelId = raw['animeLabelId'] as String?;
+            String? resolvedAnimeLabelId;
+            if (rawAnimeLabelId != null && rawAnimeLabelId.isNotEmpty) {
+              resolvedAnimeLabelId = senderToLocalLabelId[rawAnimeLabelId] ?? labelsById[rawAnimeLabelId]?.id;
+            }
+            resolvedAnimeLabelId ??= matchedAnimeLabelIds.length == 1 ? matchedAnimeLabelIds.first : null;
+
+            pendingRefUpserts.add(
+              NewReferenceImagesCompanion.insert(
+                id: imgId,
+                placeKey: Value(existingMatch?.placeKey),
+                stopId: Value(stopId),
+                localPath: Value(existingMatch?.localPath),
+                remoteUrl: Value(remoteUrl),
+                animeLabelId: Value(resolvedAnimeLabelId),
+                episode: Value(raw['episode'] as String?),
+                timestampS: Value((raw['timestampS'] as num?)?.toInt()),
+                source: Value(raw['source'] as String?),
+                sourceUrl: Value(raw['sourceUrl'] as String?),
+              ),
+            );
+          }
+
+          for (final existing in existingRefs) {
+            final isUrlBacked = existing.remoteUrl != null && existing.remoteUrl!.isNotEmpty;
+            if (isUrlBacked && !incomingIds.contains(existing.id)) {
+              pendingRefDeletes.add(existing.id);
+            }
+          }
+        }
+
+        if (localStop == null) {
+          stopsToInsert[stopId] = companion;
+        }
+        if (labelsRaw != null && localStop != null) {
+          stopLabelClearIds.add(stopId);
+        }
+        stopLabelsToInsert.addAll(pendingStopLabels);
+        refImagesToUpsert.addAll(pendingRefUpserts);
+        refImageIdsToDelete.addAll(pendingRefDeletes);
+      } catch (e, stack) {
+        debugPrint('[SyncEngineV2] Error applying remote stop: $e\n$stack');
       }
-    });
-
-    await _flushPendingScheduleItemsForParent(tripId);
-  }
-
-  Future<void> _flushPendingScheduleItemsForParent(String tripId) async {
-    final pendingItems = _pendingRemoteItems.values
-        .where((i) => i['tripId'] == tripId)
-        .toList();
-    for (final itemData in pendingItems) {
-      await _applyRemoteScheduleItem(tripId, itemData);
     }
+
+    // Topological write order: Stops & Labels first, then junction StopLabels & ReferenceImages.
+    if (stopsToInsert.isNotEmpty) {
+      await localDb.batch((b) => b.insertAll(
+            localDb.stops,
+            stopsToInsert.values.toList(),
+            mode: InsertMode.insertOrIgnore,
+          ));
+    }
+    if (labelsToInsert.isNotEmpty) {
+      await localDb.batch((b) => b.insertAll(
+            localDb.labels,
+            labelsToInsert,
+            mode: InsertMode.insertOrIgnore,
+          ));
+    }
+    for (final backfill in labelBangumiBackfills) {
+      await (localDb.update(localDb.labels)..where((l) => l.id.equals(backfill.id)))
+          .write(LabelsCompanion(bangumiId: Value(backfill.bangumiId)));
+    }
+    for (var i = 0; i < stopLabelClearIds.length; i += _sqlInChunkSize) {
+      final chunk = stopLabelClearIds.sublist(
+        i,
+        i + _sqlInChunkSize > stopLabelClearIds.length ? stopLabelClearIds.length : i + _sqlInChunkSize,
+      );
+      await (localDb.delete(localDb.stopLabels)..where((sl) => sl.stopId.isIn(chunk))).go();
+    }
+    if (stopLabelsToInsert.isNotEmpty) {
+      await localDb.batch((b) => b.insertAll(
+            localDb.stopLabels,
+            stopLabelsToInsert,
+            mode: InsertMode.insertOrIgnore,
+          ));
+    }
+    if (refImagesToUpsert.isNotEmpty) {
+      await localDb.batch((b) => b.insertAllOnConflictUpdate(
+            localDb.newReferenceImages,
+            refImagesToUpsert,
+          ));
+    }
+    for (var i = 0; i < refImageIdsToDelete.length; i += _sqlInChunkSize) {
+      final chunk = refImageIdsToDelete.sublist(
+        i,
+        i + _sqlInChunkSize > refImageIdsToDelete.length ? refImageIdsToDelete.length : i + _sqlInChunkSize,
+      );
+      await (localDb.delete(localDb.newReferenceImages)..where((r) => r.id.isIn(chunk))).go();
+    }
+    return true;
   }
 
-  Future<void> _applyRemoteScheduleItem(String tripId, Map<String, dynamic> data) async {
-    final itemId = data['id'] as String?;
-    if (itemId == null || itemId.isEmpty) return;
-
-    final stopId = data['stopId'] as String? ?? '';
-    final dayId = data['dayId'] as String? ?? '';
-
-    // Ensure parent trip, day, and stop exist locally before inserting schedule_item (FK safety)
+  /// Applies a snapshot of remote schedule items inside the caller's open transaction.
+  /// Items whose parent day or stop is missing locally remain buffered in `_pendingRemoteItems`.
+  Future<bool> _applyRemoteScheduleItemsBatchInTx(
+    String tripId,
+    List<Map<String, dynamic>> itemsList,
+  ) async {
     final parentTrip = await (localDb.select(localDb.trips)..where((t) => t.id.equals(tripId))).getSingleOrNull();
-    final parentDay = await (localDb.select(localDb.tripDays)..where((d) => d.id.equals(dayId))).getSingleOrNull();
-    final parentStop = await (localDb.select(localDb.stops)..where((s) => s.id.equals(stopId))).getSingleOrNull();
-    if (parentTrip == null || parentDay == null || parentStop == null) {
-      _pendingRemoteItems[itemId] = data;
-      return;
-    }
-    if (parentTrip.sharing == 'private') {
-      return;
-    }
-    _pendingRemoteItems.remove(itemId);
-
-    final remoteUpdatedAt = _parseTimestamp(data['updatedAt']);
-    final deletedAt = _parseTimestamp(data['deletedAt']);
-    final remoteStatus = data['status'] as String? ?? 'planned';
-
-    await localDb.transaction(() async {
-      final currentTrip = await (localDb.select(localDb.trips)..where((t) => t.id.equals(tripId))).getSingleOrNull();
-      if (currentTrip == null || currentTrip.sharing == 'private') return;
-
-      final localItem =
-          await (localDb.select(localDb.scheduleItems)..where((i) => i.id.equals(itemId))).getSingleOrNull();
-      if (localItem != null) {
-        if (localItem.tripId != tripId) return;
-        if (remoteUpdatedAt != null && !remoteUpdatedAt.isAfter(localItem.updatedAt)) {
-          return;
+    if (parentTrip == null) {
+      for (final data in itemsList) {
+        final itemId = data['id'];
+        if (itemId is String && itemId.isNotEmpty) {
+          _pendingRemoteItems[itemId] = data;
         }
-
-        // If local user marked this item done while offline (syncStatus == 1),
-        // preserve 'done' over remote 'planned', and keep syncStatus == 1 so the
-        // check-in pushes upstream once online.
-        final preserveLocalVisited = localItem.syncStatus == 1 &&
-            localItem.status == 'done' &&
-            remoteStatus == 'planned';
-
-        final effectiveStatus = preserveLocalVisited ? 'done' : remoteStatus;
-        final effectiveSyncStatus = preserveLocalVisited ? 1 : 0;
-        final effectiveUpdatedAt = preserveLocalVisited
-            ? DateTime.now()
-            : (remoteUpdatedAt ?? DateTime.now());
-        final effectiveUpdatedBy = preserveLocalVisited ? currentUserId : data['updatedBy'] as String?;
-
-        final companion = ScheduleItemsCompanion(
-          id: Value(itemId),
-          tripId: Value(tripId),
-          stopId: Value(stopId),
-          dayId: Value(dayId),
-          sortKey: Value(data['sortKey'] as String? ?? 'a0'),
-          stayMinutes: Value((data['stayMinutes'] as num?)?.toInt() ?? 60),
-          transitMinutes: Value((data['transitMinutes'] as num?)?.toInt() ?? 0),
-          fixedTime: Value((data['fixedTime'] as num?)?.toInt()),
-          status: Value(effectiveStatus),
-          updatedAt: Value(effectiveUpdatedAt),
-          updatedBy: Value(effectiveUpdatedBy),
-          deletedAt: Value(deletedAt),
-          syncStatus: Value(effectiveSyncStatus),
-        );
-
-        await (localDb.update(localDb.scheduleItems)
-              ..where((i) => i.id.equals(itemId) & i.tripId.equals(tripId)))
-            .write(companion);
-
-        if (preserveLocalVisited) {
-          _pendingTripIdsToPush.add(tripId);
-          _scheduleDebouncedPush();
-        }
-      } else {
-        final companion = ScheduleItemsCompanion(
-          id: Value(itemId),
-          tripId: Value(tripId),
-          stopId: Value(stopId),
-          dayId: Value(dayId),
-          sortKey: Value(data['sortKey'] as String? ?? 'a0'),
-          stayMinutes: Value((data['stayMinutes'] as num?)?.toInt() ?? 60),
-          transitMinutes: Value((data['transitMinutes'] as num?)?.toInt() ?? 0),
-          fixedTime: Value((data['fixedTime'] as num?)?.toInt()),
-          status: Value(remoteStatus),
-          updatedAt: Value(remoteUpdatedAt ?? DateTime.now()),
-          updatedBy: Value(data['updatedBy'] as String?),
-          deletedAt: Value(deletedAt),
-          syncStatus: const Value(0),
-        );
-        await localDb.into(localDb.scheduleItems).insert(companion, mode: InsertMode.insertOrIgnore);
       }
-    });
+      return false;
+    }
+    if (parentTrip.sharing == 'private') return false;
+
+    final dayRows = await (localDb.selectOnly(localDb.tripDays)
+          ..addColumns([localDb.tripDays.id])
+          ..where(localDb.tripDays.tripId.equals(tripId)))
+        .get();
+    final validDayIds = {for (final r in dayRows) r.read(localDb.tripDays.id)!};
+
+    final stopRows = await (localDb.selectOnly(localDb.stops)
+          ..addColumns([localDb.stops.id])
+          ..where(localDb.stops.tripId.equals(tripId)))
+        .get();
+    final validStopIds = {for (final r in stopRows) r.read(localDb.stops.id)!};
+
+    final readyItems = <Map<String, dynamic>>[];
+    final readyIds = <String>{};
+    for (final data in itemsList) {
+      final itemId = data['id'];
+      if (itemId is! String || itemId.isEmpty) continue;
+      final stopId = data['stopId'] as String? ?? '';
+      final dayId = data['dayId'] as String? ?? '';
+      if (!validDayIds.contains(dayId) || !validStopIds.contains(stopId)) {
+        _pendingRemoteItems[itemId] = data;
+      } else {
+        _pendingRemoteItems.remove(itemId);
+        readyItems.add(data);
+        readyIds.add(itemId);
+      }
+    }
+    if (readyItems.isEmpty) return true;
+
+    // Query without tripId filter so cross-trip PK collisions are still detected.
+    final existingRows = await _queryInChunks(
+      readyIds,
+      (chunk) => (localDb.select(localDb.scheduleItems)..where((i) => i.id.isIn(chunk))).get(),
+    );
+    final existingById = {for (final item in existingRows) item.id: item};
+
+    final itemsToInsert = <String, ScheduleItemsCompanion>{};
+    var shouldReschedulePush = false;
+
+    for (final data in readyItems) {
+      try {
+        final itemId = data['id'] as String;
+        final stopId = data['stopId'] as String? ?? '';
+        final dayId = data['dayId'] as String? ?? '';
+        final remoteUpdatedAt = _parseTimestamp(data['updatedAt']);
+        final deletedAt = _parseTimestamp(data['deletedAt']);
+        final remoteStatus = data['status'] as String? ?? 'planned';
+
+        final localItem = existingById[itemId];
+        if (localItem != null) {
+          if (localItem.tripId != tripId) continue;
+          if (remoteUpdatedAt != null &&
+              remoteUpdatedAt.millisecondsSinceEpoch <= localItem.updatedAt.millisecondsSinceEpoch) {
+            continue;
+          }
+
+          // If local user marked this item done while offline (syncStatus == 1),
+          // preserve 'done' over remote 'planned', and keep syncStatus == 1 so the
+          // check-in pushes upstream once online.
+          final preserveLocalVisited = localItem.syncStatus == 1 &&
+              localItem.status == 'done' &&
+              remoteStatus == 'planned';
+
+          final effectiveStatus = preserveLocalVisited ? 'done' : remoteStatus;
+          final effectiveSyncStatus = preserveLocalVisited ? 1 : 0;
+          final effectiveUpdatedAt = preserveLocalVisited
+              ? DateTime.now()
+              : (remoteUpdatedAt ?? DateTime.now());
+          final effectiveUpdatedBy = preserveLocalVisited ? currentUserId : data['updatedBy'] as String?;
+
+          final companion = ScheduleItemsCompanion(
+            id: Value(itemId),
+            tripId: Value(tripId),
+            stopId: Value(stopId),
+            dayId: Value(dayId),
+            sortKey: Value(data['sortKey'] as String? ?? 'a0'),
+            stayMinutes: Value((data['stayMinutes'] as num?)?.toInt() ?? 60),
+            transitMinutes: Value((data['transitMinutes'] as num?)?.toInt() ?? 0),
+            fixedTime: Value((data['fixedTime'] as num?)?.toInt()),
+            status: Value(effectiveStatus),
+            updatedAt: Value(effectiveUpdatedAt),
+            updatedBy: Value(effectiveUpdatedBy),
+            deletedAt: Value(deletedAt),
+            syncStatus: Value(effectiveSyncStatus),
+          );
+
+          await (localDb.update(localDb.scheduleItems)
+                ..where((i) => i.id.equals(itemId) & i.tripId.equals(tripId)))
+              .write(companion);
+
+          if (preserveLocalVisited) {
+            shouldReschedulePush = true;
+          }
+        } else {
+          itemsToInsert[itemId] = ScheduleItemsCompanion(
+            id: Value(itemId),
+            tripId: Value(tripId),
+            stopId: Value(stopId),
+            dayId: Value(dayId),
+            sortKey: Value(data['sortKey'] as String? ?? 'a0'),
+            stayMinutes: Value((data['stayMinutes'] as num?)?.toInt() ?? 60),
+            transitMinutes: Value((data['transitMinutes'] as num?)?.toInt() ?? 0),
+            fixedTime: Value((data['fixedTime'] as num?)?.toInt()),
+            status: Value(remoteStatus),
+            updatedAt: Value(remoteUpdatedAt ?? DateTime.now()),
+            updatedBy: Value(data['updatedBy'] as String?),
+            deletedAt: Value(deletedAt),
+            syncStatus: const Value(0),
+          );
+        }
+      } catch (e, stack) {
+        debugPrint('[SyncEngineV2] Error applying remote schedule item: $e\n$stack');
+      }
+    }
+
+    if (itemsToInsert.isNotEmpty) {
+      await localDb.batch((b) => b.insertAll(
+            localDb.scheduleItems,
+            itemsToInsert.values.toList(),
+            mode: InsertMode.insertOrIgnore,
+          ));
+    }
+    if (shouldReschedulePush) {
+      _pendingTripIdsToPush.add(tripId);
+      _scheduleDebouncedPush();
+    }
+    return true;
   }
 
   /// Converts a collaborator trip to an unsynced private trip when owner deletes or unshares.
