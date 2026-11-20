@@ -1,5 +1,5 @@
 import 'dart:async';
-import 'package:cloud_firestore/cloud_firestore.dart' show Timestamp;
+import 'package:cloud_firestore/cloud_firestore.dart' show Timestamp, WriteBatch;
 import 'package:drift/drift.dart';
 import 'package:flutter/foundation.dart';
 import 'package:uuid/uuid.dart';
@@ -383,6 +383,8 @@ class SyncEngineServiceV2 {
           continue;
         }
 
+        await _claimTombstones(tripId);
+
         final dirtyDays = await (localDb.select(localDb.tripDays)
               ..where((d) => d.tripId.equals(tripId) & d.syncStatus.equals(1)))
             .get();
@@ -415,29 +417,28 @@ class SyncEngineServiceV2 {
 
         if (_isStopped) break;
 
-        var batch = firestoreSync.createBatch();
-        var opCount = 0;
+        // The writes, gathered first so a refused batch can be retried
+        // without the activity log (below).
+        final changeOps = <void Function(WriteBatch)>[];
 
-        Future<void> flushIfFull() async {
-          if (opCount >= maxBatchOps) {
+        Future<void> commitAll(List<void Function(WriteBatch)> ops) async {
+          for (var start = 0; start < ops.length; start += maxBatchOps) {
+            final batch = firestoreSync.createBatch();
+            for (final op in ops.skip(start).take(maxBatchOps)) {
+              op(batch);
+            }
             await firestoreSync.commitBatch(batch);
-            batch = firestoreSync.createBatch();
-            opCount = 0;
           }
         }
 
         // 1. Trip doc
         if (trip.syncStatus == 1) {
-          firestoreSync.buildTripBatchOperations(batch, trip);
-          opCount++;
-          await flushIfFull();
+          changeOps.add((b) => firestoreSync.buildTripBatchOperations(b, trip));
         }
 
         // 2. Days
         for (final day in dirtyDays) {
-          firestoreSync.buildDayBatchOperations(batch, day);
-          opCount++;
-          await flushIfFull();
+          changeOps.add((b) => firestoreSync.buildDayBatchOperations(b, day));
         }
 
         // 3. Stops (with labels and URL-backed reference images)
@@ -456,33 +457,45 @@ class SyncEngineServiceV2 {
                 ..where((r) => r.stopId.equals(stop.id)))
               .get();
 
-          firestoreSync.buildStopBatchOperations(
-            batch,
-            stop,
-            labels: labels,
-            referenceImages: refImages,
-          );
-          opCount++;
-          await flushIfFull();
+          changeOps.add((b) => firestoreSync.buildStopBatchOperations(
+                b,
+                stop,
+                labels: labels,
+                referenceImages: refImages,
+              ));
         }
 
         // 4. Schedule items
         for (final item in dirtyItems) {
-          firestoreSync.buildScheduleItemBatchOperations(batch, item);
-          opCount++;
-          await flushIfFull();
+          changeOps.add((b) => firestoreSync.buildScheduleItemBatchOperations(b, item));
         }
 
         // 5. Activity entries, in the same batch as the changes they describe
-        for (final entry in dirtyActivities) {
-          firestoreSync.buildActivityBatchOperation(batch, entry);
-          opCount++;
-          await flushIfFull();
-        }
+        void Function(WriteBatch) activityOp(TripActivity entry) =>
+            (b) => firestoreSync.buildActivityBatchOperation(b, entry);
+
+        // Entries the rules refused on their own: kept on this phone, not retried.
+        final refusedActivities = <String>{};
 
         // Remote commit outside transaction
-        if (opCount > 0) {
-          await firestoreSync.commitBatch(batch);
+        try {
+          await commitAll([...changeOps, for (final entry in dirtyActivities) activityOp(entry)]);
+        } catch (e) {
+          if (!_isPermanentError(e) || dirtyActivities.isEmpty) rethrow;
+          // The log must never hold the trip back. An entry the rules refuse
+          // (one already in Firestore from an older build, or too long for
+          // them) would otherwise fail every push of the trip for good: send
+          // the changes alone, then each entry on its own.
+          await commitAll(changeOps);
+          for (final entry in dirtyActivities) {
+            try {
+              await commitAll([activityOp(entry)]);
+            } catch (e) {
+              if (!_isPermanentError(e)) rethrow;
+              refusedActivities.add(entry.id);
+              debugPrint('[SyncEngineV2] Activity entry ${entry.id} refused; kept on this phone only: $e');
+            }
+          }
         }
 
         if (_isStopped) break;
@@ -518,6 +531,11 @@ class SyncEngineServiceV2 {
           // stays waiting under a new id: the log is append-only in Firestore,
           // so writing the pushed id again would be refused as an update.
           for (final entry in dirtyActivities) {
+            if (refusedActivities.contains(entry.id)) {
+              await (localDb.update(localDb.tripActivities)..where((a) => a.id.equals(entry.id)))
+                  .write(const TripActivitiesCompanion(syncStatus: Value(0)));
+              continue;
+            }
             final done = await (localDb.update(localDb.tripActivities)
                   ..where((a) => a.id.equals(entry.id) & a.createdAt.equalsValue(entry.createdAt)))
                 .write(const TripActivitiesCompanion(syncStatus: Value(0)));
@@ -582,6 +600,46 @@ class SyncEngineServiceV2 {
     } else if (_pendingTripIdsToPush.isNotEmpty) {
       _scheduleDebouncedPush();
     }
+  }
+
+  /// Puts this user's name on the trip's deleted rows waiting to go up.
+  ///
+  /// A tombstone goes up with `expireAt`, which the rules accept only from the
+  /// row's `updatedBy`. A row deleted before the trip was shared, signed out,
+  /// or by a build older than `createInvite`'s stamping, can carry someone
+  /// else's id or none, and then the rules refuse the whole batch on every
+  /// try. Rows waiting on this device were deleted here, so they're ours.
+  Future<void> _claimTombstones(String tripId) async {
+    await localDb.transaction(() async {
+      await (localDb.update(localDb.trips)
+            ..where((t) =>
+                t.id.equals(tripId) &
+                t.syncStatus.equals(1) &
+                t.deletedAt.isNotNull() &
+                (t.updatedBy.isNull() | t.updatedBy.equals(currentUserId).not())))
+          .write(TripsCompanion(updatedBy: Value(currentUserId)));
+      await (localDb.update(localDb.tripDays)
+            ..where((d) =>
+                d.tripId.equals(tripId) &
+                d.syncStatus.equals(1) &
+                d.deletedAt.isNotNull() &
+                (d.updatedBy.isNull() | d.updatedBy.equals(currentUserId).not())))
+          .write(TripDaysCompanion(updatedBy: Value(currentUserId)));
+      await (localDb.update(localDb.stops)
+            ..where((s) =>
+                s.tripId.equals(tripId) &
+                s.syncStatus.equals(1) &
+                s.deletedAt.isNotNull() &
+                (s.updatedBy.isNull() | s.updatedBy.equals(currentUserId).not())))
+          .write(StopsCompanion(updatedBy: Value(currentUserId)));
+      await (localDb.update(localDb.scheduleItems)
+            ..where((i) =>
+                i.tripId.equals(tripId) &
+                i.syncStatus.equals(1) &
+                i.deletedAt.isNotNull() &
+                (i.updatedBy.isNull() | i.updatedBy.equals(currentUserId).not())))
+          .write(ScheduleItemsCompanion(updatedBy: Value(currentUserId)));
+    });
   }
 
   /// Stop all listeners and timers.

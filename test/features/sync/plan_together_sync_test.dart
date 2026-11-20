@@ -284,6 +284,58 @@ void main() {
     });
   });
 
+  group("tombstones in someone else's name", () {
+    test('a deleted row waiting on this device goes up in its user\'s name; others are left alone', () async {
+      await sharedTrip('t1');
+      final now = DateTime.now();
+      // Deleted before the trip was shared (or by an older build): someone
+      // else's updatedBy, so the rules would refuse its expireAt.
+      await stop('waiting', 't1', updatedAt: now, syncStatus: 1, deletedAt: now);
+      // Bob's own deletion, already in the cloud.
+      await stop('bobs', 't1', updatedAt: now, deletedAt: now);
+      // A live row Bob edited, waiting to go up: not a tombstone.
+      await stop('live', 't1', updatedAt: now, syncStatus: 1);
+      cloud.trips['t1'] = {'id': 't1'};
+      engine.startSync();
+      await settle(1500);
+
+      expect(cloud.tripStops['t1']!['waiting']!['updatedBy'], me);
+      expect(cloud.tripStops['t1']!['live']!['updatedBy'], 'user_bob');
+      final rows = {for (final r in await db.select(db.stops).get()) r.id: r};
+      expect(rows['waiting']!.updatedBy, me);
+      expect(rows['waiting']!.syncStatus, 0);
+      expect(rows['bobs']!.updatedBy, 'user_bob');
+      expect(rows['live']!.updatedBy, 'user_bob');
+    });
+  });
+
+  group('an entry the rules refuse', () {
+    test("doesn't hold the trip back: the changes and the other entries go up, it stays on this phone", () async {
+      await sharedTrip('t1');
+      await stop('s1', 't1', updatedAt: DateTime.now());
+      await stop('s2', 't1', updatedAt: DateTime.now());
+      cloud.trips['t1'] = {'id': 't1'};
+      final repo = DriftTripRepository(db, null, me);
+      await repo.deleteStop('s1');
+      await repo.deleteStop('s2');
+      final entries = await db.select(db.tripActivities).get();
+      expect(entries, hasLength(2));
+      final refused = entries.first.id;
+      cloud.refusedActivityIds.add(refused);
+
+      engine.startSync();
+      await settle(1500);
+
+      expect(cloud.tripStops['t1']!['s1']!['deletedAt'], isNotNull);
+      expect(cloud.tripStops['t1']!['s2']!['deletedAt'], isNotNull);
+      expect(cloud.tripActivity['t1']!.keys, [entries.last.id]);
+      final local = await db.select(db.tripActivities).get();
+      expect(local.map((a) => a.syncStatus), everyElement(0));
+      expect(local.map((a) => a.id), containsAll([refused, entries.last.id]));
+      expect(engine.getTripSyncStatus('t1'), TripSyncStatus.synced);
+    });
+  });
+
   group('tombstones purged while away', () {
     test('a server snapshot without an old clean stop hides it; recent, dirty and cached cases are left alone', () async {
       final old = DateTime.now().subtract(const Duration(days: 45));
