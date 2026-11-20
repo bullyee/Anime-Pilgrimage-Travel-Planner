@@ -97,6 +97,7 @@ void main() {
           driveCleanupJournalProvider.overrideWithValue(InMemoryDriveCleanupJournal()),
           // Its count checks files on disk, which a widget test can't wait for.
           pendingFrameDownloadCountProvider(trip.id).overrideWith((_) => Stream.value(0)),
+          pendingDriveFrameDownloadCountProvider(trip.id).overrideWith((_) => Stream.value(0)),
           transferForegroundServiceProvider.overrideWithValue(service),
           transferJournalProvider.overrideWithValue(InMemoryTransferJournal()),
           appVisibleProvider.overrideWithValue(() => true),
@@ -232,6 +233,7 @@ void main() {
           googleDriveFrameServiceProvider.overrideWithValue(drive),
           driveCleanupJournalProvider.overrideWithValue(journal),
           pendingFrameDownloadCountProvider(trip.id).overrideWith((_) => Stream.value(0)),
+          pendingDriveFrameDownloadCountProvider(trip.id).overrideWith((_) => Stream.value(0)),
           transferForegroundServiceProvider.overrideWithValue(FakeTransferService()),
           transferJournalProvider.overrideWithValue(InMemoryTransferJournal()),
           appVisibleProvider.overrideWithValue(() => true),

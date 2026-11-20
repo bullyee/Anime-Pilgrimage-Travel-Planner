@@ -179,6 +179,111 @@ void main() {
     });
   });
 
+  group('a trip arriving', () {
+    Map<String, dynamic> tripDoc() =>
+        {'id': 't1', 'title': 'Uji', 'ownerId': 'user_bob', 'sharing': 'group', 'dayCount': 2, 'updatedAt': DateTime.now()};
+    Map<String, dynamic> stopDoc(String id) => {
+          'id': id,
+          'tripId': 't1',
+          'placeKey': 'anitabi:$id',
+          'name': 'Stop $id',
+          'lat': 34.9,
+          'lng': 135.8,
+          'addedBy': 'user_bob',
+          'updatedAt': DateTime.now(),
+        };
+
+    test('a just-joined trip is arriving until the server sent its days, stops and schedule', () async {
+      await sharedTrip('t1', owner: 'user_bob');
+      final changes = <bool>[];
+      final sub = engine.arrivingStream.listen((trips) => changes.add(trips.contains('t1')));
+      engine.startSync();
+      cloud.emitUserTrips([tripDoc()]);
+      await settle(200);
+      expect(engine.isTripArriving('t1'), isTrue);
+
+      // The cache says nothing about what the server has.
+      cloud.emitDays('t1', RemoteDocList(const [], isFromCache: true));
+      cloud.emitDays('t1', RemoteDocList(const [], isFromCache: false));
+      cloud.emitStops('t1', RemoteDocList([stopDoc('s1'), stopDoc('s2'), stopDoc('s3')], isFromCache: false));
+      await settle(200);
+      expect(engine.isTripArriving('t1'), isTrue);
+      expect(await db.select(db.stops).get(), hasLength(3));
+
+      cloud.emitScheduleItems('t1', RemoteDocList(const [], isFromCache: false));
+      await settle(200);
+      expect(engine.isTripArriving('t1'), isFalse);
+      expect(changes, [true, false]);
+      await sub.cancel();
+    });
+
+    test("a trip whose days are already here isn't arriving", () async {
+      await sharedTrip('t1', owner: 'user_bob');
+      await db.into(db.tripDays).insert(TripDaysCompanion.insert(id: 'd1', tripId: 't1', sortKey: 'a0'));
+      engine.startSync();
+      cloud.emitUserTrips([tripDoc()]);
+      await settle(200);
+      expect(engine.isTripArriving('t1'), isFalse);
+    });
+
+    test('schedule items that come before their days and stops land once those do', () async {
+      await sharedTrip('t1', owner: 'user_bob');
+      engine.startSync();
+      cloud.emitUserTrips([tripDoc()]);
+      await settle(200);
+
+      final now = DateTime.now();
+      cloud.emitScheduleItems('t1', RemoteDocList([
+        for (var i = 0; i < 3; i++)
+          {'id': 'i$i', 'tripId': 't1', 'dayId': 'd1', 'stopId': 's$i', 'sortKey': 'a$i', 'updatedAt': now},
+      ], isFromCache: false));
+      await settle(200);
+      expect(await db.select(db.scheduleItems).get(), isEmpty);
+
+      cloud.emitDays('t1', RemoteDocList([
+        {'id': 'd1', 'tripId': 't1', 'sortKey': 'a0', 'updatedAt': now},
+      ], isFromCache: false));
+      cloud.emitStops('t1', RemoteDocList([for (var i = 0; i < 3; i++) stopDoc('s$i')], isFromCache: false));
+      await settle(300);
+
+      // No new trip snapshot came; each stop that landed let its items in.
+      expect((await db.select(db.scheduleItems).get()).map((i) => i.id).toSet(), {'i0', 'i1', 'i2'});
+      expect(engine.isTripArriving('t1'), isFalse);
+    });
+
+    test('on the web, a trip already here is checked against the server too', () async {
+      await sharedTrip('t1', owner: 'user_bob');
+      await db.into(db.tripDays).insert(TripDaysCompanion.insert(id: 'd1', tripId: 't1', sortKey: 'a0'));
+      engine.stopSync();
+      engine = SyncEngineServiceV2(localDb: db, firestoreSync: cloud, currentUserId: me, confirmEveryTrip: true);
+      engine.startSync();
+      cloud.emitUserTrips([tripDoc()]);
+      await settle(200);
+      expect(engine.isTripArriving('t1'), isTrue);
+
+      cloud.emitDays('t1', RemoteDocList(const [], isFromCache: false));
+      cloud.emitStops('t1', RemoteDocList(const [], isFromCache: false));
+      cloud.emitScheduleItems('t1', RemoteDocList(const [], isFromCache: false));
+      await settle(300);
+      expect(engine.isTripArriving('t1'), isFalse);
+    });
+
+    test("a snapshot's stops land together", () async {
+      await sharedTrip('t1', owner: 'user_bob');
+      engine.startSync();
+      cloud.emitUserTrips([tripDoc()]);
+      await settle(200);
+
+      final counts = <int>[];
+      final sub = (db.select(db.stops)..where((s) => s.tripId.equals('t1'))).watch().listen((rows) => counts.add(rows.length));
+      await settle(50);
+      cloud.emitStops('t1', RemoteDocList([for (var i = 0; i < 5; i++) stopDoc('s$i')], isFromCache: false));
+      await settle(300);
+      expect(counts, [0, 5]);
+      await sub.cancel();
+    });
+  });
+
   group("tombstones in someone else's name", () {
     test('a deleted row waiting on this device goes up in its user\'s name; others are left alone', () async {
       await sharedTrip('t1');
