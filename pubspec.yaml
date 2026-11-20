@@ -30,6 +30,8 @@ environment:
 dependencies:
   flutter:
     sdk: flutter
+  flutter_localizations:
+    sdk: flutter
   flutter_web_plugins:
     sdk: flutter
 
@@ -60,7 +62,7 @@ dependencies:
 
   # Utilities
   uuid: ^4.5.1
-  intl: ^0.19.0
+  intl: ^0.20.2
   json_annotation: ^4.9.0
   http: ^1.6.0
   web: ^1.1.0
@@ -110,6 +112,7 @@ flutter:
   # included with your application, so that you can use the icons in
   # the material Icons class.
   uses-material-design: true
+  generate: true
 
   # The isnet-anime cutout model (~176 MB) is NOT bundled as an asset — it is
   # fetched on first use and cached on-device by IsnetModelStore

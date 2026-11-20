@@ -4,6 +4,8 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:url_launcher/url_launcher.dart';
 
 import '../../../core/app_version.dart';
+import '../../../core/l10n/l10n.dart';
+import '../../../core/l10n/locale_provider.dart';
 import '../../../shared/map/app_map.dart';
 import '../../anime/services/isnet_model_store.dart';
 import '../../auth/providers/auth_provider.dart';
@@ -13,6 +15,7 @@ import '../../sync/widgets/drive_cleanup_flow.dart';
 import '../../sync/providers/drive_upload_quality_provider.dart';
 import '../../sync/widgets/drive_upload_quality_picker.dart';
 import '../services/storage_usage.dart';
+import '../widgets/language_picker.dart';
 
 /// Deletes the cutout model; tests replace it.
 final deleteCutoutModelProvider = Provider<Future<void> Function()>((ref) => () => IsnetModelStore().delete());
@@ -30,10 +33,16 @@ String sizeLine(int bytes) {
 /// "less than 1 MB", "84 MB": a size inside a sentence.
 String sizeInSentence(int bytes) => bytes < 1024 * 1024 ? 'less than 1 MB' : formatBytes(bytes);
 
+String _localizedSizeLine(AppLocalizations l10n, int bytes) =>
+    bytes < 1024 * 1024 ? l10n.settingsSizeUnder1Mb : sizeLine(bytes);
+
+String _localizedSizeInSentence(AppLocalizations l10n, int bytes) =>
+    bytes < 1024 * 1024 ? l10n.settingsSizeLessThan1Mb : formatBytes(bytes);
+
 const privacyPolicyUrl = 'https://trip-planner-2775c.web.app/privacy.html';
 const sourceCodeUrl = 'https://github.com/bullyee/trip_planner';
 
-/// Settings: the account, your data and About, in one place instead of the
+/// Settings: the account, app language, your data and About, in one place instead of the
 /// ⋮ menus they used to be in. Opened from Home's gear and My Trips' account
 /// button.
 class SettingsScreen extends ConsumerWidget {
@@ -41,27 +50,48 @@ class SettingsScreen extends ConsumerWidget {
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
+    final l10n = context.l10n;
     return Scaffold(
-      appBar: AppBar(title: const Text('Settings')),
+      appBar: AppBar(title: Text(l10n.settingsTitle)),
       body: Align(
         alignment: Alignment.topCenter,
         child: ConstrainedBox(
           constraints: const BoxConstraints(maxWidth: 720),
           child: ListView(
             padding: const EdgeInsets.only(bottom: 24),
-            children: const [
-              _Header('Account'),
-              _AccountSection(),
-              Divider(height: 24),
-              _Header('Your data'),
-              _DataSection(),
-              Divider(height: 24),
-              _Header('About'),
-              _AboutSection(),
+            children: [
+              _Header(l10n.settingsSectionAccount),
+              const _AccountSection(),
+              const Divider(height: 24),
+              _Header(l10n.settingsSectionData),
+              const _DataSection(),
+              const Divider(height: 24),
+              _Header(l10n.settingsSectionApp),
+              const _LanguageTile(),
+              const Divider(height: 24),
+              _Header(l10n.settingsSectionAbout),
+              const _AboutSection(),
             ],
           ),
         ),
       ),
+    );
+  }
+}
+
+class _LanguageTile extends ConsumerWidget {
+  const _LanguageTile();
+
+  @override
+  Widget build(BuildContext context, WidgetRef ref) {
+    final l10n = context.l10n;
+    final current = ref.watch(appLocaleProvider);
+    return ListTile(
+      key: const Key('settingsLanguage'),
+      leading: const Icon(Icons.language),
+      title: Text(l10n.settingsLanguage),
+      subtitle: Text(current.nativeLabel ?? l10n.settingsLanguageSystem),
+      onTap: () => showLanguagePicker(context),
     );
   }
 }
@@ -91,31 +121,38 @@ class _AccountSection extends ConsumerWidget {
       await ref.read(authControllerProvider.notifier).signInWithGoogle();
     } catch (e) {
       if (context.mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text("Couldn't sign in: $e")));
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text(context.l10n.settingsSignInFailed('$e'))),
+        );
       }
     }
   }
 
   Future<void> _signOut(BuildContext context, WidgetRef ref) async {
     final messenger = ScaffoldMessenger.of(context);
+    final l10n = context.l10n;
     try {
       await ref.read(authControllerProvider.notifier).signOut();
-      messenger.showSnackBar(const SnackBar(content: Text('Signed out.')));
+      messenger.showSnackBar(SnackBar(content: Text(l10n.settingsSignedOut)));
     } catch (e) {
-      messenger.showSnackBar(SnackBar(content: Text("Couldn't sign out: $e")));
+      messenger.showSnackBar(SnackBar(content: Text(l10n.settingsSignOutFailed('$e'))));
     }
   }
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
+    final l10n = context.l10n;
     final user = ref.watch(authStateChangesProvider).valueOrNull;
     if (user == null) {
       return ListTile(
         key: const Key('settingsSignedOut'),
         leading: const Icon(Icons.account_circle_outlined),
-        title: const Text('Not signed in'),
-        subtitle: const Text('Signing in is only for sharing trips. Everything else works without an account.'),
-        trailing: FilledButton.tonal(onPressed: () => _signIn(context, ref), child: const Text('Sign in')),
+        title: Text(l10n.settingsNotSignedInTitle),
+        subtitle: Text(l10n.settingsNotSignedInSubtitle),
+        trailing: FilledButton.tonal(
+          onPressed: () => _signIn(context, ref),
+          child: Text(l10n.settingsSignInButton),
+        ),
       );
     }
     final name = user.displayName;
@@ -125,17 +162,17 @@ class _AccountSection extends ConsumerWidget {
         ListTile(
           key: const Key('settingsSignedIn'),
           leading: const Icon(Icons.account_circle_outlined),
-          title: Text(name ?? email ?? 'Signed in'),
+          title: Text(name ?? email ?? l10n.settingsSignedInFallbackTitle),
           subtitle: Text([
             if (name != null && email != null) email,
-            'Google account, for shared trips',
+            l10n.settingsGoogleAccountSubtitle,
           ].join('\n')),
           isThreeLine: name != null && email != null,
         ),
         ListTile(
           leading: const Icon(Icons.logout),
-          title: const Text('Sign out'),
-          subtitle: const Text("Shared trips sync only while you're signed in. Your library and private trips don't need it."),
+          title: Text(l10n.settingsSignOutTitle),
+          subtitle: Text(l10n.settingsSignOutSubtitle),
           onTap: () => _signOut(context, ref),
         ),
         const _UploadQualityTile(),
@@ -156,7 +193,7 @@ class _UploadQualityTile extends ConsumerWidget {
     return ListTile(
       key: const Key('settingsUploadQuality'),
       leading: const Icon(Icons.high_quality_outlined),
-      title: const Text('Frame upload quality'),
+      title: Text(context.l10n.settingsFrameUploadQualityTitle),
       subtitle: Text('${quality.label}: ${quality.detail}'),
       onTap: () => showDriveUploadQualityPicker(context),
     );
@@ -168,17 +205,15 @@ class _DriveRemovalTile extends ConsumerWidget {
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
+    final l10n = context.l10n;
     final waiting = ref.watch(driveRemovalsWaitingProvider).valueOrNull ?? 0;
     return ListTile(
       key: const Key('settingsDriveRemoval'),
       leading: const Icon(Icons.cloud_off_outlined),
-      title: const Text('Remove shared frames from my Google Drive'),
+      title: Text(l10n.settingsDriveRemoveTitle),
       subtitle: Text([
-        'Deletes every frame Trip Planner put in your Drive; anyone with a link loses it. '
-            "People in your trips lose the frames they haven't downloaded.",
-        if (waiting > 0)
-          '${waiting == 1 ? 'One removal is' : '$waiting removals are'} waiting, and will finish '
-              'the next time Google Drive can be reached.',
+        l10n.settingsDriveRemoveSubtitle,
+        if (waiting > 0) l10n.settingsDriveRemovalsWaiting(waiting),
       ].join('\n\n')),
       isThreeLine: true,
       onTap: () => confirmAndRemoveAllSharedFrames(context, ref),
@@ -190,17 +225,15 @@ class _DataSection extends ConsumerWidget {
   const _DataSection();
 
   Future<void> _clearTiles(BuildContext context, WidgetRef ref, int bytes) async {
+    final l10n = context.l10n;
     final go = await showDialog<bool>(
       context: context,
       builder: (context) => AlertDialog(
-        title: const Text('Clear map tiles?'),
-        content: Text(
-          'Frees ${sizeInSentence(bytes)}. Maps load their tiles again the next time you look at them, '
-          'so they need a connection until then.',
-        ),
+        title: Text(l10n.settingsClearMapTilesDialogTitle),
+        content: Text(l10n.settingsClearMapTilesDialogBody(_localizedSizeInSentence(l10n, bytes))),
         actions: [
-          TextButton(onPressed: () => Navigator.pop(context, false), child: const Text('Cancel')),
-          FilledButton(onPressed: () => Navigator.pop(context, true), child: const Text('Clear')),
+          TextButton(onPressed: () => Navigator.pop(context, false), child: Text(l10n.commonCancel)),
+          FilledButton(onPressed: () => Navigator.pop(context, true), child: Text(l10n.commonClear)),
         ],
       ),
     );
@@ -210,16 +243,15 @@ class _DataSection extends ConsumerWidget {
   }
 
   Future<void> _deleteModel(BuildContext context, WidgetRef ref, int bytes) async {
+    final l10n = context.l10n;
     final go = await showDialog<bool>(
       context: context,
       builder: (context) => AlertDialog(
-        title: const Text('Delete the cutout model?'),
-        content: Text(
-          'Frees ${sizeInSentence(bytes)}. Cut out character downloads it again (about 176 MB) the next time you use it.',
-        ),
+        title: Text(l10n.settingsDeleteModelDialogTitle),
+        content: Text(l10n.settingsDeleteModelDialogBody(_localizedSizeInSentence(l10n, bytes))),
         actions: [
-          TextButton(onPressed: () => Navigator.pop(context, false), child: const Text('Cancel')),
-          FilledButton(onPressed: () => Navigator.pop(context, true), child: const Text('Delete')),
+          TextButton(onPressed: () => Navigator.pop(context, false), child: Text(l10n.commonCancel)),
+          FilledButton(onPressed: () => Navigator.pop(context, true), child: Text(l10n.commonDelete)),
         ],
       ),
     );
@@ -230,52 +262,52 @@ class _DataSection extends ConsumerWidget {
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
+    final l10n = context.l10n;
     final usage = kIsWeb ? null : ref.watch(storageUsageProvider);
     final u = usage?.valueOrNull;
-    String size(int Function(StorageUsage) of) =>
-        usage == null ? '' : (u == null ? (usage.hasError ? "Couldn't measure" : 'Measuring…') : sizeLine(of(u)));
+    String size(int Function(StorageUsage) of) => usage == null
+        ? ''
+        : (u == null ? (usage.hasError ? l10n.settingsStorageError : l10n.settingsStorageMeasuring) : _localizedSizeLine(l10n, of(u)));
     return Column(
       children: [
         ListTile(
           leading: const Icon(Icons.save_alt),
-          title: const Text('Back up to a file'),
-          subtitle: const Text(
-            'Your library with its photos and frames, and your private trips, in one file to keep or send to a new phone.',
-          ),
+          title: Text(l10n.settingsBackupTitle),
+          subtitle: Text(l10n.settingsBackupSubtitle),
           onTap: () => backUpLibrary(context, ref),
         ),
         ListTile(
           leading: const Icon(Icons.restore),
-          title: const Text('Restore from a file'),
-          subtitle: const Text("Adds what's in a backup and isn't on this phone yet. Nothing here is changed."),
+          title: Text(l10n.settingsRestoreTitle),
+          subtitle: Text(l10n.settingsRestoreSubtitle),
           onTap: () => restoreLibrary(context, ref),
         ),
         if (usage != null) ...[
           ListTile(
             key: const Key('settingsYourData'),
             leading: const Icon(Icons.folder_outlined),
-            title: const Text('Your places, trips, photos and frames'),
+            title: Text(l10n.settingsYourDataTitle),
             trailing: Text(size((u) => u.yourData)),
           ),
           ListTile(
             key: const Key('settingsMapTiles'),
             leading: const Icon(Icons.map_outlined),
-            title: const Text('Map tiles'),
-            subtitle: Text('The maps you looked at in the last 14 days, kept for using offline.\n${size((u) => u.mapTiles)}'),
+            title: Text(l10n.settingsMapTilesTitle),
+            subtitle: Text(l10n.settingsMapTilesSubtitle(size((u) => u.mapTiles))),
             trailing: TextButton(
               onPressed: (u == null || u.mapTiles == 0) ? null : () => _clearTiles(context, ref, u.mapTiles),
-              child: const Text('Clear'),
+              child: Text(l10n.commonClear),
             ),
           ),
           if (u != null && u.cutoutModel > 0)
             ListTile(
               key: const Key('settingsCutoutModel'),
               leading: const Icon(Icons.content_cut),
-              title: const Text('Cutout model'),
-              subtitle: Text('For Cut out character, downloaded the first time.\n${sizeLine(u.cutoutModel)}'),
+              title: Text(l10n.settingsCutoutModelTitle),
+              subtitle: Text(l10n.settingsCutoutModelSubtitle(_localizedSizeLine(l10n, u.cutoutModel))),
               trailing: TextButton(
                 onPressed: () => _deleteModel(context, ref, u.cutoutModel),
-                child: const Text('Delete'),
+                child: Text(l10n.commonDelete),
               ),
             ),
         ],
@@ -289,53 +321,54 @@ class _AboutSection extends ConsumerWidget {
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
+    final l10n = context.l10n;
     void open(String url) => ref.read(openLinkProvider)(Uri.parse(url));
     return Column(
       children: [
         ListTile(
           leading: const Icon(Icons.info_outline),
-          title: const Text('Trip Planner'),
-          subtitle: Text('Version $appVersionLabel'),
+          title: Text(l10n.appTitle),
+          subtitle: Text(l10n.settingsVersion(appVersionLabel)),
         ),
         ListTile(
           leading: const Icon(Icons.place_outlined),
-          title: const Text('Spots and frames from Anitabi'),
-          subtitle: const Text('anitabi.cn, shared under CC BY-NC-SA 4.0: free to use, never sold.'),
+          title: Text(l10n.settingsAboutAnitabiTitle),
+          subtitle: Text(l10n.settingsAboutAnitabiSubtitle),
           trailing: const Icon(Icons.open_in_new, size: 18),
           onTap: () => open('https://www.anitabi.cn/'),
         ),
         ListTile(
           leading: const Icon(Icons.map_outlined),
-          title: const Text('Maps from OpenStreetMap'),
-          subtitle: const Text('© OpenStreetMap contributors'),
+          title: Text(l10n.settingsAboutOsmTitle),
+          subtitle: Text(l10n.settingsAboutOsmSubtitle),
           trailing: const Icon(Icons.open_in_new, size: 18),
           onTap: () => open('https://www.openstreetmap.org/copyright'),
         ),
         ListTile(
           leading: const Icon(Icons.search),
-          title: const Text('Anime search from Bangumi'),
-          subtitle: const Text('bgm.tv'),
+          title: Text(l10n.settingsAboutBangumiTitle),
+          subtitle: Text(l10n.settingsAboutBangumiSubtitle),
           trailing: const Icon(Icons.open_in_new, size: 18),
           onTap: () => open('https://bgm.tv/'),
         ),
         ListTile(
           leading: const Icon(Icons.privacy_tip_outlined),
-          title: const Text('Privacy policy'),
+          title: Text(l10n.settingsPrivacyPolicy),
           trailing: const Icon(Icons.open_in_new, size: 18),
           onTap: () => open(privacyPolicyUrl),
         ),
         ListTile(
           leading: const Icon(Icons.code),
-          title: const Text('Source code and releases'),
+          title: Text(l10n.settingsSourceCode),
           trailing: const Icon(Icons.open_in_new, size: 18),
           onTap: () => open(sourceCodeUrl),
         ),
         ListTile(
           leading: const Icon(Icons.description_outlined),
-          title: const Text('Open-source licences'),
+          title: Text(l10n.settingsOpenSourceLicences),
           onTap: () => showLicensePage(
             context: context,
-            applicationName: 'Trip Planner',
+            applicationName: l10n.appTitle,
             applicationVersion: appVersionLabel,
           ),
         ),
