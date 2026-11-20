@@ -48,6 +48,7 @@ Future<void> openAnimeCamera(
   WidgetRef ref, {
   String? placeKey,
   String? tripId,
+  String? stopId,
 }) async {
   if (!animeCameraSupported) return;
   if (placeKey == null) {
@@ -57,14 +58,20 @@ Future<void> openAnimeCamera(
   if (!kIsWeb && Platform.isAndroid) {
     await _shootWithPhoneCamera(context, ref, placeKey: placeKey, tripId: tripId);
   } else {
-    context.push(_inAppCameraLocation(placeKey, tripId));
+    context.push(_inAppCameraLocation(placeKey, tripId, stopId: stopId));
   }
 }
 
-String _inAppCameraLocation(String? placeKey, String? tripId, {String? frameId}) =>
+String _inAppCameraLocation(
+  String? placeKey,
+  String? tripId, {
+  String? stopId,
+  String? frameId,
+}) =>
     Uri(path: '/camera', queryParameters: {
       'place': ?placeKey,
       'trip': ?tripId,
+      'stop': ?stopId,
       'frame': ?frameId,
     }).toString();
 
@@ -257,6 +264,7 @@ Future<void> shootWithFrames(
   WidgetRef ref, {
   required String placeKey,
   String? tripId,
+  String? stopId,
   List<NewReferenceImage> frames = const [],
   int index = 0,
 }) async {
@@ -281,7 +289,8 @@ Future<void> shootWithFrames(
   if (kIsWeb || !Platform.isAndroid) {
     // The in-app camera starts on the frame and offers the place's others.
     final start = reference?.frames[reference.index].imageId;
-    context.push(_inAppCameraLocation(placeKey, tripId, frameId: start));
+    final effectiveStopId = stopId ?? frames.map((f) => f.stopId).nonNulls.firstOrNull;
+    context.push(_inAppCameraLocation(placeKey, tripId, stopId: effectiveStopId, frameId: start));
     return;
   }
   await _shootWith(context, reference, placeKey: placeKey, tripId: tripId);

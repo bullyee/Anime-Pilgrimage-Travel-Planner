@@ -493,7 +493,15 @@ class _StopScreenState extends ConsumerState<StopScreen> {
 
   /// The camera on [frames]' [index], with the stop's other frames to switch to.
   Future<void> _shoot(Stop stop, List<NewReferenceImage> frames, int index) =>
-      shootWithFrames(context, ref, placeKey: stop.placeKey, tripId: _tripId, frames: frames, index: index);
+      shootWithFrames(
+        context,
+        ref,
+        placeKey: stop.placeKey,
+        tripId: _tripId,
+        stopId: stop.id,
+        frames: frames,
+        index: index,
+      );
 
   Future<void> _float(NewReferenceImage frame) async {
     final path = await _framePath(frame);
