@@ -1,0 +1,122 @@
+{
+  "@@locale": "en",
+  "appTitle": "Trip Planner",
+  "@appTitle": {
+    "description": "Application name shown in app switcher and About section."
+  },
+  "navHome": "Home",
+  "navTrips": "Trips",
+  "navLibrary": "Library",
+  "navPhotos": "Photos",
+  "navShoot": "Shoot",
+  "commonCancel": "Cancel",
+  "commonDone": "Done",
+  "commonClear": "Clear",
+  "commonDelete": "Delete",
+  "settingsTitle": "Settings",
+  "settingsSectionApp": "App",
+  "settingsSectionAccount": "Account",
+  "settingsSectionData": "Your data",
+  "settingsSectionAbout": "About",
+  "settingsLanguage": "Language",
+  "settingsLanguageSystem": "System default",
+  "settingsLanguageSystemSubtitle": "Follows your device language; defaults to English for unsupported languages.",
+  "settingsLanguageDialogTitle": "Language",
+  "settingsSignInFailed": "Couldn't sign in: {error}",
+  "@settingsSignInFailed": {
+    "placeholders": {
+      "error": {
+        "type": "String"
+      }
+    }
+  },
+  "settingsSignedOut": "Signed out.",
+  "settingsSignOutFailed": "Couldn't sign out: {error}",
+  "@settingsSignOutFailed": {
+    "placeholders": {
+      "error": {
+        "type": "String"
+      }
+    }
+  },
+  "settingsNotSignedInTitle": "Not signed in",
+  "settingsNotSignedInSubtitle": "Signing in is only for sharing trips. Everything else works without an account.",
+  "settingsSignInButton": "Sign in",
+  "settingsSignedInFallbackTitle": "Signed in",
+  "settingsGoogleAccountSubtitle": "Google account, for shared trips",
+  "settingsSignOutTitle": "Sign out",
+  "settingsSignOutSubtitle": "Shared trips sync only while you're signed in. Your library and private trips don't need it.",
+  "settingsFrameUploadQualityTitle": "Frame upload quality",
+  "settingsDriveRemoveTitle": "Remove shared frames from my Google Drive",
+  "settingsDriveRemoveSubtitle": "Deletes every frame Trip Planner put in your Drive; anyone with a link loses it. People in your trips lose the frames they haven't downloaded.",
+  "settingsDriveRemovalsWaiting": "{count, plural, =1{One removal is waiting, and will finish the next time Google Drive can be reached.} other{{count} removals are waiting, and will finish the next time Google Drive can be reached.}}",
+  "@settingsDriveRemovalsWaiting": {
+    "placeholders": {
+      "count": {
+        "type": "int"
+      }
+    }
+  },
+  "settingsBackupTitle": "Back up to a file",
+  "settingsBackupSubtitle": "Your library with its photos and frames, and your private trips, in one file to keep or send to a new phone.",
+  "settingsRestoreTitle": "Restore from a file",
+  "settingsRestoreSubtitle": "Adds what's in a backup and isn't on this phone yet. Nothing here is changed.",
+  "settingsYourDataTitle": "Your places, trips, photos and frames",
+  "settingsMapTilesTitle": "Map tiles",
+  "settingsMapTilesSubtitle": "The maps you looked at in the last 14 days, kept for using offline.\n{size}",
+  "@settingsMapTilesSubtitle": {
+    "placeholders": {
+      "size": {
+        "type": "String"
+      }
+    }
+  },
+  "settingsCutoutModelTitle": "Cutout model",
+  "settingsCutoutModelSubtitle": "For Cut out character, downloaded the first time.\n{size}",
+  "@settingsCutoutModelSubtitle": {
+    "placeholders": {
+      "size": {
+        "type": "String"
+      }
+    }
+  },
+  "settingsStorageError": "Couldn't measure",
+  "settingsStorageMeasuring": "Measuring…",
+  "settingsSizeUnder1Mb": "Under 1 MB",
+  "settingsSizeLessThan1Mb": "less than 1 MB",
+  "settingsClearMapTilesDialogTitle": "Clear map tiles?",
+  "settingsClearMapTilesDialogBody": "Frees {size}. Maps load their tiles again the next time you look at them, so they need a connection until then.",
+  "@settingsClearMapTilesDialogBody": {
+    "placeholders": {
+      "size": {
+        "type": "String"
+      }
+    }
+  },
+  "settingsDeleteModelDialogTitle": "Delete the cutout model?",
+  "settingsDeleteModelDialogBody": "Frees {size}. Cut out character downloads it again (about 176 MB) the next time you use it.",
+  "@settingsDeleteModelDialogBody": {
+    "placeholders": {
+      "size": {
+        "type": "String"
+      }
+    }
+  },
+  "settingsVersion": "Version {version}",
+  "@settingsVersion": {
+    "placeholders": {
+      "version": {
+        "type": "String"
+      }
+    }
+  },
+  "settingsAboutAnitabiTitle": "Spots and frames from Anitabi",
+  "settingsAboutAnitabiSubtitle": "anitabi.cn, shared under CC BY-NC-SA 4.0: free to use, never sold.",
+  "settingsAboutOsmTitle": "Maps from OpenStreetMap",
+  "settingsAboutOsmSubtitle": "© OpenStreetMap contributors",
+  "settingsAboutBangumiTitle": "Anime search from Bangumi",
+  "settingsAboutBangumiSubtitle": "bgm.tv",
+  "settingsPrivacyPolicy": "Privacy policy",
+  "settingsSourceCode": "Source code and releases",
+  "settingsOpenSourceLicences": "Open-source licences"
+}
