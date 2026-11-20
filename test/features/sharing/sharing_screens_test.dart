@@ -22,6 +22,7 @@ import 'package:trip_planner/features/trip/screens/trip_screen.dart';
 import 'package:trip_planner/features/trip/widgets/trip_card.dart';
 
 import 'fake_sharing_firestore.dart';
+import 'package:trip_planner/features/sharing/widgets/signed_out_trip_notice.dart';
 
 const _token = '8f3c41d2-5b6e-4a7f-9c0d-1e2f3a4b5c6d';
 
@@ -429,6 +430,33 @@ void main() {
       await done(tester);
     });
 
+    testWidgets("signed out, a shared trip still here says so, and Members asks to sign in", (tester) async {
+      // Signing out leaves the trip on the device, but its members are in
+      // Firestore, which only a signed-in member can read.
+      await addTrip(ownerId: 'aki', sharingMode: 'group');
+      sharing.members = [_member('aki', 'Aki', TripMemberRole.owner)];
+      await pump(tester, tripRouter(), userId: guestUserId);
+
+      expect(find.byKey(const Key('signedOutTripStrip')), findsOneWidget);
+      expect(find.text(signedOutTripText), findsOneWidget);
+
+      await tester.tap(find.text('Members'));
+      await tester.pumpAndSettle();
+      expect(find.textContaining("Couldn't load who's in this trip"), findsNothing);
+      expect(find.text(signedOutTripText), findsNWidgets(2));
+      expect(find.widgetWithText(FilledButton, 'Sign in'), findsOneWidget);
+      await done(tester);
+    });
+
+    testWidgets('signed in, a shared trip has no signed-out strip', (tester) async {
+      await addTrip(ownerId: 'aki', sharingMode: 'group');
+      sharing.members = [_member('aki', 'Aki', TripMemberRole.owner), _member('u1', 'Bea', TripMemberRole.editor, minutes: 1)];
+      await pump(tester, tripRouter());
+
+      expect(find.byKey(const Key('signedOutTripStrip')), findsNothing);
+      await done(tester);
+    });
+
     testWidgets('the owner can edit and delete the trip', (tester) async {
       await addTrip();
       await pump(tester, tripRouter());
@@ -554,6 +582,19 @@ void main() {
       await tester.pumpAndSettle();
       expect(find.text('trip t1'), findsOneWidget);
       expect(sharing.calls.where((c) => c.startsWith('join')), isEmpty);
+      await done(tester);
+    });
+
+    testWidgets("signed out, a trip still here from before asks to sign in, not that you're in it", (tester) async {
+      // Joined, then signed out: the trip stayed on the device, but whoever
+      // signs in next may not be in it, and nothing syncs until someone does.
+      await addTrip(ownerId: 'aki', sharingMode: 'group');
+      sharing.preview = _invite();
+      await pump(tester, joinRouter('/join?token=$_token'), userId: guestUserId);
+
+      expect(find.text("You're already in this trip"), findsNothing);
+      expect(find.text('Sign in to join Kansai with friends'), findsOneWidget);
+      expect(find.text('Sign in with Google'), findsOneWidget);
       await done(tester);
     });
 
