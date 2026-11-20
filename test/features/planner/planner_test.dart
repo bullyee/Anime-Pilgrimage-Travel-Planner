@@ -1,4 +1,5 @@
 import 'package:drift/native.dart';
+import 'package:flutter/foundation.dart' show debugDefaultTargetPlatformOverride;
 import 'package:flutter/gestures.dart' show PointerDeviceKind;
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart' show LogicalKeyboardKey;
@@ -559,6 +560,39 @@ void main() {
       expect(tester.getTopLeft(find.text('DAY 1')).dx, inInclusiveRange(0, 250));
 
       await disposeApp(tester);
+    });
+
+    testWidgets('hides the day switcher bar on phones while still paging on peeking tap, and keeps it on narrow desktop',
+        (tester) async {
+      tester.view.physicalSize = const Size(1080, 2400);
+      tester.view.devicePixelRatio = 3; // 360x800 logical phone viewport
+      addTearDown(tester.view.reset);
+      final tripId = await createDesktopMultiDayTrip();
+
+      await pump(tester, tripId);
+      expect(find.byTooltip('Previous day'), findsNothing);
+      expect(find.byTooltip('Next day'), findsNothing);
+      expect(tester.getTopLeft(find.text('DAY 1')).dx, inInclusiveRange(0, 80));
+
+      // Tapping the peeking right edge still switches to Day 2 on phones.
+      await tester.tapAt(const Offset(350, 420));
+      await tester.pumpAndSettle();
+      expect(tester.getTopLeft(find.text('DAY 2')).dx, inInclusiveRange(0, 80));
+
+      await disposeApp(tester);
+
+      // Narrow desktop browser window (< 600dp wide) keeps the switcher bar.
+      tester.view.physicalSize = const Size(480, 800);
+      tester.view.devicePixelRatio = 1;
+      debugDefaultTargetPlatformOverride = TargetPlatform.windows;
+      try {
+        await pump(tester, tripId);
+        expect(find.byTooltip('Previous day'), findsOneWidget);
+        expect(find.byTooltip('Next day'), findsOneWidget);
+        await disposeApp(tester);
+      } finally {
+        debugDefaultTargetPlatformOverride = null;
+      }
     });
   });
 

@@ -383,6 +383,11 @@ class _DayPlannerState extends ConsumerState<DayPlanner> {
     );
     final pageCount = view.days.length + (widget.editing ? 2 : 1);
     final currentPage = _page.clamp(0, pageCount - 1);
+    final platform = Theme.of(context).platform;
+    final isDesktopPlatform = platform == TargetPlatform.macOS ||
+        platform == TargetPlatform.windows ||
+        platform == TargetPlatform.linux;
+    final showSwitcherBar = isDesktopPlatform || MediaQuery.sizeOf(context).width >= 600;
     final baseScroll = ScrollConfiguration.of(context);
     final desktopScroll = baseScroll.copyWith(
       dragDevices: {...baseScroll.dragDevices, PointerDeviceKind.mouse},
@@ -404,13 +409,14 @@ class _DayPlannerState extends ConsumerState<DayPlanner> {
           behavior: desktopScroll,
           child: Column(
             children: [
-              _DaySwitcherBar(
-                view: view,
-                editing: widget.editing,
-                currentPage: currentPage,
-                pageCount: pageCount,
-                onSelectPage: (i) => _goToPage(i, pageCount),
-              ),
+              if (showSwitcherBar)
+                _DaySwitcherBar(
+                  view: view,
+                  editing: widget.editing,
+                  currentPage: currentPage,
+                  pageCount: pageCount,
+                  onSelectPage: (i) => _goToPage(i, pageCount),
+                ),
               Expanded(
                 child: Stack(
                   children: [
@@ -440,7 +446,8 @@ class _DayPlannerState extends ConsumerState<DayPlanner> {
                             onToggleGroup: _toggleGroup,
                           );
                         }
-                        final padded = Padding(padding: const EdgeInsets.fromLTRB(5, 8, 5, 16), child: page);
+                        final padded =
+                            Padding(padding: EdgeInsets.fromLTRB(5, showSwitcherBar ? 8 : 12, 5, 16), child: page);
                         if (i == currentPage) return padded;
                         return ListenableBuilder(
                           listenable: _drag,
