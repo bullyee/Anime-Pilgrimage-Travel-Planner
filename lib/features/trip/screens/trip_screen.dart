@@ -65,6 +65,8 @@ class _TripScreenState extends ConsumerState<TripScreen> with SingleTickerProvid
   }
 
   void _onTabChanged() {
+    // Leaving Places disposes it, so it comes back as the list.
+    if (_tabs.index != TripTab.places.index) _placesMap = false;
     if (!_tabs.indexIsChanging) setState(() {});
   }
 
