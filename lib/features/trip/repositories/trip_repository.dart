@@ -89,6 +89,18 @@ abstract class TripRepository {
   /// trip with their stops gone.
   Future<void> foldStopsIntoPlace({required String keepId, required List<String> otherIds, required String name});
 
+  /// Sets where the frames [frameIds] are shot from, a spot of a place:
+  /// their position ([lat] with [lng]) and/or their [note], each left alone
+  /// when absent. Only frames of the trip's live stops change; the
+  /// library's stay the library's. Their stops are marked for sync, so the
+  /// `frameShots` map goes up with them, and the change is logged.
+  Future<void> setFrameShots({
+    required List<String> frameIds,
+    Value<double?> lat = const Value.absent(),
+    Value<double?> lng = const Value.absent(),
+    Value<String?> note = const Value.absent(),
+  });
+
   // Stop Labels & Reference Images
   Future<List<Label>> getLabelsForStop(String stopId);
   Stream<List<Label>> watchLabelsForStop(String stopId);
@@ -823,6 +835,35 @@ class DriftTripRepository implements TripRepository {
   @override
   Future<void> foldStopsIntoPlace({required String keepId, required List<String> otherIds, required String name}) =>
       _merge(keepId: keepId, otherIds: otherIds, place: name.trim());
+
+  @override
+  Future<void> setFrameShots({
+    required List<String> frameIds,
+    Value<double?> lat = const Value.absent(),
+    Value<double?> lng = const Value.absent(),
+    Value<String?> note = const Value.absent(),
+  }) async {
+    if (frameIds.isEmpty || (!lat.present && !lng.present && !note.present)) return;
+    final now = _now();
+    await _db.transaction(() async {
+      final frames = await (_db.select(_db.newReferenceImages)..where((f) => f.id.isIn(frameIds) & f.stopId.isNotNull())).get();
+      final stopIds = {for (final f in frames) f.stopId!};
+      final stops = await (_db.select(_db.stops)..where((s) => s.id.isIn(stopIds) & s.deletedAt.isNull())).get();
+      if (stops.isEmpty) return;
+      final live = {for (final s in stops) s.id};
+      final ids = [for (final f in frames) if (live.contains(f.stopId)) f.id];
+      await (_db.update(_db.newReferenceImages)..where((f) => f.id.isIn(ids))).write(
+        NewReferenceImagesCompanion(lat: lat, lng: lng, note: note),
+      );
+      for (final stop in stops) {
+        await (_db.update(_db.stops)..where((s) => s.id.equals(stop.id))).write(
+          StopsCompanion(updatedAt: Value(now), updatedBy: Value(_currentUserId), syncStatus: const Value(1)),
+        );
+        final what = lat.present || lng.present ? 'moved a spot of ${stop.name}' : 'renamed a spot of ${stop.name}';
+        await _log(stop.tripId, TripActivityAction.updateStop, 'stop', stop.id, what);
+      }
+    });
+  }
 
   /// [mergeStops], or with a [place] name [foldStopsIntoPlace].
   Future<void> _merge({required String keepId, required List<String> otherIds, String? place}) async {

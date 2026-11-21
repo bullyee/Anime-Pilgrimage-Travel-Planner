@@ -17,6 +17,10 @@ import '../repositories/trip_repository.dart';
 /// and with it the rest of the trip's upload.
 const maxTripNoteLength = 2000;
 
+/// The longest note of a spot (a frame's `note`), counted the same way; the
+/// rules refuse a longer one in `frameShots`.
+const maxFrameNoteLength = 100;
+
 /// [base] numbered so it differs from [taken]: "Uji Bridge (2)", then "(3)".
 String numberedName(String base, Set<String> taken) {
   var n = 2;
@@ -188,6 +192,28 @@ class TripStopsController extends Notifier<AsyncValue<void>> {
       return Future.value(const Failure('Only frames attached to this stop can be removed here.'));
     }
     return _run(() => ref.read(placeRepositoryProvider).deleteReferenceImage(frame.id, expectedStopId: stopId));
+  }
+
+  /// Moves a spot of a place: every one of [frames] is shot from ([lat],
+  /// [lng]) now. Frames only the library has stay as they are.
+  Future<AppResult<void>> setFrameShot(List<NewReferenceImage> frames, {required double lat, required double lng}) =>
+      _run(() => ref.read(tripRepositoryProvider).setFrameShots(
+            frameIds: [for (final f in frames) f.id],
+            lat: Value(lat),
+            lng: Value(lng),
+          ));
+
+  /// Names a spot of a place ("三の間"): the note of every one of [frames].
+  /// An empty note takes it off.
+  Future<AppResult<void>> setFrameNote(List<NewReferenceImage> frames, String note) {
+    final trimmed = note.trim();
+    if (trimmed.length > maxFrameNoteLength) {
+      return Future.value(const Failure('A spot note can be at most $maxFrameNoteLength characters.'));
+    }
+    return _run(() => ref.read(tripRepositoryProvider).setFrameShots(
+          frameIds: [for (final f in frames) f.id],
+          note: Value(trimmed.isEmpty ? null : trimmed),
+        ));
   }
 
   /// Groups [stopIds] as [name]. Stops in another group move into this one,
