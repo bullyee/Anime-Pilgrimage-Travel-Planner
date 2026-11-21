@@ -59,5 +59,19 @@
   "settingsAboutBangumiSubtitle": "bgm.tv",
   "settingsPrivacyPolicy": "プライバシーポリシー",
   "settingsSourceCode": "ソースコードとリリース",
-  "settingsOpenSourceLicences": "オープンソースライセンス"
+  "settingsOpenSourceLicences": "オープンソースライセンス",
+  "placeTitleFallback": "場所",
+  "placeGone": "この場所は旅程から外れています。",
+  "placeSpotCount": "{count, plural, other{{count} か所}}",
+  "placeShotCount": "撮影済み {count}",
+  "placeFilterAll": "すべて {count}",
+  "placeFilterNotShot": "未撮影 {count}",
+  "placeNearestFirst": "近い順",
+  "placeAllShot": "ここはすべて撮影済みです。",
+  "placeNoSpots": "スポットがありません。",
+  "placeSpotShot": "撮影済み",
+  "placeSpotNotShot": "未撮影",
+  "placeFrameCount": "{count, plural, other{比較画像 {count} 枚}}",
+  "placeFrameNotShotLabel": "比較画像、未撮影。タップして撮影",
+  "placeFrameShotLabel": "この比較画像に合わせて撮った写真"
 }

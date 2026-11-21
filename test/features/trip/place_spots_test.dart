@@ -4,6 +4,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:go_router/go_router.dart';
 import 'package:trip_planner/core/database/database.dart';
+import 'package:trip_planner/core/l10n/l10n.dart';
 import 'package:trip_planner/core/providers/database_provider.dart';
 import 'package:trip_planner/features/auth/providers/auth_provider.dart';
 import 'package:trip_planner/features/library/providers/place_providers.dart';
@@ -108,6 +109,17 @@ void main() {
       expect(spotShot(shown: const [], shot: const {}, photos: const []), isFalse);
       expect(spotShot(shown: [frame('f', path: 'a')], shot: const {}, photos: [photo('p')]), isFalse);
     });
+  });
+
+  test('the place page counts are plurals in every language', () {
+    final en = lookupAppLocalizations(const Locale('en'));
+    expect(en.placeSpotCount(1), '1 spot');
+    expect(en.placeSpotCount(3), '3 spots');
+    expect(en.placeFrameCount(1), '1 frame');
+    final zh = lookupAppLocalizations(const Locale.fromSubtags(languageCode: 'zh', scriptCode: 'Hant'));
+    expect(zh.placeSpotCount(3), '3 個取景點');
+    expect(zh.placeShotCount(2), '已拍 2');
+    expect(lookupAppLocalizations(const Locale('ja')).placeFrameCount(2), '比較画像 2 枚');
   });
 
   group('TripPlaceScreen', () {

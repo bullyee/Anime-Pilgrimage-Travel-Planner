@@ -118,5 +118,59 @@
   "settingsAboutBangumiSubtitle": "bgm.tv",
   "settingsPrivacyPolicy": "Privacy policy",
   "settingsSourceCode": "Source code and releases",
-  "settingsOpenSourceLicences": "Open-source licences"
+  "settingsOpenSourceLicences": "Open-source licences",
+  "placeTitleFallback": "Place",
+  "@placeTitleFallback": {
+    "description": "Title of a trip's place page while its name is unknown."
+  },
+  "placeGone": "This place is no longer in the trip.",
+  "placeSpotCount": "{count, plural, =1{1 spot} other{{count} spots}}",
+  "@placeSpotCount": {
+    "description": "How many spots (shot positions) a place has.",
+    "placeholders": {
+      "count": {
+        "type": "int"
+      }
+    }
+  },
+  "placeShotCount": "{count} shot",
+  "@placeShotCount": {
+    "description": "How many of a place's spots are shot, after the spot count.",
+    "placeholders": {
+      "count": {
+        "type": "int"
+      }
+    }
+  },
+  "placeFilterAll": "All {count}",
+  "@placeFilterAll": {
+    "placeholders": {
+      "count": {
+        "type": "int"
+      }
+    }
+  },
+  "placeFilterNotShot": "Not shot {count}",
+  "@placeFilterNotShot": {
+    "placeholders": {
+      "count": {
+        "type": "int"
+      }
+    }
+  },
+  "placeNearestFirst": "Nearest first",
+  "placeAllShot": "Every spot here is shot.",
+  "placeNoSpots": "No spots.",
+  "placeSpotShot": "Shot",
+  "placeSpotNotShot": "Not shot",
+  "placeFrameCount": "{count, plural, =1{1 frame} other{{count} frames}}",
+  "@placeFrameCount": {
+    "placeholders": {
+      "count": {
+        "type": "int"
+      }
+    }
+  },
+  "placeFrameNotShotLabel": "Frame, not shot. Shoot it",
+  "placeFrameShotLabel": "Your photo of this frame"
 }

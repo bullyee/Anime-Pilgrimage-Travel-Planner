@@ -8,6 +8,7 @@ import 'package:go_router/go_router.dart';
 import 'package:latlong2/latlong.dart';
 
 import '../../../core/database/database.dart';
+import '../../../core/l10n/l10n.dart';
 import '../../../core/utils/platform_media.dart';
 import '../../../shared/map/app_map.dart';
 import '../../../shared/theme/app_theme.dart';
@@ -149,7 +150,8 @@ class _TripPlaceScreenState extends ConsumerState<TripPlaceScreen> with WidgetsB
     final entries = ref.watch(tripStopEntriesProvider(widget.tripId));
     final members = placeEntries(entries.valueOrNull ?? const [], widget.stopId);
     final group = members.isEmpty ? null : stopGroup(members.first.stop);
-    final title = group ?? (members.isEmpty ? 'Place' : members.single.stop.name);
+    final l10n = context.l10n;
+    final title = group ?? (members.isEmpty ? l10n.placeTitleFallback : members.single.stop.name);
 
     Widget scaffold(Widget body, {String? subtitle}) => Scaffold(
           appBar: AppBar(
@@ -167,7 +169,7 @@ class _TripPlaceScreenState extends ConsumerState<TripPlaceScreen> with WidgetsB
         );
 
     if (entries.isLoading && !entries.hasValue) return scaffold(const Center(child: CircularProgressIndicator()));
-    if (members.isEmpty) return scaffold(const Center(child: Text('This place is no longer in the trip.')));
+    if (members.isEmpty) return scaffold(Center(child: Text(l10n.placeGone)));
 
     final spots = [for (final e in members) _spot(e.stop, group)];
     final shotCount = spots.where((s) => s.isShot).length;
@@ -180,7 +182,7 @@ class _TripPlaceScreenState extends ConsumerState<TripPlaceScreen> with WidgetsB
       if (sel != null) shown = [sel, for (final s in shown) if (s != sel) s];
     }
 
-    final subtitle = '${spots.length == 1 ? '1 spot' : '${spots.length} spots'} · $shotCount shot';
+    final subtitle = '${l10n.placeSpotCount(spots.length)} · ${l10n.placeShotCount(shotCount)}';
     return scaffold(
       subtitle: subtitle,
       Column(
@@ -233,26 +235,26 @@ class _TripPlaceScreenState extends ConsumerState<TripPlaceScreen> with WidgetsB
             child: Row(
               children: [
                 ChoiceChip(
-                  label: Text('All ${spots.length}'),
+                  label: Text(l10n.placeFilterAll(spots.length)),
                   selected: !_onlyUnshot,
                   onSelected: (_) => setState(() => _onlyUnshot = false),
                 ),
                 const SizedBox(width: 8),
                 ChoiceChip(
                   key: const Key('placeUnshotChip'),
-                  label: Text('Not shot $unshot'),
+                  label: Text(l10n.placeFilterNotShot(unshot)),
                   selected: _onlyUnshot,
                   onSelected: (_) => setState(() => _onlyUnshot = true),
                 ),
                 const Spacer(),
                 if (pos != null)
-                  Text('Nearest first', style: theme.textTheme.labelSmall?.copyWith(color: theme.colorScheme.onSurfaceVariant)),
+                  Text(l10n.placeNearestFirst, style: theme.textTheme.labelSmall?.copyWith(color: theme.colorScheme.onSurfaceVariant)),
               ],
             ),
           ),
           Expanded(
             child: shown.isEmpty
-                ? Center(child: Text(_onlyUnshot ? 'Every spot here is shot.' : 'No spots.'))
+                ? Center(child: Text(_onlyUnshot ? l10n.placeAllShot : l10n.placeNoSpots))
                 : ListView.separated(
                     padding: const EdgeInsets.fromLTRB(0, 4, 0, 32),
                     itemCount: shown.length,
@@ -293,8 +295,9 @@ class _SpotTile extends StatelessWidget {
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
     final p = theme.trip;
-    final status = spot.isShot ? 'Shot' : 'Not shot';
-    final line = [?distance, status, if (spot.frames.isNotEmpty) spot.frames.length == 1 ? '1 frame' : '${spot.frames.length} frames'].join(' · ');
+    final l10n = context.l10n;
+    final status = spot.isShot ? l10n.placeSpotShot : l10n.placeSpotNotShot;
+    final line = [?distance, status, if (spot.frames.isNotEmpty) l10n.placeFrameCount(spot.frames.length)].join(' · ');
     return Material(
       color: selected ? p.teaSoft : Colors.transparent,
       child: InkWell(
@@ -366,7 +369,7 @@ class _FrameCell extends StatelessWidget {
     final shot = photo;
     return Semantics(
       button: onTap != null,
-      label: shot == null ? 'Frame, not shot. Shoot it' : 'Your photo of this frame',
+      label: shot == null ? context.l10n.placeFrameNotShotLabel : context.l10n.placeFrameShotLabel,
       child: GestureDetector(
         onTap: onTap,
         child: ClipRRect(

@@ -220,4 +220,68 @@ class AppLocalizationsEn extends AppLocalizations {
 
   @override
   String get settingsOpenSourceLicences => 'Open-source licences';
+
+  @override
+  String get placeTitleFallback => 'Place';
+
+  @override
+  String get placeGone => 'This place is no longer in the trip.';
+
+  @override
+  String placeSpotCount(int count) {
+    String _temp0 = intl.Intl.pluralLogic(
+      count,
+      locale: localeName,
+      other: '$count spots',
+      one: '1 spot',
+    );
+    return '$_temp0';
+  }
+
+  @override
+  String placeShotCount(int count) {
+    return '$count shot';
+  }
+
+  @override
+  String placeFilterAll(int count) {
+    return 'All $count';
+  }
+
+  @override
+  String placeFilterNotShot(int count) {
+    return 'Not shot $count';
+  }
+
+  @override
+  String get placeNearestFirst => 'Nearest first';
+
+  @override
+  String get placeAllShot => 'Every spot here is shot.';
+
+  @override
+  String get placeNoSpots => 'No spots.';
+
+  @override
+  String get placeSpotShot => 'Shot';
+
+  @override
+  String get placeSpotNotShot => 'Not shot';
+
+  @override
+  String placeFrameCount(int count) {
+    String _temp0 = intl.Intl.pluralLogic(
+      count,
+      locale: localeName,
+      other: '$count frames',
+      one: '1 frame',
+    );
+    return '$_temp0';
+  }
+
+  @override
+  String get placeFrameNotShotLabel => 'Frame, not shot. Shoot it';
+
+  @override
+  String get placeFrameShotLabel => 'Your photo of this frame';
 }

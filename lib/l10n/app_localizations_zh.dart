@@ -212,6 +212,68 @@ class AppLocalizationsZh extends AppLocalizations {
 
   @override
   String get settingsOpenSourceLicences => '開放原始碼授權條款';
+
+  @override
+  String get placeTitleFallback => '地點';
+
+  @override
+  String get placeGone => '這個地點已不在行程中。';
+
+  @override
+  String placeSpotCount(int count) {
+    String _temp0 = intl.Intl.pluralLogic(
+      count,
+      locale: localeName,
+      other: '$count 個取景點',
+    );
+    return '$_temp0';
+  }
+
+  @override
+  String placeShotCount(int count) {
+    return '已拍 $count';
+  }
+
+  @override
+  String placeFilterAll(int count) {
+    return '全部 $count';
+  }
+
+  @override
+  String placeFilterNotShot(int count) {
+    return '未拍 $count';
+  }
+
+  @override
+  String get placeNearestFirst => '由近到遠';
+
+  @override
+  String get placeAllShot => '這裡的取景點都拍過了。';
+
+  @override
+  String get placeNoSpots => '沒有取景點。';
+
+  @override
+  String get placeSpotShot => '已拍';
+
+  @override
+  String get placeSpotNotShot => '未拍';
+
+  @override
+  String placeFrameCount(int count) {
+    String _temp0 = intl.Intl.pluralLogic(
+      count,
+      locale: localeName,
+      other: '$count 張分鏡',
+    );
+    return '$_temp0';
+  }
+
+  @override
+  String get placeFrameNotShotLabel => '分鏡，尚未拍攝。點一下拍攝';
+
+  @override
+  String get placeFrameShotLabel => '你拍的這張分鏡';
 }
 
 /// The translations for Chinese, using the Han script (`zh_Hant`).
@@ -422,4 +484,66 @@ class AppLocalizationsZhHant extends AppLocalizationsZh {
 
   @override
   String get settingsOpenSourceLicences => '開放原始碼授權條款';
+
+  @override
+  String get placeTitleFallback => '地點';
+
+  @override
+  String get placeGone => '這個地點已不在行程中。';
+
+  @override
+  String placeSpotCount(int count) {
+    String _temp0 = intl.Intl.pluralLogic(
+      count,
+      locale: localeName,
+      other: '$count 個取景點',
+    );
+    return '$_temp0';
+  }
+
+  @override
+  String placeShotCount(int count) {
+    return '已拍 $count';
+  }
+
+  @override
+  String placeFilterAll(int count) {
+    return '全部 $count';
+  }
+
+  @override
+  String placeFilterNotShot(int count) {
+    return '未拍 $count';
+  }
+
+  @override
+  String get placeNearestFirst => '由近到遠';
+
+  @override
+  String get placeAllShot => '這裡的取景點都拍過了。';
+
+  @override
+  String get placeNoSpots => '沒有取景點。';
+
+  @override
+  String get placeSpotShot => '已拍';
+
+  @override
+  String get placeSpotNotShot => '未拍';
+
+  @override
+  String placeFrameCount(int count) {
+    String _temp0 = intl.Intl.pluralLogic(
+      count,
+      locale: localeName,
+      other: '$count 張分鏡',
+    );
+    return '$_temp0';
+  }
+
+  @override
+  String get placeFrameNotShotLabel => '分鏡，尚未拍攝。點一下拍攝';
+
+  @override
+  String get placeFrameShotLabel => '你拍的這張分鏡';
 }

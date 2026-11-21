@@ -460,6 +460,90 @@ abstract class AppLocalizations {
   /// In en, this message translates to:
   /// **'Open-source licences'**
   String get settingsOpenSourceLicences;
+
+  /// Title of a trip's place page while its name is unknown.
+  ///
+  /// In en, this message translates to:
+  /// **'Place'**
+  String get placeTitleFallback;
+
+  /// No description provided for @placeGone.
+  ///
+  /// In en, this message translates to:
+  /// **'This place is no longer in the trip.'**
+  String get placeGone;
+
+  /// How many spots (shot positions) a place has.
+  ///
+  /// In en, this message translates to:
+  /// **'{count, plural, =1{1 spot} other{{count} spots}}'**
+  String placeSpotCount(int count);
+
+  /// How many of a place's spots are shot, after the spot count.
+  ///
+  /// In en, this message translates to:
+  /// **'{count} shot'**
+  String placeShotCount(int count);
+
+  /// No description provided for @placeFilterAll.
+  ///
+  /// In en, this message translates to:
+  /// **'All {count}'**
+  String placeFilterAll(int count);
+
+  /// No description provided for @placeFilterNotShot.
+  ///
+  /// In en, this message translates to:
+  /// **'Not shot {count}'**
+  String placeFilterNotShot(int count);
+
+  /// No description provided for @placeNearestFirst.
+  ///
+  /// In en, this message translates to:
+  /// **'Nearest first'**
+  String get placeNearestFirst;
+
+  /// No description provided for @placeAllShot.
+  ///
+  /// In en, this message translates to:
+  /// **'Every spot here is shot.'**
+  String get placeAllShot;
+
+  /// No description provided for @placeNoSpots.
+  ///
+  /// In en, this message translates to:
+  /// **'No spots.'**
+  String get placeNoSpots;
+
+  /// No description provided for @placeSpotShot.
+  ///
+  /// In en, this message translates to:
+  /// **'Shot'**
+  String get placeSpotShot;
+
+  /// No description provided for @placeSpotNotShot.
+  ///
+  /// In en, this message translates to:
+  /// **'Not shot'**
+  String get placeSpotNotShot;
+
+  /// No description provided for @placeFrameCount.
+  ///
+  /// In en, this message translates to:
+  /// **'{count, plural, =1{1 frame} other{{count} frames}}'**
+  String placeFrameCount(int count);
+
+  /// No description provided for @placeFrameNotShotLabel.
+  ///
+  /// In en, this message translates to:
+  /// **'Frame, not shot. Shoot it'**
+  String get placeFrameNotShotLabel;
+
+  /// No description provided for @placeFrameShotLabel.
+  ///
+  /// In en, this message translates to:
+  /// **'Your photo of this frame'**
+  String get placeFrameShotLabel;
 }
 
 class _AppLocalizationsDelegate

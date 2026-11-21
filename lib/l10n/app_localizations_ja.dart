@@ -215,4 +215,66 @@ class AppLocalizationsJa extends AppLocalizations {
 
   @override
   String get settingsOpenSourceLicences => 'オープンソースライセンス';
+
+  @override
+  String get placeTitleFallback => '場所';
+
+  @override
+  String get placeGone => 'この場所は旅程から外れています。';
+
+  @override
+  String placeSpotCount(int count) {
+    String _temp0 = intl.Intl.pluralLogic(
+      count,
+      locale: localeName,
+      other: '$count か所',
+    );
+    return '$_temp0';
+  }
+
+  @override
+  String placeShotCount(int count) {
+    return '撮影済み $count';
+  }
+
+  @override
+  String placeFilterAll(int count) {
+    return 'すべて $count';
+  }
+
+  @override
+  String placeFilterNotShot(int count) {
+    return '未撮影 $count';
+  }
+
+  @override
+  String get placeNearestFirst => '近い順';
+
+  @override
+  String get placeAllShot => 'ここはすべて撮影済みです。';
+
+  @override
+  String get placeNoSpots => 'スポットがありません。';
+
+  @override
+  String get placeSpotShot => '撮影済み';
+
+  @override
+  String get placeSpotNotShot => '未撮影';
+
+  @override
+  String placeFrameCount(int count) {
+    String _temp0 = intl.Intl.pluralLogic(
+      count,
+      locale: localeName,
+      other: '比較画像 $count 枚',
+    );
+    return '$_temp0';
+  }
+
+  @override
+  String get placeFrameNotShotLabel => '比較画像、未撮影。タップして撮影';
+
+  @override
+  String get placeFrameShotLabel => 'この比較画像に合わせて撮った写真';
 }

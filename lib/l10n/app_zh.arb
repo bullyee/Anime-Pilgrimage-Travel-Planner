@@ -59,5 +59,19 @@
   "settingsAboutBangumiSubtitle": "bgm.tv",
   "settingsPrivacyPolicy": "隱私權政策",
   "settingsSourceCode": "原始碼與版本發布",
-  "settingsOpenSourceLicences": "開放原始碼授權條款"
+  "settingsOpenSourceLicences": "開放原始碼授權條款",
+  "placeTitleFallback": "地點",
+  "placeGone": "這個地點已不在行程中。",
+  "placeSpotCount": "{count, plural, other{{count} 個取景點}}",
+  "placeShotCount": "已拍 {count}",
+  "placeFilterAll": "全部 {count}",
+  "placeFilterNotShot": "未拍 {count}",
+  "placeNearestFirst": "由近到遠",
+  "placeAllShot": "這裡的取景點都拍過了。",
+  "placeNoSpots": "沒有取景點。",
+  "placeSpotShot": "已拍",
+  "placeSpotNotShot": "未拍",
+  "placeFrameCount": "{count, plural, other{{count} 張分鏡}}",
+  "placeFrameNotShotLabel": "分鏡，尚未拍攝。點一下拍攝",
+  "placeFrameShotLabel": "你拍的這張分鏡"
 }
