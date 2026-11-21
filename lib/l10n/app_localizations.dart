@@ -550,6 +550,54 @@ abstract class AppLocalizations {
   /// In en, this message translates to:
   /// **'Details'**
   String get placeDetails;
+
+  /// No description provided for @placeFoldBannerText.
+  ///
+  /// In en, this message translates to:
+  /// **'A group of stops is one place now, its stops the spots inside it.'**
+  String get placeFoldBannerText;
+
+  /// No description provided for @placeFoldBannerAction.
+  ///
+  /// In en, this message translates to:
+  /// **'Turn into places'**
+  String get placeFoldBannerAction;
+
+  /// No description provided for @placeFoldConfirmTitle.
+  ///
+  /// In en, this message translates to:
+  /// **'Turn groups into places?'**
+  String get placeFoldConfirmTitle;
+
+  /// No description provided for @placeFoldConfirmBody.
+  ///
+  /// In en, this message translates to:
+  /// **'Each group becomes one stop with the group\'s name. Its stops\' frames, days and labels move onto it, and each frame keeps where it was shot from. Everyone in the trip sees the change.'**
+  String get placeFoldConfirmBody;
+
+  /// No description provided for @placeFoldDone.
+  ///
+  /// In en, this message translates to:
+  /// **'{count, plural, =1{Made 1 place.} other{Made {count} places.}}'**
+  String placeFoldDone(int count);
+
+  /// No description provided for @placeFoldNeedsSignIn.
+  ///
+  /// In en, this message translates to:
+  /// **'Sign in to change a shared trip.'**
+  String get placeFoldNeedsSignIn;
+
+  /// No description provided for @placeFoldNeedsSync.
+  ///
+  /// In en, this message translates to:
+  /// **'Some changes haven\'t synced yet. Try again once they have.'**
+  String get placeFoldNeedsSync;
+
+  /// No description provided for @placeFoldFailed.
+  ///
+  /// In en, this message translates to:
+  /// **'Couldn\'t turn the groups into places: {error}'**
+  String placeFoldFailed(String error);
 }
 
 class _AppLocalizationsDelegate

@@ -13,6 +13,7 @@ import '../../sharing/widgets/invite_sheet.dart';
 import '../controllers/trips_controller.dart';
 import '../providers/trip_providers.dart';
 import '../services/trip_route_export_service.dart';
+import '../widgets/place_fold_banner.dart';
 import '../widgets/trip_arrival_banner.dart';
 import '../widgets/trip_card.dart';
 import '../widgets/trip_form_sheet.dart';
@@ -190,6 +191,7 @@ class _TripScreenState extends ConsumerState<TripScreen> with SingleTickerProvid
         children: [
           if (shared && ref.watch(signedOutProvider)) const SignedOutTripStrip(),
           if (shared) TripArrivalBanner(trip: trip),
+          PlaceFoldBanner(trip: trip),
           Expanded(
             child: TabBarView(
               controller: _tabs,

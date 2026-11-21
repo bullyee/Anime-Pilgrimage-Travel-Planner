@@ -74,5 +74,13 @@
   "placeFrameCount": "{count, plural, other{比較画像 {count} 枚}}",
   "placeFrameNotShotLabel": "比較画像、未撮影。タップして撮影",
   "placeFrameShotLabel": "この比較画像に合わせて撮った写真",
-  "placeDetails": "詳細"
+  "placeDetails": "詳細",
+  "placeFoldBannerText": "グループは一つの場所になり、中の各スポットは撮影位置になりました。",
+  "placeFoldBannerAction": "場所に変換",
+  "placeFoldConfirmTitle": "グループを場所に変換しますか？",
+  "placeFoldConfirmBody": "各グループはグループ名の一つのスポットにまとまります。中のスポットの比較画像・日程・ラベルはそこへ移り、比較画像ごとに撮影位置が残ります。旅程のメンバー全員に反映されます。",
+  "placeFoldDone": "{count, plural, other{{count} か所の場所にまとめました。}}",
+  "placeFoldNeedsSignIn": "共有旅程を変更するにはログインしてください。",
+  "placeFoldNeedsSync": "未同期の変更があります。同期が終わってからもう一度お試しください。",
+  "placeFoldFailed": "グループを場所に変換できませんでした：{error}"
 }

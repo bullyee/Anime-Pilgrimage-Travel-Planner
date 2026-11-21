@@ -277,6 +277,40 @@ class AppLocalizationsZh extends AppLocalizations {
 
   @override
   String get placeDetails => '詳細資料';
+
+  @override
+  String get placeFoldBannerText => '一組站點現在就是一個地點，組內的站點成為其中的取景點。';
+
+  @override
+  String get placeFoldBannerAction => '轉為地點';
+
+  @override
+  String get placeFoldConfirmTitle => '要將群組轉為地點嗎？';
+
+  @override
+  String get placeFoldConfirmBody =>
+      '每個群組會合併成一個以群組命名的站點，組內站點的分鏡、日程與標籤都會移到這個站點，每張分鏡也會記住原本的拍攝位置。行程中的所有成員都會看到這項變更。';
+
+  @override
+  String placeFoldDone(int count) {
+    String _temp0 = intl.Intl.pluralLogic(
+      count,
+      locale: localeName,
+      other: '已建立 $count 個地點。',
+    );
+    return '$_temp0';
+  }
+
+  @override
+  String get placeFoldNeedsSignIn => '請先登入才能修改共享行程。';
+
+  @override
+  String get placeFoldNeedsSync => '還有變更尚未同步，請等同步完成後再試一次。';
+
+  @override
+  String placeFoldFailed(String error) {
+    return '無法將群組轉為地點：$error';
+  }
 }
 
 /// The translations for Chinese, using the Han script (`zh_Hant`).
@@ -552,4 +586,38 @@ class AppLocalizationsZhHant extends AppLocalizationsZh {
 
   @override
   String get placeDetails => '詳細資料';
+
+  @override
+  String get placeFoldBannerText => '一組站點現在就是一個地點，組內的站點成為其中的取景點。';
+
+  @override
+  String get placeFoldBannerAction => '轉為地點';
+
+  @override
+  String get placeFoldConfirmTitle => '要將群組轉為地點嗎？';
+
+  @override
+  String get placeFoldConfirmBody =>
+      '每個群組會合併成一個以群組命名的站點，組內站點的分鏡、日程與標籤都會移到這個站點，每張分鏡也會記住原本的拍攝位置。行程中的所有成員都會看到這項變更。';
+
+  @override
+  String placeFoldDone(int count) {
+    String _temp0 = intl.Intl.pluralLogic(
+      count,
+      locale: localeName,
+      other: '已建立 $count 個地點。',
+    );
+    return '$_temp0';
+  }
+
+  @override
+  String get placeFoldNeedsSignIn => '請先登入才能修改共享行程。';
+
+  @override
+  String get placeFoldNeedsSync => '還有變更尚未同步，請等同步完成後再試一次。';
+
+  @override
+  String placeFoldFailed(String error) {
+    return '無法將群組轉為地點：$error';
+  }
 }

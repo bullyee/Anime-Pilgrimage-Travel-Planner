@@ -173,5 +173,27 @@
   },
   "placeFrameNotShotLabel": "Frame, not shot. Shoot it",
   "placeFrameShotLabel": "Your photo of this frame",
-  "placeDetails": "Details"
+  "placeDetails": "Details",
+  "placeFoldBannerText": "A group of stops is one place now, its stops the spots inside it.",
+  "placeFoldBannerAction": "Turn into places",
+  "placeFoldConfirmTitle": "Turn groups into places?",
+  "placeFoldConfirmBody": "Each group becomes one stop with the group's name. Its stops' frames, days and labels move onto it, and each frame keeps where it was shot from. Everyone in the trip sees the change.",
+  "placeFoldDone": "{count, plural, =1{Made 1 place.} other{Made {count} places.}}",
+  "@placeFoldDone": {
+    "placeholders": {
+      "count": {
+        "type": "int"
+      }
+    }
+  },
+  "placeFoldNeedsSignIn": "Sign in to change a shared trip.",
+  "placeFoldNeedsSync": "Some changes haven't synced yet. Try again once they have.",
+  "placeFoldFailed": "Couldn't turn the groups into places: {error}",
+  "@placeFoldFailed": {
+    "placeholders": {
+      "error": {
+        "type": "String"
+      }
+    }
+  }
 }

@@ -74,5 +74,13 @@
   "placeFrameCount": "{count, plural, other{{count} 張分鏡}}",
   "placeFrameNotShotLabel": "分鏡，尚未拍攝。點一下拍攝",
   "placeFrameShotLabel": "你拍的這張分鏡",
-  "placeDetails": "詳細資料"
+  "placeDetails": "詳細資料",
+  "placeFoldBannerText": "一組站點現在就是一個地點，組內的站點成為其中的取景點。",
+  "placeFoldBannerAction": "轉為地點",
+  "placeFoldConfirmTitle": "要將群組轉為地點嗎？",
+  "placeFoldConfirmBody": "每個群組會合併成一個以群組命名的站點，組內站點的分鏡、日程與標籤都會移到這個站點，每張分鏡也會記住原本的拍攝位置。行程中的所有成員都會看到這項變更。",
+  "placeFoldDone": "{count, plural, other{已建立 {count} 個地點。}}",
+  "placeFoldNeedsSignIn": "請先登入才能修改共享行程。",
+  "placeFoldNeedsSync": "還有變更尚未同步，請等同步完成後再試一次。",
+  "placeFoldFailed": "無法將群組轉為地點：{error}"
 }

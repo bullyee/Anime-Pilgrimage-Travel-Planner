@@ -287,4 +287,41 @@ class AppLocalizationsEn extends AppLocalizations {
 
   @override
   String get placeDetails => 'Details';
+
+  @override
+  String get placeFoldBannerText =>
+      'A group of stops is one place now, its stops the spots inside it.';
+
+  @override
+  String get placeFoldBannerAction => 'Turn into places';
+
+  @override
+  String get placeFoldConfirmTitle => 'Turn groups into places?';
+
+  @override
+  String get placeFoldConfirmBody =>
+      'Each group becomes one stop with the group\'s name. Its stops\' frames, days and labels move onto it, and each frame keeps where it was shot from. Everyone in the trip sees the change.';
+
+  @override
+  String placeFoldDone(int count) {
+    String _temp0 = intl.Intl.pluralLogic(
+      count,
+      locale: localeName,
+      other: 'Made $count places.',
+      one: 'Made 1 place.',
+    );
+    return '$_temp0';
+  }
+
+  @override
+  String get placeFoldNeedsSignIn => 'Sign in to change a shared trip.';
+
+  @override
+  String get placeFoldNeedsSync =>
+      'Some changes haven\'t synced yet. Try again once they have.';
+
+  @override
+  String placeFoldFailed(String error) {
+    return 'Couldn\'t turn the groups into places: $error';
+  }
 }

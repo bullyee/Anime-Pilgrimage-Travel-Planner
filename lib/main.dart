@@ -15,6 +15,7 @@ import 'features/sync/providers/drive_cleanup_providers.dart';
 import 'features/sync/providers/frame_transfer_providers.dart';
 import 'features/sync/providers/sync_v2_providers.dart';
 import 'features/sync/widgets/frame_transfer_widgets.dart';
+import 'features/trip/providers/trip_place_providers.dart';
 import 'shared/theme/app_theme.dart';
 // Added for custom error monitoring
 import 'core/utils/app_logger.dart';
@@ -92,6 +93,9 @@ class TripPlannerApp extends ConsumerWidget {
     // Takes Drive uploads back when a trip is deleted, unshared or left, or a
     // stop or frame is removed (and retries removals that had to wait).
     if (!kIsWeb) ref.watch(driveCleanupRunnerProvider);
+    // A private trip's groups of stops become places once (shared trips
+    // offer it on the trip's page).
+    if (!kIsWeb) ref.watch(placeFoldRunnerProvider);
 
     return MaterialApp.router(
       onGenerateTitle: (context) => context.l10n.appTitle,

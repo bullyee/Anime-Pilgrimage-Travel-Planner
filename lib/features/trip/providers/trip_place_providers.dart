@@ -1,8 +1,11 @@
 import 'package:drift/drift.dart';
+import 'package:flutter/foundation.dart' show debugPrint, kIsWeb;
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../../core/database/database.dart';
 import '../../../core/providers/database_provider.dart';
+import '../services/place_fold_service.dart';
+import 'trip_providers.dart';
 
 // A trip's places see the whole trip's frames and photos at once: a place is
 // one stop, but its frames may have come from stops folded into it, and the
@@ -54,4 +57,25 @@ final tripPhotosProvider = StreamProvider.autoDispose.family<List<Photo>, String
       )
       .watch()
       .map((rows) => [for (final row in rows) db.photos.map(row.data)]);
+});
+
+final placeFoldServiceProvider = Provider<PlaceFoldService>(
+  (ref) => PlaceFoldService(ref.watch(databaseProvider), ref.watch(tripRepositoryProvider)),
+);
+
+final placeFoldStoreProvider = Provider<PlaceFoldStore>(
+  (ref) => kIsWeb ? InMemoryPlaceFoldStore() : FilePlaceFoldStore(),
+);
+
+/// Folds the groups of the private trips there were when this version first
+/// ran, once ([PlaceFoldService.foldPrivateTripsOnce]). Not on the web, which
+/// keeps no record of having done it; the trip's banner offers it there.
+final placeFoldRunnerProvider = FutureProvider<int>((ref) async {
+  if (kIsWeb) return 0;
+  try {
+    return await ref.read(placeFoldServiceProvider).foldPrivateTripsOnce(ref.read(placeFoldStoreProvider));
+  } catch (e, stack) {
+    debugPrint('[PlaceFold] $e\n$stack');
+    return 0;
+  }
 });

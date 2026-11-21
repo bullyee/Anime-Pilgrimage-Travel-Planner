@@ -4,6 +4,7 @@ import '../../../core/database/database.dart';
 import '../../../core/utils/fractional_index.dart';
 import '../../../core/utils/schedule_logic.dart';
 import '../../library/repositories/place_repository.dart';
+import '../models/stop_group.dart';
 import '../services/trip_activity_log.dart';
 
 /// The trip note of stops merged into one: [kept]'s, then each other one
@@ -72,8 +73,21 @@ abstract class TripRepository {
 
   /// Merges [otherIds] into [keepId], stops of one trip for the same spot.
   /// The kept stop keeps its name and facts, and takes on the others' notes,
-  /// labels, frames, group and days; the others are then removed.
+  /// labels, frames, group and days; the others are then removed. The
+  /// others' frames become spots of the kept stop: each takes the position
+  /// and short name of the stop it came from, unless it has its own.
   Future<void> mergeStops({required String keepId, required List<String> otherIds});
+
+  /// Turns a group of stops into one place named [name]: [keepId] stays,
+  /// renamed to [name] and in no group, and takes on [otherIds]' labels,
+  /// frames and days as [mergeStops] does, but not their trip notes (a
+  /// member's note names its spot, so it goes onto its frames instead).
+  /// Every member's frames, the kept stop's too, take the position and
+  /// short name ([spotLabel]) of the stop they came from unless they have
+  /// their own, and the library's frames of the members are copied onto the
+  /// kept stop with theirs, since the library places stop showing in the
+  /// trip with their stops gone.
+  Future<void> foldStopsIntoPlace({required String keepId, required List<String> otherIds, required String name});
 
   // Stop Labels & Reference Images
   Future<List<Label>> getLabelsForStop(String stopId);
@@ -773,13 +787,16 @@ class DriftTripRepository implements TripRepository {
   @override
   Future<void> deleteStop(String stopId) => _deleteStop(stopId);
 
-  Future<void> _deleteStop(String stopId, {bool log = true}) async {
+  /// Deletes [stopId] and its days; [mergedInto] names the stop a merge
+  /// moved it into, which the other members' phones follow.
+  Future<void> _deleteStop(String stopId, {bool log = true, String? mergedInto}) async {
     final now = _now();
     await _db.transaction(() async {
       final stop = await getStop(stopId);
       await (_db.update(_db.stops)..where((tbl) => tbl.id.equals(stopId))).write(
         StopsCompanion(
           deletedAt: Value(now),
+          mergedInto: Value(mergedInto),
           updatedAt: Value(now),
           updatedBy: Value(_currentUserId),
           syncStatus: const Value(1),
@@ -800,7 +817,15 @@ class DriftTripRepository implements TripRepository {
   }
 
   @override
-  Future<void> mergeStops({required String keepId, required List<String> otherIds}) async {
+  Future<void> mergeStops({required String keepId, required List<String> otherIds}) =>
+      _merge(keepId: keepId, otherIds: otherIds);
+
+  @override
+  Future<void> foldStopsIntoPlace({required String keepId, required List<String> otherIds, required String name}) =>
+      _merge(keepId: keepId, otherIds: otherIds, place: name.trim());
+
+  /// [mergeStops], or with a [place] name [foldStopsIntoPlace].
+  Future<void> _merge({required String keepId, required List<String> otherIds, String? place}) async {
     await _db.transaction(() async {
       final kept = await getStop(keepId);
       if (kept == null || kept.deletedAt != null) throw StateError('The stop to keep is gone.');
@@ -809,13 +834,16 @@ class DriftTripRepository implements TripRepository {
           if (id != keepId)
             if (await getStop(id) case final s? when s.deletedAt == null && s.tripId == kept.tripId) s,
       ];
-      if (others.isEmpty) return;
+      final folding = place != null && place.isNotEmpty;
+      if (others.isEmpty && !folding) return;
 
       String? clean(String? s) => s == null || s.trim().isEmpty ? null : s.trim();
       var area = clean(kept.area);
       for (final other in others) {
         area ??= clean(other.area);
       }
+      // The name a member's spots are told apart from: the group's.
+      final group = folding ? place : area;
 
       // Labels.
       final otherIdList = [for (final o in others) o.id];
@@ -824,19 +852,57 @@ class DriftTripRepository implements TripRepository {
         await _db.into(_db.stopLabels).insertOnConflictUpdate(StopLabelsCompanion.insert(stopId: keepId, labelId: row.labelId));
       }
 
-      // Frames: one that shows a file the kept stop already has goes.
-      final files = {
-        for (final f in await getReferenceImagesForStop(keepId)) ?(f.localPath ?? f.remoteUrl),
+      // Frames: one that shows a file the kept stop already has goes, and
+      // the user's photos of it count for the one that stays. The rest move
+      // to the kept stop as its spots.
+      final keptFrames = await getReferenceImagesForStop(keepId);
+      final byFile = <String, String>{
+        for (final f in keptFrames)
+          if (f.localPath ?? f.remoteUrl case final file?) file: f.id,
       };
+      if (folding) {
+        for (final frame in keptFrames) {
+          await (_db.update(_db.newReferenceImages)..where((t) => t.id.equals(frame.id))).write(frameAsSpotOf(frame, kept, group));
+        }
+      }
       for (final other in others) {
         for (final frame in await getReferenceImagesForStop(other.id)) {
           final file = frame.localPath ?? frame.remoteUrl;
-          if (file != null && !files.add(file)) {
+          final same = file == null ? null : byFile[file];
+          if (same != null) {
+            await (_db.update(_db.photos)..where((t) => t.referenceImageId.equals(frame.id)))
+                .write(PhotosCompanion(referenceImageId: Value(same)));
             await (_db.delete(_db.newReferenceImages)..where((t) => t.id.equals(frame.id))).go();
           } else {
+            if (file != null) byFile[file] = frame.id;
             await (_db.update(_db.newReferenceImages)..where((t) => t.id.equals(frame.id)))
-                .write(NewReferenceImagesCompanion(stopId: Value(keepId)));
+                .write(frameAsSpotOf(frame, other, group).copyWith(stopId: Value(keepId)));
           }
+        }
+      }
+      // The library's frames of a stop show in the trip only through it, so
+      // those of a stop that goes (and, folding, the kept stop's too, to say
+      // where they're shot from) are copied onto the kept stop.
+      for (final member in [if (folding) kept, ...others]) {
+        if (member.placeKey.isEmpty) continue;
+        final library = await (_db.select(_db.newReferenceImages)
+              ..where((t) => t.placeKey.equals(member.placeKey) & t.stopId.isNull())
+              ..orderBy([(t) => OrderingTerm(expression: t.createdAt), (t) => OrderingTerm(expression: t.id)]))
+            .get();
+        for (final frame in library) {
+          final file = frame.localPath ?? frame.remoteUrl;
+          if (file == null || byFile.containsKey(file)) continue;
+          final id = _uuid.v4();
+          byFile[file] = id;
+          await _db.into(_db.newReferenceImages).insert(frame.toCompanion(true).copyWith(
+                id: Value(id),
+                placeKey: const Value(null),
+                stopId: Value(keepId),
+                lat: Value(frame.lat ?? member.lat),
+                lng: Value(frame.lng ?? member.lng),
+                note: Value(clean(frame.note) ?? spotLabel(member, group)),
+                createdAt: Value(DateTime.now()),
+              ));
         }
       }
 
@@ -871,17 +937,22 @@ class DriftTripRepository implements TripRepository {
 
       // The kept stop is edited, so it syncs again with what it took on.
       await (_db.update(_db.stops)..where((t) => t.id.equals(keepId))).write(StopsCompanion(
-        note: Value(mergedStopNote(kept.note, [for (final o in others) o.note])),
-        area: Value(area),
+        name: folding ? Value(place) : const Value.absent(),
+        note: folding ? const Value.absent() : Value(mergedStopNote(kept.note, [for (final o in others) o.note])),
+        area: Value(folding ? null : area),
         updatedAt: Value(now),
         updatedBy: Value(_currentUserId),
         syncStatus: const Value(1),
       ));
       for (final other in others) {
-        await _deleteStop(other.id, log: false);
+        await _deleteStop(other.id, log: false, mergedInto: keepId);
       }
-      await _log(kept.tripId, TripActivityAction.mergeStops, 'stop', keepId,
-          'merged ${stopNames([for (final o in others) o.name])} into ${kept.name}');
+      final summary = !folding
+          ? 'merged ${stopNames([for (final o in others) o.name])} into ${kept.name}'
+          : others.isEmpty
+              ? 'made "$place" one place'
+              : 'made "$place" one place from ${stopNames([kept.name, for (final o in others) o.name])}';
+      await _log(kept.tripId, TripActivityAction.mergeStops, 'stop', keepId, summary);
     });
   }
 

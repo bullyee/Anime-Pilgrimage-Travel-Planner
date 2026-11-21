@@ -280,4 +280,38 @@ class AppLocalizationsJa extends AppLocalizations {
 
   @override
   String get placeDetails => '詳細';
+
+  @override
+  String get placeFoldBannerText => 'グループは一つの場所になり、中の各スポットは撮影位置になりました。';
+
+  @override
+  String get placeFoldBannerAction => '場所に変換';
+
+  @override
+  String get placeFoldConfirmTitle => 'グループを場所に変換しますか？';
+
+  @override
+  String get placeFoldConfirmBody =>
+      '各グループはグループ名の一つのスポットにまとまります。中のスポットの比較画像・日程・ラベルはそこへ移り、比較画像ごとに撮影位置が残ります。旅程のメンバー全員に反映されます。';
+
+  @override
+  String placeFoldDone(int count) {
+    String _temp0 = intl.Intl.pluralLogic(
+      count,
+      locale: localeName,
+      other: '$count か所の場所にまとめました。',
+    );
+    return '$_temp0';
+  }
+
+  @override
+  String get placeFoldNeedsSignIn => '共有旅程を変更するにはログインしてください。';
+
+  @override
+  String get placeFoldNeedsSync => '未同期の変更があります。同期が終わってからもう一度お試しください。';
+
+  @override
+  String placeFoldFailed(String error) {
+    return 'グループを場所に変換できませんでした：$error';
+  }
 }

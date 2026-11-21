@@ -93,6 +93,10 @@ void main() {
 
     final removed = await (db.select(db.stops)..where((s) => s.id.isIn([a.id, b.id]))).get();
     expect(removed.every((s) => s.deletedAt != null && s.syncStatus == 1), isTrue);
+    expect(removed.every((s) => s.mergedInto == keep.id), isTrue, reason: 'other phones move their own frames after it');
+    final moved = frames.singleWhere((f) => f.id == 'f3');
+    expect(moved.note, isNotNull, reason: 'the frames of a merged stop become spots of the kept one');
+    expect(moved.lat, a.lat);
   });
 
   test('a kept stop keeps its own group', () async {
