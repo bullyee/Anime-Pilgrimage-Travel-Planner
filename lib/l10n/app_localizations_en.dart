@@ -284,4 +284,7 @@ class AppLocalizationsEn extends AppLocalizations {
 
   @override
   String get placeFrameShotLabel => 'Your photo of this frame';
+
+  @override
+  String get placeDetails => 'Details';
 }

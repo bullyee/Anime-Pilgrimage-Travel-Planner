@@ -16,6 +16,8 @@ import 'package:trip_planner/features/sharing/providers/group_sharing_providers.
 import 'package:trip_planner/features/trip/controllers/trip_stops_controller.dart';
 import 'package:trip_planner/features/trip/repositories/trip_repository.dart';
 import 'package:trip_planner/features/trip/screens/stop_screen.dart';
+import 'package:trip_planner/features/trip/screens/trip_place_screen.dart';
+import 'package:trip_planner/shared/map/app_map.dart';
 import 'package:trip_planner/features/trip/screens/trip_stops_tab.dart';
 
 NewReferenceImage _frame(String id, {String? local, String? remote}) =>
@@ -126,9 +128,18 @@ void main() {
           path: '/trips/:tripId/stops/:stopId',
           builder: (_, s) => StopScreen(tripId: s.pathParameters['tripId']!, stopId: s.pathParameters['stopId']!),
         ),
+        GoRoute(
+          path: '/trips/:tripId/places/:stopId',
+          builder: (_, s) => TripPlaceScreen(tripId: s.pathParameters['tripId']!, stopId: s.pathParameters['stopId']!),
+        ),
       ]);
       await tester.pumpWidget(ProviderScope(
-        overrides: [databaseProvider.overrideWithValue(db), currentUserIdProvider.overrideWithValue('u1'), ...overrides],
+        overrides: [
+          databaseProvider.overrideWithValue(db),
+          currentUserIdProvider.overrideWithValue('u1'),
+          mapTilesProvider.overrideWithValue(false),
+          ...overrides,
+        ],
         child: MaterialApp.router(routerConfig: router),
       ));
       await tester.pumpAndSettle();
@@ -144,7 +155,11 @@ void main() {
     testWidgets('a stop in the list opens on its own page: the plan, then what the trip shares, then your own', (tester) async {
       final (trip, _) = await uji();
       await pump(tester, '/trips/${trip.id}/stops');
+      // The row opens the place's page, and its details the stop's.
       await tester.tap(find.text('Uji Bridge'));
+      await tester.pumpAndSettle();
+      expect(find.byType(TripPlaceScreen), findsOneWidget);
+      await tester.tap(find.byKey(const Key('placeDetails')));
       await tester.pumpAndSettle();
 
       expect(find.text('Uji day trip · Day 1'), findsOneWidget);

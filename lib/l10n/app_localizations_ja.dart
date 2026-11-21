@@ -277,4 +277,7 @@ class AppLocalizationsJa extends AppLocalizations {
 
   @override
   String get placeFrameShotLabel => 'この比較画像に合わせて撮った写真';
+
+  @override
+  String get placeDetails => '詳細';
 }

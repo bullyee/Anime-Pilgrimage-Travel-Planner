@@ -172,5 +172,6 @@
     }
   },
   "placeFrameNotShotLabel": "Frame, not shot. Shoot it",
-  "placeFrameShotLabel": "Your photo of this frame"
+  "placeFrameShotLabel": "Your photo of this frame",
+  "placeDetails": "Details"
 }

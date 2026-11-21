@@ -274,6 +274,9 @@ class AppLocalizationsZh extends AppLocalizations {
 
   @override
   String get placeFrameShotLabel => '你拍的這張分鏡';
+
+  @override
+  String get placeDetails => '詳細資料';
 }
 
 /// The translations for Chinese, using the Han script (`zh_Hant`).
@@ -546,4 +549,7 @@ class AppLocalizationsZhHant extends AppLocalizationsZh {
 
   @override
   String get placeFrameShotLabel => '你拍的這張分鏡';
+
+  @override
+  String get placeDetails => '詳細資料';
 }

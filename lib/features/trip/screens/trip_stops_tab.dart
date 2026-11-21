@@ -178,13 +178,16 @@ class _TripStopsTabState extends ConsumerState<TripStopsTab> {
         final rows = stopListRows(orderStopEntries(entries, _order));
         final shown = q.isEmpty ? rows : rows.where((r) => r.entries.any(matches)).toList();
 
+        // A stop is a place: its row opens the place's page. A stop shown
+        // inside a group's row opens its own page.
         void openStop(TripStopEntry e) => context.push('/trips/${widget.tripId}/stops/${e.stop.id}');
+        void openPlace(TripStopEntry e) => context.push('/trips/${widget.tripId}/places/${e.stop.id}');
         Widget stopTile(TripStopEntry e, {bool inGroup = false}) => _StopTile(
               entry: e,
               inGroup: inGroup,
               selecting: selecting,
               selected: _selected.contains(e.stop.id),
-              onTap: selecting ? () => _toggle([e.stop.id]) : () => openStop(e),
+              onTap: selecting ? () => _toggle([e.stop.id]) : () => inGroup ? openStop(e) : openPlace(e),
               onLongPress: canEdit && !selecting ? () => _toggle([e.stop.id]) : null,
             );
         final tiles = <Widget>[

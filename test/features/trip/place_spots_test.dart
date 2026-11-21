@@ -1,8 +1,10 @@
+import 'package:drift/drift.dart' show Value;
 import 'package:drift/native.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:go_router/go_router.dart';
+import 'package:latlong2/latlong.dart';
 import 'package:trip_planner/core/database/database.dart';
 import 'package:trip_planner/core/l10n/l10n.dart';
 import 'package:trip_planner/core/providers/database_provider.dart';
@@ -32,8 +34,8 @@ void main() {
         syncStatus: 0,
       );
 
-  NewReferenceImage frame(String id, {String? path, String? url}) =>
-      NewReferenceImage(id: id, localPath: path, remoteUrl: url, createdAt: t0);
+  NewReferenceImage frame(String id, {String? path, String? url, String? note, double? lat, double? lng, String? stopId}) =>
+      NewReferenceImage(id: id, localPath: path ?? '$id.png', remoteUrl: url, note: note, lat: lat, lng: lng, stopId: stopId, createdAt: t0);
 
   Photo photo(String id, {String? ref, DateTime? at}) => Photo(
         id: id,
@@ -77,10 +79,65 @@ void main() {
   test('byDistance: nearest first, list order without a position', () {
     final near = stop('near', 'N', lat: 34.8921, lng: 135.8076);
     final far = stop('far', 'F', lat: 34.8800, lng: 135.8200);
-    expect(byDistance([far, near], (s) => s), [far, near]);
-    expect(byDistance([far, near], (s) => s, lat: 34.892, lng: 135.8075), [near, far]);
+    LatLng at(Stop s) => LatLng(s.lat, s.lng);
+    expect(byDistance([far, near], at), [far, near]);
+    expect(byDistance([far, near], at, lat: 34.892, lng: 135.8075), [near, far]);
     expect(distanceText(42), '40 m');
     expect(distanceText(1234), '1.2 km');
+  });
+
+  group('placeSpots', () {
+    final place = stop('p', '宇治橋', lat: 34.8920, lng: 135.8080);
+    List<PlaceSpot> spotsOf(List<NewReferenceImage> frames, {List<Stop>? stops, String? group}) =>
+        placeSpots(stops: stops ?? [place], group: group, framesOf: (s) => [for (final f in frames) if ((f.stopId ?? 'p') == s.id) f]);
+
+    test('the same note close together is one spot, at the mean position', () {
+      final spots = spotsOf([
+        frame('a', note: '三の間', lat: 34.89210, lng: 135.80750),
+        frame('b', note: '三の間', lat: 34.89218, lng: 135.80750), // about 9 m north
+        frame('c', note: '東詰', lat: 34.89180, lng: 135.80900),
+      ]);
+      expect([for (final s in spots) s.label], ['三の間', '東詰']);
+      expect([for (final f in spots.first.frames) f.id], ['a', 'b']);
+      expect(spots.first.lat, closeTo(34.89214, 1e-9));
+      expect(spots.first.key, 'a');
+      expect(spots.first.estimated, isFalse);
+    });
+
+    test('the same note far apart, or different notes in one place, are separate spots', () {
+      final spots = spotsOf([
+        frame('a', note: '三の間', lat: 34.8921, lng: 135.8075),
+        frame('b', note: '三の間', lat: 34.8925, lng: 135.8075), // about 45 m away
+        frame('c', note: '柱の陰', lat: 34.8921, lng: 135.8075),
+      ]);
+      expect([for (final s in spots) s.key], ['a', 'b', 'c']);
+    });
+
+    test('frames without a position are about at the stop, and without a note go by its name', () {
+      final spots = spotsOf([frame('a'), frame('b')]);
+      final spot = spots.single;
+      expect(spot.label, '宇治橋');
+      expect(spot.frames, hasLength(2));
+      expect(spot.estimated, isTrue);
+      expect((spot.lat, spot.lng), (34.8920, 135.8080));
+    });
+
+    test('a group not folded yet: each stop\'s frames are its spots, and a stop without frames is one', () {
+      final bay = stop('bay', '宇治橋 三の間', area: '宇治橋', lat: 34.8921, lng: 135.8075);
+      final gate = stop('gate', '宇治橋 東詰', area: '宇治橋', lat: 34.8918, lng: 135.8090);
+      final spots = spotsOf([frame('a', stopId: 'bay'), frame('b', stopId: 'bay', note: '柱の陰')], stops: [bay, gate], group: '宇治橋');
+      expect([for (final s in spots) s.label], ['三の間', '柱の陰', '東詰']);
+      expect(spots.last.key, 'stop:gate');
+      expect(spots.last.frames, isEmpty);
+      expect(spots.last.estimated, isFalse);
+    });
+
+    test('placeFramesOf: the stop\'s copy wins over the library\'s frame', () {
+      final copy = frame('copy', path: 'a.png', note: '三の間');
+      final lib = frame('lib', path: 'a.png');
+      final other = frame('other', path: 'b.png');
+      expect([for (final f in placeFramesOf(own: [copy], library: [lib, other])) f.id], ['copy', 'other']);
+    });
   });
 
   group('shotFrames', () {
@@ -181,6 +238,43 @@ void main() {
       await tester.pumpAndSettle();
       expect(find.text('三の間'), findsNothing);
       expect(find.text('東詰'), findsOneWidget);
+
+      await tester.pumpWidget(const SizedBox());
+      await tester.pump(const Duration(seconds: 1));
+    });
+
+    testWidgets('a place that is one stop shows its frames as spots by note', (tester) async {
+      final container = ProviderContainer(overrides: [
+        databaseProvider.overrideWithValue(db),
+        currentUserIdProvider.overrideWithValue('u1'),
+        mapTilesProvider.overrideWithValue(false),
+      ]);
+      addTearDown(container.dispose);
+      final trips = container.read(tripRepositoryProvider);
+
+      late String ids;
+      await tester.runAsync(() async {
+        final trip = await trips.createTrip(title: 'Kansai', ownerId: 'u1', dayCount: 1);
+        final s = await trips.createTripOnlySpot(tripId: trip.id, name: '宇治橋', lat: 34.892, lng: 135.808, addedBy: 'u1');
+        ids = '${trip.id}/${s.id}';
+        for (final (id, note, lat) in [('f1', '三の間', 34.8921), ('f2', '三の間', 34.89212), ('f3', '東詰', 34.8918)]) {
+          await db.into(db.newReferenceImages).insert(NewReferenceImagesCompanion.insert(
+                id: id,
+                stopId: Value(s.id),
+                localPath: Value('missing-$id.png'),
+                note: Value(note),
+                lat: Value(lat),
+                lng: const Value(135.8075),
+              ));
+        }
+      });
+
+      await pump(tester, container, ids.split('/')[0], ids.split('/')[1]);
+      expect(find.text('宇治橋'), findsOneWidget);
+      expect(find.text('2 spots · 0 shot'), findsOneWidget);
+      expect(find.text('三の間'), findsOneWidget);
+      expect(find.text('東詰'), findsOneWidget);
+      expect(find.byKey(const Key('placeDetails')), findsOneWidget);
 
       await tester.pumpWidget(const SizedBox());
       await tester.pump(const Duration(seconds: 1));

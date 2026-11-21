@@ -73,5 +73,6 @@
   "placeSpotNotShot": "未撮影",
   "placeFrameCount": "{count, plural, other{比較画像 {count} 枚}}",
   "placeFrameNotShotLabel": "比較画像、未撮影。タップして撮影",
-  "placeFrameShotLabel": "この比較画像に合わせて撮った写真"
+  "placeFrameShotLabel": "この比較画像に合わせて撮った写真",
+  "placeDetails": "詳細"
 }

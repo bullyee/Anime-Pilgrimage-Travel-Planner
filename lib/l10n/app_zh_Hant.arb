@@ -73,5 +73,6 @@
   "placeSpotNotShot": "未拍",
   "placeFrameCount": "{count, plural, other{{count} 張分鏡}}",
   "placeFrameNotShotLabel": "分鏡，尚未拍攝。點一下拍攝",
-  "placeFrameShotLabel": "你拍的這張分鏡"
+  "placeFrameShotLabel": "你拍的這張分鏡",
+  "placeDetails": "詳細資料"
 }

@@ -14,18 +14,19 @@ import '../../../shared/map/app_map.dart';
 import '../../../shared/theme/app_theme.dart';
 import '../../../shared/widgets/up_button.dart';
 import '../../camera/services/anime_camera_launcher.dart';
-import '../../library/providers/place_providers.dart';
 import '../../library/widgets/place_page_parts.dart';
 import '../models/place_spots.dart';
 import '../models/stop_group.dart';
+import '../providers/trip_place_providers.dart';
 import '../providers/trip_providers.dart';
 import '../providers/trip_stop_providers.dart';
-import 'stop_screen.dart' show stopFrames;
 
-/// A place of a trip: the stops of a group (or one stop in none), shown as
-/// spots on a small map and in a list nearest first, each with its frames and
-/// the user's photos of them. Reached by any of its stops, so renaming the
-/// group keeps it open.
+/// A place of a trip: a stop, its frames grouped into spots (where in the
+/// place each is shot from), shown on a small map and in a list nearest
+/// first, each spot with its frames and the user's photos of them. A group
+/// of stops not folded into one yet shows as one place too, each stop's
+/// frames as its spots. Reached by any of its stops, and a stop folded into
+/// another opens the one it went into.
 class TripPlaceScreen extends ConsumerStatefulWidget {
   final String tripId;
   final String stopId;
@@ -38,13 +39,18 @@ class TripPlaceScreen extends ConsumerStatefulWidget {
 
 /// What the place's page knows about one spot.
 class _Spot {
-  final Stop stop;
-  final String label;
-  final List<NewReferenceImage> frames;
+  final PlaceSpot spot;
   final Map<String, Photo> shot;
+
+  /// The user's photos at the spot's stop's place, for a spot without frames.
   final List<Photo> photos;
 
-  const _Spot({required this.stop, required this.label, required this.frames, required this.shot, required this.photos});
+  const _Spot({required this.spot, required this.shot, required this.photos});
+
+  String get key => spot.key;
+  Stop get stop => spot.stop;
+  String get label => spot.label;
+  List<NewReferenceImage> get frames => spot.frames;
 
   bool get isShot => spotShot(shown: frames, shot: shot, photos: photos);
 }
@@ -110,25 +116,6 @@ class _TripPlaceScreenState extends ConsumerState<TripPlaceScreen> with WidgetsB
     }
   }
 
-  _Spot _spot(Stop stop, String? group) {
-    final placeFrames = ref.watch(placeDetailProvider(stop.placeKey)).valueOrNull == null
-        ? const <NewReferenceImage>[]
-        : ref.watch(placeReferenceImagesProvider(stop.placeKey)).valueOrNull ?? const <NewReferenceImage>[];
-    final ownFrames = ref.watch(stopReferenceImagesProvider(stop.id)).valueOrNull ?? const <NewReferenceImage>[];
-    final frames = stopFrames(place: placeFrames, stop: ownFrames);
-    final photos = [
-      for (final p in ref.watch(placePhotosProvider(stop.placeKey)).valueOrNull ?? const <Photo>[])
-        if (p.tripId == widget.tripId || p.tripId == null) p,
-    ];
-    return _Spot(
-      stop: stop,
-      label: spotLabel(stop, group),
-      frames: frames,
-      shot: shotFrames(shown: frames, all: [...placeFrames, ...ownFrames], photos: photos),
-      photos: photos,
-    );
-  }
-
   Future<void> _shoot(_Spot spot, int index) async {
     if (_launching || !animeCameraSupported) return;
     _launching = true;
@@ -148,7 +135,12 @@ class _TripPlaceScreenState extends ConsumerState<TripPlaceScreen> with WidgetsB
     final theme = Theme.of(context);
     final p = theme.trip;
     final entries = ref.watch(tripStopEntriesProvider(widget.tripId));
-    final members = placeEntries(entries.valueOrNull ?? const [], widget.stopId);
+    var members = placeEntries(entries.valueOrNull ?? const [], widget.stopId);
+    if (members.isEmpty) {
+      // Folded into another stop (here or on another member's phone).
+      final into = ref.watch(stopDetailProvider(widget.stopId)).valueOrNull?.mergedInto;
+      if (into != null) members = placeEntries(entries.valueOrNull ?? const [], into);
+    }
     final group = members.isEmpty ? null : stopGroup(members.first.stop);
     final l10n = context.l10n;
     final title = group ?? (members.isEmpty ? l10n.placeTitleFallback : members.single.stop.name);
@@ -164,6 +156,15 @@ class _TripPlaceScreenState extends ConsumerState<TripPlaceScreen> with WidgetsB
                   Text(subtitle, style: theme.textTheme.bodySmall?.copyWith(color: theme.colorScheme.onSurfaceVariant)),
               ],
             ),
+            actions: [
+              if (members.length == 1)
+                IconButton(
+                  key: const Key('placeDetails'),
+                  tooltip: l10n.placeDetails,
+                  icon: const Icon(Icons.info_outline),
+                  onPressed: () => _openStop(members.single.stop),
+                ),
+            ],
           ),
           body: body,
         );
@@ -171,14 +172,37 @@ class _TripPlaceScreenState extends ConsumerState<TripPlaceScreen> with WidgetsB
     if (entries.isLoading && !entries.hasValue) return scaffold(const Center(child: CircularProgressIndicator()));
     if (members.isEmpty) return scaffold(Center(child: Text(l10n.placeGone)));
 
-    final spots = [for (final e in members) _spot(e.stop, group)];
+    final own = ref.watch(tripFramesProvider(widget.tripId)).valueOrNull ?? const <NewReferenceImage>[];
+    final library = ref.watch(tripLibraryFramesProvider(widget.tripId)).valueOrNull ?? const <NewReferenceImage>[];
+    final photos = ref.watch(tripPhotosProvider(widget.tripId)).valueOrNull ?? const <Photo>[];
+    final ownByStop = <String, List<NewReferenceImage>>{};
+    for (final f in own) {
+      if (f.stopId case final id?) ownByStop.putIfAbsent(id, () => []).add(f);
+    }
+    final libraryByPlace = <String, List<NewReferenceImage>>{};
+    for (final f in library) {
+      if (f.placeKey case final key?) libraryByPlace.putIfAbsent(key, () => []).add(f);
+    }
+    final all = [...own, ...library];
+    final spots = [
+      for (final spot in placeSpots(
+        stops: [for (final e in members) e.stop],
+        group: group,
+        framesOf: (stop) => placeFramesOf(own: ownByStop[stop.id] ?? const [], library: libraryByPlace[stop.placeKey] ?? const []),
+      ))
+        _Spot(
+          spot: spot,
+          shot: shotFrames(shown: spot.frames, all: all, photos: photos),
+          photos: [for (final ph in photos) if (ph.placeKey == spot.stop.placeKey) ph],
+        ),
+    ];
     final shotCount = spots.where((s) => s.isShot).length;
     final unshot = spots.length - shotCount;
     final pos = _position;
-    var shown = byDistance(spots, (s) => s.stop, lat: pos?.latitude, lng: pos?.longitude);
+    var shown = byDistance(spots, (s) => s.spot.point, lat: pos?.latitude, lng: pos?.longitude);
     if (_onlyUnshot) shown = [for (final s in shown) if (!s.isShot) s];
     if (_selected != null) {
-      final sel = shown.where((s) => s.stop.id == _selected).firstOrNull;
+      final sel = shown.where((s) => s.key == _selected).firstOrNull;
       if (sel != null) shown = [sel, for (final s in shown) if (s != sel) s];
     }
 
@@ -198,15 +222,15 @@ class _TripPlaceScreenState extends ConsumerState<TripPlaceScreen> with WidgetsB
               pins: [
                 for (final s in spots)
                   MapPin(
-                    id: s.stop.id,
-                    point: LatLng(s.stop.lat, s.stop.lng),
+                    id: s.key,
+                    point: s.spot.point,
                     name: s.label,
                     color: p.tea,
                     done: s.isShot,
-                    selected: s.stop.id == _selected,
+                    selected: s.key == _selected,
                   ),
               ],
-              center: LatLng(spots.first.stop.lat, spots.first.stop.lng),
+              center: spots.first.spot.point,
               onPinTap: (pin) => setState(() => _selected = _selected == pin.id ? null : pin.id),
               onTap: (_) {
                 if (_selected != null) setState(() => _selected = null);
@@ -261,11 +285,13 @@ class _TripPlaceScreenState extends ConsumerState<TripPlaceScreen> with WidgetsB
                     separatorBuilder: (_, _) => const Divider(height: 1, indent: 16, endIndent: 16),
                     itemBuilder: (context, i) {
                       final s = shown[i];
+                      final metres = pos == null ? null : metresBetween(pos.latitude, pos.longitude, s.spot.lat, s.spot.lng);
                       return _SpotTile(
-                        key: ValueKey('spot-${s.stop.id}'),
+                        key: ValueKey('spot-${s.key}'),
                         spot: s,
-                        selected: s.stop.id == _selected,
-                        distance: pos == null ? null : distanceText(metresTo(s.stop, pos.latitude, pos.longitude)),
+                        selected: s.key == _selected,
+                        // A spot placed only by its stop is about there.
+                        distance: metres == null ? null : '${s.spot.estimated ? '~' : ''}${distanceText(metres)}',
                         onOpen: () => _openStop(s.stop),
                         onFrame: animeCameraSupported ? (index) => _shoot(s, index) : null,
                       );

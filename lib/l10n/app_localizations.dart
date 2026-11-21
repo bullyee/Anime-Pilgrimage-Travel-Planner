@@ -544,6 +544,12 @@ abstract class AppLocalizations {
   /// In en, this message translates to:
   /// **'Your photo of this frame'**
   String get placeFrameShotLabel;
+
+  /// No description provided for @placeDetails.
+  ///
+  /// In en, this message translates to:
+  /// **'Details'**
+  String get placeDetails;
 }
 
 class _AppLocalizationsDelegate
