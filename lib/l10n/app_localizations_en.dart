@@ -751,4 +751,121 @@ class AppLocalizationsEn extends AppLocalizations {
   String placePickFailed(String error) {
     return 'Couldn\'t add the photo: $error';
   }
+
+  @override
+  String get photosFilterAll => 'All';
+
+  @override
+  String get photosFilterToEdit => 'To edit';
+
+  @override
+  String photosFilterToEditCount(int count) {
+    return 'To edit · $count';
+  }
+
+  @override
+  String get photosFilterPairs => 'Pairs';
+
+  @override
+  String get photosEditFromGallery => 'Edit a photo from the gallery';
+
+  @override
+  String get photosGroupBy => 'Group by';
+
+  @override
+  String get photosByDay => 'By day';
+
+  @override
+  String get photosByPlace => 'By place';
+
+  @override
+  String photosLoadFailed(String error) {
+    return 'Couldn\'t load the photos: $error';
+  }
+
+  @override
+  String get photosEmptyTitle => 'No photos yet';
+
+  @override
+  String get photosEmptyBody =>
+      'The photos you take with Shoot, or from a place or a stop, show up here.';
+
+  @override
+  String get photosPairsEmpty =>
+      'Photos you shoot against a frame show here under it. Open a place and start shooting, or pick one from the gallery on a frame.';
+
+  @override
+  String get photosPlaceGone => 'A place no longer in your library';
+
+  @override
+  String get photosShareImage => 'Share image';
+
+  @override
+  String photosShareMax(int max) {
+    return 'Up to $max pairs';
+  }
+
+  @override
+  String photosShareMake(int count) {
+    String _temp0 = intl.Intl.pluralLogic(
+      count,
+      locale: localeName,
+      other: 'Make an image with $count pairs',
+      one: 'Make an image with 1 pair',
+      zero: 'Pick a few pairs',
+    );
+    return '$_temp0';
+  }
+
+  @override
+  String get shareImageTitle => 'Share image';
+
+  @override
+  String shareImagePairs(int count) {
+    String _temp0 = intl.Intl.pluralLogic(
+      count,
+      locale: localeName,
+      other: '$count pairs',
+      one: '1 pair',
+    );
+    return '$_temp0';
+  }
+
+  @override
+  String shareImageSubtitle(int count) {
+    String _temp0 = intl.Intl.pluralLogic(
+      count,
+      locale: localeName,
+      other: '$count pairs',
+      one: '1 pair',
+    );
+    return '$_temp0 · frame / my photo';
+  }
+
+  @override
+  String get shareImageTitleField => 'Title';
+
+  @override
+  String get shareImageGrid => 'Grid';
+
+  @override
+  String get shareImageStacked => 'Stacked';
+
+  @override
+  String get shareImageSave => 'Save';
+
+  @override
+  String get shareImageShare => 'Share';
+
+  @override
+  String get shareImageDefaultTitle => 'My pilgrimage';
+
+  @override
+  String get shareImageNothing =>
+      'None of these photos or frames could be read.';
+
+  @override
+  String shareImageFailed(String error) {
+    return 'Couldn\'t make the image: $error';
+  }
 }

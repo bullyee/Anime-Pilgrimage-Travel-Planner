@@ -11,6 +11,7 @@ import 'package:trip_planner/features/camera/services/photo_edit_route.dart';
 import 'package:trip_planner/features/photos/providers/photos_providers.dart';
 import 'package:trip_planner/features/photos/screens/photo_screen.dart';
 import 'package:trip_planner/features/photos/screens/photos_screen.dart';
+import 'package:trip_planner/features/photos/screens/share_image_screen.dart';
 
 void main() {
   late AppDatabase db;
@@ -183,6 +184,59 @@ void main() {
     expect(find.text('editor'), findsOneWidget);
     expect(edited.single.photoId, 'a');
     expect(edited.single.placeKey, 'uji');
+    await close(tester);
+  });
+
+  testWidgets('Pairs: shot photos under their frames, newest first; Share image picks up to 8', (tester) async {
+    await place(tester, 'uji', 'Uji Bridge');
+    for (var i = 0; i < 10; i++) {
+      await tester.runAsync(() => db.into(db.newReferenceImages).insert(NewReferenceImagesCompanion.insert(
+            id: 'f$i',
+            placeKey: const Value('uji'),
+            localPath: Value('/frames/f$i.jpg'),
+            note: Value('Spot $i'),
+          )));
+      await photo(tester, 'p$i', 'uji', DateTime(2025, 11, 7, 8, i), frameId: 'f$i');
+    }
+    await photo(tester, 'plain', 'uji', DateTime(2025, 11, 7, 9));
+    await open(tester, location: '/photos?filter=pairs');
+
+    List<String> pairs() => tester
+        .widgetList(find.byWidgetPredicate((w) => w.key is ValueKey<String> && (w.key! as ValueKey<String>).value.startsWith('pair:')))
+        .map((w) => (w.key! as ValueKey<String>).value.substring('pair:'.length))
+        .toList();
+    expect(pairs().take(2), ['p9', 'p8'], reason: 'newest first');
+    expect(pairs(), isNot(contains('plain')), reason: 'no frame, no pair');
+    expect(find.text('Spot 9'), findsOneWidget, reason: 'the spot under the place');
+
+    await tester.tap(find.byKey(const Key('photosShareImage')));
+    await tester.pumpAndSettle();
+    expect(find.text('Pick a few pairs'), findsOneWidget);
+    // Pick eight of the first visible ones, scrolling as needed.
+    for (var i = 9; i >= 1; i--) {
+      final card = find.byKey(ValueKey('pair:p$i'));
+      await tester.scrollUntilVisible(card, 200, scrollable: find.descendant(of: find.byKey(const Key('photosPairs')), matching: find.byType(Scrollable)));
+      await tester.tap(card);
+      await tester.pump();
+    }
+    await tester.pumpAndSettle();
+    expect(find.text('Make an image with 8 pairs'), findsOneWidget);
+    expect(find.text('Up to 8 pairs'), findsOneWidget, reason: 'the ninth is refused');
+
+    await tester.tap(find.byKey(const Key('photosShareMake')));
+    // The preview spins while it reads the files, so no pumpAndSettle.
+    await tester.pump();
+    await tester.pump(const Duration(milliseconds: 500));
+    expect(find.byType(ShareImageScreen), findsOneWidget);
+    expect(tester.widget<ShareImageScreen>(find.byType(ShareImageScreen)).pairs.map((e) => e.photo.id), [for (var i = 9; i >= 2; i--) 'p$i']);
+    expect(find.text('My pilgrimage 2025.11'), findsOneWidget, reason: 'no trip: the default title and the month');
+    // None of the files exist here, so it says it couldn't read them.
+    final failed = find.textContaining('None of these photos or frames could be read.');
+    for (var i = 0; i < 40 && failed.evaluate().isEmpty; i++) {
+      await tester.runAsync(() => Future<void>.delayed(const Duration(milliseconds: 50)));
+      await tester.pump();
+    }
+    expect(failed, findsOneWidget);
     await close(tester);
   });
 

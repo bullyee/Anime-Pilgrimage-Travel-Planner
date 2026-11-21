@@ -728,6 +728,117 @@ class AppLocalizationsZh extends AppLocalizations {
   String placePickFailed(String error) {
     return '加不進這張照片：$error';
   }
+
+  @override
+  String get photosFilterAll => '全部';
+
+  @override
+  String get photosFilterToEdit => '待編輯';
+
+  @override
+  String photosFilterToEditCount(int count) {
+    return '待編輯 · $count';
+  }
+
+  @override
+  String get photosFilterPairs => '成果';
+
+  @override
+  String get photosEditFromGallery => '編輯相簿裡的照片';
+
+  @override
+  String get photosGroupBy => '分組';
+
+  @override
+  String get photosByDay => '按日期';
+
+  @override
+  String get photosByPlace => '按地點';
+
+  @override
+  String photosLoadFailed(String error) {
+    return '載入不了照片：$error';
+  }
+
+  @override
+  String get photosEmptyTitle => '還沒有照片';
+
+  @override
+  String get photosEmptyBody => '用「拍攝」或在地點裡拍的照片，會出現在這裡。';
+
+  @override
+  String get photosPairsEmpty => '打開一個地點，按「開始拍」，或在參考圖上選「從相簿選」。拍過的照片會和參考圖排在一起。';
+
+  @override
+  String get photosPlaceGone => '已經不在景點庫的地點';
+
+  @override
+  String get photosShareImage => '做分享圖';
+
+  @override
+  String photosShareMax(int max) {
+    return '最多 $max 組';
+  }
+
+  @override
+  String photosShareMake(int count) {
+    String _temp0 = intl.Intl.pluralLogic(
+      count,
+      locale: localeName,
+      other: '用 $count 組做分享圖',
+      zero: '選幾組照片',
+    );
+    return '$_temp0';
+  }
+
+  @override
+  String get shareImageTitle => '分享圖';
+
+  @override
+  String shareImagePairs(int count) {
+    String _temp0 = intl.Intl.pluralLogic(
+      count,
+      locale: localeName,
+      other: '$count 組對照',
+    );
+    return '$_temp0';
+  }
+
+  @override
+  String shareImageSubtitle(int count) {
+    String _temp0 = intl.Intl.pluralLogic(
+      count,
+      locale: localeName,
+      other: '$count 組 · 參考圖 ／ 我的照片',
+    );
+    return '$_temp0';
+  }
+
+  @override
+  String get shareImageTitleField => '標題';
+
+  @override
+  String get shareImageGrid => '方格';
+
+  @override
+  String get shareImageStacked => '直排';
+
+  @override
+  String get shareImageSave => '存起來';
+
+  @override
+  String get shareImageShare => '分享';
+
+  @override
+  String get shareImageDefaultTitle => '聖地巡禮';
+
+  @override
+  String get shareImageNothing => '這些照片或參考圖都讀不到。';
+
+  @override
+  String shareImageFailed(String error) {
+    return '做不出分享圖：$error';
+  }
 }
 
 /// The translations for Chinese, using the Han script (`zh_Hant`).
@@ -1453,5 +1564,116 @@ class AppLocalizationsZhHant extends AppLocalizationsZh {
   @override
   String placePickFailed(String error) {
     return '加不進這張照片：$error';
+  }
+
+  @override
+  String get photosFilterAll => '全部';
+
+  @override
+  String get photosFilterToEdit => '待編輯';
+
+  @override
+  String photosFilterToEditCount(int count) {
+    return '待編輯 · $count';
+  }
+
+  @override
+  String get photosFilterPairs => '成果';
+
+  @override
+  String get photosEditFromGallery => '編輯相簿裡的照片';
+
+  @override
+  String get photosGroupBy => '分組';
+
+  @override
+  String get photosByDay => '按日期';
+
+  @override
+  String get photosByPlace => '按地點';
+
+  @override
+  String photosLoadFailed(String error) {
+    return '載入不了照片：$error';
+  }
+
+  @override
+  String get photosEmptyTitle => '還沒有照片';
+
+  @override
+  String get photosEmptyBody => '用「拍攝」或在地點裡拍的照片，會出現在這裡。';
+
+  @override
+  String get photosPairsEmpty => '打開一個地點，按「開始拍」，或在參考圖上選「從相簿選」。拍過的照片會和參考圖排在一起。';
+
+  @override
+  String get photosPlaceGone => '已經不在景點庫的地點';
+
+  @override
+  String get photosShareImage => '做分享圖';
+
+  @override
+  String photosShareMax(int max) {
+    return '最多 $max 組';
+  }
+
+  @override
+  String photosShareMake(int count) {
+    String _temp0 = intl.Intl.pluralLogic(
+      count,
+      locale: localeName,
+      other: '用 $count 組做分享圖',
+      zero: '選幾組照片',
+    );
+    return '$_temp0';
+  }
+
+  @override
+  String get shareImageTitle => '分享圖';
+
+  @override
+  String shareImagePairs(int count) {
+    String _temp0 = intl.Intl.pluralLogic(
+      count,
+      locale: localeName,
+      other: '$count 組對照',
+    );
+    return '$_temp0';
+  }
+
+  @override
+  String shareImageSubtitle(int count) {
+    String _temp0 = intl.Intl.pluralLogic(
+      count,
+      locale: localeName,
+      other: '$count 組 · 參考圖 ／ 我的照片',
+    );
+    return '$_temp0';
+  }
+
+  @override
+  String get shareImageTitleField => '標題';
+
+  @override
+  String get shareImageGrid => '方格';
+
+  @override
+  String get shareImageStacked => '直排';
+
+  @override
+  String get shareImageSave => '存起來';
+
+  @override
+  String get shareImageShare => '分享';
+
+  @override
+  String get shareImageDefaultTitle => '聖地巡禮';
+
+  @override
+  String get shareImageNothing => '這些照片或參考圖都讀不到。';
+
+  @override
+  String shareImageFailed(String error) {
+    return '做不出分享圖：$error';
   }
 }

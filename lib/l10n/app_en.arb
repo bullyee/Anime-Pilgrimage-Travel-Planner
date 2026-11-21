@@ -530,5 +530,81 @@
         "type": "String"
       }
     }
+  },
+  "photosFilterAll": "All",
+  "photosFilterToEdit": "To edit",
+  "photosFilterToEditCount": "To edit · {count}",
+  "@photosFilterToEditCount": {
+    "placeholders": {
+      "count": {
+        "type": "int"
+      }
+    }
+  },
+  "photosFilterPairs": "Pairs",
+  "photosEditFromGallery": "Edit a photo from the gallery",
+  "photosGroupBy": "Group by",
+  "photosByDay": "By day",
+  "photosByPlace": "By place",
+  "photosLoadFailed": "Couldn't load the photos: {error}",
+  "@photosLoadFailed": {
+    "placeholders": {
+      "error": {
+        "type": "String"
+      }
+    }
+  },
+  "photosEmptyTitle": "No photos yet",
+  "photosEmptyBody": "The photos you take with Shoot, or from a place or a stop, show up here.",
+  "photosPairsEmpty": "Photos you shoot against a frame show here under it. Open a place and start shooting, or pick one from the gallery on a frame.",
+  "photosPlaceGone": "A place no longer in your library",
+  "photosShareImage": "Share image",
+  "photosShareMax": "Up to {max} pairs",
+  "@photosShareMax": {
+    "placeholders": {
+      "max": {
+        "type": "int"
+      }
+    }
+  },
+  "photosShareMake": "{count, plural, =0{Pick a few pairs} =1{Make an image with 1 pair} other{Make an image with {count} pairs}}",
+  "@photosShareMake": {
+    "placeholders": {
+      "count": {
+        "type": "int"
+      }
+    }
+  },
+  "shareImageTitle": "Share image",
+  "shareImagePairs": "{count, plural, =1{1 pair} other{{count} pairs}}",
+  "@shareImagePairs": {
+    "placeholders": {
+      "count": {
+        "type": "int"
+      }
+    }
+  },
+  "shareImageSubtitle": "{count, plural, =1{1 pair} other{{count} pairs}} · frame / my photo",
+  "@shareImageSubtitle": {
+    "placeholders": {
+      "count": {
+        "type": "int"
+      }
+    }
+  },
+  "shareImageTitleField": "Title",
+  "shareImageGrid": "Grid",
+  "shareImageStacked": "Stacked",
+  "shareImageSave": "Save",
+  "shareImageShare": "Share",
+  "shareImageDefaultTitle": "My pilgrimage",
+  "shareImageNothing": "None of these photos or frames could be read.",
+  "shareImageFailed": "Couldn't make the image: {error}",
+  "@shareImageFailed": {
+    "placeholders": {
+      "error": {
+        "type": "String"
+      }
+    }
   }
 }

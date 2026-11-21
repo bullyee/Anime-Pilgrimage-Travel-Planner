@@ -731,4 +731,116 @@ class AppLocalizationsJa extends AppLocalizations {
   String placePickFailed(String error) {
     return '写真を追加できませんでした：$error';
   }
+
+  @override
+  String get photosFilterAll => 'すべて';
+
+  @override
+  String get photosFilterToEdit => '編集待ち';
+
+  @override
+  String photosFilterToEditCount(int count) {
+    return '編集待ち · $count';
+  }
+
+  @override
+  String get photosFilterPairs => '成果';
+
+  @override
+  String get photosEditFromGallery => 'ギャラリーの写真を編集';
+
+  @override
+  String get photosGroupBy => 'グループ';
+
+  @override
+  String get photosByDay => '日付ごと';
+
+  @override
+  String get photosByPlace => '場所ごと';
+
+  @override
+  String photosLoadFailed(String error) {
+    return '写真を読み込めませんでした：$error';
+  }
+
+  @override
+  String get photosEmptyTitle => 'まだ写真がありません';
+
+  @override
+  String get photosEmptyBody => '撮影や場所のページで撮った写真がここに表示されます。';
+
+  @override
+  String get photosPairsEmpty =>
+      '場所を開いて撮影するか、比較画像で「ギャラリーから選ぶ」を選んでください。撮った写真が比較画像と並んで表示されます。';
+
+  @override
+  String get photosPlaceGone => 'ライブラリにない場所';
+
+  @override
+  String get photosShareImage => '共有画像';
+
+  @override
+  String photosShareMax(int max) {
+    return '最大 $max 組';
+  }
+
+  @override
+  String photosShareMake(int count) {
+    String _temp0 = intl.Intl.pluralLogic(
+      count,
+      locale: localeName,
+      other: '$count 組で画像を作る',
+      zero: 'いくつか選んでください',
+    );
+    return '$_temp0';
+  }
+
+  @override
+  String get shareImageTitle => '共有画像';
+
+  @override
+  String shareImagePairs(int count) {
+    String _temp0 = intl.Intl.pluralLogic(
+      count,
+      locale: localeName,
+      other: '$count 組',
+    );
+    return '$_temp0';
+  }
+
+  @override
+  String shareImageSubtitle(int count) {
+    String _temp0 = intl.Intl.pluralLogic(
+      count,
+      locale: localeName,
+      other: '$count 組 · 比較画像 ／ 自分の写真',
+    );
+    return '$_temp0';
+  }
+
+  @override
+  String get shareImageTitleField => 'タイトル';
+
+  @override
+  String get shareImageGrid => 'グリッド';
+
+  @override
+  String get shareImageStacked => '縦並び';
+
+  @override
+  String get shareImageSave => '保存';
+
+  @override
+  String get shareImageShare => '共有';
+
+  @override
+  String get shareImageDefaultTitle => '聖地巡礼';
+
+  @override
+  String get shareImageNothing => '写真も比較画像も読み込めませんでした。';
+
+  @override
+  String shareImageFailed(String error) {
+    return '画像を作れませんでした：$error';
+  }
 }

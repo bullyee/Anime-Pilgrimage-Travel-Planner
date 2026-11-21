@@ -1234,6 +1234,168 @@ abstract class AppLocalizations {
   /// In en, this message translates to:
   /// **'Couldn\'t add the photo: {error}'**
   String placePickFailed(String error);
+
+  /// No description provided for @photosFilterAll.
+  ///
+  /// In en, this message translates to:
+  /// **'All'**
+  String get photosFilterAll;
+
+  /// No description provided for @photosFilterToEdit.
+  ///
+  /// In en, this message translates to:
+  /// **'To edit'**
+  String get photosFilterToEdit;
+
+  /// No description provided for @photosFilterToEditCount.
+  ///
+  /// In en, this message translates to:
+  /// **'To edit · {count}'**
+  String photosFilterToEditCount(int count);
+
+  /// No description provided for @photosFilterPairs.
+  ///
+  /// In en, this message translates to:
+  /// **'Pairs'**
+  String get photosFilterPairs;
+
+  /// No description provided for @photosEditFromGallery.
+  ///
+  /// In en, this message translates to:
+  /// **'Edit a photo from the gallery'**
+  String get photosEditFromGallery;
+
+  /// No description provided for @photosGroupBy.
+  ///
+  /// In en, this message translates to:
+  /// **'Group by'**
+  String get photosGroupBy;
+
+  /// No description provided for @photosByDay.
+  ///
+  /// In en, this message translates to:
+  /// **'By day'**
+  String get photosByDay;
+
+  /// No description provided for @photosByPlace.
+  ///
+  /// In en, this message translates to:
+  /// **'By place'**
+  String get photosByPlace;
+
+  /// No description provided for @photosLoadFailed.
+  ///
+  /// In en, this message translates to:
+  /// **'Couldn\'t load the photos: {error}'**
+  String photosLoadFailed(String error);
+
+  /// No description provided for @photosEmptyTitle.
+  ///
+  /// In en, this message translates to:
+  /// **'No photos yet'**
+  String get photosEmptyTitle;
+
+  /// No description provided for @photosEmptyBody.
+  ///
+  /// In en, this message translates to:
+  /// **'The photos you take with Shoot, or from a place or a stop, show up here.'**
+  String get photosEmptyBody;
+
+  /// No description provided for @photosPairsEmpty.
+  ///
+  /// In en, this message translates to:
+  /// **'Photos you shoot against a frame show here under it. Open a place and start shooting, or pick one from the gallery on a frame.'**
+  String get photosPairsEmpty;
+
+  /// No description provided for @photosPlaceGone.
+  ///
+  /// In en, this message translates to:
+  /// **'A place no longer in your library'**
+  String get photosPlaceGone;
+
+  /// No description provided for @photosShareImage.
+  ///
+  /// In en, this message translates to:
+  /// **'Share image'**
+  String get photosShareImage;
+
+  /// No description provided for @photosShareMax.
+  ///
+  /// In en, this message translates to:
+  /// **'Up to {max} pairs'**
+  String photosShareMax(int max);
+
+  /// No description provided for @photosShareMake.
+  ///
+  /// In en, this message translates to:
+  /// **'{count, plural, =0{Pick a few pairs} =1{Make an image with 1 pair} other{Make an image with {count} pairs}}'**
+  String photosShareMake(int count);
+
+  /// No description provided for @shareImageTitle.
+  ///
+  /// In en, this message translates to:
+  /// **'Share image'**
+  String get shareImageTitle;
+
+  /// No description provided for @shareImagePairs.
+  ///
+  /// In en, this message translates to:
+  /// **'{count, plural, =1{1 pair} other{{count} pairs}}'**
+  String shareImagePairs(int count);
+
+  /// No description provided for @shareImageSubtitle.
+  ///
+  /// In en, this message translates to:
+  /// **'{count, plural, =1{1 pair} other{{count} pairs}} · frame / my photo'**
+  String shareImageSubtitle(int count);
+
+  /// No description provided for @shareImageTitleField.
+  ///
+  /// In en, this message translates to:
+  /// **'Title'**
+  String get shareImageTitleField;
+
+  /// No description provided for @shareImageGrid.
+  ///
+  /// In en, this message translates to:
+  /// **'Grid'**
+  String get shareImageGrid;
+
+  /// No description provided for @shareImageStacked.
+  ///
+  /// In en, this message translates to:
+  /// **'Stacked'**
+  String get shareImageStacked;
+
+  /// No description provided for @shareImageSave.
+  ///
+  /// In en, this message translates to:
+  /// **'Save'**
+  String get shareImageSave;
+
+  /// No description provided for @shareImageShare.
+  ///
+  /// In en, this message translates to:
+  /// **'Share'**
+  String get shareImageShare;
+
+  /// No description provided for @shareImageDefaultTitle.
+  ///
+  /// In en, this message translates to:
+  /// **'My pilgrimage'**
+  String get shareImageDefaultTitle;
+
+  /// No description provided for @shareImageNothing.
+  ///
+  /// In en, this message translates to:
+  /// **'None of these photos or frames could be read.'**
+  String get shareImageNothing;
+
+  /// No description provided for @shareImageFailed.
+  ///
+  /// In en, this message translates to:
+  /// **'Couldn\'t make the image: {error}'**
+  String shareImageFailed(String error);
 }
 
 class _AppLocalizationsDelegate
