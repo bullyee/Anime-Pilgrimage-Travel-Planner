@@ -1,4 +1,7 @@
+import 'package:flutter/material.dart' show Brightness, Color, ThemeData;
+
 import '../../../core/database/database.dart';
+import '../../../shared/theme/app_theme.dart';
 import '../../planner/models/planner_view.dart';
 import 'place_spots.dart';
 import 'stop_group.dart';
@@ -169,4 +172,39 @@ PlaceMatch matchPlace(TripPlace place, PlaceContent content, String query) {
   if (i < 0 || j < 0 || j >= places.length) return null;
   if (by < 0) return (before: places[j].itemIds.firstOrNull);
   return (before: j + 1 < places.length ? places[j + 1].itemIds.firstOrNull : null);
+}
+
+/// The colours days take, in day order: tea, wisteria and vermilion from the
+/// trip palette, then amber and blue; a trip with more days starts over.
+List<Color> dayPalette(ThemeData theme) {
+  final p = theme.trip;
+  final dark = theme.brightness == Brightness.dark;
+  return [
+    p.tea,
+    p.wisteria,
+    p.vermilion,
+    dark ? const Color(0xFFE2A64E) : const Color(0xFFA86A12),
+    dark ? const Color(0xFF7FB2E5) : const Color(0xFF2F6FA8),
+  ];
+}
+
+/// The slate of the places on no day.
+Color unsortedColor(ThemeData theme) =>
+    theme.brightness == Brightness.dark ? const Color(0xFFA3B3BA) : const Color(0xFF56656D);
+
+/// Each day's colour, by day id: [palette]'s colours in the days' order
+/// (dated days first, then those without a date), starting over after the
+/// last. The Places list's section headers and the trip map use the same.
+Map<String, Color> dayColors(TripPlacesView view, List<Color> palette) => {
+      for (final (i, s) in view.days.indexed)
+        if (s.dayId case final id?) id: palette[i % palette.length],
+    };
+
+/// [section]'s colour in [view]: its day's ([dayColors]), or slate for
+/// Unsorted.
+Color sectionColor(ThemeData theme, TripPlacesView view, PlacesSection section) {
+  if (section.isUnsorted) return unsortedColor(theme);
+  final palette = dayPalette(theme);
+  final i = view.days.indexWhere((d) => d.dayId == section.dayId);
+  return i < 0 ? unsortedColor(theme) : palette[i % palette.length];
 }

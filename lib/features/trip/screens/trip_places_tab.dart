@@ -316,7 +316,7 @@ class _TripPlacesTabState extends ConsumerState<TripPlacesTab> {
           title: sectionTitle(context, s),
           date: s.isUnsorted ? null : (sectionDate(context, s) ?? l10n.placeNoDate),
           today: s == todaySection,
-          color: s.isUnsorted ? Theme.of(context).colorScheme.outline : (s.day!.date == null ? Theme.of(context).trip.wisteria : Theme.of(context).trip.tea),
+          color: sectionColor(Theme.of(context), view, s),
           trailing: !canEdit || s.isUnsorted
               ? null
               : reorder
@@ -518,7 +518,12 @@ class _SectionHeader extends StatelessWidget {
         child: Row(
           children: [
             if (color != null) ...[
-              Container(width: 6, height: 22, decoration: BoxDecoration(color: color, borderRadius: BorderRadius.circular(3))),
+              Container(
+                key: const Key('sectionDot'),
+                width: 10,
+                height: 10,
+                decoration: BoxDecoration(color: color, shape: BoxShape.circle),
+              ),
               const SizedBox(width: 8),
             ],
             Flexible(

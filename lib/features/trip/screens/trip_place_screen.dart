@@ -217,7 +217,7 @@ class _TripPlaceScreenState extends ConsumerState<TripPlaceScreen> {
                 for (final s in view.sections)
                   ListTile(
                     key: ValueKey('moveTo-${s.dayId ?? 'unsorted'}'),
-                    leading: _DayDot(section: s),
+                    leading: _DayDot(color: sectionColor(theme, view, s)),
                     title: Text(sectionTitle(sheetContext, s)),
                     subtitle: Text([
                       if (!s.isUnsorted) sectionDate(sheetContext, s) ?? l10n.placeNoDate,
@@ -441,6 +441,7 @@ class _TripPlaceScreenState extends ConsumerState<TripPlaceScreen> {
               if (section != null && view != null && tripPlace != null)
                 _DayChip(
                   section: section,
+                  color: sectionColor(theme, view, section),
                   onTap: canEdit ? () => _moveSheet(view, tripPlace, section) : null,
                 ),
               for (final l in labels)
@@ -790,31 +791,25 @@ String? sectionDate(BuildContext context, PlacesSection s) {
   return MaterialLocalizations.of(context).formatMediumDate(DateTime(date.year, date.month, date.day));
 }
 
-/// The dot that marks a section: tea for a dated day, wisteria for one
-/// without a date, grey for Unsorted.
+/// The dot that marks a section: its day's colour ([dayColors]), slate for
+/// Unsorted.
 class _DayDot extends StatelessWidget {
-  final PlacesSection section;
+  final Color color;
 
-  const _DayDot({required this.section});
+  const _DayDot({required this.color});
 
   @override
-  Widget build(BuildContext context) {
-    final theme = Theme.of(context);
-    final color = section.isUnsorted
-        ? theme.colorScheme.outline
-        : section.day!.date == null
-            ? theme.trip.wisteria
-            : theme.trip.tea;
-    return Container(width: 10, height: 10, decoration: BoxDecoration(color: color, shape: BoxShape.circle));
-  }
+  Widget build(BuildContext context) =>
+      Container(width: 10, height: 10, decoration: BoxDecoration(color: color, shape: BoxShape.circle));
 }
 
 /// The place's day, which opens the sheet to move it for people who can.
 class _DayChip extends StatelessWidget {
   final PlacesSection section;
+  final Color color;
   final VoidCallback? onTap;
 
-  const _DayChip({required this.section, required this.onTap});
+  const _DayChip({required this.section, required this.color, required this.onTap});
 
   @override
   Widget build(BuildContext context) {
@@ -822,7 +817,7 @@ class _DayChip extends StatelessWidget {
     final name = sectionTitle(context, section);
     final text = date == null ? name : '$name · $date';
     final label = Text(text);
-    final dot = _DayDot(section: section);
+    final dot = _DayDot(color: color);
     return Semantics(
       label: context.l10n.placeDayChip(text),
       excludeSemantics: true,
