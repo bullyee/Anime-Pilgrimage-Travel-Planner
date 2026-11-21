@@ -292,6 +292,10 @@ class TripFramesPackService {
                   timestampS: Value((item['timestampS'] as num?)?.toInt()),
                   source: Value(item['source'] as String? ?? 'You'),
                   sourceUrl: Value(item['sourceUrl'] as String?),
+                  lat: Value((item['lat'] as num?)?.toDouble()),
+                  lng: Value((item['lng'] as num?)?.toDouble()),
+                  note: Value(item['note'] as String?),
+                  heading: Value((item['heading'] as num?)?.toDouble()),
                 ),
               );
           count++;
@@ -389,6 +393,11 @@ class TripFramesPackService {
           'timestampS': f.timestampS,
           'source': f.source,
           'sourceUrl': f.sourceUrl,
+          // Where it's shot from (schema 16); older packs have none of these.
+          if (f.lat != null) 'lat': f.lat,
+          if (f.lng != null) 'lng': f.lng,
+          if (f.note != null) 'note': f.note,
+          if (f.heading != null) 'heading': f.heading,
           'entry': entry,
           'fileHash': fileHash,
         });

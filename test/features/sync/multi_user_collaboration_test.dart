@@ -166,6 +166,8 @@ class SharedCollaborativeCloud extends Fake implements FirestoreSyncV2Service {
         'sourceUrl': stop.sourceUrl,
         'area': stop.area,
         'note': stop.note,
+        'mergedInto': stop.mergedInto,
+        if (frameShotsOf(referenceImages ?? const []) case final shots when shots.isNotEmpty) 'frameShots': shots,
         'addedBy': stop.addedBy,
         'updatedAt': stop.updatedAt,
         'updatedBy': stop.updatedBy,

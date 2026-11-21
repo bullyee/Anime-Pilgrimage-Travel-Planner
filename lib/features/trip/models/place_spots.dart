@@ -4,26 +4,12 @@ import '../../../core/database/database.dart';
 import '../providers/trip_stop_providers.dart';
 import 'stop_group.dart';
 
+export 'stop_group.dart' show spotLabel;
+
 // A trip's places and the spots in them. A place is a group of stops (or a
 // stop in no group), and it has the name. Its stops are spots: where in the
 // place a frame is shot from, told apart by a note rather than a name of
 // their own.
-
-final _separators = RegExp(r'^[\s,、・·\-–—/(（:：]+');
-
-/// What a spot in [group] is called on its place's page: its note, else its
-/// name without the group's name in front ("三の間" for "宇治橋 三の間" in
-/// "宇治橋"), else its whole name.
-String spotLabel(Stop stop, String? group) {
-  final note = stop.note?.trim();
-  if (note != null && note.isNotEmpty) return note.split('\n').first.trim();
-  final name = stop.name.trim();
-  if (group != null && name.startsWith(group)) {
-    final rest = name.substring(group.length).replaceFirst(_separators, '').trim();
-    if (rest.isNotEmpty) return rest;
-  }
-  return name;
-}
 
 /// The place [stopId] is in, among [entries] in list order: its group's
 /// stops, or just the stop when it's in no group. Empty when it's gone.

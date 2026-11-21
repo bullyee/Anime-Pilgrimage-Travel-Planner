@@ -21,6 +21,33 @@ class UserTripsSnapshot {
 Map<String, dynamic> withDocumentId(String docId, Map<String, dynamic> data) =>
     {...data, 'id': docId};
 
+/// The most `frameShots` entries one stop doc carries; the Firestore rules
+/// refuse a bigger map, and with it the rest of the trip's upload.
+const maxFrameShots = 300;
+
+/// The `frameShots` map of a stop doc: where each of [frames] is shot from
+/// (`lat`, `lng`, `note`, `heading`), by frame id, for the frames that have
+/// any of them; null values are left out.
+///
+/// It is a map of its own beside `referenceImages` rather than keys inside
+/// that array because a phone on an older version rebuilds the array without
+/// keys it doesn't know whenever it uploads the stop, while a top-level field
+/// it doesn't write survives its merge. It covers local-only frames too
+/// (keyed by their id, which a frames pack keeps on the phones it reaches).
+Map<String, Map<String, Object>> frameShotsOf(Iterable<NewReferenceImage> frames) {
+  final out = SplayTreeMap<String, Map<String, Object>>();
+  for (final f in frames) {
+    final shot = <String, Object>{
+      if (f.lat != null) 'lat': f.lat!,
+      if (f.lng != null) 'lng': f.lng!,
+      if (f.note?.trim().isNotEmpty ?? false) 'note': f.note!,
+      if (f.heading != null) 'heading': f.heading!,
+    };
+    if (shot.isNotEmpty) out[f.id] = shot;
+  }
+  return Map.fromEntries(out.entries.take(maxFrameShots));
+}
+
 /// Service responsible for communicating with Firestore under the new `/tripsV2/{tripId}` collection.
 /// The documents of one trip subcollection, as a list, plus whether the
 /// snapshot came from the local cache. A snapshot from the server is the whole
@@ -175,6 +202,7 @@ class FirestoreSyncV2Service {
       'sourceUrl': stop.sourceUrl,
       'area': stop.area,
       'note': stop.note,
+      'mergedInto': stop.mergedInto,
       'addedBy': stop.addedBy,
       'updatedAt': Timestamp.fromDate(stop.updatedAt),
       'updatedBy': stop.updatedBy,
@@ -206,6 +234,16 @@ class FirestoreSyncV2Service {
                 'sourceUrl': img.sourceUrl,
               })
           .toList();
+      // A merge keeps the doc's other entries (frames only another phone
+      // has); a value this phone cleared is deleted rather than left out, or
+      // the merge would keep the old one.
+      final shots = frameShotsOf(referenceImages);
+      if (shots.isNotEmpty) {
+        data['frameShots'] = {
+          for (final MapEntry(key: id, value: shot) in shots.entries)
+            id: {for (final k in const ['lat', 'lng', 'note', 'heading']) k: shot[k] ?? FieldValue.delete()},
+        };
+      }
     }
 
     batch.set(docRef, data, SetOptions(merge: true));

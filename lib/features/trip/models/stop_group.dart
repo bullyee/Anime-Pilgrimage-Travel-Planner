@@ -1,3 +1,5 @@
+import 'package:drift/drift.dart' show Value;
+
 import '../../../core/database/database.dart';
 
 /// The longest group name, in characters. The Firestore rules refuse a
@@ -48,3 +50,34 @@ String suggestedGroupName(List<String> names) {
 
 /// "1 stop", "7 stops".
 String stopCount(int n) => n == 1 ? '1 stop' : '$n stops';
+
+final _spotSeparators = RegExp(r'^[\s,、・·\-–—/(（:：]+');
+
+/// What a spot in [group] is called on its place's page: its note, else its
+/// name without the group's name in front ("三の間" for "宇治橋 三の間" in
+/// "宇治橋"), else its whole name. It's also the note a stop's frames take
+/// when the stop becomes a spot of another (see [frameAsSpotOf]).
+String spotLabel(Stop stop, String? group) {
+  final note = stop.note?.trim();
+  if (note != null && note.isNotEmpty) return note.split('\n').first.trim();
+  final name = stop.name.trim();
+  if (group != null && name.startsWith(group)) {
+    final rest = name.substring(group.length).replaceFirst(_spotSeparators, '').trim();
+    if (rest.isNotEmpty) return rest;
+  }
+  return name;
+}
+
+/// What [frame] of [stop] takes on when [stop] is merged into another stop
+/// and becomes one of its spots: [stop]'s position unless the frame has one,
+/// and [spotLabel] as its note unless it has one. Absent fields when the
+/// frame already says both, so the write changes nothing.
+NewReferenceImagesCompanion frameAsSpotOf(NewReferenceImage frame, Stop stop, String? group) {
+  final placed = frame.lat != null && frame.lng != null;
+  final noted = frame.note?.trim().isNotEmpty ?? false;
+  return NewReferenceImagesCompanion(
+    lat: placed ? const Value.absent() : Value(stop.lat),
+    lng: placed ? const Value.absent() : Value(stop.lng),
+    note: noted ? const Value.absent() : Value(spotLabel(stop, group)),
+  );
+}

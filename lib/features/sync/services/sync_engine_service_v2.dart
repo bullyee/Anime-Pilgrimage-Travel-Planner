@@ -5,6 +5,7 @@ import 'package:flutter/foundation.dart';
 import 'package:uuid/uuid.dart';
 
 import '../../../../core/database/database.dart';
+import '../../trip/models/stop_group.dart';
 import '../../trip/services/trip_activity_log.dart';
 import 'firestore_sync_v2_service.dart';
 
@@ -1197,7 +1198,7 @@ class SyncEngineServiceV2 {
     final needsLabels = actionable.any((r) => r.data['labels'] is List);
     final refStopIds = <String>[
       for (final r in actionable)
-        if (r.data['referenceImages'] is List) r.stopId,
+        if (r.data['referenceImages'] is List || r.data['frameShots'] is Map) r.stopId,
     ];
 
     final labelsById = <String, Label>{};
@@ -1236,6 +1237,12 @@ class SyncEngineServiceV2 {
     final stopLabelsToInsert = <StopLabelsCompanion>[];
     final refImagesToUpsert = <NewReferenceImagesCompanion>[];
     final refImageIdsToDelete = <String>[];
+    // Where frames are shot from (`frameShots`), by local frame id, written
+    // after the frames themselves.
+    final frameShotWrites = <String, Map>{};
+    // Stops merged into another on someone's phone, with the stop they went
+    // into: the frames only this phone has follow them.
+    final mergedMoves = <({Stop from, String into})>[];
 
     for (final entry in actionable) {
       final stopId = entry.stopId;
@@ -1265,6 +1272,7 @@ class SyncEngineServiceV2 {
           sourceUrl: Value(data['sourceUrl'] as String?),
           area: Value(data['area'] as String?),
           note: Value(data['note'] as String?),
+          mergedInto: Value(data['mergedInto'] as String?),
           addedBy: Value(data['addedBy'] as String? ?? currentUserId),
           updatedAt: Value(effectiveUpdatedAt),
           updatedBy: Value(data['updatedBy'] as String?),
@@ -1287,6 +1295,8 @@ class SyncEngineServiceV2 {
         final pendingStopLabels = <StopLabelsCompanion>[];
         final pendingRefUpserts = <NewReferenceImagesCompanion>[];
         final pendingRefDeletes = <String>[];
+        // The sender's frame ids, to this phone's ids for the same frames.
+        final senderToLocalFrameId = <String, String>{};
 
         final labelsRaw = data['labels'] as List?;
         if (labelsRaw != null) {
@@ -1374,6 +1384,7 @@ class SyncEngineServiceV2 {
                 (raw['id'] is String ? existingById[raw['id']] : null) ?? existingByUrl[remoteUrl];
             final imgId = existingMatch?.id ?? (raw['id'] as String?) ?? const Uuid().v4();
             incomingIds.add(imgId);
+            if (raw['id'] is String) senderToLocalFrameId[raw['id'] as String] = imgId;
 
             final rawAnimeLabelId = raw['animeLabelId'] as String?;
             String? resolvedAnimeLabelId;
@@ -1404,6 +1415,24 @@ class SyncEngineServiceV2 {
               pendingRefDeletes.add(existing.id);
             }
           }
+        }
+
+        // Where the frames are shot from. A stop uploaded by an older version
+        // has no `frameShots` (or an old one its merge kept), and what this
+        // phone knows stays; a frame the map doesn't name keeps its own.
+        final shotsRaw = data['frameShots'];
+        if (shotsRaw is Map) {
+          final localIds = {for (final r in existingRefsByStop[stopId] ?? const <NewReferenceImage>[]) r.id};
+          for (final MapEntry(:key, :value) in shotsRaw.entries) {
+            if (key is! String || value is! Map) continue;
+            final localId = senderToLocalFrameId[key] ?? (localIds.contains(key) ? key : null);
+            if (localId != null) frameShotWrites[localId] = value;
+          }
+        }
+
+        final mergedInto = data['mergedInto'];
+        if (deletedAt != null && localStop != null && localStop.deletedAt == null && mergedInto is String && mergedInto.isNotEmpty && mergedInto != stopId) {
+          mergedMoves.add((from: localStop, into: mergedInto));
         }
 
         if (localStop == null) {
@@ -1466,7 +1495,36 @@ class SyncEngineServiceV2 {
       );
       await (localDb.delete(localDb.newReferenceImages)..where((r) => r.id.isIn(chunk))).go();
     }
+    for (final MapEntry(key: frameId, value: shot) in frameShotWrites.entries) {
+      double? number(Object? v) => v is num ? v.toDouble() : null;
+      final note = shot['note'];
+      await (localDb.update(localDb.newReferenceImages)..where((r) => r.id.equals(frameId))).write(NewReferenceImagesCompanion(
+        lat: Value(number(shot['lat'])),
+        lng: Value(number(shot['lng'])),
+        note: Value(note is String && note.trim().isNotEmpty ? note : null),
+        heading: Value(number(shot['heading'])),
+      ));
+    }
+    for (final move in mergedMoves) {
+      await _moveLocalFramesOfMergedStop(tripId, move.from, move.into);
+    }
     return true;
+  }
+
+  /// Moves the frames of [from] that only this phone has (no `remoteUrl`)
+  /// onto [intoId], the stop [from] was merged into on another phone, giving
+  /// each [from]'s position and spot name the way the merge there did. The
+  /// uploaded frames come back on the kept stop from its own document.
+  Future<void> _moveLocalFramesOfMergedStop(String tripId, Stop from, String intoId) async {
+    final into = await (localDb.select(localDb.stops)..where((s) => s.id.equals(intoId) & s.tripId.equals(tripId))).getSingleOrNull();
+    if (into == null) return;
+    final frames = await (localDb.select(localDb.newReferenceImages)..where((r) => r.stopId.equals(from.id))).get();
+    final group = stopGroup(from);
+    for (final frame in frames) {
+      if (frame.remoteUrl?.isNotEmpty ?? false) continue;
+      await (localDb.update(localDb.newReferenceImages)..where((r) => r.id.equals(frame.id)))
+          .write(frameAsSpotOf(frame, from, group).copyWith(stopId: Value(intoId)));
+    }
   }
 
   /// Applies a snapshot of remote schedule items inside the caller's open transaction.
@@ -1764,6 +1822,10 @@ class SyncEngineServiceV2 {
               timestampS: Value(img.timestampS),
               source: Value(img.source),
               sourceUrl: Value(img.sourceUrl),
+              lat: Value(img.lat),
+              lng: Value(img.lng),
+              note: Value(img.note),
+              heading: Value(img.heading),
               createdAt: Value(img.createdAt),
             ),
           );

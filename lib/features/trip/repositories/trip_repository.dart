@@ -664,6 +664,10 @@ class DriftTripRepository implements TripRepository {
                 timestampS: Value(img.timestampS),
                 source: Value(img.source),
                 sourceUrl: Value(img.sourceUrl),
+                lat: Value(img.lat),
+                lng: Value(img.lng),
+                note: Value(img.note),
+                heading: Value(img.heading),
               ),
             );
       }

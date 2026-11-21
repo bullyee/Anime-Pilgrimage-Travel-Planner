@@ -2869,6 +2869,44 @@ class $NewReferenceImagesTable extends NewReferenceImages
     type: DriftSqlType.string,
     requiredDuringInsert: false,
   );
+  static const VerificationMeta _latMeta = const VerificationMeta('lat');
+  @override
+  late final GeneratedColumn<double> lat = GeneratedColumn<double>(
+    'lat',
+    aliasedName,
+    true,
+    type: DriftSqlType.double,
+    requiredDuringInsert: false,
+  );
+  static const VerificationMeta _lngMeta = const VerificationMeta('lng');
+  @override
+  late final GeneratedColumn<double> lng = GeneratedColumn<double>(
+    'lng',
+    aliasedName,
+    true,
+    type: DriftSqlType.double,
+    requiredDuringInsert: false,
+  );
+  static const VerificationMeta _noteMeta = const VerificationMeta('note');
+  @override
+  late final GeneratedColumn<String> note = GeneratedColumn<String>(
+    'note',
+    aliasedName,
+    true,
+    type: DriftSqlType.string,
+    requiredDuringInsert: false,
+  );
+  static const VerificationMeta _headingMeta = const VerificationMeta(
+    'heading',
+  );
+  @override
+  late final GeneratedColumn<double> heading = GeneratedColumn<double>(
+    'heading',
+    aliasedName,
+    true,
+    type: DriftSqlType.double,
+    requiredDuringInsert: false,
+  );
   static const VerificationMeta _createdAtMeta = const VerificationMeta(
     'createdAt',
   );
@@ -2893,6 +2931,10 @@ class $NewReferenceImagesTable extends NewReferenceImages
     timestampS,
     source,
     sourceUrl,
+    lat,
+    lng,
+    note,
+    heading,
     createdAt,
   ];
   @override
@@ -2969,6 +3011,30 @@ class $NewReferenceImagesTable extends NewReferenceImages
         sourceUrl.isAcceptableOrUnknown(data['source_url']!, _sourceUrlMeta),
       );
     }
+    if (data.containsKey('lat')) {
+      context.handle(
+        _latMeta,
+        lat.isAcceptableOrUnknown(data['lat']!, _latMeta),
+      );
+    }
+    if (data.containsKey('lng')) {
+      context.handle(
+        _lngMeta,
+        lng.isAcceptableOrUnknown(data['lng']!, _lngMeta),
+      );
+    }
+    if (data.containsKey('note')) {
+      context.handle(
+        _noteMeta,
+        note.isAcceptableOrUnknown(data['note']!, _noteMeta),
+      );
+    }
+    if (data.containsKey('heading')) {
+      context.handle(
+        _headingMeta,
+        heading.isAcceptableOrUnknown(data['heading']!, _headingMeta),
+      );
+    }
     if (data.containsKey('created_at')) {
       context.handle(
         _createdAtMeta,
@@ -3024,6 +3090,22 @@ class $NewReferenceImagesTable extends NewReferenceImages
         DriftSqlType.string,
         data['${effectivePrefix}source_url'],
       ),
+      lat: attachedDatabase.typeMapping.read(
+        DriftSqlType.double,
+        data['${effectivePrefix}lat'],
+      ),
+      lng: attachedDatabase.typeMapping.read(
+        DriftSqlType.double,
+        data['${effectivePrefix}lng'],
+      ),
+      note: attachedDatabase.typeMapping.read(
+        DriftSqlType.string,
+        data['${effectivePrefix}note'],
+      ),
+      heading: attachedDatabase.typeMapping.read(
+        DriftSqlType.double,
+        data['${effectivePrefix}heading'],
+      ),
       createdAt: attachedDatabase.typeMapping.read(
         DriftSqlType.dateTime,
         data['${effectivePrefix}created_at'],
@@ -3049,6 +3131,21 @@ class NewReferenceImage extends DataClass
   final int? timestampS;
   final String? source;
   final String? sourceUrl;
+
+  /// Where the frame is shot from (schema 16): the fine layer under a place.
+  /// A place is a stop; the frames of one stop can be shot from spots metres
+  /// apart ("三の間" and "東詰" of 宇治橋), and the place page groups them into
+  /// spots by [note] and position. Null for frames nobody placed: they count
+  /// as shot from the stop's own position.
+  final double? lat;
+  final double? lng;
+
+  /// A short name for the spot the frame is shot from ("三の間"). Frames with
+  /// the same note close together are one spot.
+  final String? note;
+
+  /// The compass direction the shot faces, in degrees from north, when known.
+  final double? heading;
   final DateTime createdAt;
   const NewReferenceImage({
     required this.id,
@@ -3061,6 +3158,10 @@ class NewReferenceImage extends DataClass
     this.timestampS,
     this.source,
     this.sourceUrl,
+    this.lat,
+    this.lng,
+    this.note,
+    this.heading,
     required this.createdAt,
   });
   @override
@@ -3093,6 +3194,18 @@ class NewReferenceImage extends DataClass
     }
     if (!nullToAbsent || sourceUrl != null) {
       map['source_url'] = Variable<String>(sourceUrl);
+    }
+    if (!nullToAbsent || lat != null) {
+      map['lat'] = Variable<double>(lat);
+    }
+    if (!nullToAbsent || lng != null) {
+      map['lng'] = Variable<double>(lng);
+    }
+    if (!nullToAbsent || note != null) {
+      map['note'] = Variable<String>(note);
+    }
+    if (!nullToAbsent || heading != null) {
+      map['heading'] = Variable<double>(heading);
     }
     map['created_at'] = Variable<DateTime>(createdAt);
     return map;
@@ -3128,6 +3241,12 @@ class NewReferenceImage extends DataClass
       sourceUrl: sourceUrl == null && nullToAbsent
           ? const Value.absent()
           : Value(sourceUrl),
+      lat: lat == null && nullToAbsent ? const Value.absent() : Value(lat),
+      lng: lng == null && nullToAbsent ? const Value.absent() : Value(lng),
+      note: note == null && nullToAbsent ? const Value.absent() : Value(note),
+      heading: heading == null && nullToAbsent
+          ? const Value.absent()
+          : Value(heading),
       createdAt: Value(createdAt),
     );
   }
@@ -3148,6 +3267,10 @@ class NewReferenceImage extends DataClass
       timestampS: serializer.fromJson<int?>(json['timestampS']),
       source: serializer.fromJson<String?>(json['source']),
       sourceUrl: serializer.fromJson<String?>(json['sourceUrl']),
+      lat: serializer.fromJson<double?>(json['lat']),
+      lng: serializer.fromJson<double?>(json['lng']),
+      note: serializer.fromJson<String?>(json['note']),
+      heading: serializer.fromJson<double?>(json['heading']),
       createdAt: serializer.fromJson<DateTime>(json['createdAt']),
     );
   }
@@ -3165,6 +3288,10 @@ class NewReferenceImage extends DataClass
       'timestampS': serializer.toJson<int?>(timestampS),
       'source': serializer.toJson<String?>(source),
       'sourceUrl': serializer.toJson<String?>(sourceUrl),
+      'lat': serializer.toJson<double?>(lat),
+      'lng': serializer.toJson<double?>(lng),
+      'note': serializer.toJson<String?>(note),
+      'heading': serializer.toJson<double?>(heading),
       'createdAt': serializer.toJson<DateTime>(createdAt),
     };
   }
@@ -3180,6 +3307,10 @@ class NewReferenceImage extends DataClass
     Value<int?> timestampS = const Value.absent(),
     Value<String?> source = const Value.absent(),
     Value<String?> sourceUrl = const Value.absent(),
+    Value<double?> lat = const Value.absent(),
+    Value<double?> lng = const Value.absent(),
+    Value<String?> note = const Value.absent(),
+    Value<double?> heading = const Value.absent(),
     DateTime? createdAt,
   }) => NewReferenceImage(
     id: id ?? this.id,
@@ -3192,6 +3323,10 @@ class NewReferenceImage extends DataClass
     timestampS: timestampS.present ? timestampS.value : this.timestampS,
     source: source.present ? source.value : this.source,
     sourceUrl: sourceUrl.present ? sourceUrl.value : this.sourceUrl,
+    lat: lat.present ? lat.value : this.lat,
+    lng: lng.present ? lng.value : this.lng,
+    note: note.present ? note.value : this.note,
+    heading: heading.present ? heading.value : this.heading,
     createdAt: createdAt ?? this.createdAt,
   );
   NewReferenceImage copyWithCompanion(NewReferenceImagesCompanion data) {
@@ -3210,6 +3345,10 @@ class NewReferenceImage extends DataClass
           : this.timestampS,
       source: data.source.present ? data.source.value : this.source,
       sourceUrl: data.sourceUrl.present ? data.sourceUrl.value : this.sourceUrl,
+      lat: data.lat.present ? data.lat.value : this.lat,
+      lng: data.lng.present ? data.lng.value : this.lng,
+      note: data.note.present ? data.note.value : this.note,
+      heading: data.heading.present ? data.heading.value : this.heading,
       createdAt: data.createdAt.present ? data.createdAt.value : this.createdAt,
     );
   }
@@ -3227,6 +3366,10 @@ class NewReferenceImage extends DataClass
           ..write('timestampS: $timestampS, ')
           ..write('source: $source, ')
           ..write('sourceUrl: $sourceUrl, ')
+          ..write('lat: $lat, ')
+          ..write('lng: $lng, ')
+          ..write('note: $note, ')
+          ..write('heading: $heading, ')
           ..write('createdAt: $createdAt')
           ..write(')'))
         .toString();
@@ -3244,6 +3387,10 @@ class NewReferenceImage extends DataClass
     timestampS,
     source,
     sourceUrl,
+    lat,
+    lng,
+    note,
+    heading,
     createdAt,
   );
   @override
@@ -3260,6 +3407,10 @@ class NewReferenceImage extends DataClass
           other.timestampS == this.timestampS &&
           other.source == this.source &&
           other.sourceUrl == this.sourceUrl &&
+          other.lat == this.lat &&
+          other.lng == this.lng &&
+          other.note == this.note &&
+          other.heading == this.heading &&
           other.createdAt == this.createdAt);
 }
 
@@ -3274,6 +3425,10 @@ class NewReferenceImagesCompanion extends UpdateCompanion<NewReferenceImage> {
   final Value<int?> timestampS;
   final Value<String?> source;
   final Value<String?> sourceUrl;
+  final Value<double?> lat;
+  final Value<double?> lng;
+  final Value<String?> note;
+  final Value<double?> heading;
   final Value<DateTime> createdAt;
   final Value<int> rowid;
   const NewReferenceImagesCompanion({
@@ -3287,6 +3442,10 @@ class NewReferenceImagesCompanion extends UpdateCompanion<NewReferenceImage> {
     this.timestampS = const Value.absent(),
     this.source = const Value.absent(),
     this.sourceUrl = const Value.absent(),
+    this.lat = const Value.absent(),
+    this.lng = const Value.absent(),
+    this.note = const Value.absent(),
+    this.heading = const Value.absent(),
     this.createdAt = const Value.absent(),
     this.rowid = const Value.absent(),
   });
@@ -3301,6 +3460,10 @@ class NewReferenceImagesCompanion extends UpdateCompanion<NewReferenceImage> {
     this.timestampS = const Value.absent(),
     this.source = const Value.absent(),
     this.sourceUrl = const Value.absent(),
+    this.lat = const Value.absent(),
+    this.lng = const Value.absent(),
+    this.note = const Value.absent(),
+    this.heading = const Value.absent(),
     this.createdAt = const Value.absent(),
     this.rowid = const Value.absent(),
   }) : id = Value(id);
@@ -3315,6 +3478,10 @@ class NewReferenceImagesCompanion extends UpdateCompanion<NewReferenceImage> {
     Expression<int>? timestampS,
     Expression<String>? source,
     Expression<String>? sourceUrl,
+    Expression<double>? lat,
+    Expression<double>? lng,
+    Expression<String>? note,
+    Expression<double>? heading,
     Expression<DateTime>? createdAt,
     Expression<int>? rowid,
   }) {
@@ -3329,6 +3496,10 @@ class NewReferenceImagesCompanion extends UpdateCompanion<NewReferenceImage> {
       if (timestampS != null) 'timestamp_s': timestampS,
       if (source != null) 'source': source,
       if (sourceUrl != null) 'source_url': sourceUrl,
+      if (lat != null) 'lat': lat,
+      if (lng != null) 'lng': lng,
+      if (note != null) 'note': note,
+      if (heading != null) 'heading': heading,
       if (createdAt != null) 'created_at': createdAt,
       if (rowid != null) 'rowid': rowid,
     });
@@ -3345,6 +3516,10 @@ class NewReferenceImagesCompanion extends UpdateCompanion<NewReferenceImage> {
     Value<int?>? timestampS,
     Value<String?>? source,
     Value<String?>? sourceUrl,
+    Value<double?>? lat,
+    Value<double?>? lng,
+    Value<String?>? note,
+    Value<double?>? heading,
     Value<DateTime>? createdAt,
     Value<int>? rowid,
   }) {
@@ -3359,6 +3534,10 @@ class NewReferenceImagesCompanion extends UpdateCompanion<NewReferenceImage> {
       timestampS: timestampS ?? this.timestampS,
       source: source ?? this.source,
       sourceUrl: sourceUrl ?? this.sourceUrl,
+      lat: lat ?? this.lat,
+      lng: lng ?? this.lng,
+      note: note ?? this.note,
+      heading: heading ?? this.heading,
       createdAt: createdAt ?? this.createdAt,
       rowid: rowid ?? this.rowid,
     );
@@ -3397,6 +3576,18 @@ class NewReferenceImagesCompanion extends UpdateCompanion<NewReferenceImage> {
     if (sourceUrl.present) {
       map['source_url'] = Variable<String>(sourceUrl.value);
     }
+    if (lat.present) {
+      map['lat'] = Variable<double>(lat.value);
+    }
+    if (lng.present) {
+      map['lng'] = Variable<double>(lng.value);
+    }
+    if (note.present) {
+      map['note'] = Variable<String>(note.value);
+    }
+    if (heading.present) {
+      map['heading'] = Variable<double>(heading.value);
+    }
     if (createdAt.present) {
       map['created_at'] = Variable<DateTime>(createdAt.value);
     }
@@ -3419,6 +3610,10 @@ class NewReferenceImagesCompanion extends UpdateCompanion<NewReferenceImage> {
           ..write('timestampS: $timestampS, ')
           ..write('source: $source, ')
           ..write('sourceUrl: $sourceUrl, ')
+          ..write('lat: $lat, ')
+          ..write('lng: $lng, ')
+          ..write('note: $note, ')
+          ..write('heading: $heading, ')
           ..write('createdAt: $createdAt, ')
           ..write('rowid: $rowid')
           ..write(')'))
@@ -4888,6 +5083,17 @@ class $StopsTable extends Stops with TableInfo<$StopsTable, Stop> {
     type: DriftSqlType.string,
     requiredDuringInsert: false,
   );
+  static const VerificationMeta _mergedIntoMeta = const VerificationMeta(
+    'mergedInto',
+  );
+  @override
+  late final GeneratedColumn<String> mergedInto = GeneratedColumn<String>(
+    'merged_into',
+    aliasedName,
+    true,
+    type: DriftSqlType.string,
+    requiredDuringInsert: false,
+  );
   static const VerificationMeta _addedByMeta = const VerificationMeta(
     'addedBy',
   );
@@ -4973,6 +5179,7 @@ class $StopsTable extends Stops with TableInfo<$StopsTable, Stop> {
     sourceUrl,
     area,
     note,
+    mergedInto,
     addedBy,
     createdAt,
     updatedAt,
@@ -5124,6 +5331,12 @@ class $StopsTable extends Stops with TableInfo<$StopsTable, Stop> {
         note.isAcceptableOrUnknown(data['note']!, _noteMeta),
       );
     }
+    if (data.containsKey('merged_into')) {
+      context.handle(
+        _mergedIntoMeta,
+        mergedInto.isAcceptableOrUnknown(data['merged_into']!, _mergedIntoMeta),
+      );
+    }
     if (data.containsKey('added_by')) {
       context.handle(
         _addedByMeta,
@@ -5231,6 +5444,10 @@ class $StopsTable extends Stops with TableInfo<$StopsTable, Stop> {
         DriftSqlType.string,
         data['${effectivePrefix}note'],
       ),
+      mergedInto: attachedDatabase.typeMapping.read(
+        DriftSqlType.string,
+        data['${effectivePrefix}merged_into'],
+      ),
       addedBy: attachedDatabase.typeMapping.read(
         DriftSqlType.string,
         data['${effectivePrefix}added_by'],
@@ -5294,6 +5511,12 @@ class Stop extends DataClass implements Insertable<Stop> {
   final String? sourceUrl;
   final String? area;
   final String? note;
+
+  /// On a stop deleted by a merge, the stop it was merged into (schema 16).
+  /// It syncs, so another member's phone can move the frames only it has
+  /// (never uploaded) onto the kept stop instead of leaving them on a
+  /// deleted one.
+  final String? mergedInto;
   final String addedBy;
   final DateTime createdAt;
   final DateTime updatedAt;
@@ -5319,6 +5542,7 @@ class Stop extends DataClass implements Insertable<Stop> {
     this.sourceUrl,
     this.area,
     this.note,
+    this.mergedInto,
     required this.addedBy,
     required this.createdAt,
     required this.updatedAt,
@@ -5370,6 +5594,9 @@ class Stop extends DataClass implements Insertable<Stop> {
     }
     if (!nullToAbsent || note != null) {
       map['note'] = Variable<String>(note);
+    }
+    if (!nullToAbsent || mergedInto != null) {
+      map['merged_into'] = Variable<String>(mergedInto);
     }
     map['added_by'] = Variable<String>(addedBy);
     map['created_at'] = Variable<DateTime>(createdAt);
@@ -5430,6 +5657,9 @@ class Stop extends DataClass implements Insertable<Stop> {
           : Value(sourceUrl),
       area: area == null && nullToAbsent ? const Value.absent() : Value(area),
       note: note == null && nullToAbsent ? const Value.absent() : Value(note),
+      mergedInto: mergedInto == null && nullToAbsent
+          ? const Value.absent()
+          : Value(mergedInto),
       addedBy: Value(addedBy),
       createdAt: Value(createdAt),
       updatedAt: Value(updatedAt),
@@ -5467,6 +5697,7 @@ class Stop extends DataClass implements Insertable<Stop> {
       sourceUrl: serializer.fromJson<String?>(json['sourceUrl']),
       area: serializer.fromJson<String?>(json['area']),
       note: serializer.fromJson<String?>(json['note']),
+      mergedInto: serializer.fromJson<String?>(json['mergedInto']),
       addedBy: serializer.fromJson<String>(json['addedBy']),
       createdAt: serializer.fromJson<DateTime>(json['createdAt']),
       updatedAt: serializer.fromJson<DateTime>(json['updatedAt']),
@@ -5497,6 +5728,7 @@ class Stop extends DataClass implements Insertable<Stop> {
       'sourceUrl': serializer.toJson<String?>(sourceUrl),
       'area': serializer.toJson<String?>(area),
       'note': serializer.toJson<String?>(note),
+      'mergedInto': serializer.toJson<String?>(mergedInto),
       'addedBy': serializer.toJson<String>(addedBy),
       'createdAt': serializer.toJson<DateTime>(createdAt),
       'updatedAt': serializer.toJson<DateTime>(updatedAt),
@@ -5525,6 +5757,7 @@ class Stop extends DataClass implements Insertable<Stop> {
     Value<String?> sourceUrl = const Value.absent(),
     Value<String?> area = const Value.absent(),
     Value<String?> note = const Value.absent(),
+    Value<String?> mergedInto = const Value.absent(),
     String? addedBy,
     DateTime? createdAt,
     DateTime? updatedAt,
@@ -5556,6 +5789,7 @@ class Stop extends DataClass implements Insertable<Stop> {
     sourceUrl: sourceUrl.present ? sourceUrl.value : this.sourceUrl,
     area: area.present ? area.value : this.area,
     note: note.present ? note.value : this.note,
+    mergedInto: mergedInto.present ? mergedInto.value : this.mergedInto,
     addedBy: addedBy ?? this.addedBy,
     createdAt: createdAt ?? this.createdAt,
     updatedAt: updatedAt ?? this.updatedAt,
@@ -5595,6 +5829,9 @@ class Stop extends DataClass implements Insertable<Stop> {
       sourceUrl: data.sourceUrl.present ? data.sourceUrl.value : this.sourceUrl,
       area: data.area.present ? data.area.value : this.area,
       note: data.note.present ? data.note.value : this.note,
+      mergedInto: data.mergedInto.present
+          ? data.mergedInto.value
+          : this.mergedInto,
       addedBy: data.addedBy.present ? data.addedBy.value : this.addedBy,
       createdAt: data.createdAt.present ? data.createdAt.value : this.createdAt,
       updatedAt: data.updatedAt.present ? data.updatedAt.value : this.updatedAt,
@@ -5627,6 +5864,7 @@ class Stop extends DataClass implements Insertable<Stop> {
           ..write('sourceUrl: $sourceUrl, ')
           ..write('area: $area, ')
           ..write('note: $note, ')
+          ..write('mergedInto: $mergedInto, ')
           ..write('addedBy: $addedBy, ')
           ..write('createdAt: $createdAt, ')
           ..write('updatedAt: $updatedAt, ')
@@ -5657,6 +5895,7 @@ class Stop extends DataClass implements Insertable<Stop> {
     sourceUrl,
     area,
     note,
+    mergedInto,
     addedBy,
     createdAt,
     updatedAt,
@@ -5686,6 +5925,7 @@ class Stop extends DataClass implements Insertable<Stop> {
           other.sourceUrl == this.sourceUrl &&
           other.area == this.area &&
           other.note == this.note &&
+          other.mergedInto == this.mergedInto &&
           other.addedBy == this.addedBy &&
           other.createdAt == this.createdAt &&
           other.updatedAt == this.updatedAt &&
@@ -5713,6 +5953,7 @@ class StopsCompanion extends UpdateCompanion<Stop> {
   final Value<String?> sourceUrl;
   final Value<String?> area;
   final Value<String?> note;
+  final Value<String?> mergedInto;
   final Value<String> addedBy;
   final Value<DateTime> createdAt;
   final Value<DateTime> updatedAt;
@@ -5739,6 +5980,7 @@ class StopsCompanion extends UpdateCompanion<Stop> {
     this.sourceUrl = const Value.absent(),
     this.area = const Value.absent(),
     this.note = const Value.absent(),
+    this.mergedInto = const Value.absent(),
     this.addedBy = const Value.absent(),
     this.createdAt = const Value.absent(),
     this.updatedAt = const Value.absent(),
@@ -5766,6 +6008,7 @@ class StopsCompanion extends UpdateCompanion<Stop> {
     this.sourceUrl = const Value.absent(),
     this.area = const Value.absent(),
     this.note = const Value.absent(),
+    this.mergedInto = const Value.absent(),
     required String addedBy,
     this.createdAt = const Value.absent(),
     this.updatedAt = const Value.absent(),
@@ -5799,6 +6042,7 @@ class StopsCompanion extends UpdateCompanion<Stop> {
     Expression<String>? sourceUrl,
     Expression<String>? area,
     Expression<String>? note,
+    Expression<String>? mergedInto,
     Expression<String>? addedBy,
     Expression<DateTime>? createdAt,
     Expression<int>? updatedAt,
@@ -5826,6 +6070,7 @@ class StopsCompanion extends UpdateCompanion<Stop> {
       if (sourceUrl != null) 'source_url': sourceUrl,
       if (area != null) 'area': area,
       if (note != null) 'note': note,
+      if (mergedInto != null) 'merged_into': mergedInto,
       if (addedBy != null) 'added_by': addedBy,
       if (createdAt != null) 'created_at': createdAt,
       if (updatedAt != null) 'updated_at': updatedAt,
@@ -5855,6 +6100,7 @@ class StopsCompanion extends UpdateCompanion<Stop> {
     Value<String?>? sourceUrl,
     Value<String?>? area,
     Value<String?>? note,
+    Value<String?>? mergedInto,
     Value<String>? addedBy,
     Value<DateTime>? createdAt,
     Value<DateTime>? updatedAt,
@@ -5882,6 +6128,7 @@ class StopsCompanion extends UpdateCompanion<Stop> {
       sourceUrl: sourceUrl ?? this.sourceUrl,
       area: area ?? this.area,
       note: note ?? this.note,
+      mergedInto: mergedInto ?? this.mergedInto,
       addedBy: addedBy ?? this.addedBy,
       createdAt: createdAt ?? this.createdAt,
       updatedAt: updatedAt ?? this.updatedAt,
@@ -5949,6 +6196,9 @@ class StopsCompanion extends UpdateCompanion<Stop> {
     if (note.present) {
       map['note'] = Variable<String>(note.value);
     }
+    if (mergedInto.present) {
+      map['merged_into'] = Variable<String>(mergedInto.value);
+    }
     if (addedBy.present) {
       map['added_by'] = Variable<String>(addedBy.value);
     }
@@ -5998,6 +6248,7 @@ class StopsCompanion extends UpdateCompanion<Stop> {
           ..write('sourceUrl: $sourceUrl, ')
           ..write('area: $area, ')
           ..write('note: $note, ')
+          ..write('mergedInto: $mergedInto, ')
           ..write('addedBy: $addedBy, ')
           ..write('createdAt: $createdAt, ')
           ..write('updatedAt: $updatedAt, ')
@@ -10358,6 +10609,10 @@ typedef $$NewReferenceImagesTableCreateCompanionBuilder =
       Value<int?> timestampS,
       Value<String?> source,
       Value<String?> sourceUrl,
+      Value<double?> lat,
+      Value<double?> lng,
+      Value<String?> note,
+      Value<double?> heading,
       Value<DateTime> createdAt,
       Value<int> rowid,
     });
@@ -10373,6 +10628,10 @@ typedef $$NewReferenceImagesTableUpdateCompanionBuilder =
       Value<int?> timestampS,
       Value<String?> source,
       Value<String?> sourceUrl,
+      Value<double?> lat,
+      Value<double?> lng,
+      Value<String?> note,
+      Value<double?> heading,
       Value<DateTime> createdAt,
       Value<int> rowid,
     });
@@ -10463,6 +10722,26 @@ class $$NewReferenceImagesTableFilterComposer
     builder: (column) => ColumnFilters(column),
   );
 
+  ColumnFilters<double> get lat => $composableBuilder(
+    column: $table.lat,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<double> get lng => $composableBuilder(
+    column: $table.lng,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<String> get note => $composableBuilder(
+    column: $table.note,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<double> get heading => $composableBuilder(
+    column: $table.heading,
+    builder: (column) => ColumnFilters(column),
+  );
+
   ColumnFilters<DateTime> get createdAt => $composableBuilder(
     column: $table.createdAt,
     builder: (column) => ColumnFilters(column),
@@ -10546,6 +10825,26 @@ class $$NewReferenceImagesTableOrderingComposer
     builder: (column) => ColumnOrderings(column),
   );
 
+  ColumnOrderings<double> get lat => $composableBuilder(
+    column: $table.lat,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<double> get lng => $composableBuilder(
+    column: $table.lng,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<String> get note => $composableBuilder(
+    column: $table.note,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<double> get heading => $composableBuilder(
+    column: $table.heading,
+    builder: (column) => ColumnOrderings(column),
+  );
+
   ColumnOrderings<DateTime> get createdAt => $composableBuilder(
     column: $table.createdAt,
     builder: (column) => ColumnOrderings(column),
@@ -10614,6 +10913,18 @@ class $$NewReferenceImagesTableAnnotationComposer
 
   GeneratedColumn<String> get sourceUrl =>
       $composableBuilder(column: $table.sourceUrl, builder: (column) => column);
+
+  GeneratedColumn<double> get lat =>
+      $composableBuilder(column: $table.lat, builder: (column) => column);
+
+  GeneratedColumn<double> get lng =>
+      $composableBuilder(column: $table.lng, builder: (column) => column);
+
+  GeneratedColumn<String> get note =>
+      $composableBuilder(column: $table.note, builder: (column) => column);
+
+  GeneratedColumn<double> get heading =>
+      $composableBuilder(column: $table.heading, builder: (column) => column);
 
   GeneratedColumn<DateTime> get createdAt =>
       $composableBuilder(column: $table.createdAt, builder: (column) => column);
@@ -10685,6 +10996,10 @@ class $$NewReferenceImagesTableTableManager
                 Value<int?> timestampS = const Value.absent(),
                 Value<String?> source = const Value.absent(),
                 Value<String?> sourceUrl = const Value.absent(),
+                Value<double?> lat = const Value.absent(),
+                Value<double?> lng = const Value.absent(),
+                Value<String?> note = const Value.absent(),
+                Value<double?> heading = const Value.absent(),
                 Value<DateTime> createdAt = const Value.absent(),
                 Value<int> rowid = const Value.absent(),
               }) => NewReferenceImagesCompanion(
@@ -10698,6 +11013,10 @@ class $$NewReferenceImagesTableTableManager
                 timestampS: timestampS,
                 source: source,
                 sourceUrl: sourceUrl,
+                lat: lat,
+                lng: lng,
+                note: note,
+                heading: heading,
                 createdAt: createdAt,
                 rowid: rowid,
               ),
@@ -10713,6 +11032,10 @@ class $$NewReferenceImagesTableTableManager
                 Value<int?> timestampS = const Value.absent(),
                 Value<String?> source = const Value.absent(),
                 Value<String?> sourceUrl = const Value.absent(),
+                Value<double?> lat = const Value.absent(),
+                Value<double?> lng = const Value.absent(),
+                Value<String?> note = const Value.absent(),
+                Value<double?> heading = const Value.absent(),
                 Value<DateTime> createdAt = const Value.absent(),
                 Value<int> rowid = const Value.absent(),
               }) => NewReferenceImagesCompanion.insert(
@@ -10726,6 +11049,10 @@ class $$NewReferenceImagesTableTableManager
                 timestampS: timestampS,
                 source: source,
                 sourceUrl: sourceUrl,
+                lat: lat,
+                lng: lng,
+                note: note,
+                heading: heading,
                 createdAt: createdAt,
                 rowid: rowid,
               ),
@@ -12024,6 +12351,7 @@ typedef $$StopsTableCreateCompanionBuilder =
       Value<String?> sourceUrl,
       Value<String?> area,
       Value<String?> note,
+      Value<String?> mergedInto,
       required String addedBy,
       Value<DateTime> createdAt,
       Value<DateTime> updatedAt,
@@ -12052,6 +12380,7 @@ typedef $$StopsTableUpdateCompanionBuilder =
       Value<String?> sourceUrl,
       Value<String?> area,
       Value<String?> note,
+      Value<String?> mergedInto,
       Value<String> addedBy,
       Value<DateTime> createdAt,
       Value<DateTime> updatedAt,
@@ -12209,6 +12538,11 @@ class $$StopsTableFilterComposer extends Composer<_$AppDatabase, $StopsTable> {
 
   ColumnFilters<String> get note => $composableBuilder(
     column: $table.note,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<String> get mergedInto => $composableBuilder(
+    column: $table.mergedInto,
     builder: (column) => ColumnFilters(column),
   );
 
@@ -12412,6 +12746,11 @@ class $$StopsTableOrderingComposer
     builder: (column) => ColumnOrderings(column),
   );
 
+  ColumnOrderings<String> get mergedInto => $composableBuilder(
+    column: $table.mergedInto,
+    builder: (column) => ColumnOrderings(column),
+  );
+
   ColumnOrderings<String> get addedBy => $composableBuilder(
     column: $table.addedBy,
     builder: (column) => ColumnOrderings(column),
@@ -12537,6 +12876,11 @@ class $$StopsTableAnnotationComposer
 
   GeneratedColumn<String> get note =>
       $composableBuilder(column: $table.note, builder: (column) => column);
+
+  GeneratedColumn<String> get mergedInto => $composableBuilder(
+    column: $table.mergedInto,
+    builder: (column) => column,
+  );
 
   GeneratedColumn<String> get addedBy =>
       $composableBuilder(column: $table.addedBy, builder: (column) => column);
@@ -12682,6 +13026,7 @@ class $$StopsTableTableManager
                 Value<String?> sourceUrl = const Value.absent(),
                 Value<String?> area = const Value.absent(),
                 Value<String?> note = const Value.absent(),
+                Value<String?> mergedInto = const Value.absent(),
                 Value<String> addedBy = const Value.absent(),
                 Value<DateTime> createdAt = const Value.absent(),
                 Value<DateTime> updatedAt = const Value.absent(),
@@ -12708,6 +13053,7 @@ class $$StopsTableTableManager
                 sourceUrl: sourceUrl,
                 area: area,
                 note: note,
+                mergedInto: mergedInto,
                 addedBy: addedBy,
                 createdAt: createdAt,
                 updatedAt: updatedAt,
@@ -12736,6 +13082,7 @@ class $$StopsTableTableManager
                 Value<String?> sourceUrl = const Value.absent(),
                 Value<String?> area = const Value.absent(),
                 Value<String?> note = const Value.absent(),
+                Value<String?> mergedInto = const Value.absent(),
                 required String addedBy,
                 Value<DateTime> createdAt = const Value.absent(),
                 Value<DateTime> updatedAt = const Value.absent(),
@@ -12762,6 +13109,7 @@ class $$StopsTableTableManager
                 sourceUrl: sourceUrl,
                 area: area,
                 note: note,
+                mergedInto: mergedInto,
                 addedBy: addedBy,
                 createdAt: createdAt,
                 updatedAt: updatedAt,

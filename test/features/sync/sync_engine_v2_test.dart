@@ -152,7 +152,12 @@ class FakeFirestoreSyncV2Service implements FirestoreSyncV2Service {
   }) {
     final fakeBatch = batch as _FakeV2WriteBatch;
     fakeBatch.addOp(() {
+      // Like Firestore's merge, `frameShots` keeps entries this push leaves out.
+      final oldShots = tripStops[stop.tripId]?[stop.id]?['frameShots'] as Map?;
+      final shots = {...?oldShots, ...frameShotsOf(referenceImages ?? const [])};
       tripStops.putIfAbsent(stop.tripId, () => {})[stop.id] = {
+        if (shots.isNotEmpty) 'frameShots': shots,
+        'mergedInto': stop.mergedInto,
         'id': stop.id,
         'tripId': stop.tripId,
         'placeKey': stop.placeKey,
