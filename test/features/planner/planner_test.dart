@@ -516,7 +516,7 @@ void main() {
       await disposeApp(tester);
     });
 
-    testWidgets('undated and untimed trips show day numbers and order badges without synthetic times', (tester) async {
+    testWidgets('undated and untimed trips show day numbers and plain dots, without synthetic times or numbers', (tester) async {
       tester.view.physicalSize = const Size(1080, 2400);
       tester.view.devicePixelRatio = 3;
       addTearDown(tester.view.reset);
@@ -538,8 +538,9 @@ void main() {
       expect(find.text('2 stops'), findsOneWidget);
       expect(find.text('09:00'), findsNothing);
       expect(find.text('10:00'), findsNothing);
-      expect(find.text('1'), findsOneWidget);
-      expect(find.text('2'), findsOneWidget);
+      // Without times the day is a set of places, not a sequence: no numbers.
+      expect(find.text('1'), findsNothing);
+      expect(find.text('2'), findsNothing);
 
       // Empty Day 2 lets editors add stops directly without toggling edit mode.
       await tester.tap(find.byTooltip('Edit the plan'));
@@ -573,7 +574,7 @@ void main() {
       await tester.tap(find.widgetWithText(FilledButton, 'Done'));
       await tester.pumpAndSettle();
 
-      // Verify Bridge moved after Shrine while keeping order badges instead of times.
+      // Verify Bridge moved after Shrine, still without times.
       expect(tester.getTopLeft(find.text('Shrine')).dy, lessThan(tester.getTopLeft(find.text('Bridge')).dy));
       await disposeApp(tester);
     });
