@@ -36,6 +36,14 @@ class MapPin {
   /// ring instead of a solid border.
   final bool estimated;
 
+  /// A picture drawn as the pin instead of a dot (a place's first frame or
+  /// latest photo), in a small rounded box bordered in [color] with a tip
+  /// pointing at [point]. Clusters of such pins show their first one's.
+  final Widget? face;
+
+  /// The number on a [face] pin's badge (its frames); none when null or 0.
+  final int? badge;
+
   const MapPin({
     required this.id,
     required this.point,
@@ -47,6 +55,8 @@ class MapPin {
     this.next = false,
     this.count = 1,
     this.estimated = false,
+    this.face,
+    this.badge,
   });
 }
 

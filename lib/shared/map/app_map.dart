@@ -4,7 +4,7 @@ import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_map/flutter_map.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
-import 'package:latlong2/latlong.dart';
+import 'package:latlong2/latlong.dart' hide Path;
 import 'package:path/path.dart' as p;
 import 'package:path_provider/path_provider.dart';
 
@@ -369,9 +369,11 @@ double pinSize(MapPin pin) => pin.selected
             ? 30
             : 24;
 
-/// [pin] as a marker whose dot is centred on its point. A selected pin carries
-/// its name underneath.
+/// [pin] as a marker whose dot is centred on its point, or, for a
+/// [MapPin.face] pin, whose tip is on it. A selected pin carries its name
+/// underneath.
 Marker pinMarker(MapPin pin, {ValueChanged<MapPin>? onTap, bool withName = true}) {
+  if (pin.face != null) return _faceMarker(pin, onTap: onTap, withName: withName);
   final size = pinSize(pin);
   // Room for the count badge, which pokes out of the top right.
   final box = size + 12;
@@ -388,7 +390,41 @@ Marker pinMarker(MapPin pin, {ValueChanged<MapPin>? onTap, bool withName = true}
   );
 }
 
+/// The width of a [MapPin.face] pin's picture; its height is 34 of 58 of
+/// it, about a frame's 16:9 once the border is in.
+double faceWidth(MapPin pin) => pin.selected ? 68 : 58;
+
+/// Room around a face pin's picture for its badge, and under it for its tip.
+const _faceInset = 8.0;
+const _faceTip = 7.0;
+
+Marker _faceMarker(MapPin pin, {ValueChanged<MapPin>? onTap, bool withName = true}) {
+  final w = faceWidth(pin);
+  final h = w * 34 / 58;
+  final box = h + _faceInset + _faceTip;
+  final named = pin.selected && withName;
+  final height = named ? box + 26 : box;
+  return Marker(
+    key: ValueKey('pin:${pin.id}'),
+    point: pin.point,
+    width: named ? 180 : w + _faceInset * 2,
+    height: height,
+    // Puts the tip, box from the top, on the point.
+    alignment: Alignment(0, 1 - 2 * box / height),
+    child: FacePin(pin: pin, withName: named, onTap: onTap == null ? null : () => onTap(pin)),
+  );
+}
+
 Marker clusterMarker(PinCluster cluster, {required ValueChanged<PinCluster> onTap}) {
+  if (cluster.pins.every((p) => p.face != null)) {
+    return Marker(
+      key: ValueKey('cluster:${cluster.first.id}'),
+      point: cluster.point,
+      width: 58 + _faceInset * 2,
+      height: 34 + _faceInset * 2,
+      child: FaceCluster(cluster: cluster, onTap: () => onTap(cluster)),
+    );
+  }
   final size = clusterSize(cluster);
   return Marker(
     key: ValueKey('cluster:${cluster.first.id}'),
@@ -518,6 +554,192 @@ class PinDot extends StatelessWidget {
       ),
     );
   }
+}
+
+/// A [MapPin.face] pin: its picture in a box bordered in its colour, a tip
+/// under it pointing at the spot, and its badge in the top right corner.
+class FacePin extends StatelessWidget {
+  final MapPin pin;
+  final VoidCallback? onTap;
+
+  /// Its name in a tag underneath.
+  final bool withName;
+
+  const FacePin({super.key, required this.pin, this.onTap, this.withName = false});
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    final w = faceWidth(pin);
+    final h = w * 34 / 58;
+    final color = pin.done ? pinDoneColor : pin.color;
+    final badge = pin.badge ?? 0;
+    final face = SizedBox(
+      width: w + _faceInset * 2,
+      height: h + _faceInset + _faceTip,
+      child: Stack(
+        clipBehavior: Clip.none,
+        children: [
+          Positioned(
+            left: _faceInset,
+            top: _faceInset,
+            width: w,
+            height: h,
+            child: Container(
+              decoration: BoxDecoration(
+                color: theme.colorScheme.surfaceContainerHighest,
+                borderRadius: BorderRadius.circular(8),
+                border: Border.all(color: color, width: 3),
+                boxShadow: [
+                  if (pin.selected) BoxShadow(color: color.withValues(alpha: 0.35), spreadRadius: 3),
+                  const BoxShadow(color: Color(0x4D000000), blurRadius: 6, offset: Offset(0, 2)),
+                ],
+              ),
+              child: ClipRRect(borderRadius: BorderRadius.circular(5), child: pin.face),
+            ),
+          ),
+          Positioned(
+            left: _faceInset + w / 2 - 6,
+            top: _faceInset + h - 1,
+            child: CustomPaint(size: const Size(12, _faceTip + 1), painter: _Tip(color: color)),
+          ),
+          if (badge > 0)
+            Positioned(
+              right: 0,
+              top: 0,
+              child: _Badge(text: '$badge', background: theme.colorScheme.onSurface, foreground: theme.colorScheme.surface),
+            ),
+        ],
+      ),
+    );
+    return Semantics(
+      button: onTap != null,
+      label: pin.name,
+      excludeSemantics: true,
+      child: GestureDetector(
+        behavior: HitTestBehavior.opaque,
+        onTap: onTap,
+        child: withName ? Column(mainAxisSize: MainAxisSize.min, children: [face, _NameTag(name: pin.name)]) : face,
+      ),
+    );
+  }
+}
+
+/// Face pins too close to part: their first one's picture on a little
+/// stack, with how many there are.
+class FaceCluster extends StatelessWidget {
+  final PinCluster cluster;
+  final VoidCallback onTap;
+
+  const FaceCluster({super.key, required this.cluster, required this.onTap});
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    final surface = theme.colorScheme.surface;
+    return Semantics(
+      button: true,
+      label: '${cluster.pins.length}: ${cluster.pins.map((p) => p.name).take(5).join(', ')}',
+      excludeSemantics: true,
+      child: GestureDetector(
+        behavior: HitTestBehavior.opaque,
+        onTap: onTap,
+        child: Stack(
+          clipBehavior: Clip.none,
+          children: [
+            Positioned(
+              left: _faceInset,
+              top: _faceInset,
+              width: 58,
+              height: 34,
+              child: Container(
+                decoration: BoxDecoration(
+                  color: theme.colorScheme.surfaceContainerHighest,
+                  borderRadius: BorderRadius.circular(10),
+                  border: Border.all(color: surface, width: 3),
+                  boxShadow: [
+                    BoxShadow(color: surface, offset: const Offset(4, 4)),
+                    BoxShadow(color: theme.colorScheme.outlineVariant, offset: const Offset(5, 5)),
+                    const BoxShadow(color: Color(0x4D000000), blurRadius: 8, offset: Offset(0, 2)),
+                  ],
+                ),
+                child: ClipRRect(borderRadius: BorderRadius.circular(7), child: cluster.first.face),
+              ),
+            ),
+            Positioned(
+              right: 0,
+              top: 0,
+              child: _Badge(text: cluster.label, background: theme.colorScheme.onSurface, foreground: surface),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+class _Badge extends StatelessWidget {
+  final String text;
+  final Color background;
+  final Color foreground;
+
+  const _Badge({required this.text, required this.background, required this.foreground});
+
+  @override
+  Widget build(BuildContext context) => Container(
+        constraints: const BoxConstraints(minWidth: 20),
+        height: 20,
+        padding: const EdgeInsets.symmetric(horizontal: 5),
+        decoration: BoxDecoration(color: background, borderRadius: BorderRadius.circular(10)),
+        alignment: Alignment.center,
+        child: Text(text, style: TextStyle(color: foreground, fontSize: 11, fontWeight: FontWeight.w700, height: 1)),
+      );
+}
+
+class _NameTag extends StatelessWidget {
+  final String name;
+
+  const _NameTag({required this.name});
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    return Container(
+      margin: const EdgeInsets.only(top: 2),
+      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
+      decoration: BoxDecoration(
+        color: theme.colorScheme.surface,
+        borderRadius: BorderRadius.circular(8),
+        boxShadow: const [BoxShadow(color: Color(0x33000000), blurRadius: 3, offset: Offset(0, 1))],
+      ),
+      child: Text(
+        name,
+        maxLines: 1,
+        overflow: TextOverflow.ellipsis,
+        style: theme.textTheme.labelSmall?.copyWith(fontWeight: FontWeight.w700),
+      ),
+    );
+  }
+}
+
+/// The little triangle under a face pin.
+class _Tip extends CustomPainter {
+  final Color color;
+
+  const _Tip({required this.color});
+
+  @override
+  void paint(Canvas canvas, Size size) {
+    final path = Path()
+      ..moveTo(0, 0)
+      ..lineTo(size.width, 0)
+      ..lineTo(size.width / 2, size.height)
+      ..close();
+    canvas.drawPath(path, Paint()..color = color);
+  }
+
+  @override
+  bool shouldRepaint(_Tip old) => old.color != color;
 }
 
 /// A dashed circle just inside its box, for an [MapPin.estimated] pin.
