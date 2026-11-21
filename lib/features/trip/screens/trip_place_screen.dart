@@ -1,21 +1,27 @@
 import 'dart:async';
 import 'dart:math' as math;
 
+import 'package:flutter/foundation.dart' show kIsWeb;
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart' show PlatformException;
 import 'package:flutter_map/flutter_map.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
+import 'package:image_picker/image_picker.dart';
 import 'package:latlong2/latlong.dart';
 import 'package:url_launcher/url_launcher.dart';
 
 import '../../../core/database/database.dart';
 import '../../../core/l10n/l10n.dart';
+import '../../../core/providers/database_provider.dart';
 import '../../../core/utils/app_result.dart';
 import '../../../core/utils/platform_media.dart';
 import '../../../shared/map/app_map.dart';
 import '../../../shared/theme/app_theme.dart';
 import '../../../shared/widgets/up_button.dart';
 import '../../camera/services/anime_camera_launcher.dart';
+import '../../camera/services/photo_edit_route.dart';
+import '../../camera/services/picked_shot.dart';
 import '../../library/models/frames.dart' show frameCaption;
 import '../../library/widgets/place_page_parts.dart';
 import '../../planner/controllers/day_planner_controller.dart';
@@ -185,6 +191,10 @@ class _TripPlaceScreenState extends ConsumerState<TripPlaceScreen> {
               Navigator.pop(viewerContext);
               context.push('/photo/${photo.id}');
             }),
+          ViewerAction(l10n.placePickFromGallery, () {
+            Navigator.pop(viewerContext);
+            _pickFromGallery(spot.stop.placeKey, frame);
+          }),
           if (animeCameraSupported)
             ViewerAction(l10n.placeTakePhoto, () {
               Navigator.pop(viewerContext);
@@ -193,6 +203,51 @@ class _TripPlaceScreenState extends ConsumerState<TripPlaceScreen> {
         ],
       ),
     ));
+  }
+
+  /// A photo from the gallery as the user's shot of [frame], so it counts
+  /// as shot: saved as the camera's kept shots are ([recordPickedShot]),
+  /// without editing. The web keeps no files, so there it goes to the
+  /// editor with the frame, whose save files it the same way.
+  Future<void> _pickFromGallery(String placeKey, NewReferenceImage frame) async {
+    final l10n = context.l10n;
+    final messenger = ScaffoldMessenger.of(context);
+    final router = GoRouter.of(context);
+    final XFile? picked;
+    try {
+      picked = await ImagePicker().pickImage(source: ImageSource.gallery);
+    } on PlatformException catch (e) {
+      messenger.showSnackBar(SnackBar(content: Text(l10n.placePickFailed(e.message ?? e.code))));
+      return;
+    }
+    if (picked == null || !mounted) return;
+    if (kIsWeb) {
+      final reference = await framePath(ref, frame);
+      router.push(PhotoEditArgs(
+        path: picked.path,
+        placeKey: placeKey,
+        tripId: widget.tripId,
+        referencePath: reference,
+        referenceImageId: reference == null ? null : frame.id,
+      ).location);
+      return;
+    }
+    try {
+      final result = await recordPickedShot(
+        ref.read(databaseProvider),
+        path: picked.path,
+        bytes: await picked.readAsBytes(),
+        placeKey: placeKey,
+        tripId: widget.tripId,
+        frameId: frame.id,
+      );
+      messenger.showSnackBar(SnackBar(
+        content: Text(l10n.placePickedSaved),
+        action: SnackBarAction(label: l10n.placeCompare, onPressed: () => router.push('/photo/${result.photo.id}')),
+      ));
+    } catch (e) {
+      messenger.showSnackBar(SnackBar(content: Text(l10n.placePickFailed('$e'))));
+    }
   }
 
   Future<void> _moveSheet(TripPlacesView view, TripPlace place, PlacesSection from) async {

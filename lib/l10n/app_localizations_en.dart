@@ -740,4 +740,15 @@ class AppLocalizationsEn extends AppLocalizations {
 
   @override
   String get mapNoPlaces => 'No places here yet';
+
+  @override
+  String get placePickFromGallery => 'Pick from gallery';
+
+  @override
+  String get placePickedSaved => 'Saved as your photo of this frame';
+
+  @override
+  String placePickFailed(String error) {
+    return 'Couldn\'t add the photo: $error';
+  }
 }

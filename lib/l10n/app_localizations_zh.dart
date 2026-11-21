@@ -717,6 +717,17 @@ class AppLocalizationsZh extends AppLocalizations {
 
   @override
   String get mapNoPlaces => '這裡還沒有地點';
+
+  @override
+  String get placePickFromGallery => '從相簿選';
+
+  @override
+  String get placePickedSaved => '存好了，這張參考圖算拍過了';
+
+  @override
+  String placePickFailed(String error) {
+    return '加不進這張照片：$error';
+  }
 }
 
 /// The translations for Chinese, using the Han script (`zh_Hant`).
@@ -1432,4 +1443,15 @@ class AppLocalizationsZhHant extends AppLocalizationsZh {
 
   @override
   String get mapNoPlaces => '這裡還沒有地點';
+
+  @override
+  String get placePickFromGallery => '從相簿選';
+
+  @override
+  String get placePickedSaved => '存好了，這張參考圖算拍過了';
+
+  @override
+  String placePickFailed(String error) {
+    return '加不進這張照片：$error';
+  }
 }

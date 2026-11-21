@@ -185,5 +185,8 @@
   "mapClose": "關閉",
   "mapPlaceCount": "{count, plural, other{{count} 個地點}}",
   "mapCrowded": "這一帶太擠，點一個看看",
-  "mapNoPlaces": "這裡還沒有地點"
+  "mapNoPlaces": "這裡還沒有地點",
+  "placePickFromGallery": "從相簿選",
+  "placePickedSaved": "存好了，這張參考圖算拍過了",
+  "placePickFailed": "加不進這張照片：{error}"
 }

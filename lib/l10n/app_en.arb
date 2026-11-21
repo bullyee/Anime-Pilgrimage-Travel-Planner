@@ -520,5 +520,15 @@
     }
   },
   "mapCrowded": "Too crowded here; pick one",
-  "mapNoPlaces": "No places here yet"
+  "mapNoPlaces": "No places here yet",
+  "placePickFromGallery": "Pick from gallery",
+  "placePickedSaved": "Saved as your photo of this frame",
+  "placePickFailed": "Couldn't add the photo: {error}",
+  "@placePickFailed": {
+    "placeholders": {
+      "error": {
+        "type": "String"
+      }
+    }
+  }
 }

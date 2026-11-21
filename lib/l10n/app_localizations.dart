@@ -1216,6 +1216,24 @@ abstract class AppLocalizations {
   /// In en, this message translates to:
   /// **'No places here yet'**
   String get mapNoPlaces;
+
+  /// No description provided for @placePickFromGallery.
+  ///
+  /// In en, this message translates to:
+  /// **'Pick from gallery'**
+  String get placePickFromGallery;
+
+  /// No description provided for @placePickedSaved.
+  ///
+  /// In en, this message translates to:
+  /// **'Saved as your photo of this frame'**
+  String get placePickedSaved;
+
+  /// No description provided for @placePickFailed.
+  ///
+  /// In en, this message translates to:
+  /// **'Couldn\'t add the photo: {error}'**
+  String placePickFailed(String error);
 }
 
 class _AppLocalizationsDelegate

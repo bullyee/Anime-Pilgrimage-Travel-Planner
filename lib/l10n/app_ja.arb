@@ -185,5 +185,8 @@
   "mapClose": "閉じる",
   "mapPlaceCount": "{count, plural, other{{count} か所}}",
   "mapCrowded": "このあたりは混み合っています。ひとつ選んでください",
-  "mapNoPlaces": "まだ場所がありません"
+  "mapNoPlaces": "まだ場所がありません",
+  "placePickFromGallery": "ギャラリーから選ぶ",
+  "placePickedSaved": "この比較画像の写真として保存しました",
+  "placePickFailed": "写真を追加できませんでした：{error}"
 }

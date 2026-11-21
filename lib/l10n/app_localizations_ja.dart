@@ -720,4 +720,15 @@ class AppLocalizationsJa extends AppLocalizations {
 
   @override
   String get mapNoPlaces => 'まだ場所がありません';
+
+  @override
+  String get placePickFromGallery => 'ギャラリーから選ぶ';
+
+  @override
+  String get placePickedSaved => 'この比較画像の写真として保存しました';
+
+  @override
+  String placePickFailed(String error) {
+    return '写真を追加できませんでした：$error';
+  }
 }
