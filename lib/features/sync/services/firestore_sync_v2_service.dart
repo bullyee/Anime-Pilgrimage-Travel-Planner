@@ -21,8 +21,10 @@ class UserTripsSnapshot {
 Map<String, dynamic> withDocumentId(String docId, Map<String, dynamic> data) =>
     {...data, 'id': docId};
 
-/// The most `frameShots` entries one stop doc carries; the Firestore rules
-/// refuse a bigger map, and with it the rest of the trip's upload.
+/// The most `frameShots` entries one phone writes for a stop. The merge keeps
+/// entries of frames that are gone (another phone's local frames can't be
+/// told apart from deleted ones), so the Firestore rules allow a far bigger
+/// map (2000) and a stop that keeps losing and gaining frames still uploads.
 const maxFrameShots = 300;
 
 /// The `frameShots` map of a stop doc: where each of [frames] is shot from
