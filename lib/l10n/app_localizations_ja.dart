@@ -665,4 +665,59 @@ class AppLocalizationsJa extends AppLocalizations {
 
   @override
   String get placesDone => '完了';
+
+  @override
+  String get placesAddFromLibrary => 'ライブラリから';
+
+  @override
+  String get placesAddFromLibraryHint => '保存した場所';
+
+  @override
+  String get placesAddNewSpot => '新しい場所';
+
+  @override
+  String get placesAddNewSpotHint => '地図で選ぶ';
+
+  @override
+  String get placesShowAs => '表示';
+
+  @override
+  String get placesViewList => 'リスト';
+
+  @override
+  String get placesViewMap => '地図';
+
+  @override
+  String get mapAllDays => 'すべて';
+
+  @override
+  String get mapDays => '日';
+
+  @override
+  String get mapYourLocation => '現在地';
+
+  @override
+  String get mapOpenPlace => '場所を開く';
+
+  @override
+  String get mapShootHere => 'ここで撮る';
+
+  @override
+  String get mapClose => '閉じる';
+
+  @override
+  String mapPlaceCount(int count) {
+    String _temp0 = intl.Intl.pluralLogic(
+      count,
+      locale: localeName,
+      other: '$count か所',
+    );
+    return '$_temp0';
+  }
+
+  @override
+  String get mapCrowded => 'このあたりは混み合っています。ひとつ選んでください';
+
+  @override
+  String get mapNoPlaces => 'まだ場所がありません';
 }

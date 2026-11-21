@@ -684,4 +684,60 @@ class AppLocalizationsEn extends AppLocalizations {
 
   @override
   String get placesDone => 'Done';
+
+  @override
+  String get placesAddFromLibrary => 'From my library';
+
+  @override
+  String get placesAddFromLibraryHint => 'Places you have saved';
+
+  @override
+  String get placesAddNewSpot => 'New spot';
+
+  @override
+  String get placesAddNewSpotHint => 'Pick it on the map';
+
+  @override
+  String get placesShowAs => 'Show as';
+
+  @override
+  String get placesViewList => 'List';
+
+  @override
+  String get placesViewMap => 'Map';
+
+  @override
+  String get mapAllDays => 'All';
+
+  @override
+  String get mapDays => 'Days';
+
+  @override
+  String get mapYourLocation => 'Your location';
+
+  @override
+  String get mapOpenPlace => 'Open place';
+
+  @override
+  String get mapShootHere => 'Shoot here';
+
+  @override
+  String get mapClose => 'Close';
+
+  @override
+  String mapPlaceCount(int count) {
+    String _temp0 = intl.Intl.pluralLogic(
+      count,
+      locale: localeName,
+      other: '$count places',
+      one: '1 place',
+    );
+    return '$_temp0';
+  }
+
+  @override
+  String get mapCrowded => 'Too crowded here; pick one';
+
+  @override
+  String get mapNoPlaces => 'No places here yet';
 }

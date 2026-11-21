@@ -497,5 +497,28 @@
       }
     }
   },
-  "placesDone": "Done"
+  "placesDone": "Done",
+  "placesAddFromLibrary": "From my library",
+  "placesAddFromLibraryHint": "Places you have saved",
+  "placesAddNewSpot": "New spot",
+  "placesAddNewSpotHint": "Pick it on the map",
+  "placesShowAs": "Show as",
+  "placesViewList": "List",
+  "placesViewMap": "Map",
+  "mapAllDays": "All",
+  "mapDays": "Days",
+  "mapYourLocation": "Your location",
+  "mapOpenPlace": "Open place",
+  "mapShootHere": "Shoot here",
+  "mapClose": "Close",
+  "mapPlaceCount": "{count, plural, =1{1 place} other{{count} places}}",
+  "@mapPlaceCount": {
+    "placeholders": {
+      "count": {
+        "type": "int"
+      }
+    }
+  },
+  "mapCrowded": "Too crowded here; pick one",
+  "mapNoPlaces": "No places here yet"
 }

@@ -14,7 +14,10 @@ import 'package:trip_planner/features/trip/controllers/trips_controller.dart' sh
 import 'package:trip_planner/features/trip/models/place_spots.dart';
 import 'package:trip_planner/features/trip/models/trip_places_view.dart';
 import 'package:trip_planner/features/trip/repositories/trip_repository.dart';
+import 'package:trip_planner/features/trip/screens/trip_map_view.dart';
+import 'package:trip_planner/features/trip/screens/trip_place_screen.dart' show FrameCell;
 import 'package:trip_planner/features/trip/screens/trip_places_tab.dart';
+import 'package:trip_planner/shared/map/app_map.dart';
 
 /// The trip page's Places tab: days as categories holding places, Unsorted,
 /// the search, and what editors can do that viewers can't.
@@ -38,6 +41,7 @@ void main() {
         databaseProvider.overrideWithValue(db),
         currentUserIdProvider.overrideWithValue('u1'),
         homeClockProvider.overrideWithValue(() => now),
+        mapTilesProvider.overrideWithValue(false),
         if (canEdit != null) canEditTripProvider.overrideWith((ref, id) => canEdit),
       ],
       child: MaterialApp.router(routerConfig: router),
@@ -101,6 +105,48 @@ void main() {
     await tester.tap(find.text('平等院'));
     await tester.pumpAndSettle();
     expect(find.text('place ${t.ids['平等院']}'), findsOneWidget);
+    await unmount(tester);
+  });
+
+  testWidgets('the map shows the places as pins; a day narrows them and draws its route; a pin opens its card', (tester) async {
+    late ({String tripId, Map<String, String> ids, List<TripDay> days}) t;
+    await tester.runAsync(() async => t = await seed());
+    await pump(tester, t.tripId);
+
+    await tester.tap(find.text('Map'));
+    await tester.pumpAndSettle();
+    expect(find.byType(TripMapView), findsOneWidget);
+    expect(find.byKey(const Key('placesSearch')), findsNothing);
+    expect(find.byKey(const Key('mapDay-all')), findsOneWidget);
+    expect(find.byKey(ValueKey('mapDay-${t.days[0].id}')), findsOneWidget);
+
+    // The three places share a position: one stack, which can't part.
+    final stack = find.byKey(ValueKey('cluster:place:${t.ids['宇治橋']}'));
+    expect(find.descendant(of: stack, matching: find.byType(FaceCluster)), findsOneWidget);
+    expect(find.descendant(of: stack, matching: find.text('3')), findsOneWidget);
+    expect(find.byKey(const Key('dayRoute')), findsNothing, reason: 'no route for all days');
+
+    await tester.tap(find.byKey(ValueKey('mapDay-${t.days[0].id}')));
+    await tester.pumpAndSettle();
+    expect(find.descendant(of: stack, matching: find.text('2')), findsOneWidget, reason: "Day 1's two places");
+    expect(find.byKey(const Key('dayRoute')), findsOneWidget);
+
+    await tester.tap(stack);
+    await tester.pumpAndSettle();
+    expect(find.byKey(const Key('mapCrowdCard')), findsOneWidget);
+    expect(find.text('2 places'), findsOneWidget);
+
+    await tester.tap(find.byKey(ValueKey('crowd-${t.ids['宇治橋']}-')));
+    await tester.pumpAndSettle();
+    final card = find.byKey(const Key('mapPlaceCard'));
+    expect(card, findsOneWidget);
+    expect(find.descendant(of: card, matching: find.textContaining('宇治橋')), findsOneWidget);
+    expect(find.descendant(of: card, matching: find.textContaining('2 spots · 2 frames')), findsOneWidget);
+    expect(find.descendant(of: card, matching: find.byType(FrameCell)), findsNWidgets(2));
+
+    await tester.tap(find.byKey(const Key('mapOpenPlace')));
+    await tester.pumpAndSettle();
+    expect(find.text('place ${t.ids['宇治橋']}'), findsOneWidget);
     await unmount(tester);
   });
 

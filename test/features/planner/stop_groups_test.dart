@@ -256,6 +256,8 @@ void main() {
       expect(find.text('Rose 1'), findsNothing);
       expect(find.text('Bridge'), findsOneWidget);
 
+      await tester.ensureVisible(find.text('Cafe Rose'));
+      await tester.pumpAndSettle();
       await tester.tap(find.text('Cafe Rose'));
       await tester.pumpAndSettle();
       expect(find.byType(TripPlaceScreen), findsOneWidget);

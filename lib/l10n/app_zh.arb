@@ -169,5 +169,21 @@
   "placesMatchName": "地點名稱",
   "placesMatchSpots": "機位：{notes}",
   "placesMatchFrames": "{count, plural, other{{count} 張參考圖：{names}}}",
-  "placesDone": "完成"
+  "placesDone": "完成",
+  "placesAddFromLibrary": "從景點庫",
+  "placesAddFromLibraryHint": "你存過的地點",
+  "placesAddNewSpot": "新地點",
+  "placesAddNewSpotHint": "在地圖上選",
+  "placesShowAs": "顯示方式",
+  "placesViewList": "清單",
+  "placesViewMap": "地圖",
+  "mapAllDays": "全部",
+  "mapDays": "分類",
+  "mapYourLocation": "你的位置",
+  "mapOpenPlace": "打開地點",
+  "mapShootHere": "拍這裡",
+  "mapClose": "關閉",
+  "mapPlaceCount": "{count, plural, other{{count} 個地點}}",
+  "mapCrowded": "這一帶太擠，點一個看看",
+  "mapNoPlaces": "這裡還沒有地點"
 }

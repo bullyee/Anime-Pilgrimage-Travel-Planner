@@ -48,6 +48,9 @@ class _TripScreenState extends ConsumerState<TripScreen> with SingleTickerProvid
   late final TabController _tabs =
       TabController(length: TripTab.values.length, vsync: this, initialIndex: widget.initialTab.index);
 
+  /// The Places tab shows the trip map.
+  bool _placesMap = false;
+
   @override
   void initState() {
     super.initState();
@@ -181,15 +184,17 @@ class _TripScreenState extends ConsumerState<TripScreen> with SingleTickerProvid
           Expanded(
             child: TabBarView(
               controller: _tabs,
+              // The trip map pans sideways, so it doesn't swipe to Members.
+              physics: _placesMap ? const NeverScrollableScrollPhysics() : null,
               children: [
-                TripPlacesTab(tripId: trip.id),
+                TripPlacesTab(tripId: trip.id, onMapChanged: (map) => setState(() => _placesMap = map)),
                 TripMembersTab(trip: trip),
               ],
             ),
           ),
         ],
       ),
-      floatingActionButton: tab == TripTab.places && canEdit
+      floatingActionButton: tab == TripTab.places && canEdit && !_placesMap
           ? FloatingActionButton.extended(
               key: const Key('addPlaces'),
               onPressed: () => openAddStopsSheet(context, trip.id),

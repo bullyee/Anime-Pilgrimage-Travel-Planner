@@ -662,6 +662,61 @@ class AppLocalizationsZh extends AppLocalizations {
 
   @override
   String get placesDone => '完成';
+
+  @override
+  String get placesAddFromLibrary => '從景點庫';
+
+  @override
+  String get placesAddFromLibraryHint => '你存過的地點';
+
+  @override
+  String get placesAddNewSpot => '新地點';
+
+  @override
+  String get placesAddNewSpotHint => '在地圖上選';
+
+  @override
+  String get placesShowAs => '顯示方式';
+
+  @override
+  String get placesViewList => '清單';
+
+  @override
+  String get placesViewMap => '地圖';
+
+  @override
+  String get mapAllDays => '全部';
+
+  @override
+  String get mapDays => '分類';
+
+  @override
+  String get mapYourLocation => '你的位置';
+
+  @override
+  String get mapOpenPlace => '打開地點';
+
+  @override
+  String get mapShootHere => '拍這裡';
+
+  @override
+  String get mapClose => '關閉';
+
+  @override
+  String mapPlaceCount(int count) {
+    String _temp0 = intl.Intl.pluralLogic(
+      count,
+      locale: localeName,
+      other: '$count 個地點',
+    );
+    return '$_temp0';
+  }
+
+  @override
+  String get mapCrowded => '這一帶太擠，點一個看看';
+
+  @override
+  String get mapNoPlaces => '這裡還沒有地點';
 }
 
 /// The translations for Chinese, using the Han script (`zh_Hant`).
@@ -1322,4 +1377,59 @@ class AppLocalizationsZhHant extends AppLocalizationsZh {
 
   @override
   String get placesDone => '完成';
+
+  @override
+  String get placesAddFromLibrary => '從景點庫';
+
+  @override
+  String get placesAddFromLibraryHint => '你存過的地點';
+
+  @override
+  String get placesAddNewSpot => '新地點';
+
+  @override
+  String get placesAddNewSpotHint => '在地圖上選';
+
+  @override
+  String get placesShowAs => '顯示方式';
+
+  @override
+  String get placesViewList => '清單';
+
+  @override
+  String get placesViewMap => '地圖';
+
+  @override
+  String get mapAllDays => '全部';
+
+  @override
+  String get mapDays => '分類';
+
+  @override
+  String get mapYourLocation => '你的位置';
+
+  @override
+  String get mapOpenPlace => '打開地點';
+
+  @override
+  String get mapShootHere => '拍這裡';
+
+  @override
+  String get mapClose => '關閉';
+
+  @override
+  String mapPlaceCount(int count) {
+    String _temp0 = intl.Intl.pluralLogic(
+      count,
+      locale: localeName,
+      other: '$count 個地點',
+    );
+    return '$_temp0';
+  }
+
+  @override
+  String get mapCrowded => '這一帶太擠，點一個看看';
+
+  @override
+  String get mapNoPlaces => '這裡還沒有地點';
 }

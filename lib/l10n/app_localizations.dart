@@ -1120,6 +1120,102 @@ abstract class AppLocalizations {
   /// In en, this message translates to:
   /// **'Done'**
   String get placesDone;
+
+  /// No description provided for @placesAddFromLibrary.
+  ///
+  /// In en, this message translates to:
+  /// **'From my library'**
+  String get placesAddFromLibrary;
+
+  /// No description provided for @placesAddFromLibraryHint.
+  ///
+  /// In en, this message translates to:
+  /// **'Places you have saved'**
+  String get placesAddFromLibraryHint;
+
+  /// No description provided for @placesAddNewSpot.
+  ///
+  /// In en, this message translates to:
+  /// **'New spot'**
+  String get placesAddNewSpot;
+
+  /// No description provided for @placesAddNewSpotHint.
+  ///
+  /// In en, this message translates to:
+  /// **'Pick it on the map'**
+  String get placesAddNewSpotHint;
+
+  /// No description provided for @placesShowAs.
+  ///
+  /// In en, this message translates to:
+  /// **'Show as'**
+  String get placesShowAs;
+
+  /// No description provided for @placesViewList.
+  ///
+  /// In en, this message translates to:
+  /// **'List'**
+  String get placesViewList;
+
+  /// No description provided for @placesViewMap.
+  ///
+  /// In en, this message translates to:
+  /// **'Map'**
+  String get placesViewMap;
+
+  /// No description provided for @mapAllDays.
+  ///
+  /// In en, this message translates to:
+  /// **'All'**
+  String get mapAllDays;
+
+  /// No description provided for @mapDays.
+  ///
+  /// In en, this message translates to:
+  /// **'Days'**
+  String get mapDays;
+
+  /// No description provided for @mapYourLocation.
+  ///
+  /// In en, this message translates to:
+  /// **'Your location'**
+  String get mapYourLocation;
+
+  /// No description provided for @mapOpenPlace.
+  ///
+  /// In en, this message translates to:
+  /// **'Open place'**
+  String get mapOpenPlace;
+
+  /// No description provided for @mapShootHere.
+  ///
+  /// In en, this message translates to:
+  /// **'Shoot here'**
+  String get mapShootHere;
+
+  /// No description provided for @mapClose.
+  ///
+  /// In en, this message translates to:
+  /// **'Close'**
+  String get mapClose;
+
+  /// No description provided for @mapPlaceCount.
+  ///
+  /// In en, this message translates to:
+  /// **'{count, plural, =1{1 place} other{{count} places}}'**
+  String mapPlaceCount(int count);
+
+  /// No description provided for @mapCrowded.
+  ///
+  /// In en, this message translates to:
+  /// **'Too crowded here; pick one'**
+  String get mapCrowded;
+
+  /// No description provided for @mapNoPlaces.
+  ///
+  /// In en, this message translates to:
+  /// **'No places here yet'**
+  String get mapNoPlaces;
 }
 
 class _AppLocalizationsDelegate

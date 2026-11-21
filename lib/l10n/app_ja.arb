@@ -169,5 +169,21 @@
   "placesMatchName": "場所の名前",
   "placesMatchSpots": "撮影位置：{notes}",
   "placesMatchFrames": "{count, plural, other{比較画像 {count} 枚：{names}}}",
-  "placesDone": "完了"
+  "placesDone": "完了",
+  "placesAddFromLibrary": "ライブラリから",
+  "placesAddFromLibraryHint": "保存した場所",
+  "placesAddNewSpot": "新しい場所",
+  "placesAddNewSpotHint": "地図で選ぶ",
+  "placesShowAs": "表示",
+  "placesViewList": "リスト",
+  "placesViewMap": "地図",
+  "mapAllDays": "すべて",
+  "mapDays": "日",
+  "mapYourLocation": "現在地",
+  "mapOpenPlace": "場所を開く",
+  "mapShootHere": "ここで撮る",
+  "mapClose": "閉じる",
+  "mapPlaceCount": "{count, plural, other{{count} か所}}",
+  "mapCrowded": "このあたりは混み合っています。ひとつ選んでください",
+  "mapNoPlaces": "まだ場所がありません"
 }

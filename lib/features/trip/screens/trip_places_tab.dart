@@ -17,6 +17,7 @@ import '../models/place_spots.dart';
 import '../models/trip_places_view.dart';
 import '../providers/trip_place_providers.dart';
 import '../widgets/position_follower.dart';
+import 'trip_map_view.dart';
 import 'trip_place_screen.dart' show FrameCell, sectionDate, sectionTitle;
 
 /// Offers the two ways to add places: from the library, or a new spot.
@@ -30,8 +31,8 @@ void openAddStopsSheet(BuildContext context, String tripId) {
         children: [
           ListTile(
             leading: const Icon(Icons.collections_bookmark_outlined),
-            title: const Text('From my library'),
-            subtitle: const Text('Places you have saved'),
+            title: Text(sheetContext.l10n.placesAddFromLibrary),
+            subtitle: Text(sheetContext.l10n.placesAddFromLibraryHint),
             onTap: () {
               Navigator.pop(sheetContext);
               context.push('/trips/$tripId/stops/add');
@@ -39,8 +40,8 @@ void openAddStopsSheet(BuildContext context, String tripId) {
           ),
           ListTile(
             leading: const Icon(Icons.add_location_alt_outlined),
-            title: const Text('New spot'),
-            subtitle: const Text('Pick it on the map'),
+            title: Text(sheetContext.l10n.placesAddNewSpot),
+            subtitle: Text(sheetContext.l10n.placesAddNewSpotHint),
             onTap: () {
               Navigator.pop(sheetContext);
               context.push('/trips/$tripId/stops/new');
@@ -63,10 +64,16 @@ void openAddStopsSheet(BuildContext context, String tripId) {
 /// People who can edit the trip rename days, give or take their dates,
 /// reorder a day's places, delete days (their places go to Unsorted), add
 /// days and places. Times stay in the schedule.
+///
+/// List / Map switches to the trip map ([TripMapView]).
 class TripPlacesTab extends ConsumerStatefulWidget {
   final String tripId;
 
-  const TripPlacesTab({super.key, required this.tripId});
+  /// Told when the tab switches between the list and the map, so the page
+  /// can stop swiping between tabs (the map pans) and hide its button.
+  final ValueChanged<bool>? onMapChanged;
+
+  const TripPlacesTab({super.key, required this.tripId, this.onMapChanged});
 
   @override
   ConsumerState<TripPlacesTab> createState() => _TripPlacesTabState();
@@ -77,6 +84,7 @@ class _TripPlacesTabState extends ConsumerState<TripPlacesTab> {
   final _search = TextEditingController();
   String _query = '';
   bool _nearest = false;
+  bool _map = false;
 
   /// The day whose places are being reordered.
   String? _reordering;
@@ -104,6 +112,12 @@ class _TripPlacesTabState extends ConsumerState<TripPlacesTab> {
 
   void _onPosition() {
     if (mounted) setState(() {});
+  }
+
+  void _showMap(bool map) {
+    if (map == _map) return;
+    setState(() => _map = map);
+    widget.onMapChanged?.call(map);
   }
 
   void _open(TripPlace place) => context.push('/trips/${widget.tripId}/places/${place.id}');
@@ -357,48 +371,74 @@ class _TripPlacesTabState extends ConsumerState<TripPlacesTab> {
       }
     }
 
+    final toggle = SegmentedButton<bool>(
+      key: const Key('placesViewToggle'),
+      showSelectedIcon: false,
+      style: const ButtonStyle(visualDensity: VisualDensity.compact),
+      segments: [
+        ButtonSegment(value: false, icon: const Icon(Icons.view_list_outlined), label: Text(l10n.placesViewList)),
+        ButtonSegment(value: true, icon: const Icon(Icons.map_outlined), label: Text(l10n.placesViewMap)),
+      ],
+      selected: {_map},
+      onSelectionChanged: (v) => _showMap(v.first),
+    );
+    final toolbar = Padding(
+      padding: const EdgeInsets.fromLTRB(16, 10, 16, 0),
+      child: Row(
+        children: [
+          Semantics(label: l10n.placesShowAs, container: true, child: toggle),
+          const Spacer(),
+          if (lat != null && !_map)
+            FilterChip(
+              key: const Key('placesNearest'),
+              label: Text(l10n.placesSortNearest),
+              selected: _nearest,
+              onSelected: (v) => setState(() => _nearest = v),
+            ),
+        ],
+      ),
+    );
+
+    if (_map) {
+      return Column(
+        children: [
+          toolbar,
+          const SizedBox(height: 8),
+          Expanded(
+            child: TripMapView(tripId: widget.tripId, view: view, contents: contents, follower: _follower),
+          ),
+        ],
+      );
+    }
+
     return Align(
       alignment: Alignment.topCenter,
       child: ConstrainedBox(
         constraints: const BoxConstraints(maxWidth: 720),
         child: Column(
           children: [
+            toolbar,
             Padding(
-              padding: const EdgeInsets.fromLTRB(16, 12, 16, 4),
-              child: Row(
-                children: [
-                  Expanded(
-                    child: TextField(
-                      key: const Key('placesSearch'),
-                      controller: _search,
-                      decoration: InputDecoration(
-                        prefixIcon: const Icon(Icons.search),
-                        hintText: l10n.placesSearchHint,
-                        isDense: true,
-                        suffixIcon: _query.isEmpty
-                            ? null
-                            : IconButton(
-                                tooltip: l10n.placesClearSearch,
-                                icon: const Icon(Icons.close),
-                                onPressed: () => setState(() {
-                                  _search.clear();
-                                  _query = '';
-                                }),
-                              ),
-                      ),
-                      onChanged: (v) => setState(() => _query = v),
-                    ),
-                  ),
-                  if (lat != null) ...[
-                    const SizedBox(width: 8),
-                    FilterChip(
-                      key: const Key('placesNearest'),
-                      label: Text(l10n.placesSortNearest),
-                      selected: _nearest,
-                      onSelected: (v) => setState(() => _nearest = v),
-                    ),
-                  ],
-                ],
+              padding: const EdgeInsets.fromLTRB(16, 8, 16, 4),
+              child: TextField(
+                key: const Key('placesSearch'),
+                controller: _search,
+                decoration: InputDecoration(
+                  prefixIcon: const Icon(Icons.search),
+                  hintText: l10n.placesSearchHint,
+                  isDense: true,
+                  suffixIcon: _query.isEmpty
+                      ? null
+                      : IconButton(
+                          tooltip: l10n.placesClearSearch,
+                          icon: const Icon(Icons.close),
+                          onPressed: () => setState(() {
+                            _search.clear();
+                            _query = '';
+                          }),
+                        ),
+                ),
+                onChanged: (v) => setState(() => _query = v),
               ),
             ),
             Expanded(
