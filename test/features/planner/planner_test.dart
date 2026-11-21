@@ -16,6 +16,7 @@ import 'package:trip_planner/features/planner/widgets/planner_sheets.dart';
 import 'package:trip_planner/features/trip/controllers/trips_controller.dart';
 import 'package:trip_planner/features/trip/providers/trip_providers.dart';
 import 'package:trip_planner/features/trip/repositories/trip_repository.dart';
+import 'package:trip_planner/features/trip/screens/trip_schedule_screen.dart';
 import 'package:trip_planner/features/trip/screens/trip_screen.dart';
 
 DateTime _utc(int y, int m, int d) => DateTime.utc(y, m, d);
@@ -251,8 +252,10 @@ void main() {
   });
 
   group('TripScreen', () {
-    Future<void> pump(WidgetTester tester, String tripId, {String query = ''}) async {
-      final router = GoRouter(initialLocation: '/trips/$tripId$query', routes: [
+    /// The trip's schedule (the day planner), or with [schedule] false the
+    /// trip page it opens from.
+    Future<void> pump(WidgetTester tester, String tripId, {String query = '', bool schedule = true}) async {
+      final router = GoRouter(initialLocation: schedule ? '/trips/$tripId/schedule' : '/trips/$tripId$query', routes: [
         GoRoute(
           path: '/trips/:tripId',
           builder: (_, s) => TripScreen(
@@ -260,6 +263,7 @@ void main() {
             initialTab: TripTab.fromQuery(s.uri.queryParameters['tab']),
           ),
         ),
+        GoRoute(path: '/trips/:tripId/schedule', builder: (_, s) => TripScheduleScreen(tripId: s.pathParameters['tripId']!)),
       ]);
       await tester.pumpWidget(ProviderScope(
         overrides: [databaseProvider.overrideWithValue(db), currentUserIdProvider.overrideWithValue('u1')],
@@ -273,7 +277,7 @@ void main() {
       await tester.pump(const Duration(seconds: 1));
     }
 
-    testWidgets('opens on the plan, one of three tabs; the plan is read-only until edited', (tester) async {
+    testWidgets('the trip page has Places and Members; its schedule opens read-only until edited', (tester) async {
       // A phone-sized screen.
       tester.view.physicalSize = const Size(1080, 2400);
       tester.view.devicePixelRatio = 3;
@@ -284,12 +288,18 @@ void main() {
       final bridge = await r.createTripOnlySpot(tripId: trip.id, name: 'Bridge', lat: 0, lng: 0, addedBy: 'u1');
       await r.scheduleStop(tripId: trip.id, stopId: bridge.id, dayId: day.id, fixedTime: 10 * 60);
 
-      await pump(tester, trip.id);
-      expect(find.byType(Tab), findsNWidgets(3));
-      for (final name in ['Plan', 'Stops', 'Members']) {
+      await pump(tester, trip.id, schedule: false);
+      expect(find.byType(Tab), findsNWidgets(2));
+      for (final name in ['Places', 'Members']) {
         expect(find.widgetWithText(Tab, name), findsOneWidget);
       }
-      expect(find.widgetWithText(Tab, 'Overview'), findsNothing);
+      expect(find.widgetWithText(Tab, 'Plan'), findsNothing);
+      expect(find.text('Bridge'), findsOneWidget);
+      expect(find.text('10:00'), findsNothing, reason: 'times are in the schedule');
+
+      await tester.tap(find.byKey(const Key('tripSchedule')));
+      await tester.pumpAndSettle();
+      expect(find.byType(TripScheduleScreen), findsOneWidget);
       expect(find.text('Bridge'), findsOneWidget);
       expect(find.text('10:00'), findsOneWidget);
       expect(find.text('Add from backlog'), findsNothing);
@@ -355,8 +365,8 @@ void main() {
       final r = DriftTripRepository(db);
       final trip = await r.createTrip(title: 'Uji', ownerId: 'u1', startDate: '2027-04-29', dayCount: 2);
 
-      await pump(tester, trip.id);
-      await tester.tap(find.byType(PopupMenuButton<String>));
+      await pump(tester, trip.id, schedule: false);
+      await tester.tap(find.byKey(const Key('tripMenu')));
       await tester.pumpAndSettle();
       expect(find.text('Edit name and dates'), findsNothing);
       await tester.tap(find.text('Edit trip'));
@@ -372,16 +382,16 @@ void main() {
       await disposeApp(tester);
     });
 
-    for (final query in ['?tab=overview', '?tab=nonsense']) {
-      testWidgets('a link with $query opens the plan', (tester) async {
+    for (final query in ['?tab=overview', '?tab=nonsense', '?tab=plan', '?tab=stops']) {
+      testWidgets('a link with $query opens the places', (tester) async {
         tester.view.physicalSize = const Size(1080, 2400);
         tester.view.devicePixelRatio = 3;
         addTearDown(tester.view.reset);
         final trip = await DriftTripRepository(db).createTrip(title: 'Uji', ownerId: 'u1', dayCount: 1);
 
-        await pump(tester, trip.id, query: query);
-        expect(tester.widget<TabBar>(find.byType(TabBar)).controller!.index, TripTab.plan.index);
-        expect(find.byTooltip('Edit the plan'), findsOneWidget);
+        await pump(tester, trip.id, query: query, schedule: false);
+        expect(tester.widget<TabBar>(find.byType(TabBar)).controller!.index, TripTab.places.index);
+        expect(find.byKey(const Key('placesSearch')), findsOneWidget);
         await disposeApp(tester);
       });
     }
@@ -449,8 +459,8 @@ void main() {
       final day = (await r.getDaysForTrip(trip.id)).single;
       final bridge = await r.createTripOnlySpot(tripId: trip.id, name: 'Bridge', lat: 0, lng: 0, addedBy: 'u1');
       await r.scheduleStop(tripId: trip.id, stopId: bridge.id, dayId: day.id, fixedTime: 10 * 60);
-      final router = GoRouter(initialLocation: '/trips/${trip.id}', routes: [
-        GoRoute(path: '/trips/:tripId', builder: (_, s) => TripScreen(tripId: s.pathParameters['tripId']!)),
+      final router = GoRouter(initialLocation: '/trips/${trip.id}/schedule', routes: [
+        GoRoute(path: '/trips/:tripId/schedule', builder: (_, s) => TripScheduleScreen(tripId: s.pathParameters['tripId']!)),
         GoRoute(
           path: '/trips/:tripId/stops/:stopId',
           builder: (_, s) => Scaffold(body: Text('Stop page ${s.pathParameters['stopId']}')),
@@ -460,8 +470,6 @@ void main() {
         overrides: [databaseProvider.overrideWithValue(db), currentUserIdProvider.overrideWithValue('u1')],
         child: MaterialApp.router(routerConfig: router),
       ));
-      await tester.pumpAndSettle();
-      await tester.tap(find.text('Plan'));
       await tester.pumpAndSettle();
 
       await tester.tap(find.text('Bridge'));
@@ -490,8 +498,6 @@ void main() {
       await r.scheduleStop(tripId: trip.id, stopId: bridge.id, dayId: day.id, fixedTime: 10 * 60);
 
       await pump(tester, trip.id);
-      await tester.tap(find.text('Plan'));
-      await tester.pumpAndSettle();
       await tester.tap(find.byTooltip('Edit the plan'));
       await tester.pumpAndSettle();
       await tester.tap(find.text('Bridge'));
@@ -522,8 +528,10 @@ void main() {
       await r.scheduleStop(tripId: trip.id, stopId: bridge.id, dayId: days[0].id);
       await r.scheduleStop(tripId: trip.id, stopId: shrine.id, dayId: days[0].id);
 
-      await pump(tester, trip.id);
+      await pump(tester, trip.id, schedule: false);
       expect(find.text('2 days'), findsOneWidget);
+      await tester.tap(find.byKey(const Key('tripSchedule')));
+      await tester.pumpAndSettle();
       expect(find.text('No dates yet'), findsNothing);
       expect(find.text('No date yet'), findsNothing);
       expect(find.text('Day 1'), findsOneWidget);
@@ -596,7 +604,7 @@ void main() {
       final r = DriftTripRepository(db);
       final trip = await r.createTrip(title: 'Empty Uji', ownerId: 'u1', dayCount: 0);
 
-      await pump(tester, trip.id);
+      await pump(tester, trip.id, schedule: false);
       expect(find.text('Empty Uji'), findsOneWidget);
       expect(find.text('0 days'), findsNothing);
       expect(find.text('No dates yet'), findsNothing);

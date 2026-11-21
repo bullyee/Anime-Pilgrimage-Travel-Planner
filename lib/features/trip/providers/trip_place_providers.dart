@@ -59,6 +59,25 @@ final tripPhotosProvider = StreamProvider.autoDispose.family<List<Photo>, String
       .map((rows) => [for (final row in rows) db.photos.map(row.data)]);
 });
 
+/// The anime labels of [tripId]'s stops, by stop id, sorted by name: the
+/// Places tab's line under each place, read for the whole trip at once.
+final tripAnimeLabelsProvider = StreamProvider.autoDispose.family<Map<String, List<String>>, String>((ref, tripId) {
+  final db = ref.watch(databaseProvider);
+  final query = db.select(db.stopLabels).join([
+    innerJoin(db.labels, db.labels.id.equalsExp(db.stopLabels.labelId)),
+    innerJoin(db.stops, db.stops.id.equalsExp(db.stopLabels.stopId)),
+  ])
+    ..where(db.stops.tripId.equals(tripId) & db.labels.kind.equals('anime'))
+    ..orderBy([OrderingTerm(expression: db.labels.name)]);
+  return query.watch().map((rows) {
+    final out = <String, List<String>>{};
+    for (final row in rows) {
+      out.putIfAbsent(row.readTable(db.stopLabels).stopId, () => []).add(row.readTable(db.labels).name);
+    }
+    return out;
+  });
+});
+
 final placeFoldServiceProvider = Provider<PlaceFoldService>(
   (ref) => PlaceFoldService(ref.watch(databaseProvider), ref.watch(tripRepositoryProvider)),
 );

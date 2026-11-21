@@ -13,7 +13,7 @@ import 'package:trip_planner/features/trip/providers/trip_providers.dart';
 import 'package:trip_planner/features/trip/providers/trip_stop_providers.dart';
 import 'package:trip_planner/features/trip/repositories/trip_repository.dart';
 import 'package:trip_planner/features/trip/screens/library_picker_screen.dart';
-import 'package:trip_planner/features/trip/screens/trip_stops_tab.dart';
+import 'package:trip_planner/features/trip/screens/trip_places_tab.dart';
 
 Future<void> _savePlace(AppDatabase db, String key, String name) => db.into(db.places).insert(
       PlacesCompanion.insert(placeKey: key, name: name, lat: 34.89, lng: 135.80, visibility: const Value('saved')),
@@ -154,11 +154,8 @@ void main() {
         dayCount: 2,
       );
       expect(entries.map((e) => e.stop.name), ['Zoo', 'Café', 'Bridge', 'Aquarium', 'Skipped']);
-      expect(stopWhenLine(entries[0]), 'Day 1 · 09:00');
-      expect(stopWhenLine(entries[1]), 'Day 1 · 10:30');
-      expect(stopWhenLine(entries[2]), 'Day 2');
-      expect(stopWhenLine(entries[3]), 'Backup day');
-      expect(stopWhenLine(entries[4]), 'Not on a day yet');
+      expect([for (final e in entries) e.dayIndex], [0, 0, 1, 2, null]);
+      expect([for (final e in entries) e.startMinutes], [540, 630, null, null, null]);
     });
 
     test('the list can be ordered by name or by when stops were added', () {
@@ -179,7 +176,7 @@ void main() {
   group('screens', () {
     Future<void> pump(WidgetTester tester, String location) async {
       final router = GoRouter(initialLocation: location, routes: [
-        GoRoute(path: '/trips/:tripId/stops', builder: (_, s) => Scaffold(body: TripStopsTab(tripId: s.pathParameters['tripId']!))),
+        GoRoute(path: '/trips/:tripId/stops', builder: (_, s) => Scaffold(body: TripPlacesTab(tripId: s.pathParameters['tripId']!))),
         GoRoute(path: '/trips/:tripId/stops/add', builder: (_, s) => LibraryPickerScreen(tripId: s.pathParameters['tripId']!)),
         GoRoute(path: '/trips/:tripId/stops/new', builder: (_, _) => const Scaffold(body: Text('new spot'))),
       ]);
@@ -195,11 +192,11 @@ void main() {
       await tester.pump(const Duration(seconds: 1));
     }
 
-    testWidgets('an empty trip offers both ways to add stops', (tester) async {
+    testWidgets('an empty trip offers both ways to add places', (tester) async {
       final trip = await DriftTripRepository(db).createTrip(title: 'Uji', ownerId: 'u1', dayCount: 1);
       await pump(tester, '/trips/${trip.id}/stops');
-      expect(find.text('No stops yet'), findsOneWidget);
-      await tester.tap(find.widgetWithText(FilledButton, 'Add stops'));
+      expect(find.text('No places in this trip yet.'), findsOneWidget);
+      await tester.tap(find.widgetWithText(FilledButton, 'Add places'));
       await tester.pumpAndSettle();
       expect(find.text('From my library'), findsOneWidget);
       await tester.tap(find.text('New spot'));
@@ -225,21 +222,7 @@ void main() {
       await disposeApp(tester);
     });
 
-    testWidgets('the stop list shows where each stop is planned', (tester) async {
-      final repo = DriftTripRepository(db);
-      final trip = await repo.createTrip(title: 'Uji', ownerId: 'u1', dayCount: 1);
-      final day = (await repo.getDaysForTrip(trip.id)).single;
-      final bridge = await repo.createTripOnlySpot(tripId: trip.id, name: '宇治橋', lat: 0, lng: 0, addedBy: 'u1');
-      await repo.createTripOnlySpot(tripId: trip.id, name: '朝霧橋', lat: 0, lng: 0, addedBy: 'u1');
-      await repo.scheduleStop(tripId: trip.id, stopId: bridge.id, dayId: day.id, fixedTime: 9 * 60 + 30);
-
-      await pump(tester, '/trips/${trip.id}/stops');
-      expect(find.text('Day 1 · 09:30'), findsOneWidget);
-      expect(find.text('Not on a day yet'), findsOneWidget);
-      await disposeApp(tester);
-    });
-
-    testWidgets('the sort menu orders the stops by name', (tester) async {
+    testWidgets("the places list shows each day's places, then the ones on no day", (tester) async {
       final repo = DriftTripRepository(db);
       final trip = await repo.createTrip(title: 'Uji', ownerId: 'u1', dayCount: 1);
       final day = (await repo.getDaysForTrip(trip.id)).single;
@@ -248,14 +231,11 @@ void main() {
       await repo.scheduleStop(tripId: trip.id, stopId: zoo.id, dayId: day.id, fixedTime: 9 * 60);
 
       await pump(tester, '/trips/${trip.id}/stops');
-      double top(String name) => tester.getTopLeft(find.text(name)).dy;
-      expect(top('Zoo'), lessThan(top('Aquarium')), reason: 'planned first');
-
-      await tester.tap(find.byTooltip('Sort stops'));
-      await tester.pumpAndSettle();
-      await tester.tap(find.text('Name'));
-      await tester.pumpAndSettle();
-      expect(top('Aquarium'), lessThan(top('Zoo')));
+      double top(String text) => tester.getTopLeft(find.text(text)).dy;
+      expect(top('Day 1'), lessThan(top('Zoo')));
+      expect(top('Zoo'), lessThan(top('Unsorted')), reason: 'planned first');
+      expect(top('Unsorted'), lessThan(top('Aquarium')));
+      expect(find.text('09:00'), findsNothing, reason: 'times are in the schedule');
       await disposeApp(tester);
     });
 

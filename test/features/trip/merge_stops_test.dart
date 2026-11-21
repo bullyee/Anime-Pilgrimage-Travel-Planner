@@ -12,7 +12,8 @@ import 'package:trip_planner/features/trip/controllers/trip_stops_controller.dar
 import 'package:trip_planner/features/trip/providers/trip_providers.dart';
 import 'package:trip_planner/features/trip/providers/trip_stop_providers.dart';
 import 'package:trip_planner/features/trip/repositories/trip_repository.dart';
-import 'package:trip_planner/features/trip/screens/trip_stops_tab.dart';
+import 'package:trip_planner/features/trip/screens/trip_place_screen.dart';
+import 'package:trip_planner/shared/map/app_map.dart';
 
 void main() {
   late AppDatabase db;
@@ -150,46 +151,45 @@ void main() {
     expect(stopToKeep([late, day2, day1Second, day1First]).stop.id, 'day1a');
   });
 
-  testWidgets('in the Stops tab, held stops are merged into the one picked', (tester) async {
+  testWidgets("a place's menu merges another place into it", (tester) async {
     tester.view.physicalSize = const Size(1080, 2400);
     tester.view.devicePixelRatio = 2.625;
     addTearDown(tester.view.reset);
     final trip = await repo.createTrip(title: 'Uji', ownerId: 'u1', dayCount: 1);
     final day = (await repo.getDaysForTrip(trip.id)).single;
-    await spot(trip.id, 'Bridge (2)');
+    final other = await spot(trip.id, 'Bridge (2)');
     final first = await spot(trip.id, 'Bridge');
-    await repo.scheduleStop(tripId: trip.id, stopId: first.id, dayId: day.id);
+    await repo.scheduleStop(tripId: trip.id, stopId: other.id, dayId: day.id);
     await spot(trip.id, 'Shrine');
 
-    final router = GoRouter(initialLocation: '/trips/${trip.id}/stops', routes: [
-      GoRoute(path: '/trips/:tripId/stops', builder: (_, s) => Scaffold(body: TripStopsTab(tripId: s.pathParameters['tripId']!))),
+    final router = GoRouter(initialLocation: '/trips/${trip.id}/places/${first.id}', routes: [
+      GoRoute(path: '/trips/:tripId', builder: (_, _) => const Scaffold()),
+      GoRoute(
+        path: '/trips/:tripId/places/:stopId',
+        builder: (_, s) => TripPlaceScreen(tripId: s.pathParameters['tripId']!, stopId: s.pathParameters['stopId']!),
+      ),
     ]);
     await tester.pumpWidget(ProviderScope(
-      overrides: [databaseProvider.overrideWithValue(db), currentUserIdProvider.overrideWithValue('u1')],
+      overrides: [databaseProvider.overrideWithValue(db), currentUserIdProvider.overrideWithValue('u1'), mapTilesProvider.overrideWithValue(false)],
       child: MaterialApp.router(routerConfig: router),
     ));
     await tester.pumpAndSettle();
 
-    await tester.longPress(find.text('Bridge (2)'));
+    await tester.tap(find.byKey(const Key('placeMenu')));
     await tester.pumpAndSettle();
-    await tester.tap(find.text('Bridge'));
+    await tester.tap(find.byKey(const Key('placeMerge')));
     await tester.pumpAndSettle();
-    await tester.tap(find.widgetWithText(TextButton, 'Merge'));
+    expect(find.text('Merge into “Bridge”'), findsOneWidget);
+    await tester.tap(find.text('Bridge (2)'));
     await tester.pumpAndSettle();
-    expect(find.text('Merge 2 stops'), findsOneWidget);
-    // The planned one is picked to keep; pick the other instead.
-    expect(find.widgetWithText(ListTile, 'Keep'), findsOneWidget);
-    expect(find.descendant(of: find.widgetWithText(ListTile, 'Bridge'), matching: find.text('Keep')), findsOneWidget);
-    await tester.tap(find.descendant(of: find.byType(BottomSheet), matching: find.text('Bridge (2)')));
-    await tester.pumpAndSettle();
+    expect(find.text('Merge “Bridge (2)” into “Bridge”?'), findsOneWidget);
     await tester.tap(find.widgetWithText(FilledButton, 'Merge'));
     await tester.pumpAndSettle();
 
     final stops = await repo.getStopsForTrip(trip.id);
-    expect(stops.map((s) => s.name).toSet(), {'Bridge (2)', 'Shrine'});
-    expect((await repo.getScheduleItemsForTrip(trip.id)).single.stopId, stops.firstWhere((s) => s.name == 'Bridge (2)').id);
-    expect(find.text('Merged 2 stops into Bridge (2).'), findsOneWidget);
-    expect(find.text('Bridge'), findsNothing);
+    expect(stops.map((s) => s.name).toSet(), {'Bridge', 'Shrine'});
+    expect((await repo.getScheduleItemsForTrip(trip.id)).single.stopId, first.id, reason: "the merged place's day comes along");
+    expect(find.text('Merged “Bridge (2)” into this place.'), findsOneWidget);
 
     await tester.pumpWidget(const SizedBox());
     await tester.pump(const Duration(seconds: 1));

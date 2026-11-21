@@ -390,8 +390,10 @@ void main() {
           GoRoute(path: '/trips/:tripId', builder: (_, s) => TripScreen(tripId: s.pathParameters['tripId']!)),
         ]);
 
+    final dayMenus = find.byWidgetPredicate((w) => w.key is ValueKey<String> && (w.key! as ValueKey<String>).value.startsWith('dayMenu-'));
+
     Future<List<String>> menuItems(WidgetTester tester) async {
-      await tester.tap(find.byType(PopupMenuButton<String>));
+      await tester.tap(find.byKey(const Key('tripMenu')));
       await tester.pumpAndSettle();
       final items = tester
           .widgetList<PopupMenuItem<String>>(find.byWidgetPredicate((w) => w is PopupMenuItem<String>))
@@ -414,12 +416,10 @@ void main() {
       expect(find.byTooltip('Invite people'), findsNothing);
       expect(await menuItems(tester), ['export_gpx', 'export_geojson', 'trash', 'leave']);
 
-      expect(find.byTooltip('Edit the plan'), findsNothing);
-
-      await tester.tap(find.text('Stops'));
-      await tester.pumpAndSettle();
-      expect(find.text('Add stops'), findsNothing);
-      expect(find.textContaining('once someone who can edit the trip adds them'), findsOneWidget);
+      // The Places tab, with nothing to change.
+      expect(find.byKey(const Key('addPlaces')), findsNothing);
+      expect(find.byKey(const Key('newDayButton')), findsNothing);
+      expect(dayMenus, findsNothing);
       await done(tester);
     });
 
@@ -433,7 +433,8 @@ void main() {
 
       expect(find.textContaining('View only'), findsNothing);
       expect(await menuItems(tester), ['edit', 'export_gpx', 'export_geojson', 'trash', 'leave']);
-      expect(find.byTooltip('Edit the plan'), findsOneWidget);
+      expect(find.byKey(const Key('addPlaces')), findsOneWidget);
+      expect(find.byKey(const Key('newDayButton')), findsOneWidget);
       await done(tester);
     });
 
@@ -445,11 +446,9 @@ void main() {
       await pump(tester, tripRouter());
 
       expect(find.textContaining('View only'), findsNothing, reason: "it isn't known to be view only either");
-      expect(find.byType(PopupMenuButton<String>), findsNothing);
-      expect(find.byTooltip('Edit the plan'), findsNothing);
-      await tester.tap(find.text('Stops'));
-      await tester.pumpAndSettle();
-      expect(find.text('Add stops'), findsNothing);
+      expect(find.byKey(const Key('tripMenu')), findsNothing);
+      expect(find.byKey(const Key('addPlaces')), findsNothing);
+      expect(dayMenus, findsNothing);
       await done(tester);
     });
 
