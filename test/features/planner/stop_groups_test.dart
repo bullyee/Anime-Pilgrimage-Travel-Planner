@@ -14,7 +14,9 @@ import 'package:trip_planner/features/trip/controllers/trip_stops_controller.dar
 import 'package:trip_planner/features/trip/models/stop_group.dart';
 import 'package:trip_planner/features/trip/providers/trip_providers.dart';
 import 'package:trip_planner/features/trip/repositories/trip_repository.dart';
+import 'package:trip_planner/features/trip/screens/trip_place_screen.dart';
 import 'package:trip_planner/features/trip/screens/trip_screen.dart';
+import 'package:trip_planner/shared/map/app_map.dart';
 
 void main() {
   late AppDatabase db;
@@ -217,9 +219,17 @@ void main() {
       addTearDown(tester.view.reset);
       final router = GoRouter(initialLocation: '/trips/$tripId', routes: [
         GoRoute(path: '/trips/:tripId', builder: (_, s) => TripScreen(tripId: s.pathParameters['tripId']!, initialTab: tab)),
+        GoRoute(
+          path: '/trips/:tripId/places/:stopId',
+          builder: (_, s) => TripPlaceScreen(tripId: s.pathParameters['tripId']!, stopId: s.pathParameters['stopId']!),
+        ),
       ]);
       await tester.pumpWidget(ProviderScope(
-        overrides: [databaseProvider.overrideWithValue(db), currentUserIdProvider.overrideWithValue('u1')],
+        overrides: [
+          databaseProvider.overrideWithValue(db),
+          currentUserIdProvider.overrideWithValue('u1'),
+          mapTilesProvider.overrideWithValue(false),
+        ],
         child: MaterialApp.router(routerConfig: router),
       ));
       await tester.pumpAndSettle();
@@ -254,9 +264,15 @@ void main() {
       expect(find.text('2 stops'), findsOneWidget);
       expect(find.text('Cafe Rose'), findsOneWidget, reason: 'one row, closed');
       expect(find.text('Bridge'), findsOneWidget);
-      await tester.tap(find.text('2 stops'));
+      await tester.tap(find.byKey(const Key('groupToggle-Cafe Rose')));
       await tester.pumpAndSettle();
       expect(find.text('Cafe Rose'), findsNWidgets(3));
+
+      // The row itself opens the place's page.
+      await tester.tap(find.text('2 stops'));
+      await tester.pumpAndSettle();
+      expect(find.byType(TripPlaceScreen), findsOneWidget);
+      expect(find.text('2 spots · 0 shot'), findsOneWidget);
       await disposeApp(tester);
     });
 

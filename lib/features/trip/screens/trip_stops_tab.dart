@@ -47,7 +47,8 @@ void openAddStopsSheet(BuildContext context, String tripId) {
 }
 
 /// The Stops tab: the trip's stops, what's planned on which day, and what
-/// isn't yet. A group's stops show as one row that opens. People who can edit
+/// isn't yet. A group's stops show as one row: tapping it opens the place's page,
+/// its arrow shows the stops here. People who can edit
 /// the trip hold a stop to select stops and group them. The tab's add button
 /// lives on the trip screen.
 class TripStopsTab extends ConsumerStatefulWidget {
@@ -197,7 +198,8 @@ class _TripStopsTabState extends ConsumerState<TripStopsTab> {
                 selected: row.entries.where((e) => _selected.contains(e.stop.id)).length,
                 onTap: selecting
                     ? () => _toggle([for (final e in row.entries) e.stop.id])
-                    : () => setState(() => _open.contains(group) ? _open.remove(group) : _open.add(group)),
+                    : () => context.push('/trips/${widget.tripId}/places/${row.entries.first.stop.id}'),
+                onToggle: () => setState(() => _open.contains(group) ? _open.remove(group) : _open.add(group)),
                 onLongPress: canEdit && !selecting ? () => _toggle([for (final e in row.entries) e.stop.id]) : null,
                 onRename: canEdit ? () => _renameGroup(group) : null,
                 onUngroup: canEdit ? () => _ungroup(group) : null,
@@ -490,7 +492,11 @@ class _GroupTile extends StatelessWidget {
 
   /// How many of its stops are selected.
   final int selected;
+  /// Opens the place's page, or selects the group while selecting.
   final VoidCallback onTap;
+
+  /// Shows or hides the group's stops in the list.
+  final VoidCallback onToggle;
   final VoidCallback? onLongPress;
 
   /// Null for people who can't edit the trip.
@@ -504,6 +510,7 @@ class _GroupTile extends StatelessWidget {
     required this.selecting,
     required this.selected,
     required this.onTap,
+    required this.onToggle,
     required this.onLongPress,
     required this.onRename,
     required this.onUngroup,
@@ -546,7 +553,12 @@ class _GroupTile extends StatelessWidget {
                   PopupMenuItem(value: 'ungroup', child: Text('Ungroup')),
                 ],
               ),
-            Icon(open ? Icons.expand_less : Icons.expand_more),
+            IconButton(
+              key: Key('groupToggle-$name'),
+              tooltip: open ? 'Hide its stops' : 'Show its stops',
+              icon: Icon(open ? Icons.expand_less : Icons.expand_more),
+              onPressed: onToggle,
+            ),
           ],
         ],
       ),

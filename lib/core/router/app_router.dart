@@ -26,6 +26,7 @@ import '../../features/trip/screens/library_picker_screen.dart';
 import '../../features/trip/screens/new_spot_screen.dart';
 import '../../features/trip/screens/pilgrimage_day_map_screen.dart';
 import '../../features/trip/screens/stop_screen.dart';
+import '../../features/trip/screens/trip_place_screen.dart';
 import '../../features/trip/screens/trip_list_screen.dart';
 import '../../features/trip/screens/trip_activity_screen.dart';
 import '../../features/trip/screens/trip_screen.dart';
@@ -149,6 +150,15 @@ GoRouter router(RouterRef ref) {
         path: '/trips/:tripId/stops/new',
         builder: (context, state) => NewSpotScreen(
           tripId: state.pathParameters['tripId']!,
+        ),
+      ),
+      GoRoute(
+        // A place of the trip: the group of [stopId], or the stop itself
+        // when it's in no group.
+        path: '/trips/:tripId/places/:stopId',
+        builder: (context, state) => TripPlaceScreen(
+          tripId: state.pathParameters['tripId']!,
+          stopId: state.pathParameters['stopId']!,
         ),
       ),
       GoRoute(
