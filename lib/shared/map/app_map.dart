@@ -432,7 +432,7 @@ class PinDot extends StatelessWidget {
             decoration: BoxDecoration(
               color: color,
               shape: BoxShape.circle,
-              border: Border.all(color: Colors.white, width: pin.selected ? 3 : 2.5),
+              border: pin.estimated ? null : Border.all(color: Colors.white, width: pin.selected ? 3 : 2.5),
               boxShadow: [
                 if (pin.selected || pin.next) BoxShadow(color: color.withValues(alpha: 0.35), spreadRadius: 4),
                 const BoxShadow(color: Color(0x40000000), blurRadius: 3, offset: Offset(0, 1)),
@@ -458,6 +458,10 @@ class PinDot extends StatelessWidget {
                         decoration: const BoxDecoration(color: Colors.white, shape: BoxShape.circle),
                       ),
           ),
+          if (pin.estimated)
+            IgnorePointer(
+              child: CustomPaint(size: Size.square(size + 4), painter: _DashedRing(color: Colors.white)),
+            ),
           if (pin.count > 1)
             Positioned(
               right: 0,
@@ -514,6 +518,31 @@ class PinDot extends StatelessWidget {
       ),
     );
   }
+}
+
+/// A dashed circle just inside its box, for an [MapPin.estimated] pin.
+class _DashedRing extends CustomPainter {
+  final Color color;
+
+  const _DashedRing({required this.color});
+
+  @override
+  void paint(Canvas canvas, Size size) {
+    const dashes = 10;
+    final paint = Paint()
+      ..color = color
+      ..style = PaintingStyle.stroke
+      ..strokeWidth = 2.5;
+    final rect = Offset.zero & size;
+    final box = rect.deflate(paint.strokeWidth / 2 + 2);
+    const sweep = 2 * math.pi / dashes;
+    for (var i = 0; i < dashes; i++) {
+      canvas.drawArc(box, i * sweep, sweep * 0.55, false, paint);
+    }
+  }
+
+  @override
+  bool shouldRepaint(_DashedRing old) => old.color != color;
 }
 
 /// "© OpenStreetMap contributors" in a corner, as OSM's licence asks.

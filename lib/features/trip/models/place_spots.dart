@@ -204,3 +204,154 @@ Map<String, Photo> shotFrames({
 /// and the user has a photo there.
 bool spotShot({required List<NewReferenceImage> shown, required Map<String, Photo> shot, required List<Photo> photos}) =>
     shot.isNotEmpty || (shown.isEmpty && photos.isNotEmpty);
+
+/// A trip's frames and the user's photos of them, indexed once, so any of
+/// its places can be worked out without going through all of them again:
+/// the place page uses it for one place, the Places tab for every place.
+class TripFrameIndex {
+  final Map<String, List<NewReferenceImage>> _ownByStop = {};
+  final Map<String, List<NewReferenceImage>> _libraryByPlace = {};
+
+  /// The newest photo shot against a frame, by the frame's id, file and
+  /// link (`id:`, `path:`, `url:`), so a photo of one copy of a frame counts
+  /// for the others, as [shotFrames] has it.
+  final Map<String, Photo> _newestByKey = {};
+  final Map<String, List<Photo>> _photosByPlace = {};
+
+  TripFrameIndex({
+    required List<NewReferenceImage> own,
+    required List<NewReferenceImage> library,
+    required List<Photo> photos,
+  }) {
+    for (final f in own) {
+      if (f.stopId case final id?) _ownByStop.putIfAbsent(id, () => []).add(f);
+    }
+    for (final f in library) {
+      if (f.placeKey case final key?) _libraryByPlace.putIfAbsent(key, () => []).add(f);
+    }
+    final byId = {for (final f in [...own, ...library]) f.id: f};
+    final newestFirst = [...photos]..sort((a, b) => _takenAt(b).compareTo(_takenAt(a)));
+    for (final photo in newestFirst) {
+      _photosByPlace.putIfAbsent(photo.placeKey, () => []).add(photo);
+      final against = byId[photo.referenceImageId];
+      if (against == null) continue;
+      for (final key in _keys(against)) {
+        _newestByKey.putIfAbsent(key, () => photo);
+      }
+    }
+  }
+
+  static DateTime _takenAt(Photo p) => p.takenAt ?? p.createdAt;
+
+  static List<String> _keys(NewReferenceImage f) => [
+        'id:${f.id}',
+        if (f.localPath?.isNotEmpty ?? false) 'path:${f.localPath}',
+        if (f.remoteUrl?.isNotEmpty ?? false) 'url:${f.remoteUrl}',
+      ];
+
+  /// The newest of the user's photos of [frame] or a copy of it.
+  Photo? shotOf(NewReferenceImage frame) {
+    Photo? best;
+    for (final key in _keys(frame)) {
+      final p = _newestByKey[key];
+      if (p != null && (best == null || _takenAt(p).isAfter(_takenAt(best)))) best = p;
+    }
+    return best;
+  }
+
+  /// The place made of [stops] (one, or a group named [group]).
+  PlaceContent place(List<Stop> stops, {String? group}) {
+    final spots = placeSpots(
+      stops: stops,
+      group: group,
+      framesOf: (stop) => placeFramesOf(own: _ownByStop[stop.id] ?? const [], library: _libraryByPlace[stop.placeKey] ?? const []),
+    );
+    final shot = <String, Photo>{};
+    for (final s in spots) {
+      for (final f in s.frames) {
+        if (shotOf(f) case final p?) shot[f.id] = p;
+      }
+    }
+    return PlaceContent(
+      spots: spots,
+      shot: shot,
+      photosAt: {for (final stop in stops) stop.placeKey: _photosByPlace[stop.placeKey] ?? const <Photo>[]},
+    );
+  }
+}
+
+/// What a place holds: its spots, with the user's photos of their frames.
+class PlaceContent {
+  final List<PlaceSpot> spots;
+
+  /// The newest photo of each shot frame, by frame id.
+  final Map<String, Photo> shot;
+
+  /// The user's photos at each of the place's stops' places, newest first,
+  /// by place key: a spot without frames counts as shot with one.
+  final Map<String, List<Photo>> photosAt;
+
+  const PlaceContent({required this.spots, required this.shot, required this.photosAt});
+
+  List<NewReferenceImage> get frames => [for (final s in spots) ...s.frames];
+  int get frameCount => spots.fold(0, (n, s) => n + s.frames.length);
+
+  /// How many of its frames are shot.
+  int get shotCount => frames.where((f) => shot.containsKey(f.id)).length;
+  int get unshotCount => frameCount - shotCount;
+
+  bool isShot(PlaceSpot spot) =>
+      spotShot(shown: spot.frames, shot: {for (final f in spot.frames) if (shot[f.id] case final p?) f.id: p}, photos: photosAt[spot.stop.placeKey] ?? const []);
+
+  int shotIn(PlaceSpot spot) => spot.frames.where((f) => shot.containsKey(f.id)).length;
+  bool hasUnshot(PlaceSpot spot) => spot.frames.any((f) => !shot.containsKey(f.id));
+
+  /// The newest photo of any of its frames, for its thumbnail.
+  Photo? get latestShot {
+    Photo? best;
+    for (final p in shot.values) {
+      if (best == null || (p.takenAt ?? p.createdAt).isAfter(best.takenAt ?? best.createdAt)) best = p;
+    }
+    return best;
+  }
+
+  NewReferenceImage? get firstFrame => frames.firstOrNull;
+
+  /// The metres from ([lat], [lng]) to its nearest spot; null without a
+  /// position or spots.
+  double? distanceFrom(double? lat, double? lng) {
+    if (lat == null || lng == null || spots.isEmpty) return null;
+    return spots.map((s) => metresBetween(lat, lng, s.lat, s.lng)).reduce((a, b) => a < b ? a : b);
+  }
+}
+
+/// The frames to shoot at a place, in the order the queue offers them: the
+/// ones not shot yet, the nearest spot's first when there's a position,
+/// else in the place's order. Nothing makes the user follow it.
+List<NewReferenceImage> shootingQueue(PlaceContent place, {double? lat, double? lng}) => [
+      for (final s in byDistance(place.spots, (s) => s.point, lat: lat, lng: lng))
+        for (final f in s.frames)
+          if (!place.shot.containsKey(f.id)) f,
+    ];
+
+/// What to shoot next at a place: the first frame of [shootingQueue], with
+/// its spot and how far away it is. Null when everything is shot.
+({PlaceSpot spot, NewReferenceImage frame, double? metres})? nextToShoot(PlaceContent place, {double? lat, double? lng}) {
+  final frame = shootingQueue(place, lat: lat, lng: lng).firstOrNull;
+  if (frame == null) return null;
+  final spot = place.spots.firstWhere((s) => s.frames.contains(frame));
+  return (
+    spot: spot,
+    frame: frame,
+    metres: lat == null || lng == null ? null : metresBetween(lat, lng, spot.lat, spot.lng),
+  );
+}
+
+/// The eight compass points, for "NE 40 m".
+enum Compass { n, ne, e, se, s, sw, w, nw }
+
+/// Which way ([toLat], [toLng]) is from ([lat], [lng]).
+Compass compassTo(double lat, double lng, double toLat, double toLng) {
+  final degrees = const Distance().bearing(LatLng(lat, lng), LatLng(toLat, toLng));
+  return Compass.values[((degrees % 360 + 360) % 360 / 45).round() % 8];
+}

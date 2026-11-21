@@ -257,7 +257,7 @@ class AppLocalizationsEn extends AppLocalizations {
   String get placeNearestFirst => 'Nearest first';
 
   @override
-  String get placeAllShot => 'Every spot here is shot.';
+  String get placeAllShot => 'Everything here is shot.';
 
   @override
   String get placeNoSpots => 'No spots.';
@@ -280,13 +280,13 @@ class AppLocalizationsEn extends AppLocalizations {
   }
 
   @override
-  String get placeFrameNotShotLabel => 'Frame, not shot. Shoot it';
+  String get placeFrameNotShotLabel => 'Frame, not shot';
 
   @override
   String get placeFrameShotLabel => 'Your photo of this frame';
 
   @override
-  String get placeDetails => 'Details';
+  String get placeDetails => 'Stop details';
 
   @override
   String get placeFoldBannerText =>
@@ -324,4 +324,364 @@ class AppLocalizationsEn extends AppLocalizations {
   String placeFoldFailed(String error) {
     return 'Couldn\'t turn the groups into places: $error';
   }
+
+  @override
+  String placeFilterNearby(int count) {
+    return 'Nearby $count';
+  }
+
+  @override
+  String get placeNoneNearby => 'No spots within 60 m.';
+
+  @override
+  String get placeEstimated => 'Position estimated';
+
+  @override
+  String get placeSpotsHeading => 'Spots';
+
+  @override
+  String get placeSpotsHint =>
+      'Each spot is a place to shoot from, with the frames shot there.';
+
+  @override
+  String get placeNotesHeading => 'Notes';
+
+  @override
+  String get placeNotesHint => 'Getting there, opening hours, when to shoot…';
+
+  @override
+  String get placeOpenInMaps => 'Open in Google Maps';
+
+  @override
+  String placeDistanceAway(String distance) {
+    return '$distance away';
+  }
+
+  @override
+  String placeCompass(String dir) {
+    String _temp0 = intl.Intl.selectLogic(dir, {
+      'n': 'N',
+      'ne': 'NE',
+      'e': 'E',
+      'se': 'SE',
+      's': 'S',
+      'sw': 'SW',
+      'w': 'W',
+      'nw': 'NW',
+      'other': '',
+    });
+    return '$_temp0';
+  }
+
+  @override
+  String placeSpotWay(String direction, String distance) {
+    return '$direction $distance';
+  }
+
+  @override
+  String placeStartShooting(int count) {
+    String _temp0 = intl.Intl.pluralLogic(
+      count,
+      locale: localeName,
+      other: 'Start shooting · $count not shot',
+      one: 'Start shooting · 1 not shot',
+    );
+    return '$_temp0';
+  }
+
+  @override
+  String get placeSeePhotos => 'Everything here is shot · See photos';
+
+  @override
+  String placeNext(String spot, String distance) {
+    return 'Next: $spot · $distance';
+  }
+
+  @override
+  String placeNextHere(String spot) {
+    return 'Next: $spot';
+  }
+
+  @override
+  String get placeShoot => 'Shoot';
+
+  @override
+  String get placeSpotNoteLabel =>
+      'Note (a spot has no name; its note tells it apart)';
+
+  @override
+  String get placeSpotNoteHint => 'e.g. north side of the 3rd pillar';
+
+  @override
+  String get placeSaveNote => 'Save note';
+
+  @override
+  String get placeSetPosition => 'Set its position on the map';
+
+  @override
+  String get placeSetPositionEstimated => 'The position now is estimated';
+
+  @override
+  String get placeShootSpot => 'Shoot this spot';
+
+  @override
+  String placePlacing(String spot) {
+    return 'Drag the map to put the cross on where “$spot” is shot from';
+  }
+
+  @override
+  String get placeSetHere => 'Set here';
+
+  @override
+  String get placePositionSaved => 'Position saved.';
+
+  @override
+  String placeSpotOptions(String spot) {
+    return 'Options for “$spot”';
+  }
+
+  @override
+  String get placeMenu => 'Place options';
+
+  @override
+  String get placeDayUnsorted => 'Unsorted';
+
+  @override
+  String placeDayN(int n) {
+    return 'Day $n';
+  }
+
+  @override
+  String get placeNoDate => 'No date';
+
+  @override
+  String placeDayChip(String day) {
+    return 'Day: $day. Tap to move the place';
+  }
+
+  @override
+  String placeMoveTitle(String place) {
+    return 'Where “$place” goes';
+  }
+
+  @override
+  String placeMovedTo(String day) {
+    return 'Moved to $day.';
+  }
+
+  @override
+  String placeCountInDay(int count) {
+    String _temp0 = intl.Intl.pluralLogic(
+      count,
+      locale: localeName,
+      other: '$count places',
+      one: '1 place',
+    );
+    return '$_temp0';
+  }
+
+  @override
+  String get placeMerge => 'Merge another place into this one';
+
+  @override
+  String placeMergePick(String place) {
+    return 'Merge into “$place”';
+  }
+
+  @override
+  String placeMergeConfirm(String other, String place) {
+    return 'Merge “$other” into “$place”?';
+  }
+
+  @override
+  String placeMergeBody(String other) {
+    return 'Its frames, labels and days come here, each frame keeping where it was shot from, and “$other” leaves the trip, for everyone in it.';
+  }
+
+  @override
+  String get placeMergeAction => 'Merge';
+
+  @override
+  String placeMerged(String other) {
+    return 'Merged “$other” into this place.';
+  }
+
+  @override
+  String get placeTakePhoto => 'Take photo';
+
+  @override
+  String get placeCompare => 'See your photo';
+
+  @override
+  String get placeFrameTitle => 'Anime frame';
+
+  @override
+  String get placeNoFrames => 'No frames yet';
+
+  @override
+  String get placeSpotNoFrames => 'No frames at this spot yet.';
+
+  @override
+  String get placeCancel => 'Cancel';
+
+  @override
+  String get tripTabPlaces => 'Places';
+
+  @override
+  String get tripTabMembers => 'Members';
+
+  @override
+  String get tripSchedule => 'Schedule';
+
+  @override
+  String get placesSearchHint => 'Find places, spot notes or frames';
+
+  @override
+  String get placesClearSearch => 'Clear search';
+
+  @override
+  String get placesSortNearest => 'Nearest';
+
+  @override
+  String get placesSortByDay => 'By day';
+
+  @override
+  String get placesNearestHeading => 'Nearest to you';
+
+  @override
+  String get placesToday => 'Today';
+
+  @override
+  String placesTodayTitle(String date, String day) {
+    return 'Today $date · $day';
+  }
+
+  @override
+  String placesTodayNearest(int count, String place, String distance) {
+    String _temp0 = intl.Intl.pluralLogic(
+      count,
+      locale: localeName,
+      other: '$count places, nearest is “$place” $distance',
+      one: '1 place, nearest is “$place” $distance',
+    );
+    return '$_temp0';
+  }
+
+  @override
+  String placesTodayStart(int count, String place) {
+    String _temp0 = intl.Intl.pluralLogic(
+      count,
+      locale: localeName,
+      other: '$count places, start with “$place”',
+      one: '1 place, start with “$place”',
+    );
+    return '$_temp0';
+  }
+
+  @override
+  String placesNoMatch(String query) {
+    return 'Nothing matches “$query”.';
+  }
+
+  @override
+  String get placesEmptyDay =>
+      'No places yet. Open a place and tap its day to move it here.';
+
+  @override
+  String get placesEmpty => 'No places in this trip yet.';
+
+  @override
+  String get placesNewDay => '+ New day / category';
+
+  @override
+  String get placesAddPlaces => 'Add places';
+
+  @override
+  String placesDayOptions(String day) {
+    return 'Options for “$day”';
+  }
+
+  @override
+  String get placesRename => 'Rename';
+
+  @override
+  String get placesSetDate => 'Add a date';
+
+  @override
+  String placesChangeDate(String date) {
+    return 'Change the date ($date)';
+  }
+
+  @override
+  String get placesClearDate => 'Remove the date';
+
+  @override
+  String get placesClearDateHint => 'Keeps just the name';
+
+  @override
+  String get placesReorder => 'Reorder';
+
+  @override
+  String get placesDeleteDay => 'Delete';
+
+  @override
+  String get placesDeleteDayHint => 'Its places move to Unsorted';
+
+  @override
+  String placesDeleteDayTitle(String day) {
+    return 'Delete “$day”?';
+  }
+
+  @override
+  String get placesDeleteDayBody =>
+      'Its places aren\'t deleted; they move to Unsorted.';
+
+  @override
+  String get placesDayName => 'Name';
+
+  @override
+  String get placesDayNameHint => 'e.g. Nishinomiya, Next time';
+
+  @override
+  String get placesNewDayTitle => 'New day / category';
+
+  @override
+  String get placesRenameTitle => 'Rename the day';
+
+  @override
+  String get placesWithDate => 'Add a date (optional)';
+
+  @override
+  String get placesCreate => 'Create';
+
+  @override
+  String get placesSave => 'Save';
+
+  @override
+  String get placesMoveUp => 'Move up';
+
+  @override
+  String get placesMoveDown => 'Move down';
+
+  @override
+  String get placesMatchName => 'Place name';
+
+  @override
+  String placesMatchSpots(String notes) {
+    return 'Spots: $notes';
+  }
+
+  @override
+  String placesMatchFrames(int count, String names) {
+    String _temp0 = intl.Intl.pluralLogic(
+      count,
+      locale: localeName,
+      other: '$count frames: $names',
+      one: '1 frame: $names',
+    );
+    return '$_temp0';
+  }
+
+  @override
+  String get placesDone => 'Done';
 }

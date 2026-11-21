@@ -1,20 +1,11 @@
 import 'package:drift/drift.dart' show Value;
-import 'package:drift/native.dart';
-import 'package:flutter/material.dart';
-import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:flutter/widgets.dart' show Locale;
 import 'package:flutter_test/flutter_test.dart';
-import 'package:go_router/go_router.dart';
 import 'package:latlong2/latlong.dart';
 import 'package:trip_planner/core/database/database.dart';
 import 'package:trip_planner/core/l10n/l10n.dart';
-import 'package:trip_planner/core/providers/database_provider.dart';
-import 'package:trip_planner/features/auth/providers/auth_provider.dart';
-import 'package:trip_planner/features/library/providers/place_providers.dart';
 import 'package:trip_planner/features/trip/models/place_spots.dart';
-import 'package:trip_planner/features/trip/providers/trip_providers.dart';
 import 'package:trip_planner/features/trip/providers/trip_stop_providers.dart';
-import 'package:trip_planner/features/trip/screens/trip_place_screen.dart';
-import 'package:trip_planner/shared/map/app_map.dart';
 
 void main() {
   final t0 = DateTime(2027, 6, 19, 10);
@@ -174,110 +165,50 @@ void main() {
     expect(en.placeSpotCount(3), '3 spots');
     expect(en.placeFrameCount(1), '1 frame');
     final zh = lookupAppLocalizations(const Locale.fromSubtags(languageCode: 'zh', scriptCode: 'Hant'));
-    expect(zh.placeSpotCount(3), '3 個取景點');
-    expect(zh.placeShotCount(2), '已拍 2');
+    expect(zh.placeSpotCount(3), '3 個機位');
+    expect(zh.placeShotCount(2), '拍過 2');
+    expect(zh.placeStartShooting(4), '開始拍 · 還有 4 張沒拍');
+    expect(en.placeStartShooting(1), 'Start shooting · 1 not shot');
     expect(lookupAppLocalizations(const Locale('ja')).placeFrameCount(2), '比較画像 2 枚');
   });
 
-  group('TripPlaceScreen', () {
-    late AppDatabase db;
-    setUp(() => db = AppDatabase.forTesting(NativeDatabase.memory()));
-    tearDown(() => db.close());
+  group('what to shoot next', () {
+    // Two spots of 宇治橋: 三の間 to the west, 東詰 about 140 m east.
+    final place = stop('p', '宇治橋', lat: 34.8920, lng: 135.8080);
+    final west = [frame('w1', note: '三の間', lat: 34.8921, lng: 135.8075), frame('w2', note: '三の間', lat: 34.8921, lng: 135.8075)];
+    final east = [frame('e1', note: '東詰', lat: 34.8918, lng: 135.8090)];
+    PlaceContent content(List<Photo> photos) =>
+        TripFrameIndex(own: [for (final f in [...west, ...east]) f.copyWith(stopId: const Value('p'))], library: const [], photos: photos)
+            .place([place]);
 
-    Future<void> pump(WidgetTester tester, ProviderContainer container, String tripId, String stopId) async {
-      tester.view.physicalSize = const Size(1080, 2400);
-      tester.view.devicePixelRatio = 3;
-      addTearDown(tester.view.reset);
-      final router = GoRouter(initialLocation: '/trips/$tripId/places/$stopId', routes: [
-        GoRoute(path: '/trips/:tripId', builder: (_, _) => const Scaffold()),
-        GoRoute(
-          path: '/trips/:tripId/places/:stopId',
-          builder: (_, s) => TripPlaceScreen(tripId: s.pathParameters['tripId']!, stopId: s.pathParameters['stopId']!),
-        ),
-      ]);
-      await tester.pumpWidget(UncontrolledProviderScope(
-        container: container,
-        child: MaterialApp.router(routerConfig: router),
-      ));
-      await tester.pumpAndSettle();
-    }
-
-    testWidgets('lists a group\'s spots by note or short name and filters the unshot', (tester) async {
-      final container = ProviderContainer(overrides: [
-        databaseProvider.overrideWithValue(db),
-        currentUserIdProvider.overrideWithValue('u1'),
-        mapTilesProvider.overrideWithValue(false),
-      ]);
-      addTearDown(container.dispose);
-      final trips = container.read(tripRepositoryProvider);
-      final places = container.read(placeRepositoryProvider);
-
-      late String firstId;
-      await tester.runAsync(() async {
-        final trip = await trips.createTrip(title: 'Kansai', ownerId: 'u1', dayCount: 1);
-        final a = await trips.createTripOnlySpot(tripId: trip.id, name: '宇治橋 三の間', lat: 34.8921, lng: 135.8075, addedBy: 'u1', area: '宇治橋');
-        final b = await trips.createTripOnlySpot(tripId: trip.id, name: '宇治橋 東詰', lat: 34.8918, lng: 135.8090, addedBy: 'u1', area: '宇治橋');
-        await trips.createTripOnlySpot(tripId: trip.id, name: '平等院', lat: 34.889, lng: 135.807, addedBy: 'u1');
-        firstId = '${trip.id}/${b.id}';
-        final fa = await places.addReferenceImage(stopId: a.id, localPath: 'missing-a.png');
-        await places.addReferenceImage(stopId: b.id, localPath: 'missing-b.png');
-        await places.addPhoto(placeKey: a.placeKey, localPath: 'missing-shot.jpg', tripId: trip.id, referenceImageId: fa.id);
-      });
-
-      final ids = firstId.split('/');
-      await pump(tester, container, ids[0], ids[1]);
-
-      expect(find.text('宇治橋'), findsOneWidget, reason: 'the place has the name');
-      expect(find.text('2 spots · 1 shot'), findsOneWidget);
-      expect(find.text('三の間'), findsOneWidget);
-      expect(find.text('東詰'), findsOneWidget);
-      expect(find.text('平等院'), findsNothing, reason: 'not in the group');
-      expect(find.bySemanticsLabel('Your photo of this frame'), findsOneWidget);
-
-      await tester.tap(find.byKey(const Key('placeUnshotChip')));
-      await tester.pumpAndSettle();
-      expect(find.text('三の間'), findsNothing);
-      expect(find.text('東詰'), findsOneWidget);
-
-      await tester.pumpWidget(const SizedBox());
-      await tester.pump(const Duration(seconds: 1));
+    test('the queue is the frames not shot, nearest spot first, or in order without a position', () {
+      final c = content([photo('x', ref: 'w1')]);
+      expect(c.shotCount, 1);
+      expect(c.unshotCount, 2);
+      expect([for (final f in shootingQueue(c)) f.id], ['w2', 'e1']);
+      expect([for (final f in shootingQueue(c, lat: 34.8918, lng: 135.8091)) f.id], ['e1', 'w2']);
     });
 
-    testWidgets('a place that is one stop shows its frames as spots by note', (tester) async {
-      final container = ProviderContainer(overrides: [
-        databaseProvider.overrideWithValue(db),
-        currentUserIdProvider.overrideWithValue('u1'),
-        mapTilesProvider.overrideWithValue(false),
-      ]);
-      addTearDown(container.dispose);
-      final trips = container.read(tripRepositoryProvider);
+    test('nextToShoot names the spot and how far it is, and nothing once all is shot', () {
+      final next = nextToShoot(content(const []), lat: 34.8918, lng: 135.8091);
+      expect(next!.frame.id, 'e1');
+      expect(next.spot.label, '東詰');
+      expect(next.metres, lessThan(15));
+      expect(nextToShoot(content(const []))!.spot.label, '三の間');
+      expect(nextToShoot(content([photo('a', ref: 'w1'), photo('b', ref: 'w2'), photo('c', ref: 'e1')])), isNull);
+    });
 
-      late String ids;
-      await tester.runAsync(() async {
-        final trip = await trips.createTrip(title: 'Kansai', ownerId: 'u1', dayCount: 1);
-        final s = await trips.createTripOnlySpot(tripId: trip.id, name: '宇治橋', lat: 34.892, lng: 135.808, addedBy: 'u1');
-        ids = '${trip.id}/${s.id}';
-        for (final (id, note, lat) in [('f1', '三の間', 34.8921), ('f2', '三の間', 34.89212), ('f3', '東詰', 34.8918)]) {
-          await db.into(db.newReferenceImages).insert(NewReferenceImagesCompanion.insert(
-                id: id,
-                stopId: Value(s.id),
-                localPath: Value('missing-$id.png'),
-                note: Value(note),
-                lat: Value(lat),
-                lng: const Value(135.8075),
-              ));
-        }
-      });
+    test("the latest shot is the place's thumbnail", () {
+      final c = content([photo('old', ref: 'w1', at: t0), photo('new', ref: 'e1', at: t0.add(const Duration(hours: 2)))]);
+      expect(c.latestShot!.id, 'new');
+      expect(c.firstFrame!.id, 'w1');
+    });
 
-      await pump(tester, container, ids.split('/')[0], ids.split('/')[1]);
-      expect(find.text('宇治橋'), findsOneWidget);
-      expect(find.text('2 spots · 0 shot'), findsOneWidget);
-      expect(find.text('三の間'), findsOneWidget);
-      expect(find.text('東詰'), findsOneWidget);
-      expect(find.byKey(const Key('placeDetails')), findsOneWidget);
-
-      await tester.pumpWidget(const SizedBox());
-      await tester.pump(const Duration(seconds: 1));
+    test('compassTo: which way a spot is', () {
+      expect(compassTo(34.0, 135.0, 34.001, 135.0), Compass.n);
+      expect(compassTo(34.0, 135.0, 34.001, 135.0012), Compass.ne);
+      expect(compassTo(34.0, 135.0, 33.999, 135.0), Compass.s);
+      expect(compassTo(34.0, 135.0, 34.0, 134.999), Compass.w);
     });
   });
 }

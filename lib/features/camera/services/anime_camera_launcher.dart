@@ -280,8 +280,10 @@ Future<void> shootWithFrames(
   }
   if (kIsWeb || !Platform.isAndroid) {
     // The in-app camera starts on the frame and offers the place's others.
+    // Waits for the camera to close, so the page that opened it can offer
+    // the next frame.
     final start = reference?.frames[reference.index].imageId;
-    context.push(_inAppCameraLocation(placeKey, tripId, frameId: start));
+    await context.push(_inAppCameraLocation(placeKey, tripId, frameId: start));
     return;
   }
   await _shootWith(context, reference, placeKey: placeKey, tripId: tripId);

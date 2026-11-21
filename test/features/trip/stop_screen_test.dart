@@ -159,6 +159,8 @@ void main() {
       await tester.tap(find.text('Uji Bridge'));
       await tester.pumpAndSettle();
       expect(find.byType(TripPlaceScreen), findsOneWidget);
+      await tester.tap(find.byKey(const Key('placeMenu')));
+      await tester.pumpAndSettle();
       await tester.tap(find.byKey(const Key('placeDetails')));
       await tester.pumpAndSettle();
 

@@ -32,6 +32,10 @@ class MapPin {
   /// Read by screen readers, and shown under the pin when [selected].
   final String name;
 
+  /// Its position is a guess (a spot nobody placed): drawn with a dashed
+  /// ring instead of a solid border.
+  final bool estimated;
+
   const MapPin({
     required this.id,
     required this.point,
@@ -42,6 +46,7 @@ class MapPin {
     this.selected = false,
     this.next = false,
     this.count = 1,
+    this.estimated = false,
   });
 }
 

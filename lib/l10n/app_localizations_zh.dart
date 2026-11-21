@@ -224,14 +224,14 @@ class AppLocalizationsZh extends AppLocalizations {
     String _temp0 = intl.Intl.pluralLogic(
       count,
       locale: localeName,
-      other: '$count 個取景點',
+      other: '$count 個機位',
     );
     return '$_temp0';
   }
 
   @override
   String placeShotCount(int count) {
-    return '已拍 $count';
+    return '拍過 $count';
   }
 
   @override
@@ -241,45 +241,45 @@ class AppLocalizationsZh extends AppLocalizations {
 
   @override
   String placeFilterNotShot(int count) {
-    return '未拍 $count';
+    return '還沒拍 $count';
   }
 
   @override
   String get placeNearestFirst => '由近到遠';
 
   @override
-  String get placeAllShot => '這裡的取景點都拍過了。';
+  String get placeAllShot => '這裡都拍過了。';
 
   @override
-  String get placeNoSpots => '沒有取景點。';
+  String get placeNoSpots => '沒有符合的機位。';
 
   @override
-  String get placeSpotShot => '已拍';
+  String get placeSpotShot => '拍過';
 
   @override
-  String get placeSpotNotShot => '未拍';
+  String get placeSpotNotShot => '還沒拍';
 
   @override
   String placeFrameCount(int count) {
     String _temp0 = intl.Intl.pluralLogic(
       count,
       locale: localeName,
-      other: '$count 張分鏡',
+      other: '$count 張參考圖',
     );
     return '$_temp0';
   }
 
   @override
-  String get placeFrameNotShotLabel => '分鏡，尚未拍攝。點一下拍攝';
+  String get placeFrameNotShotLabel => '參考圖，還沒拍';
 
   @override
-  String get placeFrameShotLabel => '你拍的這張分鏡';
+  String get placeFrameShotLabel => '你拍的這張參考圖';
 
   @override
   String get placeDetails => '詳細資料';
 
   @override
-  String get placeFoldBannerText => '一組站點現在就是一個地點，組內的站點成為其中的取景點。';
+  String get placeFoldBannerText => '一組站點現在就是一個地點，組內的站點成為其中的機位。';
 
   @override
   String get placeFoldBannerAction => '轉為地點';
@@ -289,7 +289,7 @@ class AppLocalizationsZh extends AppLocalizations {
 
   @override
   String get placeFoldConfirmBody =>
-      '每個群組會合併成一個以群組命名的站點，組內站點的分鏡、日程與標籤都會移到這個站點，每張分鏡也會記住原本的拍攝位置。行程中的所有成員都會看到這項變更。';
+      '每個群組會合併成一個以群組命名的站點，組內站點的參考圖、日程與標籤都會移到這個站點，每張參考圖也會記住原本的拍攝位置。行程中的所有成員都會看到這項變更。';
 
   @override
   String placeFoldDone(int count) {
@@ -311,6 +311,357 @@ class AppLocalizationsZh extends AppLocalizations {
   String placeFoldFailed(String error) {
     return '無法將群組轉為地點：$error';
   }
+
+  @override
+  String placeFilterNearby(int count) {
+    return '附近 $count';
+  }
+
+  @override
+  String get placeNoneNearby => '60 公尺內沒有機位。';
+
+  @override
+  String get placeEstimated => '位置待確認';
+
+  @override
+  String get placeSpotsHeading => '機位';
+
+  @override
+  String get placeSpotsHint => '每個機位是一個拍攝位置，下面是在那裡拍的參考圖';
+
+  @override
+  String get placeNotesHeading => '筆記';
+
+  @override
+  String get placeNotesHint => '交通、開放時間、拍攝時段……';
+
+  @override
+  String get placeOpenInMaps => '在 Google 地圖打開';
+
+  @override
+  String placeDistanceAway(String distance) {
+    return '離你 $distance';
+  }
+
+  @override
+  String placeCompass(String dir) {
+    String _temp0 = intl.Intl.selectLogic(dir, {
+      'n': '北',
+      'ne': '東北',
+      'e': '東',
+      'se': '東南',
+      's': '南',
+      'sw': '西南',
+      'w': '西',
+      'nw': '西北',
+      'other': '',
+    });
+    return '$_temp0';
+  }
+
+  @override
+  String placeSpotWay(String direction, String distance) {
+    return '往$direction $distance';
+  }
+
+  @override
+  String placeStartShooting(int count) {
+    String _temp0 = intl.Intl.pluralLogic(
+      count,
+      locale: localeName,
+      other: '開始拍 · 還有 $count 張沒拍',
+    );
+    return '$_temp0';
+  }
+
+  @override
+  String get placeSeePhotos => '這裡都拍過了，看成果';
+
+  @override
+  String placeNext(String spot, String distance) {
+    return '下一張：$spot · $distance';
+  }
+
+  @override
+  String placeNextHere(String spot) {
+    return '下一張：$spot';
+  }
+
+  @override
+  String get placeShoot => '拍';
+
+  @override
+  String get placeSpotNoteLabel => '備註（機位沒有名字，用備註分辨）';
+
+  @override
+  String get placeSpotNoteHint => '例如：第 3 根柱子北側、往上游拍';
+
+  @override
+  String get placeSaveNote => '儲存備註';
+
+  @override
+  String get placeSetPosition => '在地圖上調整位置';
+
+  @override
+  String get placeSetPositionEstimated => '現在的位置是估的';
+
+  @override
+  String get placeShootSpot => '拍這個機位';
+
+  @override
+  String placePlacing(String spot) {
+    return '拖動地圖，把十字對準「$spot」的拍攝位置';
+  }
+
+  @override
+  String get placeSetHere => '設在這裡';
+
+  @override
+  String get placePositionSaved => '位置改好了';
+
+  @override
+  String placeSpotOptions(String spot) {
+    return '「$spot」的選項';
+  }
+
+  @override
+  String get placeMenu => '地點選項';
+
+  @override
+  String get placeDayUnsorted => '未分類';
+
+  @override
+  String placeDayN(int n) {
+    return '第 $n 天';
+  }
+
+  @override
+  String get placeNoDate => '沒有日期';
+
+  @override
+  String placeDayChip(String day) {
+    return '分類：$day，點一下換分類';
+  }
+
+  @override
+  String placeMoveTitle(String place) {
+    return '「$place」放在哪個分類';
+  }
+
+  @override
+  String placeMovedTo(String day) {
+    return '移到「$day」';
+  }
+
+  @override
+  String placeCountInDay(int count) {
+    String _temp0 = intl.Intl.pluralLogic(
+      count,
+      locale: localeName,
+      other: '$count 個地點',
+    );
+    return '$_temp0';
+  }
+
+  @override
+  String get placeMerge => '把另一個地點合併進來';
+
+  @override
+  String placeMergePick(String place) {
+    return '合併到「$place」';
+  }
+
+  @override
+  String placeMergeConfirm(String other, String place) {
+    return '把「$other」合併到「$place」？';
+  }
+
+  @override
+  String placeMergeBody(String other) {
+    return '它的參考圖、標籤和日程會移到這裡，每張參考圖保留拍攝位置；「$other」會從行程移除，所有成員都會看到。';
+  }
+
+  @override
+  String get placeMergeAction => '合併';
+
+  @override
+  String placeMerged(String other) {
+    return '已把「$other」合併進來。';
+  }
+
+  @override
+  String get placeTakePhoto => '開相機拍';
+
+  @override
+  String get placeCompare => '看對照';
+
+  @override
+  String get placeFrameTitle => '參考圖';
+
+  @override
+  String get placeNoFrames => '還沒有參考圖';
+
+  @override
+  String get placeSpotNoFrames => '這個機位還沒有參考圖。';
+
+  @override
+  String get placeCancel => '取消';
+
+  @override
+  String get tripTabPlaces => '地點';
+
+  @override
+  String get tripTabMembers => '成員';
+
+  @override
+  String get tripSchedule => '時間表';
+
+  @override
+  String get placesSearchHint => '找地點、機位備註或參考圖';
+
+  @override
+  String get placesClearSearch => '清除搜尋';
+
+  @override
+  String get placesSortNearest => '離我最近';
+
+  @override
+  String get placesSortByDay => '我的分類';
+
+  @override
+  String get placesNearestHeading => '離你最近';
+
+  @override
+  String get placesToday => '今天';
+
+  @override
+  String placesTodayTitle(String date, String day) {
+    return '今天 $date · $day';
+  }
+
+  @override
+  String placesTodayNearest(int count, String place, String distance) {
+    String _temp0 = intl.Intl.pluralLogic(
+      count,
+      locale: localeName,
+      other: '$count 個地點，離你最近的是「$place」$distance',
+    );
+    return '$_temp0';
+  }
+
+  @override
+  String placesTodayStart(int count, String place) {
+    String _temp0 = intl.Intl.pluralLogic(
+      count,
+      locale: localeName,
+      other: '$count 個地點，從「$place」開始',
+    );
+    return '$_temp0';
+  }
+
+  @override
+  String placesNoMatch(String query) {
+    return '找不到「$query」。';
+  }
+
+  @override
+  String get placesEmptyDay => '還沒有地點。打開地點，按分類就能移過來。';
+
+  @override
+  String get placesEmpty => '這趟行程還沒有地點。';
+
+  @override
+  String get placesNewDay => '＋ 新分類';
+
+  @override
+  String get placesAddPlaces => '新增地點';
+
+  @override
+  String placesDayOptions(String day) {
+    return '「$day」的選項';
+  }
+
+  @override
+  String get placesRename => '重新命名';
+
+  @override
+  String get placesSetDate => '加上日期';
+
+  @override
+  String placesChangeDate(String date) {
+    return '改日期（$date）';
+  }
+
+  @override
+  String get placesClearDate => '拿掉日期';
+
+  @override
+  String get placesClearDateHint => '只留名字';
+
+  @override
+  String get placesReorder => '調整順序';
+
+  @override
+  String get placesDeleteDay => '刪除分類';
+
+  @override
+  String get placesDeleteDayHint => '裡面的地點會移到「未分類」';
+
+  @override
+  String placesDeleteDayTitle(String day) {
+    return '刪除「$day」？';
+  }
+
+  @override
+  String get placesDeleteDayBody => '分類裡的地點不會刪掉，會移到「未分類」。';
+
+  @override
+  String get placesDayName => '名稱';
+
+  @override
+  String get placesDayNameHint => '例如：西宮、下次再去、6/22 奈良';
+
+  @override
+  String get placesNewDayTitle => '新分類';
+
+  @override
+  String get placesRenameTitle => '編輯分類';
+
+  @override
+  String get placesWithDate => '加上日期（可以不填）';
+
+  @override
+  String get placesCreate => '建立分類';
+
+  @override
+  String get placesSave => '儲存';
+
+  @override
+  String get placesMoveUp => '上移';
+
+  @override
+  String get placesMoveDown => '下移';
+
+  @override
+  String get placesMatchName => '地點名稱';
+
+  @override
+  String placesMatchSpots(String notes) {
+    return '機位：$notes';
+  }
+
+  @override
+  String placesMatchFrames(int count, String names) {
+    String _temp0 = intl.Intl.pluralLogic(
+      count,
+      locale: localeName,
+      other: '$count 張參考圖：$names',
+    );
+    return '$_temp0';
+  }
+
+  @override
+  String get placesDone => '完成';
 }
 
 /// The translations for Chinese, using the Han script (`zh_Hant`).
@@ -533,14 +884,14 @@ class AppLocalizationsZhHant extends AppLocalizationsZh {
     String _temp0 = intl.Intl.pluralLogic(
       count,
       locale: localeName,
-      other: '$count 個取景點',
+      other: '$count 個機位',
     );
     return '$_temp0';
   }
 
   @override
   String placeShotCount(int count) {
-    return '已拍 $count';
+    return '拍過 $count';
   }
 
   @override
@@ -550,45 +901,45 @@ class AppLocalizationsZhHant extends AppLocalizationsZh {
 
   @override
   String placeFilterNotShot(int count) {
-    return '未拍 $count';
+    return '還沒拍 $count';
   }
 
   @override
   String get placeNearestFirst => '由近到遠';
 
   @override
-  String get placeAllShot => '這裡的取景點都拍過了。';
+  String get placeAllShot => '這裡都拍過了。';
 
   @override
-  String get placeNoSpots => '沒有取景點。';
+  String get placeNoSpots => '沒有符合的機位。';
 
   @override
-  String get placeSpotShot => '已拍';
+  String get placeSpotShot => '拍過';
 
   @override
-  String get placeSpotNotShot => '未拍';
+  String get placeSpotNotShot => '還沒拍';
 
   @override
   String placeFrameCount(int count) {
     String _temp0 = intl.Intl.pluralLogic(
       count,
       locale: localeName,
-      other: '$count 張分鏡',
+      other: '$count 張參考圖',
     );
     return '$_temp0';
   }
 
   @override
-  String get placeFrameNotShotLabel => '分鏡，尚未拍攝。點一下拍攝';
+  String get placeFrameNotShotLabel => '參考圖，還沒拍';
 
   @override
-  String get placeFrameShotLabel => '你拍的這張分鏡';
+  String get placeFrameShotLabel => '你拍的這張參考圖';
 
   @override
   String get placeDetails => '詳細資料';
 
   @override
-  String get placeFoldBannerText => '一組站點現在就是一個地點，組內的站點成為其中的取景點。';
+  String get placeFoldBannerText => '一組站點現在就是一個地點，組內的站點成為其中的機位。';
 
   @override
   String get placeFoldBannerAction => '轉為地點';
@@ -598,7 +949,7 @@ class AppLocalizationsZhHant extends AppLocalizationsZh {
 
   @override
   String get placeFoldConfirmBody =>
-      '每個群組會合併成一個以群組命名的站點，組內站點的分鏡、日程與標籤都會移到這個站點，每張分鏡也會記住原本的拍攝位置。行程中的所有成員都會看到這項變更。';
+      '每個群組會合併成一個以群組命名的站點，組內站點的參考圖、日程與標籤都會移到這個站點，每張參考圖也會記住原本的拍攝位置。行程中的所有成員都會看到這項變更。';
 
   @override
   String placeFoldDone(int count) {
@@ -620,4 +971,355 @@ class AppLocalizationsZhHant extends AppLocalizationsZh {
   String placeFoldFailed(String error) {
     return '無法將群組轉為地點：$error';
   }
+
+  @override
+  String placeFilterNearby(int count) {
+    return '附近 $count';
+  }
+
+  @override
+  String get placeNoneNearby => '60 公尺內沒有機位。';
+
+  @override
+  String get placeEstimated => '位置待確認';
+
+  @override
+  String get placeSpotsHeading => '機位';
+
+  @override
+  String get placeSpotsHint => '每個機位是一個拍攝位置，下面是在那裡拍的參考圖';
+
+  @override
+  String get placeNotesHeading => '筆記';
+
+  @override
+  String get placeNotesHint => '交通、開放時間、拍攝時段……';
+
+  @override
+  String get placeOpenInMaps => '在 Google 地圖打開';
+
+  @override
+  String placeDistanceAway(String distance) {
+    return '離你 $distance';
+  }
+
+  @override
+  String placeCompass(String dir) {
+    String _temp0 = intl.Intl.selectLogic(dir, {
+      'n': '北',
+      'ne': '東北',
+      'e': '東',
+      'se': '東南',
+      's': '南',
+      'sw': '西南',
+      'w': '西',
+      'nw': '西北',
+      'other': '',
+    });
+    return '$_temp0';
+  }
+
+  @override
+  String placeSpotWay(String direction, String distance) {
+    return '往$direction $distance';
+  }
+
+  @override
+  String placeStartShooting(int count) {
+    String _temp0 = intl.Intl.pluralLogic(
+      count,
+      locale: localeName,
+      other: '開始拍 · 還有 $count 張沒拍',
+    );
+    return '$_temp0';
+  }
+
+  @override
+  String get placeSeePhotos => '這裡都拍過了，看成果';
+
+  @override
+  String placeNext(String spot, String distance) {
+    return '下一張：$spot · $distance';
+  }
+
+  @override
+  String placeNextHere(String spot) {
+    return '下一張：$spot';
+  }
+
+  @override
+  String get placeShoot => '拍';
+
+  @override
+  String get placeSpotNoteLabel => '備註（機位沒有名字，用備註分辨）';
+
+  @override
+  String get placeSpotNoteHint => '例如：第 3 根柱子北側、往上游拍';
+
+  @override
+  String get placeSaveNote => '儲存備註';
+
+  @override
+  String get placeSetPosition => '在地圖上調整位置';
+
+  @override
+  String get placeSetPositionEstimated => '現在的位置是估的';
+
+  @override
+  String get placeShootSpot => '拍這個機位';
+
+  @override
+  String placePlacing(String spot) {
+    return '拖動地圖，把十字對準「$spot」的拍攝位置';
+  }
+
+  @override
+  String get placeSetHere => '設在這裡';
+
+  @override
+  String get placePositionSaved => '位置改好了';
+
+  @override
+  String placeSpotOptions(String spot) {
+    return '「$spot」的選項';
+  }
+
+  @override
+  String get placeMenu => '地點選項';
+
+  @override
+  String get placeDayUnsorted => '未分類';
+
+  @override
+  String placeDayN(int n) {
+    return '第 $n 天';
+  }
+
+  @override
+  String get placeNoDate => '沒有日期';
+
+  @override
+  String placeDayChip(String day) {
+    return '分類：$day，點一下換分類';
+  }
+
+  @override
+  String placeMoveTitle(String place) {
+    return '「$place」放在哪個分類';
+  }
+
+  @override
+  String placeMovedTo(String day) {
+    return '移到「$day」';
+  }
+
+  @override
+  String placeCountInDay(int count) {
+    String _temp0 = intl.Intl.pluralLogic(
+      count,
+      locale: localeName,
+      other: '$count 個地點',
+    );
+    return '$_temp0';
+  }
+
+  @override
+  String get placeMerge => '把另一個地點合併進來';
+
+  @override
+  String placeMergePick(String place) {
+    return '合併到「$place」';
+  }
+
+  @override
+  String placeMergeConfirm(String other, String place) {
+    return '把「$other」合併到「$place」？';
+  }
+
+  @override
+  String placeMergeBody(String other) {
+    return '它的參考圖、標籤和日程會移到這裡，每張參考圖保留拍攝位置；「$other」會從行程移除，所有成員都會看到。';
+  }
+
+  @override
+  String get placeMergeAction => '合併';
+
+  @override
+  String placeMerged(String other) {
+    return '已把「$other」合併進來。';
+  }
+
+  @override
+  String get placeTakePhoto => '開相機拍';
+
+  @override
+  String get placeCompare => '看對照';
+
+  @override
+  String get placeFrameTitle => '參考圖';
+
+  @override
+  String get placeNoFrames => '還沒有參考圖';
+
+  @override
+  String get placeSpotNoFrames => '這個機位還沒有參考圖。';
+
+  @override
+  String get placeCancel => '取消';
+
+  @override
+  String get tripTabPlaces => '地點';
+
+  @override
+  String get tripTabMembers => '成員';
+
+  @override
+  String get tripSchedule => '時間表';
+
+  @override
+  String get placesSearchHint => '找地點、機位備註或參考圖';
+
+  @override
+  String get placesClearSearch => '清除搜尋';
+
+  @override
+  String get placesSortNearest => '離我最近';
+
+  @override
+  String get placesSortByDay => '我的分類';
+
+  @override
+  String get placesNearestHeading => '離你最近';
+
+  @override
+  String get placesToday => '今天';
+
+  @override
+  String placesTodayTitle(String date, String day) {
+    return '今天 $date · $day';
+  }
+
+  @override
+  String placesTodayNearest(int count, String place, String distance) {
+    String _temp0 = intl.Intl.pluralLogic(
+      count,
+      locale: localeName,
+      other: '$count 個地點，離你最近的是「$place」$distance',
+    );
+    return '$_temp0';
+  }
+
+  @override
+  String placesTodayStart(int count, String place) {
+    String _temp0 = intl.Intl.pluralLogic(
+      count,
+      locale: localeName,
+      other: '$count 個地點，從「$place」開始',
+    );
+    return '$_temp0';
+  }
+
+  @override
+  String placesNoMatch(String query) {
+    return '找不到「$query」。';
+  }
+
+  @override
+  String get placesEmptyDay => '還沒有地點。打開地點，按分類就能移過來。';
+
+  @override
+  String get placesEmpty => '這趟行程還沒有地點。';
+
+  @override
+  String get placesNewDay => '＋ 新分類';
+
+  @override
+  String get placesAddPlaces => '新增地點';
+
+  @override
+  String placesDayOptions(String day) {
+    return '「$day」的選項';
+  }
+
+  @override
+  String get placesRename => '重新命名';
+
+  @override
+  String get placesSetDate => '加上日期';
+
+  @override
+  String placesChangeDate(String date) {
+    return '改日期（$date）';
+  }
+
+  @override
+  String get placesClearDate => '拿掉日期';
+
+  @override
+  String get placesClearDateHint => '只留名字';
+
+  @override
+  String get placesReorder => '調整順序';
+
+  @override
+  String get placesDeleteDay => '刪除分類';
+
+  @override
+  String get placesDeleteDayHint => '裡面的地點會移到「未分類」';
+
+  @override
+  String placesDeleteDayTitle(String day) {
+    return '刪除「$day」？';
+  }
+
+  @override
+  String get placesDeleteDayBody => '分類裡的地點不會刪掉，會移到「未分類」。';
+
+  @override
+  String get placesDayName => '名稱';
+
+  @override
+  String get placesDayNameHint => '例如：西宮、下次再去、6/22 奈良';
+
+  @override
+  String get placesNewDayTitle => '新分類';
+
+  @override
+  String get placesRenameTitle => '編輯分類';
+
+  @override
+  String get placesWithDate => '加上日期（可以不填）';
+
+  @override
+  String get placesCreate => '建立分類';
+
+  @override
+  String get placesSave => '儲存';
+
+  @override
+  String get placesMoveUp => '上移';
+
+  @override
+  String get placesMoveDown => '下移';
+
+  @override
+  String get placesMatchName => '地點名稱';
+
+  @override
+  String placesMatchSpots(String notes) {
+    return '機位：$notes';
+  }
+
+  @override
+  String placesMatchFrames(int count, String names) {
+    String _temp0 = intl.Intl.pluralLogic(
+      count,
+      locale: localeName,
+      other: '$count 張參考圖：$names',
+    );
+    return '$_temp0';
+  }
+
+  @override
+  String get placesDone => '完成';
 }
