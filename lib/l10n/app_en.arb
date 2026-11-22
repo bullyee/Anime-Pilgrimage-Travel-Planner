@@ -522,6 +522,7 @@
   "mapCrowded": "Too crowded here; pick one",
   "mapNoPlaces": "No places here yet",
   "placePickFromGallery": "Pick from gallery",
+  "placePickEmpty": "That photo is empty and can't be used",
   "placePickedSaved": "Saved as your photo of this frame",
   "placePickFailed": "Couldn't add the photo: {error}",
   "@placePickFailed": {

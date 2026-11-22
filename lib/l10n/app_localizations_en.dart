@@ -745,6 +745,9 @@ class AppLocalizationsEn extends AppLocalizations {
   String get placePickFromGallery => 'Pick from gallery';
 
   @override
+  String get placePickEmpty => 'That photo is empty and can\'t be used';
+
+  @override
   String get placePickedSaved => 'Saved as your photo of this frame';
 
   @override

@@ -232,17 +232,23 @@ class _TripPlaceScreenState extends ConsumerState<TripPlaceScreen> {
       ).location);
       return;
     }
+    final bytes = await picked.readAsBytes();
+    if (bytes.isEmpty) {
+      messenger.showSnackBar(SnackBar(content: Text(l10n.placePickEmpty)));
+      return;
+    }
     try {
       final result = await recordPickedShot(
         ref.read(databaseProvider),
         path: picked.path,
-        bytes: await picked.readAsBytes(),
+        bytes: bytes,
         placeKey: placeKey,
         tripId: widget.tripId,
         frameId: frame.id,
       );
       messenger.showSnackBar(SnackBar(
         content: Text(l10n.placePickedSaved),
+        persist: false,
         action: SnackBarAction(label: l10n.placeCompare, onPressed: () => router.push('/photo/${result.photo.id}')),
       ));
     } catch (e) {
@@ -1052,8 +1058,8 @@ class _SpotCard extends StatelessWidget {
                                   if (spot.estimated)
                                     Container(
                                       padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
-                                      decoration: BoxDecoration(color: p.vermilionSoft, borderRadius: BorderRadius.circular(11)),
-                                      child: Text(l10n.placeEstimated, style: theme.textTheme.labelSmall?.copyWith(color: p.vermilion)),
+                                      decoration: BoxDecoration(color: theme.colorScheme.surfaceContainerHighest, borderRadius: BorderRadius.circular(11)),
+                                      child: Text(l10n.placeEstimated, style: theme.textTheme.labelSmall?.copyWith(color: theme.colorScheme.onSurfaceVariant)),
                                     ),
                                 ],
                               ),

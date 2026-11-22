@@ -9,7 +9,7 @@ import '../../../core/l10n/l10n.dart';
 import '../../../core/utils/platform_media.dart';
 import '../../../shared/theme/app_theme.dart';
 import '../../camera/providers/shooting_core_providers.dart';
-import '../../camera/services/anime_camera_launcher.dart' show editPhotoFromGallery;
+import '../../camera/services/anime_camera_launcher.dart' show animeCameraSupported, editPhotoFromGallery;
 import '../../camera/screens/photos_to_edit_screen.dart';
 import '../../library/widgets/place_page_parts.dart' show FrameImage;
 import '../../trip/providers/trip_providers.dart';
@@ -215,7 +215,10 @@ class _PhotosScreenState extends ConsumerState<PhotosScreen> {
             ? null
             : SafeArea(
                 child: Padding(
-                  padding: const EdgeInsets.fromLTRB(16, 8, 16, 12),
+                  // Clear of the app frame's Shoot button, which is docked in
+                  // the middle of the bottom bar and stands half of its 96 dp
+                  // above it.
+                  padding: EdgeInsets.fromLTRB(16, 8, 16, animeCameraSupported ? 60 : 12),
                   child: FilledButton(
                     key: const Key('photosShareMake'),
                     style: FilledButton.styleFrom(minimumSize: const Size.fromHeight(48)),
