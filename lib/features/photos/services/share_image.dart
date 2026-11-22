@@ -114,8 +114,10 @@ Future<Uint8List> renderShareImage(
   final recorder = ui.PictureRecorder();
   final canvas = Canvas(recorder, Rect.fromLTWH(0, 0, g.width, g.height));
   canvas.drawRect(Rect.fromLTWH(0, 0, g.width, g.height), Paint()..color = const Color(0xFF0E1311));
-  _text(canvas, title, const Offset(28, 44), 56, const Color(0xFFF2F5F3), FontWeight.w700, g.width - 56);
-  _text(canvas, subtitle, const Offset(30, 110), 26, const Color(0xFF73C6A0), FontWeight.w500, g.width - 60);
+  // The subtitle goes under the title's real height: CJK fallback fonts
+  // stand taller than Latin ones, and a fixed offset let them overlap.
+  final titleHeight = _text(canvas, title, const Offset(28, 22), 56, const Color(0xFFF2F5F3), FontWeight.w700, g.width - 56);
+  _text(canvas, subtitle, Offset(30, 22 + titleHeight + 4), 26, const Color(0xFF73C6A0), FontWeight.w500, g.width - 60);
   for (final (i, pair) in pairs.indexed) {
     final at = g.origin(i);
     _cover(canvas, pair.frame, Rect.fromLTWH(at.dx, at.dy, g.cellWidth, g.cellHeight));
@@ -155,7 +157,8 @@ void _cover(Canvas canvas, ui.Image image, Rect dst) {
   );
 }
 
-void _text(Canvas canvas, String text, Offset at, double size, Color color, FontWeight weight, double maxWidth) {
+/// Paints [text] on one line at [at] and returns its height.
+double _text(Canvas canvas, String text, Offset at, double size, Color color, FontWeight weight, double maxWidth) {
   final painter = TextPainter(
     text: TextSpan(text: text, style: TextStyle(fontSize: size, color: color, fontWeight: weight)),
     textDirection: TextDirection.ltr,
@@ -163,5 +166,7 @@ void _text(Canvas canvas, String text, Offset at, double size, Color color, Font
     ellipsis: '…',
   )..layout(maxWidth: math.max(0, maxWidth));
   painter.paint(canvas, at);
+  final height = painter.height;
   painter.dispose();
+  return height;
 }
