@@ -187,7 +187,7 @@
   "mapCrowded": "このあたりは混み合っています。ひとつ選んでください",
   "mapNoPlaces": "まだ場所がありません",
   "placePickFromGallery": "ギャラリーから選ぶ",
-  "placePickEmpty": "この写真は空なので使えません",
+  "placePickEmpty": "この写真は開けないので使えません",
   "placePickedSaved": "この比較画像の写真として保存しました",
   "placePickFailed": "写真を追加できませんでした：{error}",
   "photosFilterAll": "すべて",

@@ -725,7 +725,7 @@ class AppLocalizationsJa extends AppLocalizations {
   String get placePickFromGallery => 'ギャラリーから選ぶ';
 
   @override
-  String get placePickEmpty => 'この写真は空なので使えません';
+  String get placePickEmpty => 'この写真は開けないので使えません';
 
   @override
   String get placePickedSaved => 'この比較画像の写真として保存しました';

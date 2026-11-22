@@ -1,4 +1,5 @@
 import 'dart:typed_data';
+import 'dart:ui' as ui;
 
 import 'package:image/image.dart' as img;
 
@@ -20,6 +21,25 @@ DateTime? exifTakenAt(Uint8List bytes) {
     return DateTime(parts[0], parts[1], parts[2], parts[3], parts[4], parts[5]);
   } catch (_) {
     return null;
+  }
+}
+
+/// Whether [bytes] is an image Flutter can open: it reads only the header
+/// (format and size), so it's cheap even for a large photo. A gallery entry
+/// can be an empty or broken file, which would show as a broken shot.
+Future<bool> isReadableImage(Uint8List bytes) async {
+  if (bytes.isEmpty) return false;
+  ui.ImmutableBuffer? buffer;
+  ui.ImageDescriptor? descriptor;
+  try {
+    buffer = await ui.ImmutableBuffer.fromUint8List(bytes);
+    descriptor = await ui.ImageDescriptor.encoded(buffer);
+    return descriptor.width > 0 && descriptor.height > 0;
+  } catch (_) {
+    return false;
+  } finally {
+    descriptor?.dispose();
+    buffer?.dispose();
   }
 }
 

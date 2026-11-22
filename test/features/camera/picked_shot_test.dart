@@ -11,6 +11,17 @@ import 'package:trip_planner/features/trip/repositories/trip_repository.dart';
 
 /// A photo picked from the gallery for a frame counts as that frame's shot.
 void main() {
+  group('isReadableImage', () {
+    testWidgets('opens a real image and refuses empty or broken bytes', (tester) async {
+      await tester.runAsync(() async {
+        final png = Uint8List.fromList(img.encodePng(img.Image(width: 4, height: 3)));
+        expect(await isReadableImage(png), isTrue);
+        expect(await isReadableImage(Uint8List(0)), isFalse);
+        expect(await isReadableImage(Uint8List.fromList(List.filled(64, 7))), isFalse);
+      });
+    });
+  });
+
   Uint8List jpeg({String? taken}) {
     final image = img.Image(width: 8, height: 8);
     if (taken != null) image.exif.exifIfd['DateTimeOriginal'] = taken;

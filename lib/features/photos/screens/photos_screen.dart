@@ -140,7 +140,9 @@ class _PhotosScreenState extends ConsumerState<PhotosScreen> {
     if (picks == null || picks.isEmpty) return;
     final byId = {for (final e in pairs) e.photo.id: e};
     final picked = [for (final id in picks) ?byId[id]];
-    Navigator.of(context).push(MaterialPageRoute<void>(builder: (_) => ShareImageScreen(pairs: picked)));
+    // Above the app frame, so its bottom bar and Shoot button stay off the
+    // title field.
+    Navigator.of(context, rootNavigator: true).push(MaterialPageRoute<void>(builder: (_) => ShareImageScreen(pairs: picked)));
   }
 
   @override

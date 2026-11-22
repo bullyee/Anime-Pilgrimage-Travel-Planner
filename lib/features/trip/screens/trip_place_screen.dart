@@ -233,7 +233,7 @@ class _TripPlaceScreenState extends ConsumerState<TripPlaceScreen> {
       return;
     }
     final bytes = await picked.readAsBytes();
-    if (bytes.isEmpty) {
+    if (!await isReadableImage(bytes)) {
       messenger.showSnackBar(SnackBar(content: Text(l10n.placePickEmpty)));
       return;
     }

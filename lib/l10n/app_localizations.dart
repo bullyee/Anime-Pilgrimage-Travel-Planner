@@ -1226,7 +1226,7 @@ abstract class AppLocalizations {
   /// No description provided for @placePickEmpty.
   ///
   /// In en, this message translates to:
-  /// **'That photo is empty and can\'t be used'**
+  /// **'That photo can\'t be opened, so it can\'t be used'**
   String get placePickEmpty;
 
   /// No description provided for @placePickedSaved.

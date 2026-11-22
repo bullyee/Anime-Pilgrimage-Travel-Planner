@@ -722,7 +722,7 @@ class AppLocalizationsZh extends AppLocalizations {
   String get placePickFromGallery => '從相簿選';
 
   @override
-  String get placePickEmpty => '這張照片是空的，用不了';
+  String get placePickEmpty => '這張照片打不開，用不了';
 
   @override
   String get placePickedSaved => '存好了，這張參考圖算拍過了';
@@ -1562,7 +1562,7 @@ class AppLocalizationsZhHant extends AppLocalizationsZh {
   String get placePickFromGallery => '從相簿選';
 
   @override
-  String get placePickEmpty => '這張照片是空的，用不了';
+  String get placePickEmpty => '這張照片打不開，用不了';
 
   @override
   String get placePickedSaved => '存好了，這張參考圖算拍過了';
