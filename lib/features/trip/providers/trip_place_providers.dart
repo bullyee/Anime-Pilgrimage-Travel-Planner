@@ -4,6 +4,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../../core/database/database.dart';
 import '../../../core/providers/database_provider.dart';
+import '../models/trip_places_view.dart' show TripLabel;
 import '../services/place_fold_service.dart';
 import 'trip_providers.dart';
 
@@ -59,24 +60,31 @@ final tripPhotosProvider = StreamProvider.autoDispose.family<List<Photo>, String
       .map((rows) => [for (final row in rows) db.photos.map(row.data)]);
 });
 
-/// The anime labels of [tripId]'s stops, by stop id, sorted by name: the
-/// Places tab's line under each place, read for the whole trip at once.
-final tripAnimeLabelsProvider = StreamProvider.autoDispose.family<Map<String, List<String>>, String>((ref, tripId) {
+/// The labels of [tripId]'s stops (anime, tags and regions), by stop id,
+/// sorted by name: the Places tab's line under each place (its anime) and
+/// its tag filter, read for the whole trip at once.
+final tripStopLabelsProvider = StreamProvider.autoDispose.family<Map<String, List<TripLabel>>, String>((ref, tripId) {
   final db = ref.watch(databaseProvider);
   final query = db.select(db.stopLabels).join([
     innerJoin(db.labels, db.labels.id.equalsExp(db.stopLabels.labelId)),
     innerJoin(db.stops, db.stops.id.equalsExp(db.stopLabels.stopId)),
   ])
-    ..where(db.stops.tripId.equals(tripId) & db.labels.kind.equals('anime'))
+    ..where(db.stops.tripId.equals(tripId))
     ..orderBy([OrderingTerm(expression: db.labels.name)]);
   return query.watch().map((rows) {
-    final out = <String, List<String>>{};
+    final out = <String, List<TripLabel>>{};
     for (final row in rows) {
-      out.putIfAbsent(row.readTable(db.stopLabels).stopId, () => []).add(row.readTable(db.labels).name);
+      final label = row.readTable(db.labels);
+      out.putIfAbsent(row.readTable(db.stopLabels).stopId, () => []).add((kind: label.kind, name: label.name));
     }
     return out;
   });
 });
+
+/// Which of a trip's days the Places tab has open, by section key; null
+/// until the user opens or closes one, so the tab picks. Kept for the
+/// session, so coming back to the trip finds them as they were left.
+final placesOpenSectionsProvider = StateProvider.family<Set<String>?, String>((ref, tripId) => null);
 
 final placeFoldServiceProvider = Provider<PlaceFoldService>(
   (ref) => PlaceFoldService(ref.watch(databaseProvider), ref.watch(tripRepositoryProvider)),

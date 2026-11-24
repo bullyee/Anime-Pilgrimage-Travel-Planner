@@ -534,7 +534,7 @@ class AppLocalizationsEn extends AppLocalizations {
   String get tripSchedule => 'Schedule';
 
   @override
-  String get placesSearchHint => 'Find places, spot notes or frames';
+  String get placesSearchHint => 'Find places, spot notes, frames or tags';
 
   @override
   String get placesClearSearch => 'Clear search';
@@ -705,6 +705,31 @@ class AppLocalizationsEn extends AppLocalizations {
 
   @override
   String get placesViewMap => 'Map';
+
+  @override
+  String placesSectionCount(int count) {
+    String _temp0 = intl.Intl.pluralLogic(
+      count,
+      locale: localeName,
+      other: '$count places',
+      one: '1 place',
+    );
+    return '$_temp0';
+  }
+
+  @override
+  String placesMatchLabels(String names) {
+    return 'Tags: $names';
+  }
+
+  @override
+  String get placesNoTagMatch => 'No places with these tags.';
+
+  @override
+  String get placesClearTags => 'Clear';
+
+  @override
+  String get placesFilterByTag => 'Filter by tag';
 
   @override
   String get mapAllDays => 'All';

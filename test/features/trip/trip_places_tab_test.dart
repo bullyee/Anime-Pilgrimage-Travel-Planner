@@ -28,6 +28,9 @@ void main() {
 
   final now = DateTime(2027, 6, 19, 10);
 
+  /// A day's header: its title starts the line, its date and count follow.
+  Finder header(String title) => find.textContaining(RegExp('^${RegExp.escape(title)}(\\s|\$)'));
+
   Future<void> pump(WidgetTester tester, String tripId, {bool? canEdit}) async {
     tester.view.physicalSize = const Size(1080, 2400);
     tester.view.devicePixelRatio = 3;
@@ -92,15 +95,29 @@ void main() {
     await pump(tester, t.tripId);
 
     double top(Finder f) => tester.getTopLeft(f).dy;
-    expect(find.text('Uji'), findsOneWidget, reason: 'the day goes by its title');
-    expect(find.text('Day 2'), findsOneWidget, reason: 'an untitled day goes by its number');
+    expect(header('Uji'), findsOneWidget, reason: 'the day goes by its title');
+    expect(header('Day 2'), findsOneWidget, reason: 'an untitled day goes by its number');
     expect(find.byKey(const Key('todayBadge')), findsOneWidget);
     expect(find.byKey(const Key('todayCard')), findsOneWidget);
-    expect(top(find.text('Uji')), lessThan(top(find.text('平等院'))));
-    expect(top(find.text('Day 2')), lessThan(top(find.text('Unsorted'))));
-    expect(top(find.text('Unsorted')), lessThan(top(find.text('西宮'))));
-    expect(find.text('No places yet. Open a place and tap its day to move it here.'), findsOneWidget, reason: 'Day 2 is empty');
+    expect(top(header('Uji')), lessThan(top(find.text('平等院'))));
+    expect(top(header('Day 2')), lessThan(top(header('Unsorted'))));
     expect(find.textContaining('2 spots · 2 frames · 1 shot'), findsOneWidget);
+
+    // Only today's day starts open; the others say how many places they hold.
+    expect(find.text('西宮'), findsNothing);
+    expect(find.textContaining('Unsorted   1 place'), findsOneWidget, reason: 'Unsorted, closed');
+    expect(find.textContaining('· 0 places'), findsOneWidget, reason: 'Day 2, closed, after its date');
+    await tester.tap(header('Unsorted'));
+    await tester.pumpAndSettle();
+    expect(top(header('Unsorted')), lessThan(top(find.text('西宮'))));
+    await tester.tap(header('Day 2'));
+    await tester.pumpAndSettle();
+    expect(find.text('No places yet. Open a place and tap its day to move it here.'), findsOneWidget, reason: 'Day 2 is empty');
+    await tester.tap(header('Uji'));
+    await tester.pumpAndSettle();
+    expect(find.text('平等院'), findsNothing, reason: 'today can be closed too');
+    await tester.tap(header('Uji'));
+    await tester.pumpAndSettle();
 
     await tester.tap(find.text('平等院'));
     await tester.pumpAndSettle();
@@ -147,6 +164,62 @@ void main() {
     await tester.tap(find.byKey(const Key('mapOpenPlace')));
     await tester.pumpAndSettle();
     expect(find.text('place ${t.ids['宇治橋']}'), findsOneWidget);
+    await unmount(tester);
+  });
+
+  testWidgets("every day's menu sits at the end of its header, whatever the title's length", (tester) async {
+    late ({String tripId, Map<String, String> ids, List<TripDay> days}) t;
+    await tester.runAsync(() async {
+      t = await seed();
+      await DriftTripRepository(db, null, 'u1').updateDayBlock(TripDaysCompanion(id: Value(t.days[1].id), title: const Value('A much longer day title')));
+    });
+    await pump(tester, t.tripId);
+
+    final right = [for (final d in t.days) tester.getTopRight(find.byKey(ValueKey('dayMenu-${d.id}'))).dx];
+    expect(right[0], right[1]);
+    await unmount(tester);
+  });
+
+  testWidgets('the tag chips narrow the list to places with any picked tag; the search finds tags too', (tester) async {
+    late ({String tripId, Map<String, String> ids, List<TripDay> days}) t;
+    await tester.runAsync(() async {
+      t = await seed();
+      for (final (id, kind, name) in [('l1', 'anime', 'Eupho'), ('l2', 'tag', 'Shrine')]) {
+        await db.into(db.labels).insert(LabelsCompanion.insert(id: id, kind: kind, name: name));
+      }
+      for (final (stop, label) in [('宇治橋', 'l1'), ('西宮', 'l1'), ('平等院', 'l2')]) {
+        await db.into(db.stopLabels).insert(StopLabelsCompanion.insert(stopId: t.ids[stop]!, labelId: label));
+      }
+    });
+    await pump(tester, t.tripId);
+
+    expect(find.text('Eupho  2'), findsOneWidget);
+    expect(find.text('Shrine  1'), findsOneWidget);
+    await tester.tap(find.byKey(const ValueKey('tag-anime-Eupho')));
+    await tester.pumpAndSettle();
+    expect(find.text('宇治橋'), findsOneWidget);
+    expect(find.text('西宮'), findsOneWidget, reason: 'a filter opens every day it matches in');
+    expect(find.text('平等院'), findsNothing);
+    expect(header('Day 2'), findsNothing, reason: 'a day with no match hides');
+    expect(find.byKey(const Key('todayCard')), findsNothing);
+
+    await tester.ensureVisible(find.byKey(const ValueKey('tag-tag-Shrine')));
+    await tester.pumpAndSettle();
+    await tester.tap(find.byKey(const ValueKey('tag-tag-Shrine')));
+    await tester.pumpAndSettle();
+    expect(find.text('平等院'), findsOneWidget, reason: 'any picked tag lets a place through');
+
+    await tester.drag(find.byKey(const Key('placesTags')), const Offset(600, 0));
+    await tester.pumpAndSettle();
+    await tester.tap(find.byKey(const Key('tagsClear')));
+    await tester.pumpAndSettle();
+    expect(header('Day 2'), findsOneWidget);
+    expect(find.text('西宮'), findsNothing, reason: 'Unsorted is closed again');
+
+    await tester.enterText(find.byKey(const Key('placesSearch')), 'shrine');
+    await tester.pumpAndSettle();
+    expect(find.text('平等院'), findsOneWidget);
+    expect(find.text('Tags: Shrine'), findsOneWidget);
     await unmount(tester);
   });
 
@@ -209,7 +282,7 @@ void main() {
     final stops = await tester.runAsync(() => repo.getStopsForTrip(t.tripId));
     expect(stops, hasLength(3), reason: 'no place is deleted');
     expect(await tester.runAsync(() => repo.getScheduleItemsForTrip(t.tripId)), isEmpty);
-    expect(find.text('Uji'), findsNothing);
+    expect(header('Uji'), findsNothing);
     await unmount(tester);
   });
 
@@ -228,7 +301,7 @@ void main() {
 
     final days = await tester.runAsync(() => DriftTripRepository(db, null, 'u1').getDaysForTrip(t.tripId));
     expect(days!.map((d) => d.title), contains('Next time'));
-    expect(find.text('Next time'), findsOneWidget);
+    expect(header('Next time'), findsOneWidget);
     await unmount(tester);
   });
 
@@ -289,6 +362,45 @@ void main() {
       expect(matchPlace(place, content, '三の').spots, ['三の間']);
       expect(matchPlace(place, content, '3').frames.single.id, 'f1');
       expect(matchPlace(place, content, 'x').any, isFalse);
+    });
+
+    test('defaultOpen: today\'s day, else the first with places', () {
+      PlacesSection section(String? dayId, DateTime? date, List<String> stops) => PlacesSection(
+            day: dayId == null
+                ? null
+                : PlannerDay(
+                    day: TripDay(id: dayId, tripId: 't', sortKey: dayId, updatedAt: t0, syncStatus: 0),
+                    index: 0,
+                    isBackup: false,
+                    date: date,
+                    pinConflict: false,
+                    freeDaysBefore: 0,
+                    items: const [],
+                  ),
+            places: placesOfStops([for (final s in stops) stop(s)]),
+          );
+      final view = TripPlacesView(
+        days: [section('d1', DateTime(2027, 6, 18), []), section('d2', DateTime(2027, 6, 19), ['a']), section('d3', DateTime(2027, 6, 20), ['b'])],
+        unsorted: section(null, null, ['c']),
+      );
+      expect(view.defaultOpen(DateTime(2027, 6, 20)), {'d3'});
+      expect(view.defaultOpen(DateTime(2027, 7, 1)), {'d2'});
+    });
+
+    test('labelFilterOptions: anime, then tags, then regions, the most used first', () {
+      final places = placesOfStops([stop('a'), stop('b'), stop('c')]);
+      const eupho = (kind: 'anime', name: 'Eupho');
+      const kon = (kind: 'anime', name: 'K-On');
+      const shrine = (kind: 'tag', name: 'Shrine');
+      const uji = (kind: 'region', name: 'Uji');
+      final labels = {
+        'a': [uji, kon, shrine],
+        'b': [eupho, shrine],
+        'c': [eupho],
+      };
+      expect([for (final o in labelFilterOptions(places, labels)) '${o.label.name} ${o.count}'], ['Eupho 2', 'K-On 1', 'Shrine 2', 'Uji 1']);
+      expect([for (final p in places) if (placeHasAnyLabel(p, labels, {kon, uji})) p.id], ['a']);
+      expect(places.every((p) => placeHasAnyLabel(p, labels, const {})), isTrue);
     });
 
     test("todaySection finds the day dated today, and buildTripPlacesView leaves the rest to Unsorted", () {

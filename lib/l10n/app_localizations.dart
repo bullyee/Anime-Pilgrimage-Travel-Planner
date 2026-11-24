@@ -896,7 +896,7 @@ abstract class AppLocalizations {
   /// No description provided for @placesSearchHint.
   ///
   /// In en, this message translates to:
-  /// **'Find places, spot notes or frames'**
+  /// **'Find places, spot notes, frames or tags'**
   String get placesSearchHint;
 
   /// No description provided for @placesClearSearch.
@@ -1162,6 +1162,36 @@ abstract class AppLocalizations {
   /// In en, this message translates to:
   /// **'Map'**
   String get placesViewMap;
+
+  /// No description provided for @placesSectionCount.
+  ///
+  /// In en, this message translates to:
+  /// **'{count, plural, =1{1 place} other{{count} places}}'**
+  String placesSectionCount(int count);
+
+  /// No description provided for @placesMatchLabels.
+  ///
+  /// In en, this message translates to:
+  /// **'Tags: {names}'**
+  String placesMatchLabels(String names);
+
+  /// No description provided for @placesNoTagMatch.
+  ///
+  /// In en, this message translates to:
+  /// **'No places with these tags.'**
+  String get placesNoTagMatch;
+
+  /// No description provided for @placesClearTags.
+  ///
+  /// In en, this message translates to:
+  /// **'Clear'**
+  String get placesClearTags;
+
+  /// No description provided for @placesFilterByTag.
+  ///
+  /// In en, this message translates to:
+  /// **'Filter by tag'**
+  String get placesFilterByTag;
 
   /// No description provided for @mapAllDays.
   ///

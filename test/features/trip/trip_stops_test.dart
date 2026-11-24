@@ -231,9 +231,12 @@ void main() {
       await repo.scheduleStop(tripId: trip.id, stopId: zoo.id, dayId: day.id, fixedTime: 9 * 60);
 
       await pump(tester, '/trips/${trip.id}/stops');
-      double top(String text) => tester.getTopLeft(find.text(text)).dy;
+      double top(String text) => tester.getTopLeft(find.textContaining(RegExp('^${RegExp.escape(text)}(\\s|\$)'))).dy;
       expect(top('Day 1'), lessThan(top('Zoo')));
       expect(top('Zoo'), lessThan(top('Unsorted')), reason: 'planned first');
+      expect(find.text('Aquarium'), findsNothing, reason: 'only the first day with places starts open');
+      await tester.tap(find.textContaining(RegExp(r'^Unsorted')));
+      await tester.pumpAndSettle();
       expect(top('Unsorted'), lessThan(top('Aquarium')));
       expect(find.text('09:00'), findsNothing, reason: 'times are in the schedule');
       await disposeApp(tester);

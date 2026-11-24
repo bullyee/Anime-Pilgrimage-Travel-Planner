@@ -520,7 +520,7 @@ class AppLocalizationsJa extends AppLocalizations {
   String get tripSchedule => 'スケジュール';
 
   @override
-  String get placesSearchHint => '場所・メモ・比較画像を検索';
+  String get placesSearchHint => '場所・メモ・比較画像・タグを検索';
 
   @override
   String get placesClearSearch => '検索をクリア';
@@ -686,6 +686,30 @@ class AppLocalizationsJa extends AppLocalizations {
 
   @override
   String get placesViewMap => '地図';
+
+  @override
+  String placesSectionCount(int count) {
+    String _temp0 = intl.Intl.pluralLogic(
+      count,
+      locale: localeName,
+      other: '$count か所',
+    );
+    return '$_temp0';
+  }
+
+  @override
+  String placesMatchLabels(String names) {
+    return 'タグ：$names';
+  }
+
+  @override
+  String get placesNoTagMatch => 'このタグの場所はありません。';
+
+  @override
+  String get placesClearTags => 'クリア';
+
+  @override
+  String get placesFilterByTag => 'タグで絞り込む';
 
   @override
   String get mapAllDays => 'すべて';

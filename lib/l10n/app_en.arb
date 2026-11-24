@@ -382,7 +382,7 @@
   "tripTabPlaces": "Places",
   "tripTabMembers": "Members",
   "tripSchedule": "Schedule",
-  "placesSearchHint": "Find places, spot notes or frames",
+  "placesSearchHint": "Find places, spot notes, frames or tags",
   "placesClearSearch": "Clear search",
   "placesSortNearest": "Nearest",
   "placesSortByDay": "By day",
@@ -505,6 +505,25 @@
   "placesShowAs": "Show as",
   "placesViewList": "List",
   "placesViewMap": "Map",
+  "placesSectionCount": "{count, plural, =1{1 place} other{{count} places}}",
+  "@placesSectionCount": {
+    "placeholders": {
+      "count": {
+        "type": "int"
+      }
+    }
+  },
+  "placesMatchLabels": "Tags: {names}",
+  "@placesMatchLabels": {
+    "placeholders": {
+      "names": {
+        "type": "String"
+      }
+    }
+  },
+  "placesNoTagMatch": "No places with these tags.",
+  "placesClearTags": "Clear",
+  "placesFilterByTag": "Filter by tag",
   "mapAllDays": "All",
   "mapDays": "Days",
   "mapYourLocation": "Your location",

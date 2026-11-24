@@ -43,6 +43,9 @@ class PlacesSection {
 
   bool get isUnsorted => day == null;
   String? get dayId => day?.day.id;
+
+  /// What the tab remembers it open or closed by.
+  String get key => dayId ?? 'unsorted';
 }
 
 /// Everything the Places tab lists for one trip.
@@ -83,7 +86,46 @@ class TripPlacesView {
     }
     return null;
   }
+
+  /// The sections open before the user opens or closes one: today's day
+  /// while the trip is on, else the first one with places, so a long trip
+  /// starts as a short list of its days.
+  Set<String> defaultOpen(DateTime today) {
+    final first = todaySection(today) ?? sections.where((s) => s.places.isNotEmpty).firstOrNull;
+    return {?first?.key};
+  }
 }
+
+/// A label on one of a trip's stops: an anime, a tag or a region.
+typedef TripLabel = ({String kind, String name});
+
+/// [place]'s labels, each once, from its stops' [labels] (by stop id).
+List<TripLabel> labelsOfPlace(TripPlace place, Map<String, List<TripLabel>> labels) => {
+      for (final s in place.stops) ...?labels[s.id],
+    }.toList();
+
+/// The labels to filter [places] by, each with how many places carry it:
+/// anime first, then tags, then regions, each the most used first.
+List<({TripLabel label, int count})> labelFilterOptions(List<TripPlace> places, Map<String, List<TripLabel>> labels) {
+  final counts = <TripLabel, int>{};
+  for (final p in places) {
+    for (final l in labelsOfPlace(p, labels)) {
+      counts[l] = (counts[l] ?? 0) + 1;
+    }
+  }
+  int rank(String kind) => switch (kind) { 'anime' => 0, 'tag' => 1, 'region' => 2, _ => 3 };
+  return [for (final e in counts.entries) (label: e.key, count: e.value)]
+    ..sort((a, b) {
+      final byKind = rank(a.label.kind).compareTo(rank(b.label.kind));
+      if (byKind != 0) return byKind;
+      final byCount = b.count.compareTo(a.count);
+      return byCount != 0 ? byCount : a.label.name.compareTo(b.label.name);
+    });
+}
+
+/// Whether [place] carries any of [picked] (no pick lets every place through).
+bool placeHasAnyLabel(TripPlace place, Map<String, List<TripLabel>> labels, Set<TripLabel> picked) =>
+    picked.isEmpty || labelsOfPlace(place, labels).any(picked.contains);
 
 /// [stops] as places, in their order: a group's stops make one place, where
 /// its first stop comes.

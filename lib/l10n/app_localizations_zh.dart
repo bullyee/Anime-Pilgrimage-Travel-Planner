@@ -517,7 +517,7 @@ class AppLocalizationsZh extends AppLocalizations {
   String get tripSchedule => '時間表';
 
   @override
-  String get placesSearchHint => '找地點、機位備註或參考圖';
+  String get placesSearchHint => '找地點、機位備註、參考圖或標籤';
 
   @override
   String get placesClearSearch => '清除搜尋';
@@ -683,6 +683,30 @@ class AppLocalizationsZh extends AppLocalizations {
 
   @override
   String get placesViewMap => '地圖';
+
+  @override
+  String placesSectionCount(int count) {
+    String _temp0 = intl.Intl.pluralLogic(
+      count,
+      locale: localeName,
+      other: '$count 個地點',
+    );
+    return '$_temp0';
+  }
+
+  @override
+  String placesMatchLabels(String names) {
+    return '標籤：$names';
+  }
+
+  @override
+  String get placesNoTagMatch => '沒有地點有這些標籤。';
+
+  @override
+  String get placesClearTags => '清除';
+
+  @override
+  String get placesFilterByTag => '用標籤篩選';
 
   @override
   String get mapAllDays => '全部';
@@ -1357,7 +1381,7 @@ class AppLocalizationsZhHant extends AppLocalizationsZh {
   String get tripSchedule => '時間表';
 
   @override
-  String get placesSearchHint => '找地點、機位備註或參考圖';
+  String get placesSearchHint => '找地點、機位備註、參考圖或標籤';
 
   @override
   String get placesClearSearch => '清除搜尋';
@@ -1523,6 +1547,30 @@ class AppLocalizationsZhHant extends AppLocalizationsZh {
 
   @override
   String get placesViewMap => '地圖';
+
+  @override
+  String placesSectionCount(int count) {
+    String _temp0 = intl.Intl.pluralLogic(
+      count,
+      locale: localeName,
+      other: '$count 個地點',
+    );
+    return '$_temp0';
+  }
+
+  @override
+  String placesMatchLabels(String names) {
+    return '標籤：$names';
+  }
+
+  @override
+  String get placesNoTagMatch => '沒有地點有這些標籤。';
+
+  @override
+  String get placesClearTags => '清除';
+
+  @override
+  String get placesFilterByTag => '用標籤篩選';
 
   @override
   String get mapAllDays => '全部';

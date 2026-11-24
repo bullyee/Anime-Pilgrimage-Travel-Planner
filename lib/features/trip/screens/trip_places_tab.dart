@@ -57,9 +57,12 @@ void openAddStopsSheet(BuildContext context, String tripId) {
 /// The trip page's Places tab: the trip's days (optional categories with a
 /// title and maybe a date), each with its places, then the places on no day
 /// in Unsorted. Each place shows its latest photo or first frame, how many
-/// spots and frames it has and how many are shot, and how far it is when
-/// the position is known; it opens the place page. A search finds places by
-/// name, spot note or frame episode, and Nearest lists them all by distance.
+/// spots and frames it has and how many are shot; it opens the place page.
+/// A day opens and closes from its header (today's day, or else the first
+/// with places, starts open). A search finds places by name, spot note,
+/// frame episode or tag, the tag chips narrow the list to places with any
+/// of the picked tags, and Nearest lists them by distance, the only time
+/// the rows show how far each is.
 ///
 /// People who can edit the trip rename days, give or take their dates,
 /// reorder a day's places, delete days (their places go to Unsorted), add
@@ -85,6 +88,9 @@ class _TripPlacesTabState extends ConsumerState<TripPlacesTab> {
   String _query = '';
   bool _nearest = false;
   bool _map = false;
+
+  /// The tags the list is narrowed to.
+  final Set<TripLabel> _picked = {};
 
   /// The day whose places are being reordered.
   String? _reordering;
@@ -118,6 +124,12 @@ class _TripPlacesTabState extends ConsumerState<TripPlacesTab> {
     if (map == _map) return;
     setState(() => _map = map);
     widget.onMapChanged?.call(map);
+  }
+
+  void _setOpen(String key, Set<String> open, bool to) {
+    final next = {...open};
+    to ? next.add(key) : next.remove(key);
+    ref.read(placesOpenSectionsProvider(widget.tripId).notifier).state = next;
   }
 
   void _open(TripPlace place) => context.push('/trips/${widget.tripId}/places/${place.id}');
@@ -254,7 +266,7 @@ class _TripPlacesTabState extends ConsumerState<TripPlacesTab> {
     }
     final view = buildTripPlacesView(plannerView);
     final contents = _contentsOf(view);
-    final labels = ref.watch(tripAnimeLabelsProvider(widget.tripId)).valueOrNull ?? const <String, List<String>>{};
+    final labels = ref.watch(tripStopLabelsProvider(widget.tripId)).valueOrNull ?? const <String, List<TripLabel>>{};
     final pos = _follower.position;
     final lat = pos?.latitude;
     final lng = pos?.longitude;
@@ -264,8 +276,17 @@ class _TripPlacesTabState extends ConsumerState<TripPlacesTab> {
     final query = _query.trim();
     final today = normalizeDay(ref.watch(homeClockProvider)());
     final todaySection = view.todaySection(today);
+    final open = ref.watch(placesOpenSectionsProvider(widget.tripId)) ?? view.defaultOpen(today);
+    final options = labelFilterOptions(all, labels);
+    _picked.retainWhere((l) => options.any((o) => o.label == l));
+    final filtering = _picked.isNotEmpty;
+    if (filtering) _reordering = null;
+    bool passes(TripPlace p) => placeHasAnyLabel(p, labels, _picked);
 
-    List<String> labelsOf(TripPlace p) => {for (final s in p.stops) ...?labels[s.id]}.toList();
+    List<String> animeOf(TripPlace p) => [
+          for (final l in labelsOfPlace(p, labels))
+            if (l.kind == 'anime') l.name,
+        ];
     Widget row(TripPlace p, {PlacesSection? section, String? match}) {
       final content = contents[p.id]!;
       final reorder = section != null && section.dayId != null && section.dayId == _reordering;
@@ -273,9 +294,9 @@ class _TripPlacesTabState extends ConsumerState<TripPlacesTab> {
         key: ValueKey('place-${section?.dayId ?? 'x'}-${p.id}'),
         place: p,
         content: content,
-        labels: labelsOf(p),
+        labels: animeOf(p),
         match: match,
-        distance: content.distanceFrom(lat, lng),
+        distance: nearest ? content.distanceFrom(lat, lng) : null,
         onTap: reorder ? null : () => _open(p),
         onUp: reorder && section.places.first != p ? () => _move(section, p, -1) : null,
         onDown: reorder && section.places.last != p ? () => _move(section, p, 1) : null,
@@ -284,7 +305,7 @@ class _TripPlacesTabState extends ConsumerState<TripPlacesTab> {
     }
 
     final items = <Widget>[];
-    if (todaySection != null && todaySection.places.isNotEmpty && query.isEmpty) {
+    if (todaySection != null && todaySection.places.isNotEmpty && query.isEmpty && !filtering) {
       final places = byDistance(
         todaySection.places,
         (p) => contents[p.id]!.spots.firstOrNull?.point ?? _point(p.stop),
@@ -305,11 +326,17 @@ class _TripPlacesTabState extends ConsumerState<TripPlacesTab> {
 
     if (query.isNotEmpty) {
       final rows = <Widget>[];
-      for (final p in all) {
+      final q = query.toLowerCase();
+      for (final p in all.where(passes)) {
         final m = matchPlace(p, contents[p.id]!, query);
-        if (!m.any) continue;
+        final tags = [
+          for (final l in labelsOfPlace(p, labels))
+            if (l.name.toLowerCase().contains(q)) l.name,
+        ];
+        if (!m.any && tags.isEmpty) continue;
         final why = [
           if (m.name) l10n.placesMatchName,
+          if (tags.isNotEmpty) l10n.placesMatchLabels(tags.take(2).join('、')),
           if (m.spots.isNotEmpty) l10n.placesMatchSpots(m.spots.take(3).join('、')),
           if (m.frames.isNotEmpty)
             l10n.placesMatchFrames(m.frames.length, m.frames.take(2).map((f) => f.episode ?? '').join('、')),
@@ -318,19 +345,27 @@ class _TripPlacesTabState extends ConsumerState<TripPlacesTab> {
       }
       items.add(rows.isEmpty ? _Empty(text: l10n.placesNoMatch(query)) : _Card(children: rows));
     } else if (nearest) {
-      final sorted = byDistance(all, (p) => contents[p.id]!.spots.firstOrNull?.point ?? _point(p.stop), lat: lat, lng: lng);
+      final sorted = byDistance(all.where(passes).toList(), (p) => contents[p.id]!.spots.firstOrNull?.point ?? _point(p.stop), lat: lat, lng: lng);
       items.add(_SectionHeader(title: l10n.placesNearestHeading));
-      items.add(_Card(children: [for (final p in sorted) row(p)]));
+      items.add(sorted.isEmpty ? _Empty(text: l10n.placesNoTagMatch) : _Card(children: [for (final p in sorted) row(p)]));
     } else {
+      var shown = 0;
       for (final s in view.sections) {
         if (s.isUnsorted && s.places.isEmpty) continue;
+        final places = filtering ? s.places.where(passes).toList() : s.places;
+        if (filtering && places.isEmpty) continue;
+        shown++;
         final reorder = s.dayId != null && s.dayId == _reordering;
+        final isOpen = filtering || reorder || open.contains(s.key);
         items.add(_SectionHeader(
-          key: ValueKey('section-${s.dayId ?? 'unsorted'}'),
+          key: ValueKey('section-${s.key}'),
           title: sectionTitle(context, s),
           date: s.isUnsorted ? null : (sectionDate(context, s) ?? l10n.placeNoDate),
           today: s == todaySection,
           color: sectionColor(Theme.of(context), view, s),
+          open: isOpen,
+          count: places.length,
+          onToggle: filtering || reorder ? null : () => _setOpen(s.key, open, !isOpen),
           trailing: !canEdit || s.isUnsorted
               ? null
               : reorder
@@ -340,12 +375,19 @@ class _TripPlacesTabState extends ConsumerState<TripPlacesTab> {
                       onRename: () => _rename(s),
                       onSetDate: () => _setDate(s),
                       onClearDate: s.day!.date == null ? null : () => _clearDate(s),
-                      onReorder: s.places.length < 2 ? null : () => setState(() => _reordering = s.dayId),
+                      onReorder: filtering || s.places.length < 2
+                          ? null
+                          : () => setState(() {
+                                _setOpen(s.key, open, true);
+                                _reordering = s.dayId;
+                              }),
                       onDelete: () => _deleteDay(s),
                     ),
         ));
-        items.add(s.places.isEmpty ? _Card(children: [_Empty(text: l10n.placesEmptyDay, dense: true)]) : _Card(children: [for (final p in s.places) row(p, section: s)]));
+        if (!isOpen) continue;
+        items.add(places.isEmpty ? _Card(children: [_Empty(text: l10n.placesEmptyDay, dense: true)]) : _Card(children: [for (final p in places) row(p, section: s)]));
       }
+      if (filtering && shown == 0) items.add(_Empty(text: l10n.placesNoTagMatch));
       if (all.isEmpty) {
         items.add(_Empty(text: l10n.placesEmpty));
         if (canEdit) {
@@ -358,7 +400,7 @@ class _TripPlacesTabState extends ConsumerState<TripPlacesTab> {
           ));
         }
       }
-      if (canEdit) {
+      if (canEdit && !filtering) {
         items.add(Padding(
           padding: const EdgeInsets.only(top: 14),
           child: OutlinedButton(
@@ -441,6 +483,42 @@ class _TripPlacesTabState extends ConsumerState<TripPlacesTab> {
                 onChanged: (v) => setState(() => _query = v),
               ),
             ),
+            if (options.isNotEmpty)
+              Semantics(
+                label: l10n.placesFilterByTag,
+                container: true,
+                child: SizedBox(
+                  height: 48,
+                  child: ListView(
+                    key: const Key('placesTags'),
+                    scrollDirection: Axis.horizontal,
+                    padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 4),
+                    children: [
+                      if (filtering)
+                        Padding(
+                          padding: const EdgeInsets.only(right: 8),
+                          child: ActionChip(
+                            key: const Key('tagsClear'),
+                            avatar: const Icon(Icons.close, size: 18),
+                            label: Text(l10n.placesClearTags),
+                            onPressed: () => setState(_picked.clear),
+                          ),
+                        ),
+                      for (final o in options)
+                        Padding(
+                          padding: const EdgeInsets.only(right: 8),
+                          child: FilterChip(
+                            key: ValueKey('tag-${o.label.kind}-${o.label.name}'),
+                            avatar: Icon(_labelIcon(o.label.kind), size: 18),
+                            label: Text('${o.label.name}  ${o.count}'),
+                            selected: _picked.contains(o.label),
+                            onSelected: (v) => setState(() => v ? _picked.add(o.label) : _picked.remove(o.label)),
+                          ),
+                        ),
+                    ],
+                  ),
+                ),
+              ),
             Expanded(
               child: ListView.builder(
                 key: const Key('placesList'),
@@ -463,6 +541,12 @@ DateTime normalizeDay(DateTime date) => DateTime(date.year, date.month, date.day
 String sectionDateOf(BuildContext context, DateTime date) => MaterialLocalizations.of(context).formatMediumDate(date);
 
 LatLng _point(Stop stop) => LatLng(stop.lat, stop.lng);
+
+IconData _labelIcon(String kind) => switch (kind) {
+      'anime' => Icons.movie_outlined,
+      'region' => Icons.place_outlined,
+      _ => Icons.sell_outlined,
+    };
 
 /// A day's name and, for a new one, its date if it has one.
 class _DayForm extends StatefulWidget {
@@ -545,44 +629,90 @@ class _SectionHeader extends StatelessWidget {
   final Color? color;
   final Widget? trailing;
 
-  const _SectionHeader({super.key, required this.title, this.date, this.today = false, this.color, this.trailing});
+  /// Whether its places show; a closed day says how many it has.
+  final bool open;
+  final int? count;
+
+  /// Opens or closes it; null when it can't close (a tag filter, reordering).
+  final VoidCallback? onToggle;
+
+  const _SectionHeader({
+    super.key,
+    required this.title,
+    this.date,
+    this.today = false,
+    this.color,
+    this.trailing,
+    this.open = true,
+    this.count,
+    this.onToggle,
+  });
 
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
     final muted = theme.colorScheme.onSurfaceVariant;
+    // The date and, for a closed day, how many places it holds.
+    final note = [?date, if (!open && count != null) context.l10n.placesSectionCount(count!)].join(' · ');
+    final heading = Row(
+      children: [
+        if (onToggle != null) ...[
+          Icon(open ? Icons.expand_more : Icons.chevron_right, size: 22, color: muted),
+          const SizedBox(width: 4),
+        ],
+        if (color != null) ...[
+          Container(
+            key: const Key('sectionDot'),
+            width: 10,
+            height: 10,
+            decoration: BoxDecoration(color: color, shape: BoxShape.circle),
+          ),
+          const SizedBox(width: 8),
+        ],
+        // One line, so the note uses whatever the title leaves and is cut first.
+        Flexible(
+          child: Text.rich(
+            TextSpan(
+              children: [
+                TextSpan(text: title, style: theme.textTheme.titleMedium?.copyWith(fontWeight: FontWeight.w700)),
+                if (note.isNotEmpty) TextSpan(text: '   $note', style: theme.textTheme.bodySmall?.copyWith(color: muted)),
+              ],
+            ),
+            maxLines: 1,
+            overflow: TextOverflow.ellipsis,
+          ),
+        ),
+        if (today) ...[
+          const SizedBox(width: 6),
+          Container(
+            key: const Key('todayBadge'),
+            padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
+            decoration: BoxDecoration(color: theme.trip.teaSoft, borderRadius: BorderRadius.circular(10)),
+            child: Text(context.l10n.placesToday, style: theme.textTheme.labelSmall?.copyWith(color: theme.trip.tea, fontWeight: FontWeight.w700)),
+          ),
+        ],
+      ],
+    );
     return Padding(
       padding: const EdgeInsets.only(top: 14, bottom: 6),
       child: SizedBox(
         height: 40,
         child: Row(
           children: [
-            if (color != null) ...[
-              Container(
-                key: const Key('sectionDot'),
-                width: 10,
-                height: 10,
-                decoration: BoxDecoration(color: color, shape: BoxShape.circle),
-              ),
-              const SizedBox(width: 8),
-            ],
-            Flexible(
-              child: Text(title, maxLines: 1, overflow: TextOverflow.ellipsis, style: theme.textTheme.titleMedium?.copyWith(fontWeight: FontWeight.w700)),
+            // The heading takes the row, so the menu sits at the end whatever the title's length.
+            Expanded(
+              child: onToggle == null
+                  ? heading
+                  : Semantics(
+                      button: true,
+                      expanded: open,
+                      child: InkWell(
+                        borderRadius: BorderRadius.circular(8),
+                        onTap: onToggle,
+                        child: heading,
+                      ),
+                    ),
             ),
-            if (date != null) ...[
-              const SizedBox(width: 8),
-              Text(date!, style: theme.textTheme.bodySmall?.copyWith(color: muted)),
-            ],
-            if (today) ...[
-              const SizedBox(width: 6),
-              Container(
-                key: const Key('todayBadge'),
-                padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
-                decoration: BoxDecoration(color: theme.trip.teaSoft, borderRadius: BorderRadius.circular(10)),
-                child: Text(context.l10n.placesToday, style: theme.textTheme.labelSmall?.copyWith(color: theme.trip.tea, fontWeight: FontWeight.w700)),
-              ),
-            ],
-            const Spacer(),
             ?trailing,
           ],
         ),
