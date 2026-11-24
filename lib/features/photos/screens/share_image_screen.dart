@@ -1,4 +1,5 @@
 import 'dart:async';
+import 'dart:convert' show utf8;
 import 'dart:io';
 import 'dart:typed_data';
 import 'dart:ui' as ui;
@@ -40,6 +41,14 @@ class _ShareImageScreenState extends ConsumerState<ShareImageScreen> {
   Object? _error;
   Timer? _debounce;
   int _generation = 0;
+
+  /// The render [_bytes] came from, behind [_generation] while a newer one
+  /// (a new title or layout) is still drawing.
+  int _bytesGeneration = -1;
+  Future<void>? _rendering;
+
+  /// Save or Share is under way.
+  bool _exporting = false;
 
   /// The trip most of the pairs are filed under, for the title.
   late final String? _tripId = () {
@@ -94,29 +103,38 @@ class _ShareImageScreenState extends ConsumerState<ShareImageScreen> {
   Future<void> _load() async {
     final placeFallback = context.l10n.photosPlaceGone;
     final pairs = <SharePair>[];
-    for (final e in widget.pairs) {
-      final framePathOf = await framePath(ref, e.frame!);
-      final frame = framePathOf == null ? null : await _decode(framePathOf);
-      final photo = await _decode(e.photo.localPath);
-      if (frame != null && photo != null) {
-        pairs.add(SharePair(frame: frame, photo: photo, caption: pairCaption(e, placeFallback: placeFallback)));
-      } else {
-        frame?.dispose();
-        photo?.dispose();
+    var kept = false;
+    try {
+      for (final e in widget.pairs) {
+        // Left while decoding: ref can't be used any more.
+        if (!mounted) return;
+        final framePathOf = await framePath(ref, e.frame!);
+        final frame = framePathOf == null ? null : await _decode(framePathOf);
+        final photo = await _decode(e.photo.localPath);
+        if (frame != null && photo != null) {
+          pairs.add(SharePair(frame: frame, photo: photo, caption: pairCaption(e, placeFallback: placeFallback)));
+        } else {
+          frame?.dispose();
+          photo?.dispose();
+        }
+      }
+      if (!mounted) return;
+      kept = true;
+      setState(() => _pairs = pairs);
+    } finally {
+      if (!kept) {
+        for (final pair in pairs) {
+          pair.frame.dispose();
+          pair.photo.dispose();
+        }
       }
     }
-    if (!mounted) {
-      for (final pair in pairs) {
-        pair.frame.dispose();
-        pair.photo.dispose();
-      }
-      return;
-    }
-    setState(() => _pairs = pairs);
     _render();
   }
 
-  Future<void> _render() async {
+  Future<void> _render() => _rendering = _draw();
+
+  Future<void> _draw() async {
     final pairs = _pairs;
     if (pairs == null) return;
     final generation = ++_generation;
@@ -132,6 +150,7 @@ class _ShareImageScreenState extends ConsumerState<ShareImageScreen> {
       if (mounted && generation == _generation) {
         setState(() {
           _bytes = bytes;
+          _bytesGeneration = generation;
           _error = null;
         });
       }
@@ -146,28 +165,57 @@ class _ShareImageScreenState extends ConsumerState<ShareImageScreen> {
     _debounce = Timer(const Duration(milliseconds: 300), _render);
   }
 
+  /// The title as a file name, at most 200 bytes (file systems take 255,
+  /// and a CJK character is three).
   String get _fileName {
-    final name = _title.text.trim().replaceAll(RegExp(r'[\\/:*?"<>|]'), '_');
+    var name = _title.text.trim().replaceAll(RegExp(r'[\\/:*?"<>|]'), '_');
+    while (utf8.encode(name).length > 200) {
+      name = name.characters.skipLast(1).toString();
+    }
     return '${name.isEmpty ? 'share' : name}.jpg';
   }
 
-  void _save() {
-    final bytes = _bytes;
-    if (bytes == null) return;
-    ref.read(backgroundPhotoSavesProvider.notifier).save(toGallery: true, render: () async => bytes);
+  /// The image as it is now: a title still being typed or a layout still
+  /// drawing is waited for, so the export isn't the one before.
+  Future<Uint8List?> _current() async {
+    if (_debounce?.isActive ?? false) {
+      _debounce!.cancel();
+      await _render();
+    }
+    while (mounted && _bytesGeneration != _generation && _rendering != null) {
+      final rendering = _rendering!;
+      await rendering;
+      if (identical(rendering, _rendering)) break;
+    }
+    return _bytesGeneration == _generation ? _bytes : null;
+  }
+
+  Future<void> _save() async {
+    if (_exporting) return;
+    setState(() => _exporting = true);
+    try {
+      final bytes = await _current();
+      if (bytes == null || !mounted) return;
+      ref.read(backgroundPhotoSavesProvider.notifier).save(toGallery: true, render: () async => bytes);
+    } finally {
+      if (mounted) setState(() => _exporting = false);
+    }
   }
 
   Future<void> _share() async {
-    final bytes = _bytes;
-    if (bytes == null) return;
+    if (_exporting) return;
     final messenger = ScaffoldMessenger.of(context);
     final l10n = context.l10n;
+    setState(() => _exporting = true);
     try {
+      final bytes = await _current();
+      if (bytes == null) return;
       final XFile file;
       if (kIsWeb) {
         file = XFile.fromData(bytes, name: _fileName, mimeType: 'image/jpeg');
       } else {
-        final dir = Directory(p.join((await getTemporaryDirectory()).path, 'share_images'));
+        // A folder per share, so one still being read isn't overwritten.
+        final dir = Directory(p.join((await getTemporaryDirectory()).path, 'share_images', '${DateTime.now().microsecondsSinceEpoch}'));
         await dir.create(recursive: true);
         final out = File(p.join(dir.path, _fileName));
         await out.writeAsBytes(bytes, flush: true);
@@ -176,6 +224,8 @@ class _ShareImageScreenState extends ConsumerState<ShareImageScreen> {
       await SharePlus.instance.share(ShareParams(files: [file], text: _title.text.trim(), downloadFallbackEnabled: true));
     } catch (e) {
       messenger.showSnackBar(SnackBar(content: Text(l10n.shareImageFailed('$e'))));
+    } finally {
+      if (mounted) setState(() => _exporting = false);
     }
   }
 
@@ -196,7 +246,7 @@ class _ShareImageScreenState extends ConsumerState<ShareImageScreen> {
         });
       }
     }
-    final ready = _bytes != null;
+    final ready = _bytes != null && !_exporting;
     return Scaffold(
       appBar: AppBar(
         title: Column(

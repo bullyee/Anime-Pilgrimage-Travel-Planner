@@ -87,4 +87,21 @@ void main() {
       expect(decoded.height, g.height.round());
     });
   });
+
+  testWidgets('a stack of eight is drawn smaller, to what a GPU draws', (tester) async {
+    await tester.runAsync(() async {
+      Future<ui.Image> solid(int w, int h) {
+        final recorder = ui.PictureRecorder();
+        Canvas(recorder).drawRect(Rect.fromLTWH(0, 0, w.toDouble(), h.toDouble()), Paint()..color = Colors.red);
+        return recorder.endRecording().toImage(w, h);
+      }
+
+      final pairs = [for (var i = 0; i < 8; i++) SharePair(frame: await solid(16, 9), photo: await solid(9, 16), caption: '$i')];
+      final g = ShareImageGeometry(8, ShareImageLayout.stacked);
+      expect(g.height, greaterThan(8192), reason: 'too tall as laid out');
+      final decoded = img.decodeJpg(await renderShareImage(pairs, title: 't', subtitle: 's', layout: ShareImageLayout.stacked))!;
+      expect(decoded.height, 8192);
+      expect(decoded.width, (g.width * 8192 / g.height).round());
+    });
+  });
 }

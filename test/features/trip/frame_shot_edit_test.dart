@@ -59,7 +59,7 @@ void main() {
   test('setFrameShot moves every frame of the spot and marks the stop for sync', () async {
     final ids = await seed();
     final frames = [await frame('f1'), await frame('f2'), await frame('lib')];
-    final result = await container.read(tripStopsControllerProvider.notifier).setFrameShot(frames, lat: 34.8925, lng: 135.8071);
+    final result = await container.read(tripStopsControllerProvider.notifier).setFrameShot(ids.tripId, frames, lat: 34.8925, lng: 135.8071);
 
     expect(result, isA<Success<void>>());
     for (final id in ['f1', 'f2']) {
@@ -79,14 +79,14 @@ void main() {
     final controller = container.read(tripStopsControllerProvider.notifier);
     final frames = [await frame('f1'), await frame('f2')];
 
-    await controller.setFrameNote(frames, '  東詰 ');
+    await controller.setFrameNote(ids.tripId, frames, '  東詰 ');
     expect([(await frame('f1')).note, (await frame('f2')).note], ['東詰', '東詰']);
     expect((await stop(ids.stopId)).syncStatus, 1);
 
-    await controller.setFrameNote(frames, ' ');
+    await controller.setFrameNote(ids.tripId, frames, ' ');
     expect((await frame('f1')).note, isNull);
 
-    final tooLong = await controller.setFrameNote(frames, 'x' * (maxFrameNoteLength + 1));
+    final tooLong = await controller.setFrameNote(ids.tripId, frames, 'x' * (maxFrameNoteLength + 1));
     expect(tooLong, isA<Failure<void>>());
     expect((await frame('f1')).note, isNull);
   });

@@ -12,15 +12,17 @@ import 'trip_providers.dart';
 // one stop, but its frames may have come from stops folded into it, and the
 // user's photos keep the place (`placeKey`) they were shot at.
 
-/// The frames of [tripId]'s stops (stop-owned, live stops only), oldest
-/// first.
+/// The frames of [tripId]'s stops, oldest first: those of stops since folded
+/// or deleted too, which no place shows (places are live stops) but a photo
+/// shot against one of them still counts for its copies, like
+/// [tripPhotosProvider] has it.
 final tripFramesProvider = StreamProvider.autoDispose.family<List<NewReferenceImage>, String>((ref, tripId) {
   final db = ref.watch(databaseProvider);
-  final liveStops = db.selectOnly(db.stops)
+  final tripStops = db.selectOnly(db.stops)
     ..addColumns([db.stops.id])
-    ..where(db.stops.tripId.equals(tripId) & db.stops.deletedAt.isNull());
+    ..where(db.stops.tripId.equals(tripId));
   return (db.select(db.newReferenceImages)
-        ..where((f) => f.stopId.isInQuery(liveStops))
+        ..where((f) => f.stopId.isInQuery(tripStops))
         ..orderBy([(f) => OrderingTerm(expression: f.createdAt), (f) => OrderingTerm(expression: f.id)]))
       .watch();
 });

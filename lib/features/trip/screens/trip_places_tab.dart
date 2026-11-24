@@ -165,7 +165,21 @@ class _TripPlacesTabState extends ConsumerState<TripPlacesTab> {
     );
   }
 
-  Future<void> _newDay() async {
+  /// A day's or place's change under way: another tap waits for nothing
+  /// (a second delete, or a move from where the place no longer is).
+  bool _writing = false;
+
+  Future<void> _once(Future<void> Function() write) async {
+    if (_writing) return;
+    _writing = true;
+    try {
+      await write();
+    } finally {
+      _writing = false;
+    }
+  }
+
+  Future<void> _newDay() => _once(() async {
     final form = await _dayForm();
     if (form == null || !mounted) return;
     final added = await _planner.addDay(widget.tripId, backup: form.date == null);
@@ -178,12 +192,13 @@ class _TripPlacesTabState extends ConsumerState<TripPlacesTab> {
     } else if (mounted) {
       reportResult(context, added);
     }
-  }
+  });
 
   Future<void> _rename(PlacesSection section) async {
     final form = await _dayForm(section: section);
     if (form == null || !mounted) return;
-    reportResult(context, await _planner.setDayTitle(section.dayId!, form.name));
+    final result = await _planner.setDayTitle(section.dayId!, form.name);
+    if (mounted) reportResult(context, result);
   }
 
   /// Gives the day a date: a day without one joins the dated days first,
@@ -220,7 +235,7 @@ class _TripPlacesTabState extends ConsumerState<TripPlacesTab> {
     }
   }
 
-  Future<void> _deleteDay(PlacesSection section) async {
+  Future<void> _deleteDay(PlacesSection section) => _once(() async {
     final l10n = context.l10n;
     final title = sectionTitle(context, section);
     final ok = await showDialog<bool>(
@@ -246,14 +261,14 @@ class _TripPlacesTabState extends ConsumerState<TripPlacesTab> {
     }
     final result = await _planner.removeDay(widget.tripId, section.dayId!);
     if (mounted) reportResult(context, result);
-  }
+  });
 
-  Future<void> _move(PlacesSection section, TripPlace place, int by) async {
+  Future<void> _move(PlacesSection section, TripPlace place, int by) => _once(() async {
     final target = reorderTarget(section.places, place, by);
     if (target == null || place.itemIds.isEmpty) return;
     final result = await _planner.moveItems(itemIds: place.itemIds, toDayId: section.dayId!, beforeItemId: target.before);
     if (mounted && result is Failure) reportResult(context, result);
-  }
+  });
 
   @override
   Widget build(BuildContext context) {

@@ -8,6 +8,8 @@ import 'package:trip_planner/features/sync/services/firestore_sync_v2_service.da
 import 'package:trip_planner/features/sync/services/sync_engine_service_v2.dart';
 import 'package:trip_planner/features/trip/repositories/trip_repository.dart';
 
+import 'sync_engine_v2_test.dart' show mergeFrameShots;
+
 /// A shared Firestore simulation that broadcasts cloud updates to both Alice and Bob.
 // Extends [Fake] so that members added to [FirestoreSyncV2Service] by other
 // PRs (e.g. #103's activity/photo methods) don't break compilation here; any
@@ -167,7 +169,7 @@ class SharedCollaborativeCloud extends Fake implements FirestoreSyncV2Service {
         'area': stop.area,
         'note': stop.note,
         'mergedInto': stop.mergedInto,
-        if (frameShotsOf(referenceImages ?? const []) case final shots when shots.isNotEmpty) 'frameShots': shots,
+        if (mergeFrameShots(existing?['frameShots'] as Map?, stop, referenceImages) case final shots when shots.isNotEmpty) 'frameShots': shots,
         'addedBy': stop.addedBy,
         'updatedAt': stop.updatedAt,
         'updatedBy': stop.updatedBy,

@@ -1,5 +1,6 @@
 import 'dart:async';
 
+import 'package:flutter/foundation.dart' show kIsWeb;
 import 'package:flutter/widgets.dart';
 import 'package:geolocator/geolocator.dart';
 
@@ -13,6 +14,13 @@ class PositionFollower extends ValueNotifier<Position?> with WidgetsBindingObser
   bool _paused = false;
   bool _disposed = false;
 
+  /// Asked for the permission already: a refusal isn't asked again, even
+  /// when the app comes back to the front (which closing the prompt does).
+  bool _asked = false;
+
+  /// A [start] is between its awaits: another one waits for nothing.
+  bool _starting = false;
+
   PositionFollower() : super(null) {
     WidgetsBinding.instance.addObserver(this);
   }
@@ -21,16 +29,26 @@ class PositionFollower extends ValueNotifier<Position?> with WidgetsBindingObser
 
   /// Starts following, unless it already does or was paused for a camera.
   Future<void> start() async {
-    if (_sub != null || _paused || _disposed) return;
+    if (_sub != null || _paused || _disposed || _starting) return;
+    _starting = true;
     try {
       if (!await Geolocator.isLocationServiceEnabled()) return;
       var permission = await Geolocator.checkPermission();
-      if (permission == LocationPermission.denied) permission = await Geolocator.requestPermission();
+      if (permission == LocationPermission.denied && !_asked) {
+        _asked = true;
+        permission = await Geolocator.requestPermission();
+      }
       if (permission == LocationPermission.denied || permission == LocationPermission.deniedForever) return;
-      if (_disposed || _sub != null) return;
-      final last = await Geolocator.getLastKnownPosition();
-      if (last != null && !_disposed) value = last;
-      if (_disposed || _sub != null) return;
+      if (_disposed || _paused || _sub != null) return;
+      // The browser has no last position (the web plugin throws), and the
+      // stream below still works there.
+      if (!kIsWeb) {
+        try {
+          final last = await Geolocator.getLastKnownPosition();
+          if (last != null && !_disposed) value = last;
+        } catch (_) {}
+      }
+      if (_disposed || _paused || _sub != null) return;
       _sub = Geolocator.getPositionStream(
         locationSettings: const LocationSettings(accuracy: LocationAccuracy.high, distanceFilter: 5),
       ).listen(
@@ -41,6 +59,8 @@ class PositionFollower extends ValueNotifier<Position?> with WidgetsBindingObser
       );
     } catch (_) {
       // No geolocation here (desktop, tests): distances stay hidden.
+    } finally {
+      _starting = false;
     }
   }
 

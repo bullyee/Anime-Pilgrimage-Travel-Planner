@@ -109,10 +109,29 @@ Future<Uint8List> renderShareImage(
   required ShareImageLayout layout,
 }) async {
   final g = ShareImageGeometry(pairs.length, layout);
-  final w = g.width.round();
-  final h = g.height.round();
+  // GPUs draw an image up to a size (8192 px on most phones, 4096 on some
+  // older ones); a long stack is drawn smaller to fit, and once more at the
+  // smaller size if the first try fails.
+  try {
+    return await _render(pairs, g, title: title, subtitle: subtitle, maxSide: 8192);
+  } catch (_) {
+    return _render(pairs, g, title: title, subtitle: subtitle, maxSide: 4096);
+  }
+}
+
+Future<Uint8List> _render(
+  List<SharePair> pairs,
+  ShareImageGeometry g, {
+  required String title,
+  required String subtitle,
+  required double maxSide,
+}) async {
+  final scale = math.min(1.0, maxSide / math.max(g.width, g.height));
+  final w = (g.width * scale).round();
+  final h = (g.height * scale).round();
   final recorder = ui.PictureRecorder();
-  final canvas = Canvas(recorder, Rect.fromLTWH(0, 0, g.width, g.height));
+  final canvas = Canvas(recorder, Rect.fromLTWH(0, 0, w.toDouble(), h.toDouble()));
+  canvas.scale(scale);
   canvas.drawRect(Rect.fromLTWH(0, 0, g.width, g.height), Paint()..color = const Color(0xFF0E1311));
   // The subtitle goes under the title's real height: CJK fallback fonts
   // stand taller than Latin ones, and a fixed offset let them overlap.

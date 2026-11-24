@@ -100,6 +100,61 @@ void main() {
     expect(moved.lat, a.lat);
   });
 
+  test("an empty file isn't a file, and a link and a file of the same frame are one", () async {
+    final trip = await repo.createTrip(title: 'Uji', ownerId: 'u1', dayCount: 1);
+    final keep = await spot(trip.id, 'Bridge');
+    final other = await spot(trip.id, 'Bridge (2)');
+    Future<void> img(String id, String stopId, {String? path, String? url}) => db.into(db.newReferenceImages).insert(
+          NewReferenceImagesCompanion.insert(id: id, stopId: Value(stopId), localPath: Value(path), remoteUrl: Value(url)),
+        );
+    await img('k1', keep.id, path: '', url: 'https://x/1.jpg');
+    await img('k2', keep.id, path: '/f/2.jpg', url: 'https://x/2.jpg');
+    await img('o1', other.id, path: '', url: 'https://x/3.jpg'); // another frame, also with an empty path
+    await img('o2', other.id, url: 'https://x/2.jpg'); // k2, by its link only
+
+    await repo.mergeStops(keepId: keep.id, otherIds: [other.id]);
+    expect((await repo.getReferenceImagesForStop(keep.id)).map((f) => f.id).toSet(), {'k1', 'k2', 'o1'});
+  });
+
+  test('a skipped item on the kept stop takes a planned one of the same day', () async {
+    final trip = await repo.createTrip(title: 'Uji', ownerId: 'u1', dayCount: 1);
+    final day = (await repo.getDaysForTrip(trip.id)).single;
+    final keep = await spot(trip.id, 'Bridge');
+    final other = await spot(trip.id, 'Bridge (2)');
+    final skipped = await repo.scheduleStop(tripId: trip.id, stopId: keep.id, dayId: day.id);
+    await repo.updateScheduleItemStatus(itemId: skipped.id, status: 'skipped');
+    await repo.scheduleStop(tripId: trip.id, stopId: other.id, dayId: day.id);
+
+    await repo.mergeStops(keepId: keep.id, otherIds: [other.id]);
+    final items = await repo.getScheduleItemsForTrip(trip.id);
+    final live = [for (final i in items) if (i.deletedAt == null) i];
+    expect(live.single.stopId, keep.id);
+    expect(live.single.status, 'planned');
+  });
+
+  test("setFrameShots leaves another trip's frames alone", () async {
+    final mine = await repo.createTrip(title: 'Uji', ownerId: 'u1', dayCount: 1);
+    final theirs = await repo.createTrip(title: 'Kyoto', ownerId: 'u1', dayCount: 1);
+    final a = await spot(mine.id, 'Bridge');
+    final b = await spot(theirs.id, 'Shrine');
+    await frame('fa', a.id, '/f/a.jpg');
+    await frame('fb', b.id, '/f/b.jpg');
+    await repo.setFrameShots(tripId: mine.id, frameIds: ['fa', 'fb'], note: const Value('east end'));
+    final notes = {for (final f in await db.select(db.newReferenceImages).get()) f.id: f.note};
+    expect(notes, {'fa': 'east end', 'fb': null});
+  });
+
+  test('a merged stop brought back from the trash is merged into nothing', () async {
+    final trip = await repo.createTrip(title: 'Uji', ownerId: 'u1', dayCount: 1);
+    final keep = await spot(trip.id, 'Bridge');
+    final other = await spot(trip.id, 'Bridge (2)');
+    await repo.mergeStops(keepId: keep.id, otherIds: [other.id]);
+    expect((await repo.getStop(other.id))!.mergedInto, keep.id);
+    await repo.restoreStop(other.id);
+    final back = (await repo.getStop(other.id))!;
+    expect((back.deletedAt, back.mergedInto), (null, null));
+  });
+
   test('a kept stop keeps its own group', () async {
     final trip = await repo.createTrip(title: 'Uji', ownerId: 'u1', dayCount: 1);
     final keep = await spot(trip.id, 'A', area: 'Rose');

@@ -93,8 +93,10 @@ abstract class TripRepository {
   /// their position ([lat] with [lng]) and/or their [note], each left alone
   /// when absent. Only frames of the trip's live stops change; the
   /// library's stay the library's. Their stops are marked for sync, so the
-  /// `frameShots` map goes up with them, and the change is logged.
+  /// `frameShots` map goes up with them, and the change is logged. Frames
+  /// of another trip's stops are left alone.
   Future<void> setFrameShots({
+    required String tripId,
     required List<String> frameIds,
     Value<double?> lat = const Value.absent(),
     Value<double?> lng = const Value.absent(),
@@ -838,6 +840,7 @@ class DriftTripRepository implements TripRepository {
 
   @override
   Future<void> setFrameShots({
+    required String tripId,
     required List<String> frameIds,
     Value<double?> lat = const Value.absent(),
     Value<double?> lng = const Value.absent(),
@@ -848,7 +851,7 @@ class DriftTripRepository implements TripRepository {
     await _db.transaction(() async {
       final frames = await (_db.select(_db.newReferenceImages)..where((f) => f.id.isIn(frameIds) & f.stopId.isNotNull())).get();
       final stopIds = {for (final f in frames) f.stopId!};
-      final stops = await (_db.select(_db.stops)..where((s) => s.id.isIn(stopIds) & s.deletedAt.isNull())).get();
+      final stops = await (_db.select(_db.stops)..where((s) => s.id.isIn(stopIds) & s.tripId.equals(tripId) & s.deletedAt.isNull())).get();
       if (stops.isEmpty) return;
       final live = {for (final s in stops) s.id};
       final ids = [for (final f in frames) if (live.contains(f.stopId)) f.id];
@@ -865,17 +868,52 @@ class DriftTripRepository implements TripRepository {
     });
   }
 
+  /// The files [f] shows: its file on the device and its link, either of
+  /// which another copy of the same frame may share.
+  static List<String> _filesOf(NewReferenceImage f) => [
+        if (f.localPath?.trim() case final path? when path.isNotEmpty) path,
+        if (f.remoteUrl?.trim() case final url? when url.isNotEmpty) url,
+      ];
+
+  static int _statusRank(String status) => switch (status) { 'done' => 2, 'skipped' => 0, _ => 1 };
+
+  /// Whether [stop] has a frame with an image, its own or its place's in the
+  /// library.
+  Future<bool> _hasAnyFrame(Stop stop) async {
+    final own = await getReferenceImagesForStop(stop.id);
+    if (own.any((f) => _filesOf(f).isNotEmpty)) return true;
+    if (stop.placeKey.isEmpty) return false;
+    final library = await (_db.select(_db.newReferenceImages)..where((t) => t.placeKey.equals(stop.placeKey) & t.stopId.isNull())).get();
+    return library.any((f) => _filesOf(f).isNotEmpty);
+  }
+
   /// [mergeStops], or with a [place] name [foldStopsIntoPlace].
   Future<void> _merge({required String keepId, required List<String> otherIds, String? place}) async {
     await _db.transaction(() async {
       final kept = await getStop(keepId);
       if (kept == null || kept.deletedAt != null) throw StateError('The stop to keep is gone.');
-      final others = <Stop>[
+      final candidates = <Stop>[
         for (final id in otherIds.toSet())
           if (id != keepId)
             if (await getStop(id) case final s? when s.deletedAt == null && s.tripId == kept.tripId) s,
       ];
       final folding = place != null && place.isNotEmpty;
+      // Folding, a member with no frame at all (its own or the library's)
+      // has nothing to become a spot of the place, and its position and name
+      // would go with it: it stays a place of its own, out of the group.
+      final others = <Stop>[];
+      for (final other in candidates) {
+        if (!folding || await _hasAnyFrame(other)) {
+          others.add(other);
+        } else {
+          await (_db.update(_db.stops)..where((t) => t.id.equals(other.id))).write(StopsCompanion(
+            area: const Value(null),
+            updatedAt: Value(_now()),
+            updatedBy: Value(_currentUserId),
+            syncStatus: const Value(1),
+          ));
+        }
+      }
       if (others.isEmpty && !folding) return;
 
       String? clean(String? s) => s == null || s.trim().isEmpty ? null : s.trim();
@@ -899,8 +937,16 @@ class DriftTripRepository implements TripRepository {
       final keptFrames = await getReferenceImagesForStop(keepId);
       final byFile = <String, String>{
         for (final f in keptFrames)
-          if (f.localPath ?? f.remoteUrl case final file?) file: f.id,
+          for (final file in _filesOf(f)) file: f.id,
       };
+      // The members whose whole note became a spot's name on a frame; any
+      // other member's note goes into the place's, so none is lost.
+      final noteOnSpot = <String>{};
+      void tookNote(Stop member, String? frameNote) {
+        final note = member.note?.trim();
+        if (note != null && note.isNotEmpty && clean(frameNote) == null && spotLabel(member, group) == note) noteOnSpot.add(member.id);
+      }
+
       if (folding) {
         for (final frame in keptFrames) {
           await (_db.update(_db.newReferenceImages)..where((t) => t.id.equals(frame.id))).write(frameAsSpotOf(frame, kept, group));
@@ -908,14 +954,17 @@ class DriftTripRepository implements TripRepository {
       }
       for (final other in others) {
         for (final frame in await getReferenceImagesForStop(other.id)) {
-          final file = frame.localPath ?? frame.remoteUrl;
-          final same = file == null ? null : byFile[file];
+          final files = _filesOf(frame);
+          final same = files.map((f) => byFile[f]).nonNulls.firstOrNull;
           if (same != null) {
             await (_db.update(_db.photos)..where((t) => t.referenceImageId.equals(frame.id)))
                 .write(PhotosCompanion(referenceImageId: Value(same)));
             await (_db.delete(_db.newReferenceImages)..where((t) => t.id.equals(frame.id))).go();
           } else {
-            if (file != null) byFile[file] = frame.id;
+            for (final file in files) {
+              byFile[file] = frame.id;
+            }
+            tookNote(other, frame.note);
             await (_db.update(_db.newReferenceImages)..where((t) => t.id.equals(frame.id)))
                 .write(frameAsSpotOf(frame, other, group).copyWith(stopId: Value(keepId)));
           }
@@ -931,10 +980,13 @@ class DriftTripRepository implements TripRepository {
               ..orderBy([(t) => OrderingTerm(expression: t.createdAt), (t) => OrderingTerm(expression: t.id)]))
             .get();
         for (final frame in library) {
-          final file = frame.localPath ?? frame.remoteUrl;
-          if (file == null || byFile.containsKey(file)) continue;
+          final files = _filesOf(frame);
+          if (files.isEmpty || files.any(byFile.containsKey)) continue;
           final id = _uuid.v4();
-          byFile[file] = id;
+          for (final file in files) {
+            byFile[file] = id;
+          }
+          tookNote(member, frame.note);
           await _db.into(_db.newReferenceImages).insert(frame.toCompanion(true).copyWith(
                 id: Value(id),
                 placeKey: const Value(null),
@@ -948,7 +1000,9 @@ class DriftTripRepository implements TripRepository {
       }
 
       // Days: the others' items move to the kept stop, except on a day it is
-      // already on, where a visit still counts.
+      // already on, where the kept item takes the furthest along of the two
+      // (done, then planned, then skipped): a visit still counts, and a
+      // skipped item doesn't hide one planned that day.
       final now = _now();
       Future<List<ScheduleItem>> liveItems(String stopId) =>
           (_db.select(_db.scheduleItems)..where((t) => t.stopId.equals(stopId) & t.deletedAt.isNull())).get();
@@ -964,14 +1018,14 @@ class DriftTripRepository implements TripRepository {
               syncStatus: const Value(1),
             ));
             onDay[it.dayId] = it.copyWith(stopId: keepId);
-          } else if (it.status == 'done' && mine.status != 'done') {
+          } else if (_statusRank(it.status) > _statusRank(mine.status)) {
             await (_db.update(_db.scheduleItems)..where((t) => t.id.equals(mine.id))).write(ScheduleItemsCompanion(
-              status: const Value('done'),
+              status: Value(it.status),
               updatedAt: Value(now),
               updatedBy: Value(_currentUserId),
               syncStatus: const Value(1),
             ));
-            onDay[it.dayId] = mine.copyWith(status: 'done');
+            onDay[it.dayId] = mine.copyWith(status: it.status);
           }
         }
       }
@@ -979,7 +1033,12 @@ class DriftTripRepository implements TripRepository {
       // The kept stop is edited, so it syncs again with what it took on.
       await (_db.update(_db.stops)..where((t) => t.id.equals(keepId))).write(StopsCompanion(
         name: folding ? Value(place) : const Value.absent(),
-        note: folding ? const Value.absent() : Value(mergedStopNote(kept.note, [for (final o in others) o.note])),
+        // Folding goes without asking, so the notes are cut to what the
+        // rules take rather than refused (a merge checks first).
+        note: Value(switch (mergedStopNote(kept.note, [for (final o in others) if (!folding || !noteOnSpot.contains(o.id)) o.note])) {
+          final note? when folding => clampText(note, maxTripNoteLength),
+          final note => note,
+        }),
         area: Value(folding ? null : area),
         updatedAt: Value(now),
         updatedBy: Value(_currentUserId),
@@ -1396,10 +1455,12 @@ class DriftTripRepository implements TripRepository {
       final deletedAt = stop.deletedAt!;
       if (deletedAt.isBefore(cutoff)) return;
 
-      // Revive the stop
+      // Revive the stop, no longer merged into another: its frames went
+      // there, and a merged stop that's live would move this phone's back.
       await (_db.update(_db.stops)..where((tbl) => tbl.id.equals(stopId) & tbl.tripId.equals(stop.tripId))).write(
         StopsCompanion(
           deletedAt: const Value(null),
+          mergedInto: const Value(null),
           updatedAt: Value(now),
           updatedBy: Value(_currentUserId),
           syncStatus: const Value(1),

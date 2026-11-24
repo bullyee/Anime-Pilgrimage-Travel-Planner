@@ -151,6 +151,8 @@ class PlaceFoldState {
 }
 
 abstract class PlaceFoldStore {
+  /// The state, or the empty one before the first run. Throws when it can't
+  /// tell (a file it can't read), so nothing is folded on a guess.
   Future<PlaceFoldState> read();
   Future<void> write(PlaceFoldState state);
 }
@@ -166,28 +168,29 @@ class FilePlaceFoldStore implements PlaceFoldStore {
 
   @override
   Future<PlaceFoldState> read() async {
-    try {
-      final f = await _file();
-      if (!await f.exists()) return const PlaceFoldState();
-      final json = jsonDecode(await f.readAsString()) as Map<String, dynamic>;
-      final since = json['since'];
-      return PlaceFoldState(
-        since: since is int ? DateTime.fromMillisecondsSinceEpoch(since) : null,
-        done: {for (final id in json['done'] as List? ?? const []) if (id is String) id},
-      );
-    } catch (_) {
-      return const PlaceFoldState();
-    }
+    final f = await _file();
+    if (!await f.exists()) return const PlaceFoldState();
+    // A file that's there but unreadable throws: read as empty, it would
+    // fold every private trip again, groups made on purpose since included.
+    final json = jsonDecode(await f.readAsString()) as Map<String, dynamic>;
+    final since = json['since'];
+    return PlaceFoldState(
+      since: since is int ? DateTime.fromMillisecondsSinceEpoch(since) : null,
+      done: {for (final id in json['done'] as List? ?? const []) if (id is String) id},
+    );
   }
 
   @override
   Future<void> write(PlaceFoldState state) async {
     final f = await _file();
     await f.parent.create(recursive: true);
-    await f.writeAsString(
+    // Written aside and renamed over, so a write cut short leaves the old one.
+    final tmp = File('${f.path}.tmp');
+    await tmp.writeAsString(
       jsonEncode({'since': state.since?.millisecondsSinceEpoch, 'done': [...state.done]}),
       flush: true,
     );
+    await tmp.rename(f.path);
   }
 }
 

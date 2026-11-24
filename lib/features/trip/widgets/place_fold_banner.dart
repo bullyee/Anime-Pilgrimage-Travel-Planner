@@ -9,6 +9,7 @@ import '../../sharing/widgets/signed_out_trip_notice.dart';
 import '../models/stop_group.dart';
 import '../providers/trip_place_providers.dart';
 import '../providers/trip_providers.dart';
+import '../services/place_fold_service.dart';
 
 /// Offers to turn a trip's groups of stops into places
 /// ([PlaceFoldService.foldTrip]) to the people who can edit it, while it has
@@ -30,6 +31,7 @@ class _PlaceFoldBannerState extends ConsumerState<PlaceFoldBanner> {
   bool _busy = false;
 
   Future<void> _fold() async {
+    if (_busy) return;
     final l10n = context.l10n;
     final messenger = ScaffoldMessenger.of(context);
     final service = ref.read(placeFoldServiceProvider);
@@ -38,6 +40,16 @@ class _PlaceFoldBannerState extends ConsumerState<PlaceFoldBanner> {
       messenger.showSnackBar(SnackBar(content: Text(l10n.placeFoldNeedsSignIn)));
       return;
     }
+    // Busy from the first tap, so a second one doesn't open a second dialog.
+    setState(() => _busy = true);
+    try {
+      await _confirmAndFold(l10n, messenger, service, shared);
+    } finally {
+      if (mounted) setState(() => _busy = false);
+    }
+  }
+
+  Future<void> _confirmAndFold(AppLocalizations l10n, ScaffoldMessengerState messenger, PlaceFoldService service, bool shared) async {
     final ok = await showDialog<bool>(
       context: context,
       builder: (context) => AlertDialog(
@@ -54,7 +66,12 @@ class _PlaceFoldBannerState extends ConsumerState<PlaceFoldBanner> {
       ),
     );
     if (ok != true || !mounted) return;
-    setState(() => _busy = true);
+    // The dialog may have stayed open while the role or the sign-in changed.
+    if (!ref.read(canEditTripProvider(widget.trip.id))) return;
+    if (shared && ref.read(signedOutProvider)) {
+      messenger.showSnackBar(SnackBar(content: Text(l10n.placeFoldNeedsSignIn)));
+      return;
+    }
     try {
       if (shared && await service.hasUnsyncedChanges(widget.trip.id)) {
         messenger.showSnackBar(SnackBar(content: Text(l10n.placeFoldNeedsSync)));
@@ -64,8 +81,6 @@ class _PlaceFoldBannerState extends ConsumerState<PlaceFoldBanner> {
       messenger.showSnackBar(SnackBar(content: Text(l10n.placeFoldDone(count))));
     } catch (e) {
       messenger.showSnackBar(SnackBar(content: Text(l10n.placeFoldFailed('$e'))));
-    } finally {
-      if (mounted) setState(() => _busy = false);
     }
   }
 

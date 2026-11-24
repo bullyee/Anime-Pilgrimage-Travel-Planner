@@ -3,7 +3,7 @@ import 'dart:math' as math;
 
 import 'package:flutter/foundation.dart' show kIsWeb;
 import 'package:flutter/material.dart';
-import 'package:flutter/services.dart' show PlatformException;
+import 'package:flutter/services.dart' show PlatformException, TextInputFormatter, TextEditingValue;
 import 'package:flutter_map/flutter_map.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
@@ -63,13 +63,26 @@ class TripPlaceScreen extends ConsumerStatefulWidget {
 
 enum _Filter { all, unshot, nearby }
 
+/// Keeps a field to [max] UTF-16 code units, the way the notes' limits and
+/// the Firestore rules count, besides [TextField.maxLength]'s characters
+/// (an emoji is one character but two units).
+class Utf16LengthLimit extends TextInputFormatter {
+  final int max;
+  Utf16LengthLimit(this.max);
+
+  @override
+  TextEditingValue formatEditUpdate(TextEditingValue oldValue, TextEditingValue newValue) =>
+      newValue.text.length <= max || newValue.text.length <= oldValue.text.length ? newValue : oldValue;
+}
+
 class _TripPlaceScreenState extends ConsumerState<TripPlaceScreen> {
   final _map = MapController();
   final _follower = PositionFollower();
   final _heroPages = PageController();
   final _note = TextEditingController();
   final _noteFocus = FocusNode();
-  late final TripStopsController _stops = ref.read(tripStopsControllerProvider.notifier);
+  // Read up front: the note is saved from dispose(), where ref can't be used.
+  late final TripStopsController _stops;
 
   _Filter _filter = _Filter.all;
   String? _selected;
@@ -92,6 +105,7 @@ class _TripPlaceScreenState extends ConsumerState<TripPlaceScreen> {
   @override
   void initState() {
     super.initState();
+    _stops = ref.read(tripStopsControllerProvider.notifier);
     _follower.addListener(_onPosition);
     _follower.start();
     _noteFocus.addListener(() {
@@ -101,7 +115,11 @@ class _TripPlaceScreenState extends ConsumerState<TripPlaceScreen> {
 
   @override
   void dispose() {
-    _saveNote();
+    try {
+      _saveNote();
+    } catch (e) {
+      debugPrint('[TripPlace] note not saved on leaving: $e');
+    }
     _follower.removeListener(_onPosition);
     _follower.dispose();
     _heroPages.dispose();
@@ -126,19 +144,30 @@ class _TripPlaceScreenState extends ConsumerState<TripPlaceScreen> {
     final stopId = _noteStopId;
     if (stopId == null) return;
     final text = _note.text;
-    if (text.trim() == (_noteSaved ?? '').trim()) return;
+    final before = _noteSaved;
+    if (text.trim() == (before ?? '').trim()) return;
     _noteSaved = text;
-    _stops.setNote(stopId, text);
+    _stops.setNote(stopId, text).then((result) {
+      if (result is! Failure) return;
+      // Not saved: the next save tries again, and the user is told.
+      if (_noteSaved == text) _noteSaved = before;
+      if (mounted) _report(result, '');
+    });
   }
 
-  /// Shows [stop]'s note in the field, unless the user is typing in it.
+  /// Shows [stop]'s note in the field, unless the user is typing in it. The
+  /// field changes after this frame (not while building), and what counts as
+  /// saved changes with it, so leaving before then saves nothing over it.
   void _loadNote(Stop stop) {
     final remote = stop.note ?? '';
     if (_noteStopId == stop.id && (remote == (_noteSaved ?? '') || _noteFocus.hasFocus || _noteSave != null)) return;
-    _noteStopId = stop.id;
-    _noteSaved = remote;
     WidgetsBinding.instance.addPostFrameCallback((_) {
-      if (mounted && _note.text != remote) _note.text = remote;
+      if (!mounted) return;
+      if (_noteStopId == stop.id && (_noteFocus.hasFocus || _noteSave != null)) return;
+      if (_noteStopId != stop.id) _saveNote();
+      _noteStopId = stop.id;
+      _noteSaved = remote;
+      if (_note.text != remote) _note.text = remote;
     });
   }
 
@@ -223,6 +252,7 @@ class _TripPlaceScreenState extends ConsumerState<TripPlaceScreen> {
     if (picked == null || !mounted) return;
     if (kIsWeb) {
       final reference = await framePath(ref, frame);
+      if (!mounted) return;
       router.push(PhotoEditArgs(
         path: picked.path,
         placeKey: placeKey,
@@ -232,14 +262,16 @@ class _TripPlaceScreenState extends ConsumerState<TripPlaceScreen> {
       ).location);
       return;
     }
-    final bytes = await picked.readAsBytes();
-    if (!await isReadableImage(bytes)) {
-      messenger.showSnackBar(SnackBar(content: Text(l10n.placePickEmpty)));
-      return;
-    }
+    // Read up front: the page may be closed by the time the file is read.
+    final db = ref.read(databaseProvider);
     try {
+      final bytes = await picked.readAsBytes();
+      if (!await isReadableImage(bytes)) {
+        messenger.showSnackBar(SnackBar(content: Text(l10n.placePickEmpty)));
+        return;
+      }
       final result = await recordPickedShot(
-        ref.read(databaseProvider),
+        db,
         path: picked.path,
         bytes: bytes,
         placeKey: placeKey,
@@ -319,7 +351,7 @@ class _TripPlaceScreenState extends ConsumerState<TripPlaceScreen> {
     if (!mounted) return;
     switch (action) {
       case 'note':
-        final result = await _stops.setFrameNote(spot.frames, text);
+        final result = await _stops.setFrameNote(widget.tripId, spot.frames, text);
         if (result is Failure && mounted) _report(result, '');
       case 'place':
         setState(() {
@@ -338,9 +370,10 @@ class _TripPlaceScreenState extends ConsumerState<TripPlaceScreen> {
   Future<void> _setHere(PlaceSpot spot) async {
     final l10n = context.l10n;
     final center = _map.camera.center;
-    final result = await _stops.setFrameShot(spot.frames, lat: center.latitude, lng: center.longitude);
+    final result = await _stops.setFrameShot(widget.tripId, spot.frames, lat: center.latitude, lng: center.longitude);
     if (!mounted) return;
-    setState(() => _placing = null);
+    // A refused move leaves the pin up, to try again or cancel.
+    if (result is! Failure) setState(() => _placing = null);
     _report(result, l10n.placePositionSaved);
   }
 
@@ -672,7 +705,9 @@ class _TripPlaceScreenState extends ConsumerState<TripPlaceScreen> {
                   return l10n.placeSpotWay(dir, '${s.estimated ? '~' : ''}${distanceText(m)}');
                 }(),
                 onSelect: () => _select(s),
-                onMenu: canEdit && s.frames.isNotEmpty ? () => _spotSheet(place, s) : null,
+                // A spot of library frames only (no stop frame) can't be
+                // moved or named here: the library's frames stay its own.
+                onMenu: canEdit && s.frames.any((f) => f.stopId != null) ? () => _spotSheet(place, s) : null,
                 onFrame: (i) => _openFrame(place, s, i),
               ),
             ),
@@ -697,6 +732,7 @@ class _TripPlaceScreenState extends ConsumerState<TripPlaceScreen> {
                     minLines: 3,
                     maxLines: 10,
                     maxLength: maxTripNoteLength,
+                    inputFormatters: [Utf16LengthLimit(maxTripNoteLength)],
                     textCapitalization: TextCapitalization.sentences,
                     decoration: InputDecoration(hintText: l10n.placeNotesHint),
                     onChanged: _onNoteChanged,
@@ -808,6 +844,7 @@ class _SpotSheetState extends State<_SpotSheet> {
                 key: const Key('spotNoteField'),
                 controller: _note,
                 maxLength: maxFrameNoteLength,
+                inputFormatters: [Utf16LengthLimit(maxFrameNoteLength)],
                 decoration: InputDecoration(labelText: l10n.placeSpotNoteLabel, hintText: l10n.placeSpotNoteHint),
                 onSubmitted: (_) => _pop('note'),
               ),

@@ -2,6 +2,25 @@ import 'package:drift/drift.dart' show Value;
 
 import '../../../core/database/database.dart';
 
+/// The longest trip note, in UTF-16 code units: Dart's `String.length`, and
+/// what the Firestore rules' `size()` counts. The rules refuse a longer note,
+/// and with it the rest of the trip's upload.
+const maxTripNoteLength = 2000;
+
+/// The longest note of a spot (a frame's `note`), counted the same way; the
+/// rules refuse a longer one in `frameShots`.
+const maxFrameNoteLength = 100;
+
+/// [text] cut to at most [max] UTF-16 code units, without splitting a
+/// surrogate pair.
+String clampText(String text, int max) {
+  if (text.length <= max) return text;
+  var end = max;
+  final last = text.codeUnitAt(end - 1);
+  if (last >= 0xD800 && last <= 0xDBFF) end--;
+  return text.substring(0, end).trimRight();
+}
+
 /// The longest group name, in characters. The Firestore rules refuse a
 /// longer `stops.area`, and with it the rest of the trip's upload.
 const maxGroupNameLength = 100;
@@ -59,13 +78,13 @@ final _spotSeparators = RegExp(r'^[\s,、・·\-–—/(（:：]+');
 /// when the stop becomes a spot of another (see [frameAsSpotOf]).
 String spotLabel(Stop stop, String? group) {
   final note = stop.note?.trim();
-  if (note != null && note.isNotEmpty) return note.split('\n').first.trim();
+  if (note != null && note.isNotEmpty) return clampText(note.split('\n').first.trim(), maxFrameNoteLength);
   final name = stop.name.trim();
   if (group != null && name.startsWith(group)) {
     final rest = name.substring(group.length).replaceFirst(_spotSeparators, '').trim();
-    if (rest.isNotEmpty) return rest;
+    if (rest.isNotEmpty) return clampText(rest, maxFrameNoteLength);
   }
-  return name;
+  return clampText(name, maxFrameNoteLength);
 }
 
 /// What [frame] of [stop] takes on when [stop] is merged into another stop

@@ -1,3 +1,5 @@
+import 'dart:io';
+
 import 'package:drift/drift.dart' hide isNull, isNotNull;
 import 'package:drift/native.dart';
 import 'package:flutter/material.dart';
@@ -119,8 +121,18 @@ void main() {
       expect(bay.deletedAt, isNotNull);
       expect(bay.mergedInto, 's-gate');
       expect((await stop('c-1')).name, 'Cafe', reason: 'unplanned: the smallest id');
-      expect((await stop('c-2')).mergedInto, 'c-1');
+      final counter = await stop('c-2');
+      expect((counter.deletedAt, counter.area, counter.name), (null, null, 'Cafe counter'), reason: 'no frame to be a spot of: a place of its own');
       expect((await stop('s-other')).name, '平等院');
+    });
+
+    test("a member's note that doesn't fit on a spot goes into the place's note", () async {
+      await (db.update(db.stops)..where((s) => s.id.equals('s-bay')))
+          .write(const StopsCompanion(note: Value('Third bay, upstream side\nBring a tripod')));
+      await service.foldTrip('t');
+      expect((await stop('s-gate')).note, 'Third bay, upstream side\nBring a tripod');
+      final bay = (await framesOf('s-gate')).firstWhere((f) => f.localPath == '/f/bay.png');
+      expect(bay.note, 'Third bay, upstream side', reason: 'its first line still names the spot');
     });
 
     test('frames take their stop\'s position and short name, and nothing is lost', () async {
@@ -203,8 +215,29 @@ void main() {
     await PlaceFoldService(b, DriftTripRepository(b, null, 'u2')).foldTrip('t');
     Future<List<String>> live(AppDatabase db) async =>
         [for (final s in await (db.select(db.stops)..where((s) => s.deletedAt.isNull())..orderBy([(s) => OrderingTerm(expression: s.id)])).get()) s.id];
-    expect(await live(a), ['c-1', 's-gate', 's-other']);
+    // c-2 has no frame to be a spot of Cafe, so it stays a place of its own.
+    expect(await live(a), ['c-1', 'c-2', 's-gate', 's-other']);
     expect(await live(b), await live(a));
+  });
+
+  test("a record it can't read folds nothing, and a write replaces it whole", () async {
+    final dir = await Directory.systemTemp.createTemp('fold');
+    addTearDown(() => dir.delete(recursive: true));
+    final store = FilePlaceFoldStore(directory: () async => dir);
+    expect((await store.read()).since, isNull, reason: 'no file yet: the first run');
+
+    File('${dir.path}/place_fold.json').writeAsStringSync('{"since": 1, "do');
+    expect(store.read, throwsA(anything));
+    final db = AppDatabase.forTesting(NativeDatabase.memory());
+    addTearDown(db.close);
+    await seed(db);
+    final service = PlaceFoldService(db, DriftTripRepository(db, null, 'u1'));
+    await expectLater(service.foldPrivateTripsOnce(store), throwsA(anything));
+    expect((await (db.select(db.stops)..where((s) => s.deletedAt.isNotNull())).get()), isEmpty);
+
+    await store.write(PlaceFoldState(since: DateTime(2026, 11, 1), done: const {'t'}));
+    expect((await store.read()).done, {'t'});
+    expect(File('${dir.path}/place_fold.json.tmp').existsSync(), isFalse);
   });
 
   test('private trips fold once, the first time; shared ones and newer ones wait', () async {

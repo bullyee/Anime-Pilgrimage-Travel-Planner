@@ -135,14 +135,22 @@ class _PhotosScreenState extends ConsumerState<PhotosScreen> {
     setState(() => _picks = next.selected);
   }
 
-  void _makeImage(List<PhotoEntry> pairs) {
+  bool _opening = false;
+
+  Future<void> _makeImage(List<PhotoEntry> pairs) async {
     final picks = _picks;
-    if (picks == null || picks.isEmpty) return;
+    if (_opening || picks == null || picks.isEmpty) return;
     final byId = {for (final e in pairs) e.photo.id: e};
     final picked = [for (final id in picks) ?byId[id]];
+    if (picked.isEmpty) return;
     // Above the app frame, so its bottom bar and Shoot button stay off the
-    // title field.
-    Navigator.of(context, rootNavigator: true).push(MaterialPageRoute<void>(builder: (_) => ShareImageScreen(pairs: picked)));
+    // title field. Once, however fast the button is tapped.
+    _opening = true;
+    try {
+      await Navigator.of(context, rootNavigator: true).push(MaterialPageRoute<void>(builder: (_) => ShareImageScreen(pairs: picked)));
+    } finally {
+      _opening = false;
+    }
   }
 
   @override
