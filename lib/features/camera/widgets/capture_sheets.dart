@@ -13,7 +13,6 @@ import '../../library/providers/place_providers.dart';
 import '../../library/widgets/place_page_parts.dart' show framePathOnDevice;
 import '../../trip/providers/trip_list_providers.dart';
 import '../../trip/providers/trip_providers.dart' show tripRepositoryProvider;
-import '../../trip/screens/stop_screen.dart' show stopFrames;
 import '../services/photo_edit_route.dart';
 
 // Sheets and routing shared by both Anime Camera flows — the in-app camera

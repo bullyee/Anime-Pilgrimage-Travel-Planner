@@ -15,7 +15,7 @@ import 'package:trip_planner/features/auth/providers/auth_provider.dart';
 import 'package:trip_planner/features/camera/providers/camera_provider.dart';
 import 'package:trip_planner/features/camera/screens/camera_screen.dart';
 import 'package:trip_planner/features/camera/services/anime_camera_launcher.dart'
-    show debugAnimeCameraSupportedOverride;
+    show debugAnimeCameraSupportedOverride, resolvePlaceReferenceFrames;
 import 'package:trip_planner/features/camera/widgets/capture_sheets.dart' show spotFramesOnDevice;
 import 'package:trip_planner/features/library/providers/place_providers.dart';
 import 'package:trip_planner/features/library/repositories/place_repository.dart';
@@ -362,5 +362,72 @@ void main() {
     expect(pushedCameraUri?.queryParameters['frame'], 'rf_nav');
     expect(container.read(cameraProvider).referenceImageId, 'rf_nav');
     expect(container.read(cameraProvider).effectiveReferencePath, _tinyPngDataUrl);
+  });
+
+  testWidgets('resolvePlaceReferenceFrames resolves cached link-only frame without throwing on null localPath',
+      (tester) async {
+    const cachedUrl = 'https://example.com/cached_anitabi.jpg';
+    late String expectedCachedPath;
+
+    await tester.runAsync(() async {
+      await db.into(db.places).insert(
+            PlacesCompanion.insert(
+              placeKey: 'p_cached',
+              name: 'Cached Spot',
+              lat: 34.89,
+              lng: 135.80,
+              visibility: const Value('saved'),
+            ),
+          );
+      await seedCacheFile(cachedUrl);
+      expectedCachedPath = (await cacheService.getCacheFile(cachedUrl)).path;
+      await db.into(db.newReferenceImages).insert(
+            NewReferenceImagesCompanion.insert(
+              id: 'rf_local',
+              placeKey: const Value('p_cached'),
+              localPath: const Value(_tinyPngDataUrl),
+              createdAt: Value(DateTime(2026, 1, 1)),
+            ),
+          );
+      await db.into(db.newReferenceImages).insert(
+            NewReferenceImagesCompanion.insert(
+              id: 'rf_cached_link',
+              placeKey: const Value('p_cached'),
+              remoteUrl: const Value(cachedUrl),
+              createdAt: Value(DateTime(2026, 1, 2)),
+            ),
+          );
+    });
+
+    late WidgetRef capturedRef;
+    await tester.pumpWidget(
+      ProviderScope(
+        overrides: baseOverrides(),
+        child: Consumer(
+          builder: (_, ref, _) {
+            capturedRef = ref;
+            return const SizedBox();
+          },
+        ),
+      ),
+    );
+
+    await tester.runAsync(() async {
+      final picked = (await placeRepo.getReferenceImage('rf_cached_link'))!;
+      final resolved = await resolvePlaceReferenceFrames(
+        capturedRef,
+        placeKey: 'p_cached',
+        picked: picked,
+      );
+      expect(resolved, isNotNull);
+      expect(resolved!.index, 1);
+      expect(
+        resolved.frames.map((s) => (s.imageId, s.path)).toList(),
+        [
+          ('rf_local', _tinyPngDataUrl),
+          ('rf_cached_link', expectedCachedPath),
+        ],
+      );
+    });
   });
 }

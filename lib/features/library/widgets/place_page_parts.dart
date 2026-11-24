@@ -23,12 +23,9 @@ import '../controllers/place_controller.dart';
 import '../models/frames.dart';
 import '../providers/place_providers.dart';
 
-// The parts of a place's page, shared by a library place and a trip's stop.
+export '../models/frames.dart' show frameHasImage;
 
-/// Whether a frame has an image to show: a file on the device, or a link
-/// that the thumbnail cache can fetch (a frame on a stop someone else added).
-bool frameHasImage(NewReferenceImage f) =>
-    (f.localPath?.isNotEmpty ?? false) || (f.remoteUrl?.isNotEmpty ?? false);
+// The parts of a place's page, shared by a library place and a trip's stop.
 
 /// A local copy of a frame that only has a link, from the thumbnail cache.
 /// Null while offline or when the host refuses.
