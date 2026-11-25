@@ -10,7 +10,9 @@ import '../../library/models/frames.dart';
 import '../../library/models/library_entry.dart';
 import '../../library/providers/library_providers.dart';
 import '../../library/providers/place_providers.dart';
+import '../../library/widgets/place_page_parts.dart' show framePathOnDevice;
 import '../../trip/providers/trip_list_providers.dart';
+import '../../trip/providers/trip_providers.dart' show tripRepositoryProvider;
 import '../services/photo_edit_route.dart';
 
 // Sheets and routing shared by both Anime Camera flows — the in-app camera
@@ -242,13 +244,42 @@ class _Header extends StatelessWidget {
 /// [placeKey]'s anime frames that have a file on the device, in the order
 /// the place shows them: what [pickPlaceFrame] offers, and what the camera
 /// switches between.
-Future<List<NewReferenceImage>> placeFramesOnDevice(WidgetRef ref, String placeKey) async => [
-      for (final f in await ref.read(placeRepositoryProvider).getReferenceImagesForPlace(placeKey))
-        if (((f.localPath?.isNotEmpty ?? false) &&
-                (!kIsWeb || isRemoteOrMemoryUri(f.localPath!))) ||
-            (kIsWeb && (f.remoteUrl?.isNotEmpty ?? false)))
-          f,
-    ];
+Future<List<NewReferenceImage>> placeFramesOnDevice(WidgetRef ref, String placeKey) =>
+    spotFramesOnDevice(ref, placeKey: placeKey);
+
+/// Reference frames available for a place and/or trip stop (place's own frames
+/// first, followed by stop-specific frames deduplicated against them), matching
+/// `stopFrames` order.
+Future<List<NewReferenceImage>> spotFramesOnDevice(
+  WidgetRef ref, {
+  String? placeKey,
+  String? stopId,
+  String? tripId,
+}) async {
+  Future<List<NewReferenceImage>> usable(Iterable<NewReferenceImage> rows) async {
+    final result = <NewReferenceImage>[];
+    for (final f in rows) {
+      if (await framePathOnDevice(ref, f) != null) result.add(f);
+    }
+    return result;
+  }
+
+  final placeFrames = placeKey == null
+      ? const <NewReferenceImage>[]
+      : await usable(await ref.read(placeRepositoryProvider).getReferenceImagesForPlace(placeKey));
+
+  String? resolvedStopId = stopId;
+  if (resolvedStopId == null && tripId != null && placeKey != null) {
+    final stops = await ref.read(tripRepositoryProvider).getStopsForTrip(tripId);
+    resolvedStopId = stops.where((s) => s.placeKey == placeKey).firstOrNull?.id;
+  }
+
+  final stopList = resolvedStopId == null
+      ? const <NewReferenceImage>[]
+      : await usable(await ref.read(tripRepositoryProvider).getReferenceImagesForStop(resolvedStopId));
+
+  return stopFrames(place: placeFrames, stop: stopList);
+}
 
 String? _usableFrameSource(NewReferenceImage frame) {
   final local = frame.localPath;
@@ -260,15 +291,22 @@ String? _usableFrameSource(NewReferenceImage frame) {
   return null;
 }
 
-/// Sheet of [placeKey]'s anime frames. A place with a single frame skips the
-/// sheet. Returns the picked frame once its file is confirmed on the device;
-/// null when the sheet is dismissed or the place has none (with a snackbar).
+/// Sheet of [placeKey]'s (and optionally [stopId]'s) anime frames. A single
+/// frame skips the sheet. Returns the picked frame once its file is confirmed on
+/// the device; null when the sheet is dismissed or none exist (with a snackbar).
 Future<NewReferenceImage?> pickPlaceFrame(
   BuildContext context,
   WidgetRef ref,
-  String placeKey,
-) async {
-  final frames = await placeFramesOnDevice(ref, placeKey);
+  String placeKey, {
+  String? stopId,
+  String? tripId,
+}) async {
+  final frames = await spotFramesOnDevice(
+    ref,
+    placeKey: placeKey,
+    stopId: stopId,
+    tripId: tripId,
+  );
   if (!context.mounted) return null;
   if (frames.isEmpty) {
     ScaffoldMessenger.of(context).showSnackBar(
@@ -345,7 +383,7 @@ Future<NewReferenceImage?> pickPlaceFrame(
         );
   if (picked == null) return null;
 
-  if (!await mediaExists(_usableFrameSource(picked))) {
+  if (await framePathOnDevice(ref, picked) == null) {
     if (context.mounted) {
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(content: Text("That frame's file is missing from this phone.")),

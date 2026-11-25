@@ -309,6 +309,7 @@ class _PilgrimageDayMapScreenState extends ConsumerState<PilgrimageDayMapScreen>
           ref,
           placeKey: stop.placeKey,
           tripId: widget.tripId,
+          stopId: stop.id,
           frames: frames,
           index: index,
         );
