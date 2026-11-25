@@ -17,7 +17,7 @@ Your library and your trips live on your phone. **No account is needed, and ever
 ## How it works
 
 1. **Collect places.** Import a whole anime's pilgrimage spots from Anitabi, or add your own on the map. They go into your **library**, labelled by anime, tag and region.
-2. **Plan a trip.** Add places to a trip as stops, and arrange them day by day with start times, stays and travel between them.
+2. **Plan a trip.** Add places to a trip as stops, and arrange them day by day, with times if you want them.
 3. **Plan it together.** Invite friends with a link, a QR code or a 6-letter code. Everyone's changes sync.
 4. **Recreate the scene.** At each spot, float the anime frame over your camera, match the framing, and take your own version.
 
@@ -28,7 +28,7 @@ Your library and your trips live on your phone. **No account is needed, and ever
 - 📚 **Keep a library of places** with their anime frames, labels, facts, your own note, your visits and your photos.
 - ⬇️ **Import spots from Anitabi** by searching an anime: pick the spots you want, with their frames and coordinates.
 - 🗺️ **See your places on a map**, coloured by anime, and find new ones by name, by a Google Maps link or by coordinates. Maps you've looked at work offline.
-- 🗓️ **Plan trips day by day**: drag stops between days, set times, keep backup days for rain, and pin a day to a date. Group stops that are close together, or merge ones that are the same spot.
+- 🗓️ **Plan trips day by day**: drag stops between days, add times if you want, keep backup days for rain, and pin a day to a date. Group stops that are close together, or merge ones that are the same spot.
 - 👥 **Share a trip** with friends who can edit it or only view it, and see it sync as they change it.
 - 📍 **Shoot where you stand**: **Shoot** offers the frames of your places within about 150 m, and the day map shows the day's stops around you.
 - 📸 **Recreate scenes with the Anime Camera**, with the frame floating over your camera. On Android it opens your phone's own camera app, so you keep its HDR and night mode.
@@ -50,7 +50,7 @@ The bar at the bottom of every main screen has **Home**, **Trips**, **Shoot** *(
 
 There's no sign-in on the home screen. Sharing, inviting and joining a trip ask you to sign in with Google.
 
-**Settings** (the gear at the top of Home, or the account button in My Trips once you're signed in) has your account and **Sign out**, **Back up to a file** and **Restore from a file**, how much space the app takes with **Clear map tiles**, and About: the version, the credits, the privacy policy and the open-source licences.
+**Settings** (the gear at the top of Home, or the account button in My Trips once you're signed in) has your account and **Sign out**, **Language** (English, Traditional Chinese or Japanese, or the phone's; only part of the app is translated so far), **Back up to a file** and **Restore from a file**, how much space the app takes with **Clear map tiles**, and About: the version, the credits, the privacy policy and the open-source licences.
 
 ---
 
@@ -90,7 +90,7 @@ The frames download after you save. If you close the app before they finish, imp
 
 <img src="docs/screenshots/place.png" width="240" align="right" alt="A place's page, led by its anime frame">
 
-Tap a place to open its page. The anime frames lead; swipe between them.
+Tap a place to open its page. The anime frames lead; swipe between them, or on a computer use the arrows or the dots.
 
 - **Take photo** opens the Anime Camera with this frame. **Float frame** floats it over other apps *(Android)*. **Directions** opens your maps app.
 - **Add to trip** adds the place to a trip as a stop.
@@ -110,7 +110,7 @@ My note, your visits and your photos are only yours, even on a shared trip.
 
 1. Tap **New trip**, give it a name, a description if you like (it shows under the name in My Trips), a start date if you know it, and the number of days. The menu's **Edit trip** changes them later.
 2. Open the trip. It opens on **Plan**, next to **Stops** and **Members**.
-3. On **Stops**, tap **Add stops**: **From my library**, or **New spot** on the map. Places can come from your library, or from the import (**Save, and add them to a trip**).
+3. On **Stops**, tap **Add stops**: **From my library**, or **New spot** on the map. Places can come from your library, or from the import (**Save, and add them to a trip**). From the library, **Add to:** puts them straight onto a day, or into the backlog.
 
 **Tidy the stops:** Anitabi has one spot per scene, so one café can come in as several stops. On **Stops**, hold a stop to pick several, then:
 - **Group** stops that are close together, and name the group. A group shows as one row; open it to rename it or **Ungroup**.
@@ -126,15 +126,17 @@ The **map** button at the top of a trip opens its day map (see [On the day](#5-o
 
 <img src="docs/screenshots/planner.png" width="240" align="right" alt="The day planner showing one day">
 
-The plan shows one day at a time; swipe between days. The grid button shows every day at once, with the backup days and the **backlog** (stops not on a day yet). Tap the circle next to a stop to mark it visited.
+The plan shows one day at a time; swipe between days, or on a computer use **‹ ›**, the day buttons or the ← and → keys. The grid button shows every day at once, with the backup days and the **backlog** (stops not on a day yet). Tap the circle next to a stop to mark it visited.
 
 Tap the **pencil** to edit the plan:
 - **Hold a stop and drag it** within the day, onto another day (hold it at the screen's edge), or onto the backlog. Undo brings it back.
 - **A group** is one block on its day, such as "11:00–13:00 Café Rose · 3 stops", that opens to its stops. Drag its header to move the whole group. To move one stop on its own, tap it and choose **Take out of the group**.
-- **Tap a stop** to set its start time, its stay, and the travel time to the next stop, or to **Remove from the trip**. The rest of the day moves with it, and a stop that would start before the one before it ends is marked. Times after midnight read 25:30 and so on.
+- **Tap a stop** to move it up or down, to **Remove from the trip**, or, under **Add time (optional)**, to set its start time, its stay and the travel time to the next stop. A day without times shows its stops numbered in order. Once a day has times, the rest of the day moves with a change, and a stop that would start before the one before it ends is marked. Times after midnight read 25:30 and so on.
 - **A day's menu** names it ("Uji", "Rainy day"), pins it to a date, moves it to the backup days, or removes it.
 - **In the grid**, drop one day on another to swap them.
 - **Add Day** and **Add a backup day** come after the last day.
+
+An empty day offers **Add stops to this day**, even without the pencil.
 
 While the trip is under way, the plan opens on today.
 
@@ -169,11 +171,14 @@ Sharing needs a Google sign-in, for you and for the friends you invite.
 
 **Join:**
 - **Open the link** on an Android phone with the app installed, or **scan the QR code** with your phone's camera.
+- **On a computer or an iPhone**, the link opens the web app in the browser (see [Good to know](#good-to-know)); sign in with Google there to join.
 - Or in **My Trips**, tap **Join a trip** and type the code or paste the link.
 - You see the trip, who invited you and what you can do, then tap **Join trip**.
 
 **Once it's shared:**
 - **Everyone's changes sync** whenever they're online: days, stops, times, trip notes and the stops' facts. Your library, your notes and your photos stay on your phone.
+- **A trip you've just joined** says **Getting this trip's days and stops…** until it has all come down. On Android it then offers to download the frames others shared on Google Drive.
+- **Signed out?** Your shared trips stay on the phone and say so: sign in again to sync them, see who's in them, or leave them.
 - **The Members tab** shows who's in the trip. The owner can make someone view only or let them edit, make them the owner, remove them, stop an invite, or **Stop sharing**.
 - **Shared trips' cards** in My Trips show the others' avatars, as in "You and Aki" or "You and 3 others".
 - **Leave trip** (in the Members tab or the **⋮** menu) takes you out of a trip someone else owns. Only the owner can delete a shared trip.
@@ -191,7 +196,7 @@ Sharing needs a Google sign-in, for you and for the friends you invite.
 - **Download frames for offline** fetches the trip's frames to your phone. Frames your friends shared download by themselves on Wi-Fi.
 - No Google account? **Share local frames** makes a file you can send, and **Import local frames** reads one.
 
-> 💡 If a link opens in a chat app's browser (LINE, Discord) and the app doesn't open, copy the 6-letter code from the page and enter it under **Join a trip**.
+> 💡 If a link opens in a chat app's own browser (LINE, Instagram), Google sign-in may not work there: the page says so and offers **Copy link**, so you can open it in Chrome or Safari. On Android it also offers **Open in the app** and **Get the APK**. Or enter the 6-letter code under **Join a trip** in the app.
 
 <br clear="right">
 
@@ -258,16 +263,16 @@ The first time you open v0.2.0 or later, your data moves to the new library:
 - **Back up before you switch phones.** Shared trips are kept in the cloud, but your library, private trips and photos live only on this phone. Nothing backs up by itself: use **Back up to a file** before switching phones or clearing app data.
 - **Where features work:**
 
-  | Feature | Android | iOS | Desktop |
-  |---------|:-------:|:---:|:-------:|
-  | Library, trips, planner, sharing | ✅ | ✅ | ✅ |
-  | Opening invite links in the app | ✅ | — | — |
-  | Anime Camera (frame overlay) and Shoot here | ✅ | ✅ | — |
-  | Several shots, then pick | ✅ | — | — |
-  | Floating Reference | ✅ | — | — |
-  | Photo editor | ✅ | ✅ | ✅ (no Compose) |
+  | Feature | Android | iOS | Desktop | Web |
+  |---------|:-------:|:---:|:-------:|:---:|
+  | Library, trips, planner, sharing | ✅ | ✅ | ✅ | ✅ |
+  | Opening invite links in the app | ✅ | — | — | ✅ |
+  | Anime Camera (frame overlay) and Shoot here | ✅ | ✅ | — | ✅ (with a camera) |
+  | Several shots, then pick | ✅ | — | — | — |
+  | Floating Reference | ✅ | — | — | — |
+  | Photo editor | ✅ | ✅ | ✅ (no Compose) | ✅ (no Compose) |
 
-  A web version, from the same app, is on its way; it isn't online yet.
+  **The web app** is the same app in a browser, at [trip-planner-2775c.web.app](https://trip-planner-2775c.web.app); invite links open it. It keeps your library and trips in the browser's own storage: in a private window nothing stays after the tab closes, and Safari may delete it after 7 days without a visit unless the app is on your home screen.
 
   On Android, the camera asks once for permission to display over other apps, which the floating frame needs. With an APK you downloaded, turn on **Allow restricted settings** in the app's App info first.
 
@@ -302,7 +307,7 @@ flutter build web --wasm --release
 firebase deploy --only hosting
 ```
 
-Source is organized feature-first under `lib/features/` (`library`, `trip`, `planner`, `sharing`, `sync`, `camera`, `anime`, `poi`, `auth`, `home`), with shared infrastructure under `lib/core/` (`database`, `router`, `providers`, `services`). `firestore.rules` holds the cloud rules, and `web/` holds the web client, PWA manifest, App Links (`.well-known/assetlinks.json`), privacy policy and terms. See `CLAUDE.md` for the architecture and conventions, and `CHANGELOG.md` for release history. GitHub Actions runs the tests and the rules tests on every pull request and builds the APK when a version tag is pushed.
+Source is organized feature-first under `lib/features/` (`library`, `trip`, `planner`, `sharing`, `sync`, `camera`, `anime`, `poi`, `auth`, `home`), with shared infrastructure under `lib/core/` (`database`, `router`, `providers`, `services`, `l10n`). The translations are ARB files in `lib/l10n/` (English, Traditional Chinese, Simplified Chinese, Japanese), built by `flutter gen-l10n`; screens use `context.l10n`. `firestore.rules` holds the cloud rules, and `web/` holds the web client, PWA manifest, App Links (`.well-known/assetlinks.json`), privacy policy and terms. See `CLAUDE.md` for the architecture and conventions, and `CHANGELOG.md` for release history. GitHub Actions runs the tests and the rules tests on every pull request and builds the APK when a version tag is pushed.
 
 Contributors using Claude Code get three project skills: `run-app` (build, launch, and drive the app on the Android emulator), `verify` (`tool/verify.ps1`: the unit tests with compact output, and the rules tests with `-WithEmulator`), and `release` (version, docs, build, smoke test, and a confirmation checklist before anything is published).
 

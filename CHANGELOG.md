@@ -2,11 +2,17 @@
 
 Notable changes to Trip Planner. Builds are published as Android pre-releases on [GitHub Releases](https://github.com/bullyee/trip_planner/releases). Versions follow [Semantic Versioning](https://semver.org); before 1.0, minor versions may change behavior.
 
-## [0.3.1] - 2026-11-16
+## [0.4.0] - 2026-11-25
 
-Frames you add yourself now reach everyone in a shared trip, through your own Google Drive, and uploads and downloads run in the background. The app gets a bottom bar on every main screen with a Photos tab, a Settings page, maps that group, cluster and work offline where you've already looked, and a route export for other map apps. The same app also builds as a web app (not online yet).
+Planning a trip together now keeps track: see who changed what, bring back what was deleted, and compare a place with Anitabi and your library. Frames you add yourself reach everyone in a shared trip through your own Google Drive, and uploads and downloads run in the background. The app gets a bottom bar with a Photos tab, Settings with a language choice, maps that group and cluster, optional dates and times in the plan, and a route export. And it runs in a browser at [trip-planner-2775c.web.app](https://trip-planner-2775c.web.app), where invite links now open. v0.3.1 was never released; its changes are part of this version.
 
 ### Added
+- **What changed** ([#177](https://github.com/bullyee/trip_planner/pull/177)). The clock at the top of a shared trip lists who changed what in the last 30 days, newest first ("Mika moved Uji Bridge to Day 3"); tap an entry about a stop to open it. A dot on the trip's card and on the clock means someone else changed the trip since you last looked.
+- **Recently deleted** ([#177](https://github.com/bullyee/trip_planner/pull/177)). A trip's **⋮** menu keeps deleted days and stops for 30 days, with who deleted them and when; **Restore** puts one back where it was, with its schedule. A deleted trip waits under **My Trips → Recently deleted** for 30 days; only its owner can restore it, and a shared trip comes back for everyone.
+- **Compare a place** ([#178](https://github.com/bullyee/trip_planner/pull/178)). When Anitabi changed a spot since you imported it, or your library has a trip's stop differently, a line on the page says so ("Anitabi moved this spot 120 m SE"). Tap it to see both side by side and pick **Use this** or **Keep mine**, field by field. A joined trip's spots that aren't in your library offer **Save to my library** and **Save all**.
+- **The web app is online** at [trip-planner-2775c.web.app](https://trip-planner-2775c.web.app) ([#154](https://github.com/bullyee/trip_planner/pull/154), [#156](https://github.com/bullyee/trip_planner/pull/156), [#179](https://github.com/bullyee/trip_planner/pull/179), [#180](https://github.com/bullyee/trip_planner/pull/180)): the same app in a browser. Invite links open it, so friends can join a trip without installing anything. On an Android browser the join page offers **Open in the app** and **Get the APK**; in LINE's or Instagram's own browser it says to open the link in Chrome or Safari, where Google sign-in works, with **Copy link**. The library and trips are kept in the browser's own storage, and the camera works where the browser has one.
+- **Language** ([#185](https://github.com/bullyee/trip_planner/pull/185)): **Settings → Language** picks English, Traditional Chinese or Japanese, or follows the phone (the default). Only part of the app is translated so far; see Known issues.
+- **A joined trip says it's still coming down** ([#182](https://github.com/bullyee/trip_planner/pull/182)): "Getting this trip's days and stops…" until they've all arrived, then, on Android, an offer to download the frames others shared on Google Drive. On the web, closing the tab while a trip is still coming down asks first.
 - **Share your own frames with the trip** ([#158](https://github.com/bullyee/trip_planner/pull/158), [#162](https://github.com/bullyee/trip_planner/pull/162), [#152](https://github.com/bullyee/trip_planner/issues/152)). On a shared trip, **Members → Sync via my Google Drive** uploads the frames you added yourself to a folder of their own inside "Trip Planner Shared Frames" in your Drive and shares it by link, so everyone else in the trip sees them. Google asks once for access to the files the app creates; it can't see the rest of your Drive. **Anyone with the link can view these files.** Only people who can edit the trip can upload, and private trips never upload.
   - **Frame upload quality** is your choice: **Original** (the default; up to 1920 px, sent as the original file when it already fits), **Smaller** or **Smallest** (1280 px). Measured on 40 real 1920 × 1080 frames: about 283, 195 and 141 KB per frame.
   - **Taking them back:** deleting, unsharing or leaving a trip, or removing a stop or frame, deletes the Drive files nothing else needs; removals made offline wait and are retried. **Members → Remove my frames from Google Drive** does it for one trip, and **Settings → Remove shared frames from my Google Drive** for all of them.
@@ -18,9 +24,11 @@ Frames you add yourself now reach everyone in a shared trip, through your own Go
 - **The Photos tab** ([#160](https://github.com/bullyee/trip_planner/pull/160)): every photo, newest first, by day (with the trip) or by place. Tap one to see it next to its frame, with **Edit** and **Open the place**. **To edit** is a filter there; Home's "N photos to edit" card opens it.
 - **Settings** ([#163](https://github.com/bullyee/trip_planner/pull/163)), from the gear on Home or the account button in My Trips: your account and **Sign out**, the frame upload quality, **Back up to a file** / **Restore from a file** (moved from the Library's ⋮ menu), how much space the app takes with **Clear map tiles** and **Delete** for the cutout model, and About (version, credits, privacy policy, licences).
 - **Export a trip's route** ([#171](https://github.com/bullyee/trip_planner/pull/171), [#78](https://github.com/bullyee/trip_planner/issues/78)): the trip's **⋮** menu → **Export route (GPX)** or **(GeoJSON)**, for apps such as OsmAnd, Organic Maps or Google My Maps. Each day is a route in visiting order, with the planned time in the stop's description; backup days and the backlog come along, marked as such. Stops without coordinates are left out.
-- **A web version of the app** ([#154](https://github.com/bullyee/trip_planner/pull/154), [#156](https://github.com/bullyee/trip_planner/pull/156)): the same app builds for the browser (`flutter build web`, also `--wasm`). The library and trips are kept in the browser's own storage, links such as `/join/<code>` open the right page, and the camera works where the browser has one. It isn't hosted anywhere yet.
 
 ### Changed
+- **Dates and times are optional** ([#189](https://github.com/bullyee/trip_planner/pull/189)). A day without times shows its stops numbered in order instead of made-up times, and a trip without dates shows "Day 1", "Day 2" and how many days it has. A stop's start, stay and travel wait under **Add time (optional)**. An empty day offers **Add stops to this day** without the pencil, adding from the library can put places straight onto a day (**Add to:** Backlog, Day 1, …), and a stop's sheet has **Move up** and **Move down** while editing.
+- **On a computer** ([#188](https://github.com/bullyee/trip_planner/pull/188), [#190](https://github.com/bullyee/trip_planner/pull/190)): the plan has a day switcher (**‹ ›**, a button per day, the ← and → keys, and dragging with the mouse), and a place's frames switch with arrows, the dots or the mouse.
+- **Joining a trip on the web is faster** ([#188](https://github.com/bullyee/trip_planner/pull/188)): its days, stops and schedule come down in batches instead of one row at a time.
 - **The maps** ([#159](https://github.com/bullyee/trip_planner/pull/159)): the day map, the library's, a place's, Home's and the new spot picker now share one map.
   - **A group of stops is one pin** with a badge saying how many; its card steps through them. Pins are numbered in the day's order and turn grey with a check once visited.
   - **Crowded pins merge into a bubble** labelled with their numbers ("1–4") or a count. Tapping it zooms in; stops on the very same spot open as a list.
@@ -33,6 +41,11 @@ Frames you add yourself now reach everyone in a shared trip, through your own Go
 - Reopening the app after swiping it away returns to where you were, instead of starting over ([#161](https://github.com/bullyee/trip_planner/pull/161)).
 
 ### Fixed
+- **One refused change no longer stops a shared trip from syncing** ([#181](https://github.com/bullyee/trip_planner/pull/181)). "Couldn't sync" kept coming back when the cloud refused one entry; the other changes now go up, and the refused one stays on that phone.
+- **Joining from a link while signed out** no longer hangs on "Finding the trip…" after you sign in ([#187](https://github.com/bullyee/trip_planner/pull/187)).
+- **A shared trip on a signed-out phone** says to sign in, instead of saying you're already in when you open its invite again and the Members tab failing ([#186](https://github.com/bullyee/trip_planner/pull/186)).
+- **A trip opened on its own**, after joining from a link or reloading the web page, has a back arrow ([#183](https://github.com/bullyee/trip_planner/pull/183)).
+- **The in-app camera** (iPhone, web) shows a stop's frames over the camera; frames that came with a shared trip showed none ([#190](https://github.com/bullyee/trip_planner/pull/190)).
 - **Cancel during a Drive upload** no longer hangs on "Cancelling…": it stops the uploads in flight, and on a slow connection each file gets time in proportion to its size ([#162](https://github.com/bullyee/trip_planner/pull/162)).
 - **Signing in** from Settings, the invite sheet or Join keeps the screen you were on, with its back button ([#163](https://github.com/bullyee/trip_planner/pull/163)).
 - The "N frames to download" count updates after **Download frames for offline** finishes ([#165](https://github.com/bullyee/trip_planner/issues/165)).
@@ -42,11 +55,17 @@ Frames you add yourself now reach everyone in a shared trip, through your own Go
 - Settings' space used no longer counts the app's own files as your data ([#164](https://github.com/bullyee/trip_planner/issues/164), [#173](https://github.com/bullyee/trip_planner/pull/173)).
 
 ### Known issues
-- **Google may warn that it hasn't verified the app** when you allow Drive access; the verification is in progress.
-- **The web version isn't online yet**, and in a private window it keeps nothing after the tab closes (it warns when you leave).
+- **Only part of the app is translated.** In Chinese or Japanese, the bottom bar and Settings are translated and most other screens are still in English.
+- **The web app keeps its data in the browser.** In a private window nothing stays after the tab closes (it warns when you leave), and Safari may delete a website's data after 7 days without a visit unless it's on the home screen.
+- **Deleted days, stops and What changed entries stay in the cloud** after their 30 days. The app hides them, but they aren't purged from Firestore yet, which needs a paid plan.
 - The other known issues of v0.3.0 still apply, except the one about your own frames.
 
 ### Developer
+- Schema 15 ([#177](https://github.com/bullyee/trip_planner/pull/177)): `trip_activities` (What changed, 30 days) and `trip_views` (the unread dot, local only). `TripActivityLog` writes an entry in the same transaction as each change, pushed in the same batch to `tripsV2/{id}/activity` (append-only). Tombstones carry `expireAt`; a device that missed a purged one hides the row once a server snapshot no longer has it (`_markRowsGoneFromServer`).
+- Place comparison: field diffs between Anitabi, the library and a stop, ignoring moves under 15 m ([#178](https://github.com/bullyee/trip_planner/pull/178)).
+- Sync: a snapshot lands in one transaction and marks a joined trip as arriving (`tripArrivingProvider`) ([#182](https://github.com/bullyee/trip_planner/pull/182)); downstream rows are preloaded and written in batches, and last-write-wins compares milliseconds ([#188](https://github.com/bullyee/trip_planner/pull/188)); a refused activity entry is isolated and retried alone ([#181](https://github.com/bullyee/trip_planner/pull/181)).
+- Localization ([#185](https://github.com/bullyee/trip_planner/pull/185)): `flutter_localizations` with `flutter gen-l10n` from `lib/l10n/app_{en,zh_Hant,zh,ja}.arb`; `context.l10n`, `AppLocaleOption` and the remembered choice in `lib/core/l10n/`.
+- Hosting serves `build/web` (`flutter build web --wasm --release`), and `public/` is gone: `web/` holds `assetlinks.json`, the privacy policy and the terms ([#179](https://github.com/bullyee/trip_planner/pull/179)).
 - `lib/shared/map/` (`AppMap`, `MapPin`, `clusterPins`) and `features/trip/widgets/day_map_pins.dart`; flutter_map 7.0.2 → 8.3.2 with its built-in tile cache set up in `main()` ([#159](https://github.com/bullyee/trip_planner/pull/159)).
 - `MainActivity` keeps one cached `FlutterEngine` that outlives the Activity; `TransferService.kt` is a `dataSync` foreground service driven over the `trip_planner/transfers` channel; `frame_transfer_queue.dart` runs the jobs ([#161](https://github.com/bullyee/trip_planner/pull/161)).
 - go_router `StatefulShellRoute` with four branches in `AppFrame` ([#160](https://github.com/bullyee/trip_planner/pull/160)); the router lives as long as the app and auth changes only re-run its redirect ([#163](https://github.com/bullyee/trip_planner/pull/163)).
@@ -303,7 +322,7 @@ First Android demo build.
 ### Known issues
 - Photo re-edit overwrites the source (#17), camera crash on background/resume (#16), wrong trailing days in the calendar (#20), leaked dialog controllers (#19).
 
-[0.3.1]: https://github.com/bullyee/trip_planner/compare/v0.3.0...v0.3.1
+[0.4.0]: https://github.com/bullyee/trip_planner/compare/v0.3.0...v0.4.0
 [0.3.0]: https://github.com/bullyee/trip_planner/compare/v0.2.0...v0.3.0
 [0.2.0]: https://github.com/bullyee/trip_planner/compare/v0.1.3...v0.2.0
 [0.1.3]: https://github.com/bullyee/trip_planner/compare/v0.1.2...v0.1.3
