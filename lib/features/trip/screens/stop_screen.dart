@@ -11,6 +11,8 @@ import '../../camera/services/anime_camera_launcher.dart';
 import '../../library/controllers/library_controller.dart';
 import '../../library/controllers/place_controller.dart';
 import '../../library/models/frames.dart';
+
+export '../../library/models/frames.dart' show stopFrames;
 import '../../library/models/library_entry.dart' show labelKinds;
 import '../../library/models/place_diff.dart';
 import '../../library/providers/place_comparison_providers.dart';
@@ -52,21 +54,6 @@ bool movesWithGroup(PlannerView view, Stop stop, StopSlot? slot) {
   return slot != null
       ? slot.day.blocks.any((b) => b.isGroup && b.items.any((it) => it.stop.id == stop.id))
       : view.backlogEntries.any((e) => e.isGroup && e.stops.any((s) => s.id == stop.id));
-}
-
-/// The frames to shoot with on a stop: the user's own frames of the place
-/// first, then the stop's copies that aren't among them, such as frames
-/// someone else in the trip added.
-List<NewReferenceImage> stopFrames({required List<NewReferenceImage> place, required List<NewReferenceImage> stop}) {
-  final own = [for (final f in place) if (frameHasImage(f)) f];
-  bool same(NewReferenceImage a, NewReferenceImage b) =>
-      ((a.localPath?.isNotEmpty ?? false) && a.localPath == b.localPath) ||
-      ((a.remoteUrl?.isNotEmpty ?? false) && a.remoteUrl == b.remoteUrl);
-  return [
-    ...own,
-    for (final f in stop)
-      if (frameHasImage(f) && !own.any((o) => same(o, f))) f,
-  ];
 }
 
 /// A stop's facts in the order its page shows them.
@@ -493,7 +480,15 @@ class _StopScreenState extends ConsumerState<StopScreen> {
 
   /// The camera on [frames]' [index], with the stop's other frames to switch to.
   Future<void> _shoot(Stop stop, List<NewReferenceImage> frames, int index) =>
-      shootWithFrames(context, ref, placeKey: stop.placeKey, tripId: _tripId, frames: frames, index: index);
+      shootWithFrames(
+        context,
+        ref,
+        placeKey: stop.placeKey,
+        tripId: _tripId,
+        stopId: stop.id,
+        frames: frames,
+        index: index,
+      );
 
   Future<void> _float(NewReferenceImage frame) async {
     final path = await _framePath(frame);

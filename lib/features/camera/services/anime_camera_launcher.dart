@@ -48,6 +48,7 @@ Future<void> openAnimeCamera(
   WidgetRef ref, {
   String? placeKey,
   String? tripId,
+  String? stopId,
 }) async {
   if (!animeCameraSupported) return;
   if (placeKey == null) {
@@ -57,14 +58,20 @@ Future<void> openAnimeCamera(
   if (!kIsWeb && Platform.isAndroid) {
     await _shootWithPhoneCamera(context, ref, placeKey: placeKey, tripId: tripId);
   } else {
-    context.push(_inAppCameraLocation(placeKey, tripId));
+    context.push(_inAppCameraLocation(placeKey, tripId, stopId: stopId));
   }
 }
 
-String _inAppCameraLocation(String? placeKey, String? tripId, {String? frameId}) =>
+String _inAppCameraLocation(
+  String? placeKey,
+  String? tripId, {
+  String? stopId,
+  String? frameId,
+}) =>
     Uri(path: '/camera', queryParameters: {
       'place': ?placeKey,
       'trip': ?tripId,
+      'stop': ?stopId,
       'frame': ?frameId,
     }).toString();
 
@@ -182,9 +189,10 @@ class _Reference {
 
   const _Reference(this.frames, {this.index = 0, this.placeKey});
 
-  _Reference.single(String path, {String? imageId, this.placeKey})
-      : frames = [SeriesFrame(path, imageId: imageId)],
-        index = 0;
+  _Reference.single(String path)
+      : frames = [SeriesFrame(path)],
+        index = 0,
+        placeKey = null;
 
   String get path => frames[index].path;
 }
@@ -257,6 +265,7 @@ Future<void> shootWithFrames(
   WidgetRef ref, {
   required String placeKey,
   String? tripId,
+  String? stopId,
   List<NewReferenceImage> frames = const [],
   int index = 0,
 }) async {
@@ -281,7 +290,8 @@ Future<void> shootWithFrames(
   if (kIsWeb || !Platform.isAndroid) {
     // The in-app camera starts on the frame and offers the place's others.
     final start = reference?.frames[reference.index].imageId;
-    context.push(_inAppCameraLocation(placeKey, tripId, frameId: start));
+    final effectiveStopId = stopId ?? frames.map((f) => f.stopId).nonNulls.firstOrNull;
+    context.push(_inAppCameraLocation(placeKey, tripId, stopId: effectiveStopId, frameId: start));
     return;
   }
   await _shootWith(context, reference, placeKey: placeKey, tripId: tripId);
@@ -346,6 +356,24 @@ Future<void> _shootWith(
   ).location);
 }
 
+/// Builds the camera's ordered [SeriesFrame] list starting on [picked] for
+/// [placeKey], resolving cached link-only frames as well as local files.
+@visibleForTesting
+Future<({List<SeriesFrame> frames, int index})?> resolvePlaceReferenceFrames(
+  WidgetRef ref, {
+  required String placeKey,
+  required NewReferenceImage picked,
+}) async {
+  final all = await placeFramesOnDevice(ref, placeKey);
+  final startAt = all.indexWhere((f) => f.id == picked.id);
+  return seriesFrames(
+    startAt >= 0 ? all : [picked, ...all],
+    startAt >= 0 ? startAt : 0,
+    start: (f) => framePath(ref, f),
+    other: (f) => framePathOnDevice(ref, f),
+  );
+}
+
 /// Resolves a [_ReferenceSource.place] or [_ReferenceSource.gallery] pick to
 /// an image; null when the user backs out.
 Future<_Reference?> _pickReference(
@@ -359,14 +387,11 @@ Future<_Reference?> _pickReference(
       final key = placeKey ?? await pickPlaceKey(context, ref);
       if (key == null || !context.mounted) return null;
       final frame = await pickPlaceFrame(context, ref, key);
-      if (frame == null) return null;
+      if (frame == null || !context.mounted) return null;
       // The place's other frames come along, to switch to in the camera.
-      final frames = [
-        for (final f in await placeFramesOnDevice(ref, key)) SeriesFrame(f.localPath!, imageId: f.id),
-      ];
-      final index = frames.indexWhere((f) => f.imageId == frame.id);
-      if (index < 0) return _Reference.single(frame.localPath!, imageId: frame.id, placeKey: key);
-      return _Reference(frames, index: index, placeKey: key);
+      final resolved = await resolvePlaceReferenceFrames(ref, placeKey: key, picked: frame);
+      if (resolved == null) return null;
+      return _Reference(resolved.frames, index: resolved.index, placeKey: key);
     case _ReferenceSource.gallery:
       final XFile? picked;
       try {

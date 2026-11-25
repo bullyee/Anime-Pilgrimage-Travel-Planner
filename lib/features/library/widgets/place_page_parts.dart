@@ -1,6 +1,7 @@
 import 'dart:math' as math;
 
-import 'package:flutter/foundation.dart' show kIsWeb;
+import 'package:flutter/foundation.dart' show defaultTargetPlatform, TargetPlatform, kIsWeb;
+import 'package:flutter/gestures.dart' show PointerDeviceKind;
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
@@ -22,12 +23,9 @@ import '../controllers/place_controller.dart';
 import '../models/frames.dart';
 import '../providers/place_providers.dart';
 
-// The parts of a place's page, shared by a library place and a trip's stop.
+export '../models/frames.dart' show frameHasImage;
 
-/// Whether a frame has an image to show: a file on the device, or a link
-/// that the thumbnail cache can fetch (a frame on a stop someone else added).
-bool frameHasImage(NewReferenceImage f) =>
-    (f.localPath?.isNotEmpty ?? false) || (f.remoteUrl?.isNotEmpty ?? false);
+// The parts of a place's page, shared by a library place and a trip's stop.
 
 /// A local copy of a frame that only has a link, from the thumbnail cache.
 /// Null while offline or when the host refuses.
@@ -113,7 +111,7 @@ class SourceNote extends StatelessWidget {
   }
 }
 
-class FrameHero extends StatelessWidget {
+class FrameHero extends StatefulWidget {
   final List<NewReferenceImage> frames;
   final int index;
   final ValueChanged<int> onPage;
@@ -122,7 +120,62 @@ class FrameHero extends StatelessWidget {
   final VoidCallback? onAdd;
   final ValueChanged<int> onOpen;
 
-  const FrameHero({super.key, required this.frames, required this.index, required this.onPage, required this.onOpen, this.onAdd});
+  const FrameHero({
+    super.key,
+    required this.frames,
+    required this.index,
+    required this.onPage,
+    required this.onOpen,
+    this.onAdd,
+  });
+
+  @override
+  State<FrameHero> createState() => _FrameHeroState();
+}
+
+class _FrameHeroState extends State<FrameHero> {
+  late final PageController _controller = PageController(
+    initialPage: widget.frames.isEmpty ? 0 : widget.index.clamp(0, widget.frames.length - 1),
+  );
+  int? _animatingTo;
+
+  @override
+  void didUpdateWidget(covariant FrameHero oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    if (widget.frames.isEmpty) return;
+    final target = widget.index.clamp(0, widget.frames.length - 1);
+    if (widget.index != oldWidget.index || widget.frames.length != oldWidget.frames.length) {
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        if (!mounted || !_controller.hasClients || _animatingTo == target) return;
+        final current = _controller.page?.round() ?? _controller.initialPage;
+        if (current != target) _controller.jumpToPage(target);
+      });
+    }
+  }
+
+  @override
+  void dispose() {
+    _controller.dispose();
+    super.dispose();
+  }
+
+  void _goTo(int page) {
+    if (widget.frames.isEmpty || !_controller.hasClients) return;
+    final target = page.clamp(0, widget.frames.length - 1);
+    _animatingTo = target;
+    _controller
+        .animateToPage(target, duration: const Duration(milliseconds: 220), curve: Curves.easeOut)
+        .whenComplete(() {
+      if (_animatingTo == target) _animatingTo = null;
+    });
+  }
+
+  bool _showArrows(BuildContext context) {
+    final desktop = defaultTargetPlatform == TargetPlatform.macOS ||
+        defaultTargetPlatform == TargetPlatform.windows ||
+        defaultTargetPlatform == TargetPlatform.linux;
+    return desktop || MediaQuery.sizeOf(context).width >= 600;
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -132,7 +185,7 @@ class FrameHero extends StatelessWidget {
     final maxHeroHeight = math.min(380.0, screenHeight * 0.45);
     final maxHeroWidth = maxHeroHeight * 16 / 9;
 
-    if (frames.isEmpty) {
+    if (widget.frames.isEmpty) {
       // A place without frames still gets a hero, so the page keeps its shape.
       return Center(
         child: ConstrainedBox(
@@ -149,9 +202,9 @@ class FrameHero extends StatelessWidget {
                   Icon(Icons.movie_filter_outlined, size: 44, color: p.wisteria),
                   const SizedBox(height: 8),
                   Text('No anime frames yet', style: theme.textTheme.titleMedium),
-                  if (onAdd != null) ...[
+                  if (widget.onAdd != null) ...[
                     const SizedBox(height: 4),
-                    TextButton.icon(onPressed: onAdd, icon: const Icon(Icons.add_photo_alternate_outlined), label: const Text('Add a frame')),
+                    TextButton.icon(onPressed: widget.onAdd, icon: const Icon(Icons.add_photo_alternate_outlined), label: const Text('Add a frame')),
                   ],
                 ],
               ),
@@ -160,7 +213,10 @@ class FrameHero extends StatelessWidget {
         ),
       );
     }
-    final caption = frameCaption(frames[index]);
+    final index = widget.index.clamp(0, widget.frames.length - 1);
+    final caption = frameCaption(widget.frames[index]);
+    final baseScroll = ScrollConfiguration.of(context);
+    final showArrows = widget.frames.length > 1 && _showArrows(context);
     return Column(
       children: [
         Center(
@@ -171,37 +227,84 @@ class FrameHero extends StatelessWidget {
               child: Stack(
                 fit: StackFit.expand,
                 children: [
-                  PageView.builder(
-                    itemCount: frames.length,
-                    controller: PageController(initialPage: index),
-                    onPageChanged: onPage,
-                    itemBuilder: (_, i) => GestureDetector(
-                      onTap: () => onOpen(i),
-                      child: FrameImage(frame: frames[i], semanticLabel: frameCaption(frames[i]) ?? 'Anime frame ${i + 1}'),
+                  ScrollConfiguration(
+                    behavior: baseScroll.copyWith(
+                      dragDevices: {...baseScroll.dragDevices, PointerDeviceKind.mouse},
+                    ),
+                    child: PageView.builder(
+                      itemCount: widget.frames.length,
+                      controller: _controller,
+                      onPageChanged: widget.onPage,
+                      itemBuilder: (_, i) => GestureDetector(
+                        onTap: () => widget.onOpen(i),
+                        child: FrameImage(
+                          frame: widget.frames[i],
+                          semanticLabel: frameCaption(widget.frames[i]) ?? 'Anime frame ${i + 1}',
+                        ),
+                      ),
                     ),
                   ),
+                  if (showArrows && index > 0)
+                    Positioned(
+                      left: 10,
+                      top: 0,
+                      bottom: 0,
+                      child: Center(
+                        child: _HeroNavButton(
+                          icon: Icons.chevron_left,
+                          tooltip: 'Previous frame',
+                          onPressed: () => _goTo(index - 1),
+                        ),
+                      ),
+                    ),
+                  if (showArrows && index < widget.frames.length - 1)
+                    Positioned(
+                      right: 10,
+                      top: 0,
+                      bottom: 0,
+                      child: Center(
+                        child: _HeroNavButton(
+                          icon: Icons.chevron_right,
+                          tooltip: 'Next frame',
+                          onPressed: () => _goTo(index + 1),
+                        ),
+                      ),
+                    ),
                   if (caption != null) Positioned(left: 12, bottom: 12, child: PageChip(caption)),
-                  Positioned(right: 12, bottom: 12, child: PageChip('${index + 1} / ${frames.length}')),
+                  Positioned(right: 12, bottom: 12, child: PageChip('${index + 1} / ${widget.frames.length}')),
                 ],
               ),
             ),
           ),
         ),
-        if (frames.length > 1)
+        if (widget.frames.length > 1)
           Padding(
-            padding: const EdgeInsets.only(top: 8),
+            padding: const EdgeInsets.only(top: 2),
             child: Row(
               mainAxisAlignment: MainAxisAlignment.center,
               children: [
-                for (var i = 0; i < frames.length; i++)
-                  AnimatedContainer(
-                    duration: const Duration(milliseconds: 150),
-                    margin: const EdgeInsets.symmetric(horizontal: 3),
-                    width: i == index ? 18 : 7,
-                    height: 7,
-                    decoration: BoxDecoration(
-                      color: i == index ? p.wisteria : theme.colorScheme.outlineVariant,
-                      borderRadius: BorderRadius.circular(99),
+                for (var i = 0; i < widget.frames.length; i++)
+                  Semantics(
+                    button: true,
+                    label: 'Frame ${i + 1}',
+                    child: MouseRegion(
+                      cursor: SystemMouseCursors.click,
+                      child: GestureDetector(
+                        behavior: HitTestBehavior.opaque,
+                        onTap: () => _goTo(i),
+                        child: Padding(
+                          padding: const EdgeInsets.symmetric(horizontal: 3, vertical: 6),
+                          child: AnimatedContainer(
+                            duration: const Duration(milliseconds: 150),
+                            width: i == index ? 18 : 7,
+                            height: 7,
+                            decoration: BoxDecoration(
+                              color: i == index ? p.wisteria : theme.colorScheme.outlineVariant,
+                              borderRadius: BorderRadius.circular(99),
+                            ),
+                          ),
+                        ),
+                      ),
                     ),
                   ),
               ],
@@ -210,6 +313,33 @@ class FrameHero extends StatelessWidget {
       ],
     );
   }
+}
+
+class _HeroNavButton extends StatelessWidget {
+  final IconData icon;
+  final String tooltip;
+  final VoidCallback onPressed;
+
+  const _HeroNavButton({required this.icon, required this.tooltip, required this.onPressed});
+
+  @override
+  Widget build(BuildContext context) => Material(
+        color: Colors.black.withValues(alpha: 0.55),
+        shape: const CircleBorder(),
+        clipBehavior: Clip.antiAlias,
+        child: SizedBox(
+          width: 36,
+          height: 36,
+          child: IconButton(
+            tooltip: tooltip,
+            padding: EdgeInsets.zero,
+            iconSize: 22,
+            color: Colors.white,
+            icon: Icon(icon),
+            onPressed: onPressed,
+          ),
+        ),
+      );
 }
 
 class PageChip extends StatelessWidget {

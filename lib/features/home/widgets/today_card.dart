@@ -243,8 +243,21 @@ class _NextStop extends ConsumerWidget {
                   // stop's other frames to switch to; without frames, the
                   // usual choice of reference.
                   onPressed: () => frames.isEmpty
-                      ? openAnimeCamera(context, ref, placeKey: item.stop.placeKey, tripId: tripId)
-                      : shootWithFrames(context, ref, placeKey: item.stop.placeKey, tripId: tripId, frames: frames),
+                      ? openAnimeCamera(
+                          context,
+                          ref,
+                          placeKey: item.stop.placeKey,
+                          tripId: tripId,
+                          stopId: item.stop.id,
+                        )
+                      : shootWithFrames(
+                          context,
+                          ref,
+                          placeKey: item.stop.placeKey,
+                          tripId: tripId,
+                          stopId: item.stop.id,
+                          frames: frames,
+                        ),
                   icon: const Icon(Icons.photo_camera),
                   label: const Text('Take photo'),
                 ),
