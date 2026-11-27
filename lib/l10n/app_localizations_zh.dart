@@ -866,6 +866,73 @@ class AppLocalizationsZh extends AppLocalizations {
   String shareImageFailed(String error) {
     return '做不出分享圖：$error';
   }
+
+  @override
+  String get routesTitle => '範例路線';
+
+  @override
+  String get routesIntro => '我們自己走過的巡禮路線。打開一條就能看到地點和參考圖，喜歡的話可以複製成自己的行程。';
+
+  @override
+  String get routesEmpty => '還沒有範例路線。';
+
+  @override
+  String get routesLoadFailed => '讀不到範例路線，請確認網路後再試一次。';
+
+  @override
+  String get routesRetry => '再試一次';
+
+  @override
+  String get routesEntrySubtitle => '把我們走過的路線複製成自己的行程';
+
+  @override
+  String routeCounts(int places, int frames) {
+    return '$places 個地點 · $frames 張參考圖';
+  }
+
+  @override
+  String routePlaceCount(int count) {
+    return '$count 個地點';
+  }
+
+  @override
+  String get routeCopy => '複製這條路線';
+
+  @override
+  String get routeCopying => '複製中…';
+
+  @override
+  String get routeCopied => '已經複製到你的行程，日期之後再填就好。';
+
+  @override
+  String routeCopyFailed(String error) {
+    return '無法複製這條路線：$error';
+  }
+
+  @override
+  String get routeCopyLink => '複製連結';
+
+  @override
+  String get routeLinkCopied => '已複製連結。';
+
+  @override
+  String get routeNotFound => '找不到這條路線。';
+
+  @override
+  String get routeNoPicture => '只有機位';
+
+  @override
+  String routeEpisode(String episode) {
+    return '第 $episode 集';
+  }
+
+  @override
+  String routeCredit(String credit) {
+    return '地點與參考圖：$credit';
+  }
+
+  @override
+  String get homeSeeRoutes => '看看範例路線';
 }
 
 /// The translations for Chinese, using the Han script (`zh_Hant`).
@@ -1730,4 +1797,71 @@ class AppLocalizationsZhHant extends AppLocalizationsZh {
   String shareImageFailed(String error) {
     return '做不出分享圖：$error';
   }
+
+  @override
+  String get routesTitle => '範例路線';
+
+  @override
+  String get routesIntro => '我們自己走過的巡禮路線。打開一條就能看到地點和參考圖，喜歡的話可以複製成自己的行程。';
+
+  @override
+  String get routesEmpty => '還沒有範例路線。';
+
+  @override
+  String get routesLoadFailed => '讀不到範例路線，請確認網路後再試一次。';
+
+  @override
+  String get routesRetry => '再試一次';
+
+  @override
+  String get routesEntrySubtitle => '把我們走過的路線複製成自己的行程';
+
+  @override
+  String routeCounts(int places, int frames) {
+    return '$places 個地點 · $frames 張參考圖';
+  }
+
+  @override
+  String routePlaceCount(int count) {
+    return '$count 個地點';
+  }
+
+  @override
+  String get routeCopy => '複製這條路線';
+
+  @override
+  String get routeCopying => '複製中…';
+
+  @override
+  String get routeCopied => '已經複製到你的行程，日期之後再填就好。';
+
+  @override
+  String routeCopyFailed(String error) {
+    return '無法複製這條路線：$error';
+  }
+
+  @override
+  String get routeCopyLink => '複製連結';
+
+  @override
+  String get routeLinkCopied => '已複製連結。';
+
+  @override
+  String get routeNotFound => '找不到這條路線。';
+
+  @override
+  String get routeNoPicture => '只有機位';
+
+  @override
+  String routeEpisode(String episode) {
+    return '第 $episode 集';
+  }
+
+  @override
+  String routeCredit(String credit) {
+    return '地點與參考圖：$credit';
+  }
+
+  @override
+  String get homeSeeRoutes => '看看範例路線';
 }

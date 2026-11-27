@@ -19,6 +19,7 @@ import '../../features/library/screens/anitabi_import_screen.dart';
 import '../../features/library/screens/labels_screen.dart';
 import '../../features/library/screens/library_screen.dart';
 import '../../features/library/screens/place_screen.dart';
+import '../../features/routes/screens/example_routes_screen.dart';
 import '../../features/sharing/invite_links.dart';
 import '../../features/sharing/screens/join_trip_screen.dart';
 import '../../features/settings/screens/settings_screen.dart';
@@ -55,6 +56,13 @@ GoRouter router(RouterRef ref) {
     
     // AUTH REDIRECT LOGIC
     redirect: (context, state) {
+      // Hosting serves a route's link page as a folder (`/t/<id>/`), so a
+      // link may arrive with a trailing slash; the routes have none.
+      final path = state.uri.path;
+      if (path.length > 1 && path.endsWith('/')) {
+        return state.uri.replace(path: path.replaceFirst(RegExp(r'/+$'), '')).toString();
+      }
+
       final authState = ref.read(authStateChangesProvider);
       
       // 1. Loading state: Do not force redirect, wait for resolution.
@@ -185,6 +193,13 @@ GoRouter router(RouterRef ref) {
         builder: (context, state) => JoinTripScreen(
           invite: inviteFromQuery({'token': state.pathParameters['invite']!, 'code': state.pathParameters['invite']!}),
         ),
+      ),
+      // Example routes: the list, and one route, which anyone can open and
+      // copy into a private trip (`trip-planner-2775c.web.app/t/<id>`).
+      GoRoute(path: '/t', builder: (context, state) => const ExampleRoutesScreen()),
+      GoRoute(
+        path: '/t/:routeId',
+        builder: (context, state) => ExampleRouteScreen(routeId: state.pathParameters['routeId']!),
       ),
       GoRoute(
         path: '/library/labels',

@@ -870,4 +870,71 @@ class AppLocalizationsJa extends AppLocalizations {
   String shareImageFailed(String error) {
     return '画像を作れませんでした：$error';
   }
+
+  @override
+  String get routesTitle => 'モデルコース';
+
+  @override
+  String get routesIntro => '私たちが実際に巡ったルートです。開くとスポットと比較画像が見られ、自分の旅行にコピーできます。';
+
+  @override
+  String get routesEmpty => 'モデルコースはまだありません。';
+
+  @override
+  String get routesLoadFailed => 'モデルコースを読み込めませんでした。接続を確認して、もう一度お試しください。';
+
+  @override
+  String get routesRetry => '再試行';
+
+  @override
+  String get routesEntrySubtitle => '私たちが巡ったルートを自分の旅行にコピー';
+
+  @override
+  String routeCounts(int places, int frames) {
+    return 'スポット $places か所 · 比較画像 $frames 枚';
+  }
+
+  @override
+  String routePlaceCount(int count) {
+    return '$count か所';
+  }
+
+  @override
+  String get routeCopy => 'このルートをコピー';
+
+  @override
+  String get routeCopying => 'コピー中…';
+
+  @override
+  String get routeCopied => '旅行にコピーしました。日付は決まったら入れてください。';
+
+  @override
+  String routeCopyFailed(String error) {
+    return 'ルートをコピーできませんでした：$error';
+  }
+
+  @override
+  String get routeCopyLink => 'リンクをコピー';
+
+  @override
+  String get routeLinkCopied => 'リンクをコピーしました。';
+
+  @override
+  String get routeNotFound => 'このルートは見つかりません。';
+
+  @override
+  String get routeNoPicture => '撮影位置のみ';
+
+  @override
+  String routeEpisode(String episode) {
+    return '第$episode話';
+  }
+
+  @override
+  String routeCredit(String credit) {
+    return 'スポットと比較画像：$credit';
+  }
+
+  @override
+  String get homeSeeRoutes => 'モデルコースを見る';
 }

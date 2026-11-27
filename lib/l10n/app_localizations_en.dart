@@ -897,4 +897,93 @@ class AppLocalizationsEn extends AppLocalizations {
   String shareImageFailed(String error) {
     return 'Couldn\'t make the image: $error';
   }
+
+  @override
+  String get routesTitle => 'Example routes';
+
+  @override
+  String get routesIntro =>
+      'Routes from our own pilgrimages. Open one to see its places and frames, and copy it into a trip of your own.';
+
+  @override
+  String get routesEmpty => 'No example routes yet.';
+
+  @override
+  String get routesLoadFailed =>
+      'Couldn\'t load the example routes. Check the connection and try again.';
+
+  @override
+  String get routesRetry => 'Try again';
+
+  @override
+  String get routesEntrySubtitle =>
+      'Copy a route we\'ve walked into a trip of your own';
+
+  @override
+  String routeCounts(int places, int frames) {
+    String _temp0 = intl.Intl.pluralLogic(
+      places,
+      locale: localeName,
+      other: '$places places',
+      one: '1 place',
+    );
+    String _temp1 = intl.Intl.pluralLogic(
+      frames,
+      locale: localeName,
+      other: '$frames frames',
+      one: '1 frame',
+    );
+    return '$_temp0 · $_temp1';
+  }
+
+  @override
+  String routePlaceCount(int count) {
+    String _temp0 = intl.Intl.pluralLogic(
+      count,
+      locale: localeName,
+      other: '$count places',
+      one: '1 place',
+    );
+    return '$_temp0';
+  }
+
+  @override
+  String get routeCopy => 'Copy this route';
+
+  @override
+  String get routeCopying => 'Copying…';
+
+  @override
+  String get routeCopied =>
+      'Copied into your trips. Add dates when you know them.';
+
+  @override
+  String routeCopyFailed(String error) {
+    return 'Couldn\'t copy the route: $error';
+  }
+
+  @override
+  String get routeCopyLink => 'Copy link';
+
+  @override
+  String get routeLinkCopied => 'Link copied.';
+
+  @override
+  String get routeNotFound => 'This route isn\'t available.';
+
+  @override
+  String get routeNoPicture => 'Spot only';
+
+  @override
+  String routeEpisode(String episode) {
+    return 'Ep. $episode';
+  }
+
+  @override
+  String routeCredit(String credit) {
+    return 'Spots and frames: $credit';
+  }
+
+  @override
+  String get homeSeeRoutes => 'See example routes';
 }

@@ -1432,6 +1432,120 @@ abstract class AppLocalizations {
   /// In en, this message translates to:
   /// **'Couldn\'t make the image: {error}'**
   String shareImageFailed(String error);
+
+  /// No description provided for @routesTitle.
+  ///
+  /// In en, this message translates to:
+  /// **'Example routes'**
+  String get routesTitle;
+
+  /// No description provided for @routesIntro.
+  ///
+  /// In en, this message translates to:
+  /// **'Routes from our own pilgrimages. Open one to see its places and frames, and copy it into a trip of your own.'**
+  String get routesIntro;
+
+  /// No description provided for @routesEmpty.
+  ///
+  /// In en, this message translates to:
+  /// **'No example routes yet.'**
+  String get routesEmpty;
+
+  /// No description provided for @routesLoadFailed.
+  ///
+  /// In en, this message translates to:
+  /// **'Couldn\'t load the example routes. Check the connection and try again.'**
+  String get routesLoadFailed;
+
+  /// No description provided for @routesRetry.
+  ///
+  /// In en, this message translates to:
+  /// **'Try again'**
+  String get routesRetry;
+
+  /// No description provided for @routesEntrySubtitle.
+  ///
+  /// In en, this message translates to:
+  /// **'Copy a route we\'ve walked into a trip of your own'**
+  String get routesEntrySubtitle;
+
+  /// No description provided for @routeCounts.
+  ///
+  /// In en, this message translates to:
+  /// **'{places, plural, =1{1 place} other{{places} places}} · {frames, plural, =1{1 frame} other{{frames} frames}}'**
+  String routeCounts(int places, int frames);
+
+  /// No description provided for @routePlaceCount.
+  ///
+  /// In en, this message translates to:
+  /// **'{count, plural, =1{1 place} other{{count} places}}'**
+  String routePlaceCount(int count);
+
+  /// No description provided for @routeCopy.
+  ///
+  /// In en, this message translates to:
+  /// **'Copy this route'**
+  String get routeCopy;
+
+  /// No description provided for @routeCopying.
+  ///
+  /// In en, this message translates to:
+  /// **'Copying…'**
+  String get routeCopying;
+
+  /// No description provided for @routeCopied.
+  ///
+  /// In en, this message translates to:
+  /// **'Copied into your trips. Add dates when you know them.'**
+  String get routeCopied;
+
+  /// No description provided for @routeCopyFailed.
+  ///
+  /// In en, this message translates to:
+  /// **'Couldn\'t copy the route: {error}'**
+  String routeCopyFailed(String error);
+
+  /// No description provided for @routeCopyLink.
+  ///
+  /// In en, this message translates to:
+  /// **'Copy link'**
+  String get routeCopyLink;
+
+  /// No description provided for @routeLinkCopied.
+  ///
+  /// In en, this message translates to:
+  /// **'Link copied.'**
+  String get routeLinkCopied;
+
+  /// No description provided for @routeNotFound.
+  ///
+  /// In en, this message translates to:
+  /// **'This route isn\'t available.'**
+  String get routeNotFound;
+
+  /// No description provided for @routeNoPicture.
+  ///
+  /// In en, this message translates to:
+  /// **'Spot only'**
+  String get routeNoPicture;
+
+  /// No description provided for @routeEpisode.
+  ///
+  /// In en, this message translates to:
+  /// **'Ep. {episode}'**
+  String routeEpisode(String episode);
+
+  /// No description provided for @routeCredit.
+  ///
+  /// In en, this message translates to:
+  /// **'Spots and frames: {credit}'**
+  String routeCredit(String credit);
+
+  /// No description provided for @homeSeeRoutes.
+  ///
+  /// In en, this message translates to:
+  /// **'See example routes'**
+  String get homeSeeRoutes;
 }
 
 class _AppLocalizationsDelegate

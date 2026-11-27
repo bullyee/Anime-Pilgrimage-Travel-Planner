@@ -54,8 +54,16 @@
                     android:pathPrefix="/join" />
                 <data
                     android:scheme="https"
+                    android:host="trip-planner-2775c.web.app"
+                    android:pathPrefix="/t/" />
+                <data
+                    android:scheme="https"
                     android:host="trip-planner-2775c.firebaseapp.com"
                     android:pathPrefix="/join" />
+                <data
+                    android:scheme="https"
+                    android:host="trip-planner-2775c.firebaseapp.com"
+                    android:pathPrefix="/t/" />
             </intent-filter>
         </activity>
         <service

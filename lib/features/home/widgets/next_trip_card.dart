@@ -3,6 +3,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 import 'package:intl/intl.dart';
 
+import '../../../core/l10n/l10n.dart';
 import '../../../core/utils/schedule_logic.dart';
 import '../../../shared/theme/app_theme.dart';
 import '../../planner/models/planner_view.dart';
@@ -187,6 +188,11 @@ class _NoTrip extends StatelessWidget {
             FilledButton(onPressed: () => context.go('/trips'), child: const Text('Plan a trip')),
             const SizedBox(height: 4),
             TextButton(onPressed: () => context.push('/library/import'), child: const Text('Import from Anitabi')),
+            TextButton(
+              key: const Key('homeSeeRoutes'),
+              onPressed: () => context.push('/t'),
+              child: Text(context.l10n.homeSeeRoutes),
+            ),
           ],
         ),
       ),

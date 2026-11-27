@@ -626,5 +626,62 @@
         "type": "String"
       }
     }
-  }
+  },
+  "routesTitle": "Example routes",
+  "routesIntro": "Routes from our own pilgrimages. Open one to see its places and frames, and copy it into a trip of your own.",
+  "routesEmpty": "No example routes yet.",
+  "routesLoadFailed": "Couldn't load the example routes. Check the connection and try again.",
+  "routesRetry": "Try again",
+  "routesEntrySubtitle": "Copy a route we've walked into a trip of your own",
+  "routeCounts": "{places, plural, =1{1 place} other{{places} places}} · {frames, plural, =1{1 frame} other{{frames} frames}}",
+  "@routeCounts": {
+    "placeholders": {
+      "places": {
+        "type": "int"
+      },
+      "frames": {
+        "type": "int"
+      }
+    }
+  },
+  "routePlaceCount": "{count, plural, =1{1 place} other{{count} places}}",
+  "@routePlaceCount": {
+    "placeholders": {
+      "count": {
+        "type": "int"
+      }
+    }
+  },
+  "routeCopy": "Copy this route",
+  "routeCopying": "Copying…",
+  "routeCopied": "Copied into your trips. Add dates when you know them.",
+  "routeCopyFailed": "Couldn't copy the route: {error}",
+  "@routeCopyFailed": {
+    "placeholders": {
+      "error": {
+        "type": "String"
+      }
+    }
+  },
+  "routeCopyLink": "Copy link",
+  "routeLinkCopied": "Link copied.",
+  "routeNotFound": "This route isn't available.",
+  "routeNoPicture": "Spot only",
+  "routeEpisode": "Ep. {episode}",
+  "@routeEpisode": {
+    "placeholders": {
+      "episode": {
+        "type": "String"
+      }
+    }
+  },
+  "routeCredit": "Spots and frames: {credit}",
+  "@routeCredit": {
+    "placeholders": {
+      "credit": {
+        "type": "String"
+      }
+    }
+  },
+  "homeSeeRoutes": "See example routes"
 }

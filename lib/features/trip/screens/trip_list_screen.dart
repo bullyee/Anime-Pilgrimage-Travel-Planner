@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 
+import '../../../core/l10n/l10n.dart';
 import '../../../core/utils/app_result.dart';
 import '../../../shared/theme/app_theme.dart';
 import '../../auth/providers/auth_provider.dart';
@@ -92,6 +93,7 @@ class _TripListScreenState extends ConsumerState<TripListScreen> {
                       ),
                     ),
                   ),
+                  const Padding(padding: EdgeInsets.fromLTRB(16, 4, 16, 4), child: ExampleRoutesEntry()),
                   Expanded(
                     child: shown.isEmpty
                         ? _EmptyFilter(filter: _filter)
@@ -275,7 +277,50 @@ class _EmptyTrips extends StatelessWidget {
               icon: const Icon(Icons.group_add_outlined),
               label: const Text('Join a trip with an invite'),
             ),
+            const SizedBox(height: 16),
+            const ExampleRoutesEntry(),
           ],
+        ),
+      ),
+    );
+  }
+}
+
+/// The way to the example routes, at the top of My Trips: routes we've
+/// walked, to copy into a trip of your own.
+class ExampleRoutesEntry extends StatelessWidget {
+  const ExampleRoutesEntry({super.key});
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    final p = theme.trip;
+    final l10n = context.l10n;
+    return Material(
+      key: const Key('exampleRoutesEntry'),
+      color: p.wisteriaSoft,
+      borderRadius: BorderRadius.circular(12),
+      child: InkWell(
+        borderRadius: BorderRadius.circular(12),
+        onTap: () => context.push('/t'),
+        child: Padding(
+          padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
+          child: Row(
+            children: [
+              Icon(Icons.route_outlined, color: p.wisteria),
+              const SizedBox(width: 12),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(l10n.routesTitle, style: theme.textTheme.titleSmall?.copyWith(fontWeight: FontWeight.w700)),
+                    Text(l10n.routesEntrySubtitle, style: theme.textTheme.bodySmall?.copyWith(color: theme.colorScheme.onSurfaceVariant)),
+                  ],
+                ),
+              ),
+              Icon(Icons.chevron_right, color: theme.colorScheme.onSurfaceVariant),
+            ],
+          ),
         ),
       ),
     );
