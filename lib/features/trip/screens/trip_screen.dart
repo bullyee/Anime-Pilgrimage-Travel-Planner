@@ -1,8 +1,13 @@
+import 'dart:convert';
+
+import 'package:flutter/foundation.dart' show kDebugMode;
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 
 import '../../../core/database/database.dart';
+import '../../../core/providers/database_provider.dart';
+import '../../routes/services/example_route_service.dart';
 import '../../../core/utils/app_result.dart';
 import '../../planner/providers/planner_providers.dart';
 import '../../../core/l10n/l10n.dart';
@@ -111,6 +116,8 @@ class _TripScreenState extends ConsumerState<TripScreen> with SingleTickerProvid
       if (hasAccess) ...[
         const PopupMenuItem(value: 'export_gpx', child: Text('Export route (GPX)')),
         const PopupMenuItem(value: 'export_geojson', child: Text('Export route (GeoJSON)')),
+        // A developer tool for making the example routes (web/routes/).
+        if (kDebugMode) const PopupMenuItem(value: 'export_example', child: Text('Export as example route (dev)')),
       ],
       if (hasAccess) const PopupMenuItem(value: 'trash', child: Text('Recently deleted')),
       if (role == TripMemberRole.owner) const PopupMenuItem(value: 'delete', child: Text('Delete trip')),
@@ -166,6 +173,7 @@ class _TripScreenState extends ConsumerState<TripScreen> with SingleTickerProvid
                 if (value == 'edit') _editTrip(context, trip);
                 if (value == 'export_gpx') _exportRoute(context, trip, isGeoJson: false);
                 if (value == 'export_geojson') _exportRoute(context, trip, isGeoJson: true);
+                if (value == 'export_example') _exportExample(context, trip);
                 if (value == 'trash') context.push('/trips/${trip.id}/trash');
                 if (value == 'delete') _deleteTrip(context, trip);
                 if (value == 'leave') leaveTrip(context, ref, trip);
@@ -250,6 +258,40 @@ class _TripScreenState extends ConsumerState<TripScreen> with SingleTickerProvid
         }
       case Failure(:final error):
         ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text("Couldn't delete the trip: $error")));
+    }
+  }
+
+  /// Saves the trip as an example route file, to put in `web/routes/`.
+  Future<void> _exportExample(BuildContext context, Trip trip) async {
+    final messenger = ScaffoldMessenger.of(context);
+    final view = ref.read(plannerViewProvider(trip.id)).valueOrNull;
+    if (view == null) {
+      messenger.showSnackBar(const SnackBar(content: Text('Trip details are still loading.')));
+      return;
+    }
+    final db = ref.read(databaseProvider);
+    final stopIds = [for (final s in await ref.read(tripRepositoryProvider).getStopsForTrip(trip.id)) s.id];
+    final frames = await (db.select(db.newReferenceImages)..where((f) => f.stopId.isIn(stopIds))).get();
+    final labels = await (db.select(db.labels)..where((l) => l.kind.equals('anime'))).get();
+    final anime = {for (final l in labels) l.id: l.name};
+    final used = <String>{for (final f in frames) if (anime[f.animeLabelId] case final a?) a};
+    final export = exportExampleRoute(trip: trip, view: view, frames: frames, animeOfLabel: anime, anime: used.toList());
+    final route = export.route;
+    try {
+      await ref.read(shareRouteFileProvider)(TripRouteExportResult(
+        content: '${const JsonEncoder.withIndent('  ').convert(route.toJson())}\n',
+        fileName: '${route.id}.json',
+        mimeType: 'application/json',
+        subject: route.title,
+        stopCount: route.placeCount,
+        skippedCount: export.skippedFrames,
+      ));
+      messenger.showSnackBar(SnackBar(
+        content: Text('Exported ${route.placeCount} places, ${route.frameCount} frames '
+            '(${export.framesWithoutPicture} without a picture, ${export.skippedFrames} left out).'),
+      ));
+    } catch (e) {
+      messenger.showSnackBar(SnackBar(content: Text("Couldn't export: $e")));
     }
   }
 

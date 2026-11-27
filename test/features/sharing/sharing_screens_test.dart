@@ -414,7 +414,8 @@ void main() {
 
       expect(find.textContaining('View only'), findsOneWidget);
       expect(find.byTooltip('Invite people'), findsNothing);
-      expect(await menuItems(tester), ['export_gpx', 'export_geojson', 'trash', 'leave']);
+      // export_example is the developer's (debug builds, as tests are).
+      expect(await menuItems(tester), ['export_gpx', 'export_geojson', 'export_example', 'trash', 'leave']);
 
       // The Places tab, with nothing to change.
       expect(find.byKey(const Key('addPlaces')), findsNothing);
@@ -432,7 +433,7 @@ void main() {
       await pump(tester, tripRouter());
 
       expect(find.textContaining('View only'), findsNothing);
-      expect(await menuItems(tester), ['edit', 'export_gpx', 'export_geojson', 'trash', 'leave']);
+      expect(await menuItems(tester), ['edit', 'export_gpx', 'export_geojson', 'export_example', 'trash', 'leave']);
       expect(find.byKey(const Key('addPlaces')), findsOneWidget);
       expect(find.byKey(const Key('newDayButton')), findsOneWidget);
       await done(tester);
@@ -483,7 +484,7 @@ void main() {
       await addTrip();
       await pump(tester, tripRouter());
 
-      expect(await menuItems(tester), ['edit', 'export_gpx', 'export_geojson', 'trash', 'delete']);
+      expect(await menuItems(tester), ['edit', 'export_gpx', 'export_geojson', 'export_example', 'trash', 'delete']);
       await done(tester);
     });
   });
