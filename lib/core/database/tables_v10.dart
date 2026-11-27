@@ -151,6 +151,21 @@ class NewReferenceImages extends Table {
   TextColumn get source => text().nullable()();
   TextColumn get sourceUrl => text().nullable()();
 
+  /// Where the frame is shot from (schema 16): the fine layer under a place.
+  /// A place is a stop; the frames of one stop can be shot from spots metres
+  /// apart ("三の間" and "東詰" of 宇治橋), and the place page groups them into
+  /// spots by [note] and position. Null for frames nobody placed: they count
+  /// as shot from the stop's own position.
+  RealColumn get lat => real().nullable()();
+  RealColumn get lng => real().nullable()();
+
+  /// A short name for the spot the frame is shot from ("三の間"). Frames with
+  /// the same note close together are one spot.
+  TextColumn get note => text().nullable()();
+
+  /// The compass direction the shot faces, in degrees from north, when known.
+  RealColumn get heading => real().nullable()();
+
   DateTimeColumn get createdAt => dateTime().clientDefault(() => DateTime.now())();
 
   @override
@@ -228,6 +243,12 @@ class Stops extends Table {
   TextColumn get sourceUrl => text().nullable()();
   TextColumn get area => text().nullable()();
   TextColumn get note => text().nullable()();
+
+  /// On a stop deleted by a merge, the stop it was merged into (schema 16).
+  /// It syncs, so another member's phone can move the frames only it has
+  /// (never uploaded) onto the kept stop instead of leaving them on a
+  /// deleted one.
+  TextColumn get mergedInto => text().nullable()();
 
   TextColumn get addedBy => text()();
   DateTimeColumn get createdAt => dateTime().clientDefault(() => DateTime.now())();

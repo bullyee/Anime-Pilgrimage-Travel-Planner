@@ -79,7 +79,7 @@ void main() {
     await pumpScreen(tester, trip.id);
 
     // Open popup menu
-    final menuButton = find.byType(PopupMenuButton<String>);
+    final menuButton = find.byKey(const Key('tripMenu'));
     expect(menuButton, findsOneWidget);
     await tester.tap(menuButton);
     await tester.pumpAndSettle();
@@ -123,7 +123,7 @@ void main() {
     await pumpScreen(tester, trip.id);
 
     // Open popup menu
-    await tester.tap(find.byType(PopupMenuButton<String>));
+    await tester.tap(find.byKey(const Key('tripMenu')));
     await tester.pumpAndSettle();
 
     // Tap GeoJSON export
@@ -158,7 +158,7 @@ void main() {
     await pumpScreen(tester, trip.id);
 
     // Open popup menu and select GPX
-    await tester.tap(find.byType(PopupMenuButton<String>));
+    await tester.tap(find.byKey(const Key('tripMenu')));
     await tester.pumpAndSettle();
     await tester.tap(find.text('Export route (GPX)'));
     await tester.pumpAndSettle();

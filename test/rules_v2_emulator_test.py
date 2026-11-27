@@ -164,6 +164,45 @@ def main():
     code, _ = api_request('POST', 'tripsV2/trip_v2_1/stops?documentId=stop_note_invalid', stop_oversized_note, user_id='alice')
     assert_status("tripsV2/stops: Stop with oversized note > 2000 chars denied (403)", 403, code)
 
+    # 9d. tripsV2: Stop with frame positions and a merge target succeeds (200)
+    stop_with_shots = {
+        'fields': {
+            'id': {'stringValue': 'stop_shots_valid'},
+            'tripId': {'stringValue': 'trip_v2_1'},
+            'placeKey': {'stringValue': 'anitabi:42'},
+            'name': {'stringValue': 'Uji Bridge'},
+            'frameShots': {'mapValue': {'fields': {
+                'frame_1': {'mapValue': {'fields': {
+                    'lat': {'doubleValue': 34.8921},
+                    'lng': {'doubleValue': 135.8075},
+                    'note': {'stringValue': 'Third bay'},
+                }}},
+            }}},
+            'mergedInto': {'stringValue': 'stop_1'},
+            'addedBy': {'stringValue': 'alice'},
+            'updatedAt': {'integerValue': '1000'},
+        }
+    }
+    code, _ = api_request('POST', 'tripsV2/trip_v2_1/stops?documentId=stop_shots_valid', stop_with_shots, user_id='alice')
+    assert_status("tripsV2/stops: Stop with frameShots and mergedInto succeeds (200)", 200, code)
+
+    # 9e. tripsV2: frameShots that isn't a map, or a mergedInto over 100 chars, denied (403)
+    for doc_id, bad in [
+        ('stop_shots_list', {'frameShots': {'arrayValue': {'values': [{'stringValue': 'x'}]}}}),
+        ('stop_merged_long', {'mergedInto': {'stringValue': 'x' * 101}}),
+    ]:
+        fields = {
+            'id': {'stringValue': doc_id},
+            'tripId': {'stringValue': 'trip_v2_1'},
+            'placeKey': {'stringValue': 'anitabi:42'},
+            'name': {'stringValue': 'Bad Stop'},
+            'addedBy': {'stringValue': 'alice'},
+            'updatedAt': {'integerValue': '1000'},
+        }
+        fields.update(bad)
+        code, _ = api_request('POST', f'tripsV2/trip_v2_1/stops?documentId={doc_id}', {'fields': fields}, user_id='alice')
+        assert_status(f"tripsV2/stops: {doc_id} denied (403)", 403, code)
+
     # 10. tripsV2: Member creating schedule item succeeds
     item_data = {
         'fields': {

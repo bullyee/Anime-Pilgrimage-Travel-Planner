@@ -12,7 +12,8 @@ import 'package:trip_planner/features/trip/controllers/trip_stops_controller.dar
 import 'package:trip_planner/features/trip/providers/trip_providers.dart';
 import 'package:trip_planner/features/trip/providers/trip_stop_providers.dart';
 import 'package:trip_planner/features/trip/repositories/trip_repository.dart';
-import 'package:trip_planner/features/trip/screens/trip_stops_tab.dart';
+import 'package:trip_planner/features/trip/screens/trip_place_screen.dart';
+import 'package:trip_planner/shared/map/app_map.dart';
 
 void main() {
   late AppDatabase db;
@@ -93,6 +94,65 @@ void main() {
 
     final removed = await (db.select(db.stops)..where((s) => s.id.isIn([a.id, b.id]))).get();
     expect(removed.every((s) => s.deletedAt != null && s.syncStatus == 1), isTrue);
+    expect(removed.every((s) => s.mergedInto == keep.id), isTrue, reason: 'other phones move their own frames after it');
+    final moved = frames.singleWhere((f) => f.id == 'f3');
+    expect(moved.note, isNotNull, reason: 'the frames of a merged stop become spots of the kept one');
+    expect(moved.lat, a.lat);
+  });
+
+  test("an empty file isn't a file, and a link and a file of the same frame are one", () async {
+    final trip = await repo.createTrip(title: 'Uji', ownerId: 'u1', dayCount: 1);
+    final keep = await spot(trip.id, 'Bridge');
+    final other = await spot(trip.id, 'Bridge (2)');
+    Future<void> img(String id, String stopId, {String? path, String? url}) => db.into(db.newReferenceImages).insert(
+          NewReferenceImagesCompanion.insert(id: id, stopId: Value(stopId), localPath: Value(path), remoteUrl: Value(url)),
+        );
+    await img('k1', keep.id, path: '', url: 'https://x/1.jpg');
+    await img('k2', keep.id, path: '/f/2.jpg', url: 'https://x/2.jpg');
+    await img('o1', other.id, path: '', url: 'https://x/3.jpg'); // another frame, also with an empty path
+    await img('o2', other.id, url: 'https://x/2.jpg'); // k2, by its link only
+
+    await repo.mergeStops(keepId: keep.id, otherIds: [other.id]);
+    expect((await repo.getReferenceImagesForStop(keep.id)).map((f) => f.id).toSet(), {'k1', 'k2', 'o1'});
+  });
+
+  test('a skipped item on the kept stop takes a planned one of the same day', () async {
+    final trip = await repo.createTrip(title: 'Uji', ownerId: 'u1', dayCount: 1);
+    final day = (await repo.getDaysForTrip(trip.id)).single;
+    final keep = await spot(trip.id, 'Bridge');
+    final other = await spot(trip.id, 'Bridge (2)');
+    final skipped = await repo.scheduleStop(tripId: trip.id, stopId: keep.id, dayId: day.id);
+    await repo.updateScheduleItemStatus(itemId: skipped.id, status: 'skipped');
+    await repo.scheduleStop(tripId: trip.id, stopId: other.id, dayId: day.id);
+
+    await repo.mergeStops(keepId: keep.id, otherIds: [other.id]);
+    final items = await repo.getScheduleItemsForTrip(trip.id);
+    final live = [for (final i in items) if (i.deletedAt == null) i];
+    expect(live.single.stopId, keep.id);
+    expect(live.single.status, 'planned');
+  });
+
+  test("setFrameShots leaves another trip's frames alone", () async {
+    final mine = await repo.createTrip(title: 'Uji', ownerId: 'u1', dayCount: 1);
+    final theirs = await repo.createTrip(title: 'Kyoto', ownerId: 'u1', dayCount: 1);
+    final a = await spot(mine.id, 'Bridge');
+    final b = await spot(theirs.id, 'Shrine');
+    await frame('fa', a.id, '/f/a.jpg');
+    await frame('fb', b.id, '/f/b.jpg');
+    await repo.setFrameShots(tripId: mine.id, frameIds: ['fa', 'fb'], note: const Value('east end'));
+    final notes = {for (final f in await db.select(db.newReferenceImages).get()) f.id: f.note};
+    expect(notes, {'fa': 'east end', 'fb': null});
+  });
+
+  test('a merged stop brought back from the trash is merged into nothing', () async {
+    final trip = await repo.createTrip(title: 'Uji', ownerId: 'u1', dayCount: 1);
+    final keep = await spot(trip.id, 'Bridge');
+    final other = await spot(trip.id, 'Bridge (2)');
+    await repo.mergeStops(keepId: keep.id, otherIds: [other.id]);
+    expect((await repo.getStop(other.id))!.mergedInto, keep.id);
+    await repo.restoreStop(other.id);
+    final back = (await repo.getStop(other.id))!;
+    expect((back.deletedAt, back.mergedInto), (null, null));
   });
 
   test('a kept stop keeps its own group', () async {
@@ -146,46 +206,45 @@ void main() {
     expect(stopToKeep([late, day2, day1Second, day1First]).stop.id, 'day1a');
   });
 
-  testWidgets('in the Stops tab, held stops are merged into the one picked', (tester) async {
+  testWidgets("a place's menu merges another place into it", (tester) async {
     tester.view.physicalSize = const Size(1080, 2400);
     tester.view.devicePixelRatio = 2.625;
     addTearDown(tester.view.reset);
     final trip = await repo.createTrip(title: 'Uji', ownerId: 'u1', dayCount: 1);
     final day = (await repo.getDaysForTrip(trip.id)).single;
-    await spot(trip.id, 'Bridge (2)');
+    final other = await spot(trip.id, 'Bridge (2)');
     final first = await spot(trip.id, 'Bridge');
-    await repo.scheduleStop(tripId: trip.id, stopId: first.id, dayId: day.id);
+    await repo.scheduleStop(tripId: trip.id, stopId: other.id, dayId: day.id);
     await spot(trip.id, 'Shrine');
 
-    final router = GoRouter(initialLocation: '/trips/${trip.id}/stops', routes: [
-      GoRoute(path: '/trips/:tripId/stops', builder: (_, s) => Scaffold(body: TripStopsTab(tripId: s.pathParameters['tripId']!))),
+    final router = GoRouter(initialLocation: '/trips/${trip.id}/places/${first.id}', routes: [
+      GoRoute(path: '/trips/:tripId', builder: (_, _) => const Scaffold()),
+      GoRoute(
+        path: '/trips/:tripId/places/:stopId',
+        builder: (_, s) => TripPlaceScreen(tripId: s.pathParameters['tripId']!, stopId: s.pathParameters['stopId']!),
+      ),
     ]);
     await tester.pumpWidget(ProviderScope(
-      overrides: [databaseProvider.overrideWithValue(db), currentUserIdProvider.overrideWithValue('u1')],
+      overrides: [databaseProvider.overrideWithValue(db), currentUserIdProvider.overrideWithValue('u1'), mapTilesProvider.overrideWithValue(false)],
       child: MaterialApp.router(routerConfig: router),
     ));
     await tester.pumpAndSettle();
 
-    await tester.longPress(find.text('Bridge (2)'));
+    await tester.tap(find.byKey(const Key('placeMenu')));
     await tester.pumpAndSettle();
-    await tester.tap(find.text('Bridge'));
+    await tester.tap(find.byKey(const Key('placeMerge')));
     await tester.pumpAndSettle();
-    await tester.tap(find.widgetWithText(TextButton, 'Merge'));
+    expect(find.text('Merge into “Bridge”'), findsOneWidget);
+    await tester.tap(find.text('Bridge (2)'));
     await tester.pumpAndSettle();
-    expect(find.text('Merge 2 stops'), findsOneWidget);
-    // The planned one is picked to keep; pick the other instead.
-    expect(find.widgetWithText(ListTile, 'Keep'), findsOneWidget);
-    expect(find.descendant(of: find.widgetWithText(ListTile, 'Bridge'), matching: find.text('Keep')), findsOneWidget);
-    await tester.tap(find.descendant(of: find.byType(BottomSheet), matching: find.text('Bridge (2)')));
-    await tester.pumpAndSettle();
+    expect(find.text('Merge “Bridge (2)” into “Bridge”?'), findsOneWidget);
     await tester.tap(find.widgetWithText(FilledButton, 'Merge'));
     await tester.pumpAndSettle();
 
     final stops = await repo.getStopsForTrip(trip.id);
-    expect(stops.map((s) => s.name).toSet(), {'Bridge (2)', 'Shrine'});
-    expect((await repo.getScheduleItemsForTrip(trip.id)).single.stopId, stops.firstWhere((s) => s.name == 'Bridge (2)').id);
-    expect(find.text('Merged 2 stops into Bridge (2).'), findsOneWidget);
-    expect(find.text('Bridge'), findsNothing);
+    expect(stops.map((s) => s.name).toSet(), {'Bridge', 'Shrine'});
+    expect((await repo.getScheduleItemsForTrip(trip.id)).single.stopId, first.id, reason: "the merged place's day comes along");
+    expect(find.text('Merged “Bridge (2)” into this place.'), findsOneWidget);
 
     await tester.pumpWidget(const SizedBox());
     await tester.pump(const Duration(seconds: 1));

@@ -1,4 +1,25 @@
+import 'package:drift/drift.dart' show Value;
+
 import '../../../core/database/database.dart';
+
+/// The longest trip note, in UTF-16 code units: Dart's `String.length`, and
+/// what the Firestore rules' `size()` counts. The rules refuse a longer note,
+/// and with it the rest of the trip's upload.
+const maxTripNoteLength = 2000;
+
+/// The longest note of a spot (a frame's `note`), counted the same way; the
+/// rules refuse a longer one in `frameShots`.
+const maxFrameNoteLength = 100;
+
+/// [text] cut to at most [max] UTF-16 code units, without splitting a
+/// surrogate pair.
+String clampText(String text, int max) {
+  if (text.length <= max) return text;
+  var end = max;
+  final last = text.codeUnitAt(end - 1);
+  if (last >= 0xD800 && last <= 0xDBFF) end--;
+  return text.substring(0, end).trimRight();
+}
 
 /// The longest group name, in characters. The Firestore rules refuse a
 /// longer `stops.area`, and with it the rest of the trip's upload.
@@ -48,3 +69,34 @@ String suggestedGroupName(List<String> names) {
 
 /// "1 stop", "7 stops".
 String stopCount(int n) => n == 1 ? '1 stop' : '$n stops';
+
+final _spotSeparators = RegExp(r'^[\s,、・·\-–—/(（:：]+');
+
+/// What a spot in [group] is called on its place's page: its note, else its
+/// name without the group's name in front ("三の間" for "宇治橋 三の間" in
+/// "宇治橋"), else its whole name. It's also the note a stop's frames take
+/// when the stop becomes a spot of another (see [frameAsSpotOf]).
+String spotLabel(Stop stop, String? group) {
+  final note = stop.note?.trim();
+  if (note != null && note.isNotEmpty) return clampText(note.split('\n').first.trim(), maxFrameNoteLength);
+  final name = stop.name.trim();
+  if (group != null && name.startsWith(group)) {
+    final rest = name.substring(group.length).replaceFirst(_spotSeparators, '').trim();
+    if (rest.isNotEmpty) return clampText(rest, maxFrameNoteLength);
+  }
+  return clampText(name, maxFrameNoteLength);
+}
+
+/// What [frame] of [stop] takes on when [stop] is merged into another stop
+/// and becomes one of its spots: [stop]'s position unless the frame has one,
+/// and [spotLabel] as its note unless it has one. Absent fields when the
+/// frame already says both, so the write changes nothing.
+NewReferenceImagesCompanion frameAsSpotOf(NewReferenceImage frame, Stop stop, String? group) {
+  final placed = frame.lat != null && frame.lng != null;
+  final noted = frame.note?.trim().isNotEmpty ?? false;
+  return NewReferenceImagesCompanion(
+    lat: placed ? const Value.absent() : Value(stop.lat),
+    lng: placed ? const Value.absent() : Value(stop.lng),
+    note: noted ? const Value.absent() : Value(spotLabel(stop, group)),
+  );
+}

@@ -5,6 +5,7 @@ import 'package:flutter/foundation.dart';
 import 'package:uuid/uuid.dart';
 
 import '../../../../core/database/database.dart';
+import '../../trip/models/stop_group.dart';
 import '../../trip/services/trip_activity_log.dart';
 import 'firestore_sync_v2_service.dart';
 
@@ -16,6 +17,26 @@ enum TripSyncStatus {
 }
 
 /// Orchestrates two-way synchronization for V10 tables (Trips, Days, Stops, ScheduleItems).
+/// A `frameShots` entry from a stop doc as the frame's fields, checked,
+/// since any member of the trip writes the doc: a position only as a pair of
+/// finite numbers in range, a heading in degrees (wrapped into 0..360), a
+/// note of at most [maxFrameNoteLength] characters. A missing or bad value
+/// clears the field.
+NewReferenceImagesCompanion frameShotFromDoc(Map shot) {
+  double? finite(Object? v) => v is num && v.isFinite ? v.toDouble() : null;
+  final lat = finite(shot['lat']);
+  final lng = finite(shot['lng']);
+  final placed = lat != null && lng != null && lat.abs() <= 90 && lng.abs() <= 180;
+  final heading = finite(shot['heading']);
+  final note = shot['note'] is String ? (shot['note'] as String).trim() : '';
+  return NewReferenceImagesCompanion(
+    lat: Value(placed ? lat : null),
+    lng: Value(placed ? lng : null),
+    note: Value(note.isEmpty ? null : clampText(note, maxFrameNoteLength)),
+    heading: Value(heading == null ? null : (heading % 360 + 360) % 360),
+  );
+}
+
 class SyncEngineServiceV2 {
   bool _isPermanentError(Object error) {
     final str = error.toString().toLowerCase();
@@ -1197,7 +1218,7 @@ class SyncEngineServiceV2 {
     final needsLabels = actionable.any((r) => r.data['labels'] is List);
     final refStopIds = <String>[
       for (final r in actionable)
-        if (r.data['referenceImages'] is List) r.stopId,
+        if (r.data['referenceImages'] is List || r.data['frameShots'] is Map) r.stopId,
     ];
 
     final labelsById = <String, Label>{};
@@ -1229,6 +1250,33 @@ class SyncEngineServiceV2 {
       }
     }
 
+    // The frames the docs name by id, wherever they are on this phone, and
+    // this trip's stops: a frame that moved to another stop (a merge on
+    // another phone) is found where it was, keeping its cached file, and an
+    // id this phone uses outside the trip (a library frame, another trip's)
+    // is never taken over.
+    final namedFrameIds = <String>{
+      for (final r in actionable) ...[
+        if (r.data['referenceImages'] case final List refs)
+          for (final raw in refs)
+            if (raw is Map && raw['id'] is String) raw['id'] as String,
+        if (r.data['frameShots'] case final Map shots)
+          for (final key in shots.keys)
+            if (key is String) key,
+      ],
+    };
+    final knownFrames = {
+      for (final f in await _queryInChunks(
+        namedFrameIds,
+        (chunk) => (localDb.select(localDb.newReferenceImages)..where((r) => r.id.isIn(chunk))).get(),
+      ))
+        f.id: f,
+    };
+    final tripStopIds = knownFrames.isEmpty
+        ? const <String>{}
+        : {for (final s in await (localDb.select(localDb.stops)..where((s) => s.tripId.equals(tripId))).get()) s.id};
+    bool inTrip(NewReferenceImage f) => f.stopId != null && tripStopIds.contains(f.stopId);
+
     final stopsToInsert = <String, StopsCompanion>{};
     final labelsToInsert = <LabelsCompanion>[];
     final labelBangumiBackfills = <({String id, String bangumiId})>[];
@@ -1236,6 +1284,10 @@ class SyncEngineServiceV2 {
     final stopLabelsToInsert = <StopLabelsCompanion>[];
     final refImagesToUpsert = <NewReferenceImagesCompanion>[];
     final refImageIdsToDelete = <String>[];
+    // Where frames are shot from (`frameShots`), by local frame id, with
+    // the stop whose doc says so; written after the frames themselves, and
+    // only to a frame that is on that stop by then.
+    final frameShotWrites = <String, ({String stopId, Map shot})>{};
 
     for (final entry in actionable) {
       final stopId = entry.stopId;
@@ -1265,6 +1317,7 @@ class SyncEngineServiceV2 {
           sourceUrl: Value(data['sourceUrl'] as String?),
           area: Value(data['area'] as String?),
           note: Value(data['note'] as String?),
+          mergedInto: Value(data['mergedInto'] as String?),
           addedBy: Value(data['addedBy'] as String? ?? currentUserId),
           updatedAt: Value(effectiveUpdatedAt),
           updatedBy: Value(data['updatedBy'] as String?),
@@ -1287,6 +1340,8 @@ class SyncEngineServiceV2 {
         final pendingStopLabels = <StopLabelsCompanion>[];
         final pendingRefUpserts = <NewReferenceImagesCompanion>[];
         final pendingRefDeletes = <String>[];
+        // The sender's frame ids, to this phone's ids for the same frames.
+        final senderToLocalFrameId = <String, String>{};
 
         final labelsRaw = data['labels'] as List?;
         if (labelsRaw != null) {
@@ -1370,10 +1425,14 @@ class SyncEngineServiceV2 {
             if (raw is! Map) continue;
             final remoteUrl = raw['remoteUrl'] as String?;
             if (remoteUrl == null || remoteUrl.isEmpty) continue;
-            final existingMatch =
-                (raw['id'] is String ? existingById[raw['id']] : null) ?? existingByUrl[remoteUrl];
-            final imgId = existingMatch?.id ?? (raw['id'] as String?) ?? const Uuid().v4();
+            final rawId = raw['id'] is String && (raw['id'] as String).isNotEmpty ? raw['id'] as String : null;
+            final known = rawId == null ? null : knownFrames[rawId];
+            // This phone uses the id outside the trip: not the same frame.
+            final foreign = known != null && !inTrip(known);
+            final existingMatch = (rawId == null ? null : existingById[rawId]) ?? existingByUrl[remoteUrl] ?? (foreign ? null : known);
+            final imgId = existingMatch?.id ?? (foreign ? null : rawId) ?? const Uuid().v4();
             incomingIds.add(imgId);
+            if (rawId != null) senderToLocalFrameId[rawId] = imgId;
 
             final rawAnimeLabelId = raw['animeLabelId'] as String?;
             String? resolvedAnimeLabelId;
@@ -1403,6 +1462,21 @@ class SyncEngineServiceV2 {
             if (isUrlBacked && !incomingIds.contains(existing.id)) {
               pendingRefDeletes.add(existing.id);
             }
+          }
+        }
+
+        // Where the frames are shot from. A stop uploaded by an older version
+        // has no `frameShots` (or an old one its merge kept), and what this
+        // phone knows stays; a frame the map doesn't name keeps its own, and
+        // an empty entry clears it. A deleted stop's map is stale: its
+        // frames went with it or to the stop it was merged into.
+        final shotsRaw = data['frameShots'];
+        if (shotsRaw is Map && deletedAt == null) {
+          for (final MapEntry(:key, :value) in shotsRaw.entries) {
+            if (key is! String || value is! Map) continue;
+            final known = knownFrames[key];
+            final localId = senderToLocalFrameId[key] ?? (known != null && inTrip(known) ? key : null);
+            if (localId != null) frameShotWrites[localId] = (stopId: stopId, shot: value);
           }
         }
 
@@ -1459,6 +1533,11 @@ class SyncEngineServiceV2 {
             refImagesToUpsert,
           ));
     }
+    // A frame one doc lets go of and another brings has moved between stops
+    // (a merge on another phone), so it stays.
+    final upsertedIds = {for (final r in refImagesToUpsert) r.id.value};
+    refImageIdsToDelete.removeWhere(upsertedIds.contains);
+    await _keepPhotosOfDeletedFrames(tripId, refImageIdsToDelete);
     for (var i = 0; i < refImageIdsToDelete.length; i += _sqlInChunkSize) {
       final chunk = refImageIdsToDelete.sublist(
         i,
@@ -1466,7 +1545,79 @@ class SyncEngineServiceV2 {
       );
       await (localDb.delete(localDb.newReferenceImages)..where((r) => r.id.isIn(chunk))).go();
     }
+    // The frames only this phone has follow their stop's merge before the
+    // spots are written, so the kept stop's doc reaches the ones it names.
+    await _rehomeLocalFramesOfMergedStops(tripId);
+    for (final MapEntry(key: frameId, value: (:stopId, :shot)) in frameShotWrites.entries) {
+      await (localDb.update(localDb.newReferenceImages)..where((r) => r.id.equals(frameId) & r.stopId.equals(stopId)))
+          .write(frameShotFromDoc(shot));
+    }
     return true;
+  }
+
+  /// Points the user's photos of the frames [goingIds] at a copy of each
+  /// that stays in [tripId] (the same link), the way a merge on this phone
+  /// does: a merge on another phone drops the merged stop's copy of a frame
+  /// the kept stop already shows, and the photos still count as shot.
+  Future<void> _keepPhotosOfDeletedFrames(String tripId, List<String> goingIds) async {
+    if (goingIds.isEmpty) return;
+    final going = await _queryInChunks(
+      goingIds,
+      (chunk) => (localDb.select(localDb.newReferenceImages)..where((r) => r.id.isIn(chunk))).get(),
+    );
+    final tripStops = localDb.selectOnly(localDb.stops)
+      ..addColumns([localDb.stops.id])
+      ..where(localDb.stops.tripId.equals(tripId) & localDb.stops.deletedAt.isNull());
+    final goingSet = goingIds.toSet();
+    for (final frame in going) {
+      final url = frame.remoteUrl;
+      if (url == null || url.isEmpty) continue;
+      final copies = await (localDb.select(localDb.newReferenceImages)
+            ..where((r) => r.remoteUrl.equals(url) & r.stopId.isInQuery(tripStops)))
+          .get();
+      final copy = copies.where((c) => !goingSet.contains(c.id)).firstOrNull;
+      if (copy == null) continue;
+      await (localDb.update(localDb.photos)..where((p) => p.referenceImageId.equals(frame.id)))
+          .write(PhotosCompanion(referenceImageId: Value(copy.id)));
+    }
+  }
+
+  /// Moves the frames that only this phone has (no `remoteUrl`) off the
+  /// trip's stops that were merged into another on some phone, onto the
+  /// live stop at the end of the merge (`A` into `B` into `C` ends on `C`),
+  /// giving each its old stop's position and spot name the way the merge
+  /// there did. The uploaded frames come back on the kept stop from its own
+  /// document. Run after every batch of stops, so a merge that arrives before
+  /// the stop it went into (or a chain whose docs come in any order) is
+  /// finished by a later batch; nothing moves until the kept stop is here.
+  Future<void> _rehomeLocalFramesOfMergedStops(String tripId) async {
+    final merged = {
+      for (final s in await (localDb.select(localDb.stops)
+            ..where((s) => s.tripId.equals(tripId) & s.deletedAt.isNotNull() & s.mergedInto.isNotNull()))
+          .get())
+        s.id: s,
+    };
+    if (merged.isEmpty) return;
+    final frames = await _queryInChunks(
+      merged.keys,
+      (chunk) => (localDb.select(localDb.newReferenceImages)..where((r) => r.stopId.isIn(chunk))).get(),
+    );
+    for (final frame in frames) {
+      if (frame.remoteUrl?.isNotEmpty ?? false) continue;
+      final from = merged[frame.stopId]!;
+      var target = from.mergedInto!;
+      final seen = {from.id};
+      while (merged.containsKey(target) && seen.add(target)) {
+        target = merged[target]!.mergedInto!;
+      }
+      if (merged.containsKey(target)) continue; // a cycle
+      final into = await (localDb.select(localDb.stops)
+            ..where((s) => s.id.equals(target) & s.tripId.equals(tripId) & s.deletedAt.isNull()))
+          .getSingleOrNull();
+      if (into == null) continue;
+      await (localDb.update(localDb.newReferenceImages)..where((r) => r.id.equals(frame.id)))
+          .write(frameAsSpotOf(frame, from, stopGroup(from)).copyWith(stopId: Value(into.id)));
+    }
   }
 
   /// Applies a snapshot of remote schedule items inside the caller's open transaction.
@@ -1764,6 +1915,10 @@ class SyncEngineServiceV2 {
               timestampS: Value(img.timestampS),
               source: Value(img.source),
               sourceUrl: Value(img.sourceUrl),
+              lat: Value(img.lat),
+              lng: Value(img.lng),
+              note: Value(img.note),
+              heading: Value(img.heading),
               createdAt: Value(img.createdAt),
             ),
           );

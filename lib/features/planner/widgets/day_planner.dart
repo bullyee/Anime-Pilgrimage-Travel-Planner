@@ -708,8 +708,9 @@ class _AddDayPage extends StatelessWidget {
           borderRadius: BorderRadius.circular(20),
           side: BorderSide(color: p.tea.withValues(alpha: candidates.isNotEmpty ? 1 : 0.45), width: 1.5),
         ),
+        // Scrolls when a banner above the planner leaves it short.
         child: Center(
-          child: Padding(
+          child: SingleChildScrollView(
             padding: const EdgeInsets.all(24),
             child: Column(
               mainAxisSize: MainAxisSize.min,

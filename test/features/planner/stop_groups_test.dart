@@ -14,7 +14,10 @@ import 'package:trip_planner/features/trip/controllers/trip_stops_controller.dar
 import 'package:trip_planner/features/trip/models/stop_group.dart';
 import 'package:trip_planner/features/trip/providers/trip_providers.dart';
 import 'package:trip_planner/features/trip/repositories/trip_repository.dart';
+import 'package:trip_planner/features/trip/screens/trip_place_screen.dart';
+import 'package:trip_planner/features/trip/screens/trip_schedule_screen.dart';
 import 'package:trip_planner/features/trip/screens/trip_screen.dart';
+import 'package:trip_planner/shared/map/app_map.dart';
 
 void main() {
   late AppDatabase db;
@@ -211,15 +214,25 @@ void main() {
   });
 
   group('screens', () {
-    Future<void> pump(WidgetTester tester, String tripId, {TripTab tab = TripTab.plan}) async {
+    /// The trip's schedule, or with [places] the trip page's Places tab.
+    Future<void> pump(WidgetTester tester, String tripId, {bool places = false}) async {
       tester.view.physicalSize = const Size(1080, 2400);
       tester.view.devicePixelRatio = 3;
       addTearDown(tester.view.reset);
-      final router = GoRouter(initialLocation: '/trips/$tripId', routes: [
-        GoRoute(path: '/trips/:tripId', builder: (_, s) => TripScreen(tripId: s.pathParameters['tripId']!, initialTab: tab)),
+      final router = GoRouter(initialLocation: places ? '/trips/$tripId' : '/trips/$tripId/schedule', routes: [
+        GoRoute(path: '/trips/:tripId', builder: (_, s) => TripScreen(tripId: s.pathParameters['tripId']!)),
+        GoRoute(path: '/trips/:tripId/schedule', builder: (_, s) => TripScheduleScreen(tripId: s.pathParameters['tripId']!)),
+        GoRoute(
+          path: '/trips/:tripId/places/:stopId',
+          builder: (_, s) => TripPlaceScreen(tripId: s.pathParameters['tripId']!, stopId: s.pathParameters['stopId']!),
+        ),
       ]);
       await tester.pumpWidget(ProviderScope(
-        overrides: [databaseProvider.overrideWithValue(db), currentUserIdProvider.overrideWithValue('u1')],
+        overrides: [
+          databaseProvider.overrideWithValue(db),
+          currentUserIdProvider.overrideWithValue('u1'),
+          mapTilesProvider.overrideWithValue(false),
+        ],
         child: MaterialApp.router(routerConfig: router),
       ));
       await tester.pumpAndSettle();
@@ -230,33 +243,25 @@ void main() {
       await tester.pump(const Duration(seconds: 1));
     }
 
-    testWidgets('in the Stops tab, held stops are grouped into one row', (tester) async {
+    testWidgets("in the Places tab, a group not folded yet is one place that opens its page", (tester) async {
       final r = DriftTripRepository(db);
       final trip = await r.createTrip(title: 'Uji', ownerId: 'u1', dayCount: 1);
-      for (final name in ['Cafe Rose', 'Cafe Rose', 'Bridge']) {
-        await r.createTripOnlySpot(tripId: trip.id, name: name, lat: 0, lng: 0, addedBy: 'u1');
+      for (final name in ['Rose 1', 'Rose 2']) {
+        await r.createTripOnlySpot(tripId: trip.id, name: name, lat: 0, lng: 0, addedBy: 'u1', area: 'Cafe Rose');
       }
-      await pump(tester, trip.id, tab: TripTab.stops);
+      await r.createTripOnlySpot(tripId: trip.id, name: 'Bridge', lat: 0, lng: 0, addedBy: 'u1');
+      await pump(tester, trip.id, places: true);
 
-      await tester.longPress(find.text('Cafe Rose').first);
-      await tester.pumpAndSettle();
-      expect(find.text('1 selected'), findsOneWidget);
-      await tester.tap(find.text('Cafe Rose').last);
-      await tester.pumpAndSettle();
-      expect(find.text('2 selected'), findsOneWidget);
-      await tester.tap(find.widgetWithText(TextButton, 'Group'));
-      await tester.pumpAndSettle();
-      // Prefilled with the stops' common name.
-      expect(tester.widget<TextField>(find.byKey(const Key('nameDialogField'))).controller!.text, 'Cafe Rose');
-      await tester.tap(find.widgetWithText(FilledButton, 'Group'));
-      await tester.pumpAndSettle();
-
-      expect(find.text('2 stops'), findsOneWidget);
-      expect(find.text('Cafe Rose'), findsOneWidget, reason: 'one row, closed');
+      expect(find.text('Cafe Rose'), findsOneWidget, reason: 'one row');
+      expect(find.text('Rose 1'), findsNothing);
       expect(find.text('Bridge'), findsOneWidget);
-      await tester.tap(find.text('2 stops'));
+
+      await tester.ensureVisible(find.text('Cafe Rose'));
       await tester.pumpAndSettle();
-      expect(find.text('Cafe Rose'), findsNWidgets(3));
+      await tester.tap(find.text('Cafe Rose'));
+      await tester.pumpAndSettle();
+      expect(find.byType(TripPlaceScreen), findsOneWidget);
+      expect(find.textContaining('2 spots · 0 frames'), findsOneWidget);
       await disposeApp(tester);
     });
 

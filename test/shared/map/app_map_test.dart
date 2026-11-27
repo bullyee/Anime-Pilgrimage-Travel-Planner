@@ -135,4 +135,33 @@ void main() {
     expect(after.key, isNot(before.key));
     expect(identical(after.tileProvider, before.tileProvider), isFalse);
   });
+
+  testWidgets('a face pin shows its picture and badge; crowded ones are one stack with how many', (tester) async {
+    MapPin face(String id, double lat, double lng, {int badge = 3}) => MapPin(
+          id: id,
+          point: LatLng(lat, lng),
+          name: 'Place $id',
+          color: Colors.teal,
+          face: ColoredBox(key: ValueKey('face-$id'), color: Colors.amber),
+          badge: badge,
+        );
+    await pumpMap(
+      tester,
+      AppMap(pins: [face('a', 34.8890, 135.8077), face('b', 34.8894, 135.8081, badge: 5), face('far', 34.95, 135.90, badge: 0)]),
+    );
+    expect(find.byType(FacePin), findsOneWidget, reason: 'only the far one stands alone');
+    expect(find.byKey(const ValueKey('face-far')), findsOneWidget);
+    final stack = find.byKey(const ValueKey('cluster:a'));
+    expect(find.descendant(of: stack, matching: find.byType(FaceCluster)), findsOneWidget);
+    expect(find.descendant(of: stack, matching: find.text('2')), findsOneWidget, reason: 'two places');
+    expect(find.descendant(of: stack, matching: find.byKey(const ValueKey('face-a'))), findsOneWidget);
+    expect(find.text('0'), findsNothing, reason: 'no badge without frames');
+
+    await tester.tap(stack);
+    await tester.pumpAndSettle();
+    expect(find.byKey(const ValueKey('cluster:a')), findsNothing);
+    expect(find.byKey(const ValueKey('pin:a')), findsOneWidget);
+    expect(find.byKey(const ValueKey('pin:b')), findsOneWidget);
+    expect(find.text('5'), findsOneWidget);
+  });
 }

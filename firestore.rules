@@ -161,7 +161,11 @@ service cloud.firestore {
         && (!('name' in data) || (data.name is string && data.name.size() <= 300))
         && (!('placeKey' in data) || (data.placeKey is string && data.placeKey.size() <= 200))
         && (!('area' in data) || data.area == null || (data.area is string && data.area.size() <= 100))
-        && (!('note' in data) || data.note == null || (data.note is string && data.note.size() <= 2000));
+        && (!('note' in data) || data.note == null || (data.note is string && data.note.size() <= 2000))
+        // Where each frame of the stop is shot from, by frame id (schema 16).
+        && (!('frameShots' in data) || (data.frameShots is map && data.frameShots.size() <= 2000))
+        // The stop this one was merged into, on a merged stop's tombstone.
+        && (!('mergedInto' in data) || data.mergedInto == null || (data.mergedInto is string && data.mergedInto.size() <= 100));
     }
 
     function isScheduleItemSafe(docId) {

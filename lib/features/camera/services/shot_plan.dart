@@ -163,15 +163,28 @@ Future<ShotPlan?> loadShotPlan(
   final onShotDay = resolved.where((r) => !r.isBackup && (r.date?.isAtSameMomentAs(shotDate) ?? false)).firstOrNull;
   final shotDay = onShotDay == null ? null : dayById[onShotDay.block.id];
 
-  final stop =
-      await (db.select(db.stops)
-            ..where((s) => s.tripId.equals(trip.id) & s.placeKey.equals(placeKey) & s.deletedAt.isNull())
-            ..orderBy([(s) => OrderingTerm.asc(s.createdAt)])
-            ..limit(1))
-          .getSingleOrNull();
+  // The stop the frames belong to, when they're a stop's: a place is one
+  // stop whose frames can come from stops folded into it, with other places
+  // in the library. Else the trip's stop at the place.
+  final frameIds = [for (final id in referenceImageIds) ?id];
+  Stop? stop;
+  if (frameIds.isNotEmpty) {
+    final viaFrame = await (db.select(db.stops).join([
+      innerJoin(db.newReferenceImages, db.newReferenceImages.stopId.equalsExp(db.stops.id)),
+    ])
+          ..where(db.newReferenceImages.id.isIn(frameIds) & db.stops.tripId.equals(trip.id) & db.stops.deletedAt.isNull())
+          ..limit(1))
+        .getSingleOrNull();
+    stop = viaFrame?.readTable(db.stops);
+  }
+  stop ??= await (db.select(db.stops)
+        ..where((s) => s.tripId.equals(trip.id) & s.placeKey.equals(placeKey) & s.deletedAt.isNull())
+        ..orderBy([(s) => OrderingTerm.asc(s.createdAt)])
+        ..limit(1))
+      .getSingleOrNull();
 
   ScheduleItem? item;
-  if (stop != null) {
+  if (stop case final stop?) {
     final items = await (db.select(
       db.scheduleItems,
     )..where((i) => i.stopId.equals(stop.id) & i.deletedAt.isNull())).get();
@@ -179,10 +192,11 @@ Future<ShotPlan?> loadShotPlan(
     item = items.where((i) => i.dayId == shotDay?.id).firstOrNull ?? items.firstOrNull;
   }
 
-  // The spot's frames: the place's own, and those a shared trip links to the stop.
+  // The spot's frames: the place's own, and the stop's.
+  final stopId = stop?.id;
   final frames =
       await (db.select(db.newReferenceImages)..where(
-            (f) => f.placeKey.equals(placeKey) | (stop == null ? const Constant(false) : f.stopId.equals(stop.id)),
+            (f) => f.placeKey.equals(placeKey) | (stopId == null ? const Constant(false) : f.stopId.equals(stopId)),
           ))
           .get();
   // A stop's frames are copies of its place's (the same picture under a new
@@ -193,14 +207,14 @@ Future<ShotPlan?> loadShotPlan(
   // the spot is done; a stop without frames of its own falls back to the place's.
   final stopOwn = [
     for (final f in frames)
-      if (stop != null && f.stopId == stop.id) f,
+      if (stopId != null && f.stopId == stopId) f,
   ];
   final counted = {for (final f in stopOwn.isNotEmpty ? stopOwn : frames) picture[f.id]!};
   final saved = <String>{};
   if (picture.isNotEmpty) {
-    final photos = await (db.select(
-      db.photos,
-    )..where((p) => p.placeKey.equals(placeKey) & p.referenceImageId.isIn(picture.keys))).get();
+    // By frame alone: a photo keeps the place it was shot at, which a fold
+    // can merge into another.
+    final photos = await (db.select(db.photos)..where((p) => p.referenceImageId.isIn(picture.keys))).get();
     saved.addAll(photos.map((p) => picture[p.referenceImageId]!));
   }
 

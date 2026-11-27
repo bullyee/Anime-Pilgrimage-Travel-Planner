@@ -326,6 +326,10 @@ class PlaceComparisonService {
             timestampS: Value(f.timestampS),
             source: Value(f.source),
             sourceUrl: Value(f.sourceUrl),
+            lat: Value(f.lat),
+            lng: Value(f.lng),
+            note: Value(f.note),
+            heading: Value(f.heading),
           ));
     }
 

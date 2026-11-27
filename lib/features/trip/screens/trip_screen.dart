@@ -4,42 +4,41 @@ import 'package:go_router/go_router.dart';
 
 import '../../../core/database/database.dart';
 import '../../../core/utils/app_result.dart';
-import '../../../shared/theme/app_theme.dart';
 import '../../planner/providers/planner_providers.dart';
-import '../../planner/widgets/day_planner.dart';
+import '../../../core/l10n/l10n.dart';
 import '../../sharing/models/trip_member.dart';
 import '../../sharing/providers/group_sharing_providers.dart';
 import '../../sharing/widgets/invite_sheet.dart';
 import '../controllers/trips_controller.dart';
 import '../providers/trip_providers.dart';
 import '../services/trip_route_export_service.dart';
+import '../widgets/place_fold_banner.dart';
 import '../widgets/trip_arrival_banner.dart';
 import '../widgets/trip_card.dart';
 import '../widgets/trip_form_sheet.dart';
 import '../widgets/trip_sync_icon.dart';
 import 'trip_activity_screen.dart';
 import 'trip_members_tab.dart';
-import 'trip_stops_tab.dart';
+import 'trip_places_tab.dart';
 import '../../../shared/widgets/up_button.dart';
 import '../../sharing/widgets/signed_out_trip_notice.dart';
 
 enum TripTab {
-  plan,
-  stops,
+  places,
   members;
 
-  /// The tab a `?tab=` link names. Anything else, such as the old
-  /// `overview`, opens the plan.
-  static TripTab fromQuery(String? name) => values.asNameMap()[name] ?? plan;
+  /// The tab a `?tab=` link names. Anything else, such as the old `plan`,
+  /// `stops` or `overview`, opens the places.
+  static TripTab fromQuery(String? name) => name == 'members' ? members : places;
 }
 
-/// One trip, in three tabs: the day planner, its stops, and who it's shared
-/// with. The plan opens read-only; the pencil turns editing on.
+/// One trip, in two tabs: its places, by day, and who it's shared with. The
+/// schedule, with times, opens from the app bar.
 class TripScreen extends ConsumerStatefulWidget {
   final String tripId;
   final TripTab initialTab;
 
-  const TripScreen({super.key, required this.tripId, this.initialTab = TripTab.plan});
+  const TripScreen({super.key, required this.tripId, this.initialTab = TripTab.places});
 
   @override
   ConsumerState<TripScreen> createState() => _TripScreenState();
@@ -48,8 +47,9 @@ class TripScreen extends ConsumerStatefulWidget {
 class _TripScreenState extends ConsumerState<TripScreen> with SingleTickerProviderStateMixin {
   late final TabController _tabs =
       TabController(length: TripTab.values.length, vsync: this, initialIndex: widget.initialTab.index);
-  bool _grid = false;
-  bool _editing = false;
+
+  /// The Places tab shows the trip map.
+  bool _placesMap = false;
 
   @override
   void initState() {
@@ -65,6 +65,8 @@ class _TripScreenState extends ConsumerState<TripScreen> with SingleTickerProvid
   }
 
   void _onTabChanged() {
+    // Leaving Places disposes it, so it comes back as the list.
+    if (_tabs.index != TripTab.places.index) _placesMap = false;
     if (!_tabs.indexIsChanging) setState(() {});
   }
 
@@ -96,15 +98,12 @@ class _TripScreenState extends ConsumerState<TripScreen> with SingleTickerProvid
             final n => '$n days',
           };
     final tab = TripTab.values[_tabs.index];
-    final hasStops = ref.watch(tripStopsProvider(trip.id)).valueOrNull?.isNotEmpty ?? false;
     final role = ref.watch(myTripRoleProvider(trip.id));
     final subline = [
       if (subtitle.isNotEmpty) subtitle,
       if (role == TripMemberRole.viewer) 'View only',
     ].join(' · ');
     final canEdit = ref.watch(canEditTripProvider(trip.id));
-    // A viewer's role can change while they're on the page.
-    final editing = _editing && canEdit;
     final shared = trip.sharing == 'group';
     final hasAccess = !shared || role != null;
     final menu = [
@@ -142,20 +141,12 @@ class _TripScreenState extends ConsumerState<TripScreen> with SingleTickerProvid
           ],
         ),
         actions: [
-          if (tab == TripTab.plan)
-            IconButton(
-              tooltip: _grid ? 'Show one day at a time' : 'Show all days',
-              icon: Icon(_grid ? Icons.view_carousel_outlined : Icons.grid_view),
-              onPressed: () => setState(() => _grid = !_grid),
-            ),
-          if (tab == TripTab.plan && canEdit)
-            editing
-                ? TextButton(onPressed: () => setState(() => _editing = false), child: const Text('Done'))
-                : IconButton(
-                    tooltip: 'Edit the plan',
-                    icon: const Icon(Icons.edit_outlined),
-                    onPressed: () => setState(() => _editing = true),
-                  ),
+          IconButton(
+            key: const Key('tripSchedule'),
+            tooltip: context.l10n.tripSchedule,
+            icon: const Icon(Icons.schedule),
+            onPressed: () => context.push('/trips/${trip.id}/schedule'),
+          ),
           if (shared && hasAccess) TripActivityButton(tripId: trip.id),
           IconButton(
             tooltip: 'Pilgrimage map',
@@ -170,6 +161,7 @@ class _TripScreenState extends ConsumerState<TripScreen> with SingleTickerProvid
             ),
           if (menu.isNotEmpty)
             PopupMenuButton<String>(
+              key: const Key('tripMenu'),
               onSelected: (value) {
                 if (value == 'edit') _editTrip(context, trip);
                 if (value == 'export_gpx') _exportRoute(context, trip, isGeoJson: false);
@@ -183,61 +175,33 @@ class _TripScreenState extends ConsumerState<TripScreen> with SingleTickerProvid
         ],
         bottom: TabBar(
           controller: _tabs,
-          tabs: const [Tab(text: 'Plan'), Tab(text: 'Stops'), Tab(text: 'Members')],
+          tabs: [Tab(text: context.l10n.tripTabPlaces), Tab(text: context.l10n.tripTabMembers)],
         ),
       ),
       body: Column(
         children: [
           if (shared && ref.watch(signedOutProvider)) const SignedOutTripStrip(),
           if (shared) TripArrivalBanner(trip: trip),
+          PlaceFoldBanner(trip: trip),
           Expanded(
             child: TabBarView(
               controller: _tabs,
-              // Swiping belongs to the planner's days, so tabs change by tapping.
-              physics: const NeverScrollableScrollPhysics(),
+              // The trip map pans sideways, so it doesn't swipe to Members.
+              physics: _placesMap ? const NeverScrollableScrollPhysics() : null,
               children: [
-                Column(
-                  children: [
-                    if (editing)
-                      Container(
-                        width: double.infinity,
-                        color: theme.trip.teaSoft,
-                        padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
-                        child: Row(
-                          children: [
-                            Icon(Icons.edit_outlined, size: 18, color: theme.trip.tea),
-                            const SizedBox(width: 10),
-                            Expanded(
-                              child: Text(
-                                'Editing the plan. Hold a stop to move it. Changes are saved as you go.',
-                                style: theme.textTheme.bodySmall?.copyWith(color: theme.colorScheme.onSurface),
-                              ),
-                            ),
-                          ],
-                        ),
-                      ),
-                    Expanded(
-                      child: DayPlanner(
-                        tripId: trip.id,
-                        grid: _grid,
-                        editing: editing,
-                        onGridChanged: (grid) => setState(() => _grid = grid),
-                      ),
-                    ),
-                  ],
-                ),
-                TripStopsTab(tripId: trip.id),
+                TripPlacesTab(tripId: trip.id, onMapChanged: (map) => setState(() => _placesMap = map)),
                 TripMembersTab(trip: trip),
               ],
             ),
           ),
         ],
       ),
-      floatingActionButton: tab == TripTab.stops && hasStops && canEdit
+      floatingActionButton: tab == TripTab.places && canEdit && !_placesMap
           ? FloatingActionButton.extended(
+              key: const Key('addPlaces'),
               onPressed: () => openAddStopsSheet(context, trip.id),
               icon: const Icon(Icons.add),
-              label: const Text('Add stops'),
+              label: Text(context.l10n.placesAddPlaces),
             )
           : null,
     );

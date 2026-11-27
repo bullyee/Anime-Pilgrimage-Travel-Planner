@@ -118,5 +118,513 @@
   "settingsAboutBangumiSubtitle": "bgm.tv",
   "settingsPrivacyPolicy": "Privacy policy",
   "settingsSourceCode": "Source code and releases",
-  "settingsOpenSourceLicences": "Open-source licences"
+  "settingsOpenSourceLicences": "Open-source licences",
+  "placeTitleFallback": "Place",
+  "@placeTitleFallback": {
+    "description": "Title of a trip's place page while its name is unknown."
+  },
+  "placeGone": "This place is no longer in the trip.",
+  "placeSpotCount": "{count, plural, =1{1 spot} other{{count} spots}}",
+  "@placeSpotCount": {
+    "description": "How many spots (shot positions) a place has.",
+    "placeholders": {
+      "count": {
+        "type": "int"
+      }
+    }
+  },
+  "placeShotCount": "{count} shot",
+  "@placeShotCount": {
+    "description": "How many of a place's frames are shot, after the counts.",
+    "placeholders": {
+      "count": {
+        "type": "int"
+      }
+    }
+  },
+  "placeFilterAll": "All {count}",
+  "@placeFilterAll": {
+    "placeholders": {
+      "count": {
+        "type": "int"
+      }
+    }
+  },
+  "placeFilterNotShot": "Not shot {count}",
+  "@placeFilterNotShot": {
+    "placeholders": {
+      "count": {
+        "type": "int"
+      }
+    }
+  },
+  "placeNearestFirst": "Nearest first",
+  "placeAllShot": "Everything here is shot.",
+  "placeNoSpots": "No spots.",
+  "placeSpotShot": "Shot",
+  "placeSpotNotShot": "Not shot",
+  "placeFrameCount": "{count, plural, =1{1 frame} other{{count} frames}}",
+  "@placeFrameCount": {
+    "placeholders": {
+      "count": {
+        "type": "int"
+      }
+    }
+  },
+  "placeFrameNotShotLabel": "Frame, not shot",
+  "placeFrameShotLabel": "Your photo of this frame",
+  "placeDetails": "Stop details",
+  "placeFoldBannerText": "A group of stops is one place now, its stops the spots inside it.",
+  "placeFoldBannerAction": "Turn into places",
+  "placeFoldConfirmTitle": "Turn groups into places?",
+  "placeFoldConfirmBody": "Each group becomes one stop with the group's name. Its stops' frames, days and labels move onto it, and each frame keeps where it was shot from. Everyone in the trip sees the change.",
+  "placeFoldDone": "{count, plural, =1{Made 1 place.} other{Made {count} places.}}",
+  "@placeFoldDone": {
+    "placeholders": {
+      "count": {
+        "type": "int"
+      }
+    }
+  },
+  "placeFoldNeedsSignIn": "Sign in to change a shared trip.",
+  "placeFoldNeedsSync": "Some changes haven't synced yet. Try again once they have.",
+  "placeFoldFailed": "Couldn't turn the groups into places: {error}",
+  "@placeFoldFailed": {
+    "placeholders": {
+      "error": {
+        "type": "String"
+      }
+    }
+  },
+  "placeFilterNearby": "Nearby {count}",
+  "@placeFilterNearby": {
+    "placeholders": {
+      "count": {
+        "type": "int"
+      }
+    }
+  },
+  "placeNoneNearby": "No spots within 60 m.",
+  "placeEstimated": "Position estimated",
+  "placeSpotsHeading": "Spots",
+  "placeSpotsHint": "Each spot is a place to shoot from, with the frames shot there.",
+  "placeNotesHeading": "Notes",
+  "placeNotesHint": "Getting there, opening hours, when to shoot…",
+  "placeOpenInMaps": "Open in Google Maps",
+  "placeDistanceAway": "{distance} away",
+  "@placeDistanceAway": {
+    "placeholders": {
+      "distance": {
+        "type": "String"
+      }
+    }
+  },
+  "placeCompass": "{dir, select, n{N} ne{NE} e{E} se{SE} s{S} sw{SW} w{W} nw{NW} other{}}",
+  "@placeCompass": {
+    "description": "A compass point: n, ne, e, se, s, sw, w or nw.",
+    "placeholders": {
+      "dir": {
+        "type": "String"
+      }
+    }
+  },
+  "placeSpotWay": "{direction} {distance}",
+  "@placeSpotWay": {
+    "description": "Which way a spot is and how far, e.g. \"NE 40 m\".",
+    "placeholders": {
+      "direction": {
+        "type": "String"
+      },
+      "distance": {
+        "type": "String"
+      }
+    }
+  },
+  "placeStartShooting": "{count, plural, =1{Start shooting · 1 not shot} other{Start shooting · {count} not shot}}",
+  "@placeStartShooting": {
+    "placeholders": {
+      "count": {
+        "type": "int"
+      }
+    }
+  },
+  "placeSeePhotos": "Everything here is shot · See photos",
+  "placeNext": "Next: {spot} · {distance}",
+  "@placeNext": {
+    "placeholders": {
+      "spot": {
+        "type": "String"
+      },
+      "distance": {
+        "type": "String"
+      }
+    }
+  },
+  "placeNextHere": "Next: {spot}",
+  "@placeNextHere": {
+    "placeholders": {
+      "spot": {
+        "type": "String"
+      }
+    }
+  },
+  "placeShoot": "Shoot",
+  "placeSpotNoteLabel": "Note (a spot has no name; its note tells it apart)",
+  "placeSpotNoteHint": "e.g. north side of the 3rd pillar",
+  "placeSaveNote": "Save note",
+  "placeSetPosition": "Set its position on the map",
+  "placeSetPositionEstimated": "The position now is estimated",
+  "placeShootSpot": "Shoot this spot",
+  "placePlacing": "Drag the map to put the cross on where “{spot}” is shot from",
+  "@placePlacing": {
+    "placeholders": {
+      "spot": {
+        "type": "String"
+      }
+    }
+  },
+  "placeSetHere": "Set here",
+  "placePositionSaved": "Position saved.",
+  "placeSpotOptions": "Options for “{spot}”",
+  "@placeSpotOptions": {
+    "placeholders": {
+      "spot": {
+        "type": "String"
+      }
+    }
+  },
+  "placeMenu": "Place options",
+  "placeDayUnsorted": "Unsorted",
+  "placeDayN": "Day {n}",
+  "@placeDayN": {
+    "placeholders": {
+      "n": {
+        "type": "int"
+      }
+    }
+  },
+  "placeNoDate": "No date",
+  "placeDayChip": "Day: {day}. Tap to move the place",
+  "@placeDayChip": {
+    "placeholders": {
+      "day": {
+        "type": "String"
+      }
+    }
+  },
+  "placeMoveTitle": "Where “{place}” goes",
+  "@placeMoveTitle": {
+    "placeholders": {
+      "place": {
+        "type": "String"
+      }
+    }
+  },
+  "placeMovedTo": "Moved to {day}.",
+  "@placeMovedTo": {
+    "placeholders": {
+      "day": {
+        "type": "String"
+      }
+    }
+  },
+  "placeCountInDay": "{count, plural, =1{1 place} other{{count} places}}",
+  "@placeCountInDay": {
+    "placeholders": {
+      "count": {
+        "type": "int"
+      }
+    }
+  },
+  "placeMerge": "Merge another place into this one",
+  "placeMergePick": "Merge into “{place}”",
+  "@placeMergePick": {
+    "placeholders": {
+      "place": {
+        "type": "String"
+      }
+    }
+  },
+  "placeMergeConfirm": "Merge “{other}” into “{place}”?",
+  "@placeMergeConfirm": {
+    "placeholders": {
+      "other": {
+        "type": "String"
+      },
+      "place": {
+        "type": "String"
+      }
+    }
+  },
+  "placeMergeBody": "Its frames, labels and days come here, each frame keeping where it was shot from, and “{other}” leaves the trip, for everyone in it.",
+  "@placeMergeBody": {
+    "placeholders": {
+      "other": {
+        "type": "String"
+      }
+    }
+  },
+  "placeMergeAction": "Merge",
+  "placeMerged": "Merged “{other}” into this place.",
+  "@placeMerged": {
+    "placeholders": {
+      "other": {
+        "type": "String"
+      }
+    }
+  },
+  "placeTakePhoto": "Take photo",
+  "placeCompare": "See your photo",
+  "placeFrameTitle": "Anime frame",
+  "placeNoFrames": "No frames yet",
+  "placeSpotNoFrames": "No frames at this spot yet.",
+  "placeCancel": "Cancel",
+  "tripTabPlaces": "Places",
+  "tripTabMembers": "Members",
+  "tripSchedule": "Schedule",
+  "placesSearchHint": "Find places, spot notes, frames or tags",
+  "placesClearSearch": "Clear search",
+  "placesSortNearest": "Nearest",
+  "placesSortByDay": "By day",
+  "placesNearestHeading": "Nearest to you",
+  "placesToday": "Today",
+  "placesTodayTitle": "Today {date} · {day}",
+  "@placesTodayTitle": {
+    "placeholders": {
+      "date": {
+        "type": "String"
+      },
+      "day": {
+        "type": "String"
+      }
+    }
+  },
+  "placesTodayNearest": "{count, plural, =1{1 place, nearest is “{place}” {distance}} other{{count} places, nearest is “{place}” {distance}}}",
+  "@placesTodayNearest": {
+    "placeholders": {
+      "count": {
+        "type": "int"
+      },
+      "place": {
+        "type": "String"
+      },
+      "distance": {
+        "type": "String"
+      }
+    }
+  },
+  "placesTodayStart": "{count, plural, =1{1 place, start with “{place}”} other{{count} places, start with “{place}”}}",
+  "@placesTodayStart": {
+    "placeholders": {
+      "count": {
+        "type": "int"
+      },
+      "place": {
+        "type": "String"
+      }
+    }
+  },
+  "placesNoMatch": "Nothing matches “{query}”.",
+  "@placesNoMatch": {
+    "placeholders": {
+      "query": {
+        "type": "String"
+      }
+    }
+  },
+  "placesEmptyDay": "No places yet. Open a place and tap its day to move it here.",
+  "placesEmpty": "No places in this trip yet.",
+  "placesNewDay": "+ New day / category",
+  "placesAddPlaces": "Add places",
+  "placesDayOptions": "Options for “{day}”",
+  "@placesDayOptions": {
+    "placeholders": {
+      "day": {
+        "type": "String"
+      }
+    }
+  },
+  "placesRename": "Rename",
+  "placesSetDate": "Add a date",
+  "placesChangeDate": "Change the date ({date})",
+  "@placesChangeDate": {
+    "placeholders": {
+      "date": {
+        "type": "String"
+      }
+    }
+  },
+  "placesClearDate": "Remove the date",
+  "placesClearDateHint": "Keeps just the name",
+  "placesReorder": "Reorder",
+  "placesDeleteDay": "Delete",
+  "placesDeleteDayHint": "Its places move to Unsorted",
+  "placesDeleteDayTitle": "Delete “{day}”?",
+  "@placesDeleteDayTitle": {
+    "placeholders": {
+      "day": {
+        "type": "String"
+      }
+    }
+  },
+  "placesDeleteDayBody": "Its places aren't deleted; they move to Unsorted.",
+  "placesDayName": "Name",
+  "placesDayNameHint": "e.g. Nishinomiya, Next time",
+  "placesNewDayTitle": "New day / category",
+  "placesRenameTitle": "Rename the day",
+  "placesWithDate": "Add a date (optional)",
+  "placesCreate": "Create",
+  "placesSave": "Save",
+  "placesMoveUp": "Move up",
+  "placesMoveDown": "Move down",
+  "placesMatchName": "Place name",
+  "placesMatchSpots": "Spots: {notes}",
+  "@placesMatchSpots": {
+    "placeholders": {
+      "notes": {
+        "type": "String"
+      }
+    }
+  },
+  "placesMatchFrames": "{count, plural, =1{1 frame: {names}} other{{count} frames: {names}}}",
+  "@placesMatchFrames": {
+    "placeholders": {
+      "count": {
+        "type": "int"
+      },
+      "names": {
+        "type": "String"
+      }
+    }
+  },
+  "placesDone": "Done",
+  "placesAddFromLibrary": "From my library",
+  "placesAddFromLibraryHint": "Places you have saved",
+  "placesAddNewSpot": "New spot",
+  "placesAddNewSpotHint": "Pick it on the map",
+  "placesShowAs": "Show as",
+  "placesViewList": "List",
+  "placesViewMap": "Map",
+  "placesSectionCount": "{count, plural, =1{1 place} other{{count} places}}",
+  "@placesSectionCount": {
+    "placeholders": {
+      "count": {
+        "type": "int"
+      }
+    }
+  },
+  "placesMatchLabels": "Tags: {names}",
+  "@placesMatchLabels": {
+    "placeholders": {
+      "names": {
+        "type": "String"
+      }
+    }
+  },
+  "placesNoTagMatch": "No places with these tags.",
+  "placesClearTags": "Clear",
+  "placesFilterByTag": "Filter by tag",
+  "mapAllDays": "All",
+  "mapDays": "Days",
+  "mapYourLocation": "Your location",
+  "mapOpenPlace": "Open place",
+  "mapShootHere": "Shoot here",
+  "mapClose": "Close",
+  "mapPlaceCount": "{count, plural, =1{1 place} other{{count} places}}",
+  "@mapPlaceCount": {
+    "placeholders": {
+      "count": {
+        "type": "int"
+      }
+    }
+  },
+  "mapCrowded": "Too crowded here; pick one",
+  "mapNoPlaces": "No places here yet",
+  "placePickFromGallery": "Pick from gallery",
+  "placePickEmpty": "That photo can't be opened, so it can't be used",
+  "placePickedSaved": "Saved as your photo of this frame",
+  "placePickFailed": "Couldn't add the photo: {error}",
+  "@placePickFailed": {
+    "placeholders": {
+      "error": {
+        "type": "String"
+      }
+    }
+  },
+  "photosFilterAll": "All",
+  "photosFilterToEdit": "To edit",
+  "photosFilterToEditCount": "To edit · {count}",
+  "@photosFilterToEditCount": {
+    "placeholders": {
+      "count": {
+        "type": "int"
+      }
+    }
+  },
+  "photosFilterPairs": "Pairs",
+  "photosEditFromGallery": "Edit a photo from the gallery",
+  "photosGroupBy": "Group by",
+  "photosByDay": "By day",
+  "photosByPlace": "By place",
+  "photosLoadFailed": "Couldn't load the photos: {error}",
+  "@photosLoadFailed": {
+    "placeholders": {
+      "error": {
+        "type": "String"
+      }
+    }
+  },
+  "photosEmptyTitle": "No photos yet",
+  "photosEmptyBody": "The photos you take with Shoot, or from a place or a stop, show up here.",
+  "photosPairsEmpty": "Photos you shoot against a frame show here under it. Open a place and start shooting, or pick one from the gallery on a frame.",
+  "photosPlaceGone": "A place no longer in your library",
+  "photosShareImage": "Share image",
+  "photosShareMax": "Up to {max} pairs",
+  "@photosShareMax": {
+    "placeholders": {
+      "max": {
+        "type": "int"
+      }
+    }
+  },
+  "photosShareMake": "{count, plural, =0{Pick a few pairs} =1{Make an image with 1 pair} other{Make an image with {count} pairs}}",
+  "@photosShareMake": {
+    "placeholders": {
+      "count": {
+        "type": "int"
+      }
+    }
+  },
+  "shareImageTitle": "Share image",
+  "shareImagePairs": "{count, plural, =1{1 pair} other{{count} pairs}}",
+  "@shareImagePairs": {
+    "placeholders": {
+      "count": {
+        "type": "int"
+      }
+    }
+  },
+  "shareImageSubtitle": "{count, plural, =1{1 pair} other{{count} pairs}} · frame / my photo",
+  "@shareImageSubtitle": {
+    "placeholders": {
+      "count": {
+        "type": "int"
+      }
+    }
+  },
+  "shareImageTitleField": "Title",
+  "shareImageGrid": "Grid",
+  "shareImageStacked": "Stacked",
+  "shareImageSave": "Save",
+  "shareImageShare": "Share",
+  "shareImageDefaultTitle": "My pilgrimage",
+  "shareImageNothing": "None of these photos or frames could be read.",
+  "shareImageFailed": "Couldn't make the image: {error}",
+  "@shareImageFailed": {
+    "placeholders": {
+      "error": {
+        "type": "String"
+      }
+    }
+  }
 }

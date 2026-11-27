@@ -21,6 +21,57 @@ class UserTripsSnapshot {
 Map<String, dynamic> withDocumentId(String docId, Map<String, dynamic> data) =>
     {...data, 'id': docId};
 
+/// The most `frameShots` entries one phone writes for a stop. The merge keeps
+/// entries of frames that are gone (another phone's local frames can't be
+/// told apart from deleted ones), so the Firestore rules allow a far bigger
+/// map (2000) and a stop that keeps losing and gaining frames still uploads.
+const maxFrameShots = 300;
+
+/// The `frameShots` map of a stop doc: where each of [frames] is shot from
+/// (`lat`, `lng`, `note`, `heading`), by frame id, for the frames that have
+/// any of them; null values are left out.
+///
+/// It is a map of its own beside `referenceImages` rather than keys inside
+/// that array because a phone on an older version rebuilds the array without
+/// keys it doesn't know whenever it uploads the stop, while a top-level field
+/// it doesn't write survives its merge. It covers local-only frames too
+/// (keyed by their id, which a frames pack keeps on the phones it reaches).
+Map<String, Map<String, Object>> frameShotsOf(Iterable<NewReferenceImage> frames) {
+  final out = SplayTreeMap<String, Map<String, Object>>();
+  for (final f in frames) {
+    final shot = <String, Object>{
+      if (f.lat != null) 'lat': f.lat!,
+      if (f.lng != null) 'lng': f.lng!,
+      if (f.note?.trim().isNotEmpty ?? false) 'note': f.note!,
+      if (f.heading != null) 'heading': f.heading!,
+    };
+    if (shot.isNotEmpty) out[f.id] = shot;
+  }
+  return Map.fromEntries(out.entries.take(maxFrameShots));
+}
+
+/// What a push merges into a stop doc's `frameShots` for [frames], the
+/// stop's frames on this phone: every frame's entry with all of
+/// [frameShotFields], null for a value it lacks, which the push turns into a
+/// delete. So a value or a whole spot cleared here is cleared in the doc
+/// (a frame that says nothing leaves an empty entry, which tells the other
+/// phones to clear theirs) instead of the merge keeping the old one. Frames
+/// this phone doesn't have are left out, and so kept; at most
+/// [maxFrameShots] frames with a spot and as many without.
+Map<String, Map<String, Object?>> frameShotsPatch(Iterable<NewReferenceImage> frames) {
+  final shots = frameShotsOf(frames);
+  final cleared = SplayTreeSet<String>.of([for (final f in frames) if (!shots.containsKey(f.id) && _saysNothing(f)) f.id]);
+  return {
+    for (final MapEntry(key: id, value: shot) in shots.entries) id: {for (final k in frameShotFields) k: shot[k]},
+    for (final id in cleared.take(maxFrameShots)) id: {for (final k in frameShotFields) k: null},
+  };
+}
+
+bool _saysNothing(NewReferenceImage f) => f.lat == null && f.lng == null && f.heading == null && (f.note?.trim().isEmpty ?? true);
+
+/// The fields of a `frameShots` entry.
+const frameShotFields = ['lat', 'lng', 'note', 'heading'];
+
 /// Service responsible for communicating with Firestore under the new `/tripsV2/{tripId}` collection.
 /// The documents of one trip subcollection, as a list, plus whether the
 /// snapshot came from the local cache. A snapshot from the server is the whole
@@ -175,6 +226,7 @@ class FirestoreSyncV2Service {
       'sourceUrl': stop.sourceUrl,
       'area': stop.area,
       'note': stop.note,
+      'mergedInto': stop.mergedInto,
       'addedBy': stop.addedBy,
       'updatedAt': Timestamp.fromDate(stop.updatedAt),
       'updatedBy': stop.updatedBy,
@@ -206,6 +258,20 @@ class FirestoreSyncV2Service {
                 'sourceUrl': img.sourceUrl,
               })
           .toList();
+      // A merge keeps the doc's other entries (frames only another phone
+      // has); a value or a spot this phone cleared is deleted rather than
+      // left out, or the merge would keep the old one.
+      final patch = frameShotsPatch(referenceImages);
+      if (stop.deletedAt != null) {
+        // A deleted stop's frames are elsewhere or gone with it (a merged
+        // stop's went to the kept one), so its spots would only be stale.
+        data['frameShots'] = FieldValue.delete();
+      } else if (patch.isNotEmpty) {
+        data['frameShots'] = {
+          for (final MapEntry(key: id, value: shot) in patch.entries)
+            id: {for (final MapEntry(:key, :value) in shot.entries) key: value ?? FieldValue.delete()},
+        };
+      }
     }
 
     batch.set(docRef, data, SetOptions(merge: true));

@@ -12,7 +12,7 @@ void main() {
   test('a fresh database is at schema 15 with both tables and the index', () async {
     final db = AppDatabase.forTesting(NativeDatabase.memory());
     addTearDown(db.close);
-    expect(db.schemaVersion, 15);
+    expect(db.schemaVersion, greaterThanOrEqualTo(15));
     final tables = {
       for (final r in await db.customSelect("SELECT name FROM sqlite_master WHERE type IN ('table','index')").get())
         r.read<String>('name'),
@@ -55,6 +55,6 @@ void main() {
     expect(await db.select(db.tripActivities).get(), hasLength(1));
     expect(await db.select(db.tripViews).get(), hasLength(1));
     final version = await db.customSelect('PRAGMA user_version').getSingle();
-    expect(version.read<int>('user_version'), 15);
+    expect(version.read<int>('user_version'), greaterThanOrEqualTo(15));
   });
 }

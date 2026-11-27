@@ -12,7 +12,7 @@ void main() {
       final db = AppDatabase.forTesting(NativeDatabase.memory());
       addTearDown(db.close);
 
-      expect(db.schemaVersion, equals(15));
+      expect(db.schemaVersion, equals(16));
 
       final now = DateTime.now();
       await db.into(db.trips).insert(
@@ -92,7 +92,7 @@ void main() {
       final db2 = AppDatabase.forTesting(NativeDatabase(dbFile));
       addTearDown(db2.close);
 
-      expect(db2.schemaVersion, equals(15));
+      expect(db2.schemaVersion, equals(16));
 
       final stop = await (db2.select(db2.stops)..where((s) => s.id.equals('stop_1'))).getSingle();
       expect(stop.name, equals('Kyoto Tower'));

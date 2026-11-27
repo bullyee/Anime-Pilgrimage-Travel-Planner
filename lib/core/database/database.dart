@@ -26,7 +26,7 @@ class AppDatabase extends _$AppDatabase {
   AppDatabase.forTesting(super.executor);
 
   @override
-  int get schemaVersion => 15;
+  int get schemaVersion => 16;
 
   @override
   MigrationStrategy get migration => MigrationStrategy(
@@ -99,6 +99,25 @@ class AppDatabase extends _$AppDatabase {
             await m.createTable(tripViews);
             await _createActivityIndex();
           }
+          if (from < 16) {
+            // Where each frame is shot from: a place is one stop now, and its
+            // frames carry the spots inside it (the fine layer). A merged
+            // stop remembers the stop it went into. A file without one of the
+            // tables (only ever a hand-made test file) skips it.
+            if (await _hasTable('v10_reference_images')) {
+              for (final (name, column) in [
+                ('lat', newReferenceImages.lat),
+                ('lng', newReferenceImages.lng),
+                ('note', newReferenceImages.note),
+                ('heading', newReferenceImages.heading),
+              ]) {
+                if (!await _hasColumn('v10_reference_images', name)) await m.addColumn(newReferenceImages, column);
+              }
+            }
+            if (await _hasTable('stops') && !await _hasColumn('stops', 'merged_into')) {
+              await m.addColumn(stops, stops.mergedInto);
+            }
+          }
         },
         beforeOpen: (details) async {
           await customStatement('PRAGMA foreign_keys = ON');
@@ -108,6 +127,8 @@ class AppDatabase extends _$AppDatabase {
   Future<void> _createActivityIndex() => customStatement(
         'CREATE INDEX IF NOT EXISTS idx_trip_activities_trip_created ON trip_activities(trip_id, created_at)',
       );
+
+  Future<bool> _hasTable(String table) async => (await customSelect('PRAGMA table_info($table)').get()).isNotEmpty;
 
   Future<bool> _hasColumn(String table, String column) async {
     final columns = await customSelect('PRAGMA table_info($table)').get();

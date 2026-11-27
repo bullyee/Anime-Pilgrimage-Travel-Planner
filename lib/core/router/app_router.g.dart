@@ -6,7 +6,7 @@ part of 'app_router.dart';
 // RiverpodGenerator
 // **************************************************************************
 
-String _$routerHash() => r'd5ab64bfdedc9bd78cdef40b211efaa7e7292ce1';
+String _$routerHash() => r'809d2a73388ab1ce299f635204e802c22b625dd8';
 
 /// The app's one router. It lives as long as the app: signing in or out
 /// only re-runs [GoRouter.redirect] (through `refreshListenable`), so the

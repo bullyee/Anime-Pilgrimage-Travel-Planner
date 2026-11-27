@@ -581,6 +581,10 @@ class GoogleDriveFrameService {
                     timestampS: Value(task.frame.timestampS),
                     source: Value(task.frame.source ?? online?.source ?? (online != null ? 'Anitabi' : 'Google Drive')),
                     sourceUrl: Value(task.frame.sourceUrl ?? online?.sourceUrl ?? remoteUrl),
+                    lat: Value(task.frame.lat),
+                    lng: Value(task.frame.lng),
+                    note: Value(task.frame.note),
+                    heading: Value(task.frame.heading),
                   ),
                 );
           }

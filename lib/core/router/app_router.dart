@@ -26,8 +26,10 @@ import '../../features/trip/screens/library_picker_screen.dart';
 import '../../features/trip/screens/new_spot_screen.dart';
 import '../../features/trip/screens/pilgrimage_day_map_screen.dart';
 import '../../features/trip/screens/stop_screen.dart';
+import '../../features/trip/screens/trip_place_screen.dart';
 import '../../features/trip/screens/trip_list_screen.dart';
 import '../../features/trip/screens/trip_activity_screen.dart';
+import '../../features/trip/screens/trip_schedule_screen.dart';
 import '../../features/trip/screens/trip_screen.dart';
 import '../../features/trip/screens/trip_trash_screen.dart';
 
@@ -125,6 +127,10 @@ GoRouter router(RouterRef ref) {
         ),
       ),
       GoRoute(
+        path: '/trips/:tripId/schedule',
+        builder: (context, state) => TripScheduleScreen(tripId: state.pathParameters['tripId']!),
+      ),
+      GoRoute(
         path: '/trips/:tripId/map',
         builder: (context, state) => PilgrimageDayMapScreen(
           tripId: state.pathParameters['tripId']!,
@@ -135,7 +141,7 @@ GoRouter router(RouterRef ref) {
         path: '/trips/:tripId/stops',
         builder: (context, state) => TripScreen(
           tripId: state.pathParameters['tripId']!,
-          initialTab: TripTab.stops,
+          initialTab: TripTab.places,
         ),
       ),
       GoRoute(
@@ -149,6 +155,15 @@ GoRouter router(RouterRef ref) {
         path: '/trips/:tripId/stops/new',
         builder: (context, state) => NewSpotScreen(
           tripId: state.pathParameters['tripId']!,
+        ),
+      ),
+      GoRoute(
+        // A place of the trip: the group of [stopId], or the stop itself
+        // when it's in no group.
+        path: '/trips/:tripId/places/:stopId',
+        builder: (context, state) => TripPlaceScreen(
+          tripId: state.pathParameters['tripId']!,
+          stopId: state.pathParameters['stopId']!,
         ),
       ),
       GoRoute(

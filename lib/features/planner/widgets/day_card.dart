@@ -247,7 +247,8 @@ class _DayCardState extends State<DayCard> {
           dayId: _dayId,
           editing: widget.editing,
           showTimes: showTimes,
-          orderNumber: blockIndex + 1,
+          // Numbers only when the user ordered the day with times.
+          orderNumber: showTimes ? blockIndex + 1 : null,
           expanded: widget.actions.isGroupExpanded(key),
           dimmed: draggedIds.contains(block.first.item.id),
           drag: widget.drag,
@@ -260,7 +261,7 @@ class _DayCardState extends State<DayCard> {
           ],
         );
       } else {
-        child = stopRow(block.first, inGroup: false, orderNumber: blockIndex + 1);
+        child = stopRow(block.first, inGroup: false, orderNumber: showTimes ? blockIndex + 1 : null);
       }
       rows.add(KeyedSubtree(key: _rowKeys.putIfAbsent(block.first.item.id, GlobalKey.new), child: child));
     }

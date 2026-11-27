@@ -152,7 +152,10 @@ class FakeFirestoreSyncV2Service implements FirestoreSyncV2Service {
   }) {
     final fakeBatch = batch as _FakeV2WriteBatch;
     fakeBatch.addOp(() {
+      final shots = mergeFrameShots(tripStops[stop.tripId]?[stop.id]?['frameShots'] as Map?, stop, referenceImages);
       tripStops.putIfAbsent(stop.tripId, () => {})[stop.id] = {
+        if (shots.isNotEmpty) 'frameShots': shots,
+        'mergedInto': stop.mergedInto,
         'id': stop.id,
         'tripId': stop.tripId,
         'placeKey': stop.placeKey,
@@ -277,6 +280,28 @@ class _FakeV2WriteBatch implements WriteBatch {
 
   @override
   void update(dynamic document, Map<Object, Object?> data) {}
+}
+
+/// A stop doc's `frameShots` after a push of [stop] with [referenceImages],
+/// the way Firestore's merge does it: entries the push leaves out stay, a
+/// null value is a delete (an entry can end up empty), and a deleted stop's
+/// map goes.
+Map<String, Map<String, Object?>> mergeFrameShots(Map? old, Stop stop, List<NewReferenceImage>? referenceImages) {
+  final shots = <String, Map<String, Object?>>{
+    for (final MapEntry(:key, :value) in (old ?? const {}).entries) key as String: Map<String, Object?>.from(value as Map),
+  };
+  if (stop.deletedAt != null || referenceImages == null) return stop.deletedAt != null ? {} : shots;
+  for (final MapEntry(key: id, value: patch) in frameShotsPatch(referenceImages).entries) {
+    final entry = shots.putIfAbsent(id, () => {});
+    for (final MapEntry(:key, :value) in patch.entries) {
+      if (value == null) {
+        entry.remove(key);
+      } else {
+        entry[key] = value;
+      }
+    }
+  }
+  return shots;
 }
 
 void main() {
