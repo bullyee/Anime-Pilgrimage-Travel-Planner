@@ -175,12 +175,21 @@ class _PhotosScreenState extends ConsumerState<PhotosScreen> {
           actions: [
             if (pairsMode)
               picks == null
-                  ? TextButton.icon(
-                      key: const Key('photosShareImage'),
-                      onPressed: pairs.isEmpty ? null : () => setState(() => _picks = const []),
-                      icon: const Icon(Icons.collections_outlined),
-                      label: Text(l10n.photosShareImage),
-                    )
+                  // A narrow phone or large text keeps the icon and moves
+                  // the words to its tooltip.
+                  ? (MediaQuery.textScalerOf(context).scale(360) > MediaQuery.sizeOf(context).width
+                      ? IconButton(
+                          key: const Key('photosShareImage'),
+                          tooltip: l10n.photosShareImage,
+                          onPressed: pairs.isEmpty ? null : () => setState(() => _picks = const []),
+                          icon: const Icon(Icons.collections_outlined),
+                        )
+                      : TextButton.icon(
+                          key: const Key('photosShareImage'),
+                          onPressed: pairs.isEmpty ? null : () => setState(() => _picks = const []),
+                          icon: const Icon(Icons.collections_outlined),
+                          label: Text(l10n.photosShareImage),
+                        ))
                   : TextButton(
                       key: const Key('photosShareCancel'),
                       onPressed: () => setState(() => _picks = null),
@@ -252,6 +261,10 @@ class _PhotosScreenState extends ConsumerState<PhotosScreen> {
             final cols = c.maxWidth >= 600 ? 3 : 2;
             const gap = 10.0;
             final tile = (c.maxWidth - 24 - (cols - 1) * gap) / cols;
+            // Two lines of caption under the two pictures, as tall as the
+            // text size makes them.
+            final small = Theme.of(context).textTheme.bodySmall;
+            final line = MediaQuery.textScalerOf(context).scale(small?.fontSize ?? 12) * (small?.height ?? 1.4);
             return GridView.builder(
               key: const Key('photosPairs'),
               padding: const EdgeInsets.fromLTRB(12, 8, 12, 24),
@@ -259,7 +272,7 @@ class _PhotosScreenState extends ConsumerState<PhotosScreen> {
                 crossAxisCount: cols,
                 mainAxisSpacing: 12,
                 crossAxisSpacing: gap,
-                mainAxisExtent: math.max(1, tile * 9 / 16 * 2 + 2 + 46),
+                mainAxisExtent: math.max(1, tile * 9 / 16 * 2 + 2 + 4 + 2 * line + 8),
               ),
               itemCount: pairs.length,
               itemBuilder: (context, i) {

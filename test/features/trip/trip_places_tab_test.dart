@@ -3,7 +3,9 @@ import 'package:drift/native.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
+import 'package:geolocator/geolocator.dart';
 import 'package:go_router/go_router.dart';
+import 'package:plugin_platform_interface/plugin_platform_interface.dart';
 import 'package:trip_planner/core/database/database.dart';
 import 'package:trip_planner/core/providers/database_provider.dart';
 import 'package:trip_planner/features/auth/providers/auth_provider.dart';
@@ -19,6 +21,32 @@ import 'package:trip_planner/features/trip/screens/trip_place_screen.dart' show 
 import 'package:trip_planner/features/trip/screens/trip_places_tab.dart';
 import 'package:trip_planner/shared/map/app_map.dart';
 
+/// A phone that knows where it is, near 宇治橋.
+class _HereGeolocator extends GeolocatorPlatform with MockPlatformInterfaceMixin {
+  @override
+  Future<bool> isLocationServiceEnabled() async => true;
+
+  @override
+  Future<LocationPermission> checkPermission() async => LocationPermission.whileInUse;
+
+  @override
+  Future<Position?> getLastKnownPosition({bool forceLocationManager = false}) async => Position(
+        latitude: 34.8921,
+        longitude: 135.8075,
+        timestamp: DateTime(2027, 6, 19),
+        accuracy: 5,
+        altitude: 0,
+        altitudeAccuracy: 0,
+        heading: 0,
+        headingAccuracy: 0,
+        speed: 0,
+        speedAccuracy: 0,
+      );
+
+  @override
+  Stream<Position> getPositionStream({LocationSettings? locationSettings}) => const Stream.empty();
+}
+
 /// The trip page's Places tab: days as categories holding places, Unsorted,
 /// the search, and what editors can do that viewers can't.
 void main() {
@@ -31,8 +59,8 @@ void main() {
   /// A day's header: its title starts the line, its date and count follow.
   Finder header(String title) => find.textContaining(RegExp('^${RegExp.escape(title)}(\\s|\$)'));
 
-  Future<void> pump(WidgetTester tester, String tripId, {bool? canEdit}) async {
-    tester.view.physicalSize = const Size(1080, 2400);
+  Future<void> pump(WidgetTester tester, String tripId, {bool? canEdit, Size size = const Size(360, 800), double textScale = 1}) async {
+    tester.view.physicalSize = size * 3;
     tester.view.devicePixelRatio = 3;
     addTearDown(tester.view.reset);
     final router = GoRouter(initialLocation: '/trips/$tripId', routes: [
@@ -47,7 +75,11 @@ void main() {
         mapTilesProvider.overrideWithValue(false),
         if (canEdit != null) canEditTripProvider.overrideWith((ref, id) => canEdit),
       ],
-      child: MaterialApp.router(routerConfig: router),
+      child: MaterialApp.router(
+        routerConfig: router,
+        builder: (context, child) =>
+            MediaQuery(data: MediaQuery.of(context).copyWith(textScaler: TextScaler.linear(textScale)), child: child!),
+      ),
     ));
     await tester.pumpAndSettle();
   }
@@ -122,6 +154,22 @@ void main() {
     await tester.tap(find.text('平等院'));
     await tester.pumpAndSettle();
     expect(find.text('place ${t.ids['平等院']}'), findsOneWidget);
+    await unmount(tester);
+  });
+
+  testWidgets('on a narrow phone with large text, the list and its toolbar fit', (tester) async {
+    late ({String tripId, Map<String, String> ids, List<TripDay> days}) t;
+    await tester.runAsync(() async => t = await seed());
+    final before = GeolocatorPlatform.instance;
+    GeolocatorPlatform.instance = _HereGeolocator();
+    addTearDown(() => GeolocatorPlatform.instance = before);
+    await pump(tester, t.tripId, size: const Size(320, 640), textScale: 2);
+    expect(tester.takeException(), isNull, reason: 'nothing overflows');
+    expect(find.byKey(const Key('placesViewToggle')), findsOneWidget);
+    expect(find.byKey(const Key('placesNearest')), findsOneWidget, reason: 'with a position, Nearest is offered');
+    await tester.tap(find.byKey(const Key('placesNearest')));
+    await tester.pumpAndSettle();
+    expect(tester.takeException(), isNull);
     await unmount(tester);
   });
 

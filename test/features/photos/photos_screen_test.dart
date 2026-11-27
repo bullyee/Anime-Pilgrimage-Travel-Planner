@@ -48,8 +48,8 @@ void main() {
         () => db.into(db.places).insert(PlacesCompanion.insert(placeKey: key, name: name, lat: 34.89, lng: 135.8)),
       );
 
-  Future<GoRouter> open(WidgetTester tester, {String location = '/photos'}) async {
-    tester.view.physicalSize = const Size(1080, 2400);
+  Future<GoRouter> open(WidgetTester tester, {String location = '/photos', Size size = const Size(360, 800), double textScale = 1}) async {
+    tester.view.physicalSize = size * 3;
     tester.view.devicePixelRatio = 3;
     addTearDown(tester.view.reset);
     final router = GoRouter(
@@ -72,7 +72,11 @@ void main() {
     );
     await tester.pumpWidget(ProviderScope(
       overrides: [databaseProvider.overrideWithValue(db), currentUserIdProvider.overrideWithValue('me')],
-      child: MaterialApp.router(routerConfig: router),
+      child: MaterialApp.router(
+        routerConfig: router,
+        builder: (context, child) =>
+            MediaQuery(data: MediaQuery.of(context).copyWith(textScaler: TextScaler.linear(textScale)), child: child!),
+      ),
     ));
     await tester.pumpAndSettle();
     return router;
@@ -238,6 +242,25 @@ void main() {
     }
     expect(failed, findsOneWidget);
     await close(tester);
+  });
+
+  testWidgets('Pairs on a narrow phone with large text: each card fits its place and spot', (tester) async {
+    await place(tester, 'uji', 'Uji Bridge, the east end by the tea shops');
+    for (var i = 0; i < 4; i++) {
+      await tester.runAsync(() => db.into(db.newReferenceImages).insert(NewReferenceImagesCompanion.insert(
+            id: 'f$i',
+            placeKey: const Value('uji'),
+            localPath: Value('/frames/f$i.jpg'),
+            note: Value('Third bay from the west, spot $i'),
+          )));
+      await photo(tester, 'p$i', 'uji', DateTime(2025, 11, 7, 8, i), frameId: 'f$i');
+    }
+    for (final (size, scale) in [(const Size(320, 640), 2.0), (const Size(360, 800), 1.3), (const Size(700, 900), 1.6)]) {
+      await open(tester, location: '/photos?filter=pairs', size: size, textScale: scale);
+      expect(tester.takeException(), isNull, reason: 'nothing overflows at $size, text x$scale');
+      expect(find.byKey(const ValueKey('pair:p3')), findsOneWidget);
+      await close(tester);
+    }
   });
 
   testWidgets('a photo without a frame shows alone, and opens its place', (tester) async {

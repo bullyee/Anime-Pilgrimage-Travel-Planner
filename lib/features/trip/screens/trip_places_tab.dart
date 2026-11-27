@@ -138,7 +138,8 @@ class _TripPlacesTabState extends ConsumerState<TripPlacesTab> {
     final own = ref.watch(tripFramesProvider(widget.tripId)).valueOrNull ?? const <NewReferenceImage>[];
     final library = ref.watch(tripLibraryFramesProvider(widget.tripId)).valueOrNull ?? const <NewReferenceImage>[];
     final photos = ref.watch(tripPhotosProvider(widget.tripId)).valueOrNull ?? const <Photo>[];
-    final places = view.all;
+    // Every card's, so a group split over days has one for each day.
+    final places = view.everyCard.toList();
     final key = [own, library, photos, for (final p in places) ...p.stops];
     if (key.length == _memoKey.length && Iterable.generate(key.length).every((i) => identical(key[i], _memoKey[i]))) return _contents;
     final index = TripFrameIndex(own: own, library: library, photos: photos);
@@ -439,12 +440,16 @@ class _TripPlacesTabState extends ConsumerState<TripPlacesTab> {
       selected: {_map},
       onSelectionChanged: (v) => _showMap(v.first),
     );
+    // On a narrow phone or with large text, Nearest goes under the toggle.
     final toolbar = Padding(
       padding: const EdgeInsets.fromLTRB(16, 10, 16, 0),
-      child: Row(
+      child: Wrap(
+        alignment: WrapAlignment.spaceBetween,
+        crossAxisAlignment: WrapCrossAlignment.center,
+        spacing: 8,
+        runSpacing: 8,
         children: [
           Semantics(label: l10n.placesShowAs, container: true, child: toggle),
-          const Spacer(),
           if (lat != null && !_map)
             FilterChip(
               key: const Key('placesNearest'),
@@ -836,10 +841,11 @@ class _Empty extends StatelessWidget {
 /// The place's thumbnail: its latest photo with the frame inset, else its
 /// first frame.
 class _Thumb extends StatelessWidget {
-  final PlaceContent content;
-  final double width;
+  static const width = 96.0;
 
-  const _Thumb({required this.content, this.width = 96});
+  final PlaceContent content;
+
+  const _Thumb({required this.content});
 
   @override
   Widget build(BuildContext context) {
