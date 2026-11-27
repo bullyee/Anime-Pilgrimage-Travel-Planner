@@ -443,21 +443,24 @@ class _TripPlacesTabState extends ConsumerState<TripPlacesTab> {
     // On a narrow phone or with large text, Nearest goes under the toggle.
     final toolbar = Padding(
       padding: const EdgeInsets.fromLTRB(16, 10, 16, 0),
-      child: Wrap(
-        alignment: WrapAlignment.spaceBetween,
-        crossAxisAlignment: WrapCrossAlignment.center,
-        spacing: 8,
-        runSpacing: 8,
-        children: [
-          Semantics(label: l10n.placesShowAs, container: true, child: toggle),
-          if (lat != null && !_map)
-            FilterChip(
-              key: const Key('placesNearest'),
-              label: Text(l10n.placesSortNearest),
-              selected: _nearest,
-              onSelected: (v) => setState(() => _nearest = v),
-            ),
-        ],
+      child: SizedBox(
+        width: double.infinity,
+        child: Wrap(
+          alignment: WrapAlignment.spaceBetween,
+          crossAxisAlignment: WrapCrossAlignment.center,
+          spacing: 8,
+          runSpacing: 8,
+          children: [
+            Semantics(label: l10n.placesShowAs, container: true, child: toggle),
+            if (lat != null && !_map)
+              FilterChip(
+                key: const Key('placesNearest'),
+                label: Text(l10n.placesSortNearest),
+                selected: _nearest,
+                onSelected: (v) => setState(() => _nearest = v),
+              ),
+          ],
+        ),
       ),
     );
 
