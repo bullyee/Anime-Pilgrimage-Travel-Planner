@@ -7,9 +7,16 @@ import 'package:http/http.dart' as http;
 import '../../sharing/invite_links.dart' show inviteLinkHosts;
 import '../models/example_route.dart';
 
+/// A developer's own copy of the route files, for trying new ones before
+/// they're deployed: `--dart-define=EXAMPLE_ROUTES_BASE=http://localhost:8000/routes/`.
+const _routesBaseOverride = String.fromEnvironment('EXAMPLE_ROUTES_BASE');
+
 /// Where the route files are served: next to the web app, under `/routes/`.
 /// The web app reads them from its own site; the phone from the hosted one.
-Uri exampleRoutesBase() => kIsWeb ? Uri.base.resolve('/routes/') : Uri.https(inviteLinkHosts.first, '/routes/');
+Uri exampleRoutesBase() {
+  if (_routesBaseOverride.isNotEmpty) return Uri.parse(_routesBaseOverride);
+  return kIsWeb ? Uri.base.resolve('/routes/') : Uri.https(inviteLinkHosts.first, '/routes/');
+}
 
 /// The public link of a route: the web app's page for it, which the phone
 /// opens in the app.

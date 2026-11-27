@@ -329,6 +329,8 @@ class _PlaceTile extends StatelessWidget {
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
     final p = theme.trip;
+    // The frames with a picture first, then the ones shown by their spot.
+    final frames = [...place.pictured, ...place.frames.where((f) => f.image == null)];
     return Padding(
       key: ValueKey('routePlace:$keyId'),
       padding: const EdgeInsets.fromLTRB(16, 6, 0, 6),
@@ -354,17 +356,17 @@ class _PlaceTile extends StatelessWidget {
               ],
             ),
           ),
-          if (place.frames.isNotEmpty) ...[
+          if (frames.isNotEmpty) ...[
             const SizedBox(height: 8),
             SizedBox(
               height: 132,
               child: ListView.separated(
                 scrollDirection: Axis.horizontal,
                 padding: const EdgeInsets.only(right: 16),
-                itemCount: place.frames.length,
+                itemCount: frames.length,
                 separatorBuilder: (_, _) => const SizedBox(width: 8),
                 itemBuilder: (context, i) {
-                  final f = place.frames[i];
+                  final f = frames[i];
                   final caption = [?f.shot?.note, if (f.episode != null) context.l10n.routeEpisode(f.episode!)].join(' · ');
                   return SizedBox(
                     width: 176,
