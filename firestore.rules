@@ -164,8 +164,15 @@ service cloud.firestore {
         && (!('note' in data) || data.note == null || (data.note is string && data.note.size() <= 2000))
         // Where each frame of the stop is shot from, by frame id (schema 16).
         && (!('frameShots' in data) || (data.frameShots is map && data.frameShots.size() <= 2000))
-        // The stop this one was merged into, on a merged stop's tombstone.
-        && (!('mergedInto' in data) || data.mergedInto == null || (data.mergedInto is string && data.mergedInto.size() <= 100));
+        // The stop this one was merged into: only on a tombstone (deletedAt
+        // set), never the stop itself. The app follows it only within the
+        // same trip. It isn't checked to exist, since a merged stop's tombstone
+        // can be pushed in an earlier batch than the stop it went into.
+        && (!('mergedInto' in data) || data.mergedInto == null || (
+          data.mergedInto is string
+          && data.mergedInto.size() > 0 && data.mergedInto.size() <= 100
+          && data.mergedInto != docId
+          && ('deletedAt' in data) && data.deletedAt != null));
     }
 
     function isScheduleItemSafe(docId) {

@@ -1,5 +1,6 @@
 import urllib.request
 import urllib.error
+import datetime
 import json
 import base64
 import sys
@@ -179,17 +180,63 @@ def main():
                 }}},
             }}},
             'mergedInto': {'stringValue': 'stop_1'},
+            'deletedAt': {'timestampValue': '2026-11-27T00:00:00Z'},
             'addedBy': {'stringValue': 'alice'},
             'updatedAt': {'integerValue': '1000'},
         }
     }
     code, _ = api_request('POST', 'tripsV2/trip_v2_1/stops?documentId=stop_shots_valid', stop_with_shots, user_id='alice')
-    assert_status("tripsV2/stops: Stop with frameShots and mergedInto succeeds (200)", 200, code)
+    assert_status("tripsV2/stops: Merged stop's tombstone with frameShots and mergedInto succeeds (200)", 200, code)
 
-    # 9e. tripsV2: frameShots that isn't a map, or a mergedInto over 100 chars, denied (403)
+    # 9e. tripsV2: a merged stop's tombstone with its TTL (expireAt ~30 days ahead) succeeds (200)
+    expire_at = (datetime.datetime.now(datetime.timezone.utc) + datetime.timedelta(days=30)).strftime('%Y-%m-%dT%H:%M:%SZ')
+    merged_with_ttl = {
+        'fields': {
+            'id': {'stringValue': 'stop_merged_ttl'},
+            'tripId': {'stringValue': 'trip_v2_1'},
+            'placeKey': {'stringValue': 'anitabi:42'},
+            'name': {'stringValue': 'Uji Bridge (merged)'},
+            'mergedInto': {'stringValue': 'stop_1'},
+            'deletedAt': {'timestampValue': '2026-11-27T00:00:00Z'},
+            'expireAt': {'timestampValue': expire_at},
+            'addedBy': {'stringValue': 'alice'},
+            'updatedBy': {'stringValue': 'alice'},
+            'updatedAt': {'integerValue': '1000'},
+        }
+    }
+    code, _ = api_request('POST', 'tripsV2/trip_v2_1/stops?documentId=stop_merged_ttl', merged_with_ttl, user_id='alice')
+    assert_status("tripsV2/stops: Merged stop's tombstone with expireAt succeeds (200)", 200, code)
+
+    # 9f. tripsV2: a live stop with mergedInto null succeeds (200), as after a restore
+    restored = {
+        'fields': {
+            'id': {'stringValue': 'stop_restored'},
+            'tripId': {'stringValue': 'trip_v2_1'},
+            'placeKey': {'stringValue': 'anitabi:42'},
+            'name': {'stringValue': 'Restored Stop'},
+            'mergedInto': {'nullValue': None},
+            'deletedAt': {'nullValue': None},
+            'addedBy': {'stringValue': 'alice'},
+            'updatedAt': {'integerValue': '1000'},
+        }
+    }
+    code, _ = api_request('POST', 'tripsV2/trip_v2_1/stops?documentId=stop_restored', restored, user_id='alice')
+    assert_status("tripsV2/stops: Live stop with mergedInto null succeeds (200)", 200, code)
+
+    # 9g. tripsV2: bad frameShots or mergedInto denied (403)
+    tombstone = {'deletedAt': {'timestampValue': '2026-11-27T00:00:00Z'}}
+    too_many_shots = {'mapValue': {'fields': {f'f{i}': {'mapValue': {'fields': {}}} for i in range(2001)}}}
     for doc_id, bad in [
         ('stop_shots_list', {'frameShots': {'arrayValue': {'values': [{'stringValue': 'x'}]}}}),
-        ('stop_merged_long', {'mergedInto': {'stringValue': 'x' * 101}}),
+        ('stop_shots_null', {'frameShots': {'nullValue': None}}),
+        ('stop_shots_scalar', {'frameShots': {'stringValue': 'x'}}),
+        ('stop_shots_2001', {'frameShots': too_many_shots}),
+        ('stop_merged_long', {**tombstone, 'mergedInto': {'stringValue': 'x' * 101}}),
+        ('stop_merged_empty', {**tombstone, 'mergedInto': {'stringValue': ''}}),
+        ('stop_merged_number', {**tombstone, 'mergedInto': {'integerValue': '7'}}),
+        ('stop_merged_self', {**tombstone, 'mergedInto': {'stringValue': 'stop_merged_self'}}),
+        ('stop_merged_live', {'mergedInto': {'stringValue': 'stop_1'}}),
+        ('stop_merged_live_null', {'mergedInto': {'stringValue': 'stop_1'}, 'deletedAt': {'nullValue': None}}),
     ]:
         fields = {
             'id': {'stringValue': doc_id},
@@ -336,6 +383,22 @@ def main():
     }
     code, _ = api_request('POST', 'tripsV2/trip_v2_1/stops?documentId=stop_viewer_forbidden', viewer_stop_data, user_id='charlie')
     assert_status("Stage 4: Charlie (viewer) cannot create stop (403)", 403, code)
+
+    # 19b. Charlie as 'viewer' ATTEMPTS to merge a stop (tombstone with mergedInto) -> DENIED (403)
+    viewer_merge = {
+        'fields': {
+            'id': {'stringValue': 'stop_viewer_merge'},
+            'tripId': {'stringValue': 'trip_v2_1'},
+            'placeKey': {'stringValue': 'anitabi:42'},
+            'name': {'stringValue': 'Viewer Cannot Merge'},
+            'mergedInto': {'stringValue': 'stop_1'},
+            'deletedAt': {'timestampValue': '2026-11-27T00:00:00Z'},
+            'addedBy': {'stringValue': 'charlie'},
+            'updatedAt': {'integerValue': '3000'},
+        }
+    }
+    code, _ = api_request('POST', 'tripsV2/trip_v2_1/stops?documentId=stop_viewer_merge', viewer_merge, user_id='charlie')
+    assert_status("Stage 4: Charlie (viewer) cannot write a merged stop's tombstone (403)", 403, code)
 
     # 20. Alice (Owner) promotes Charlie to 'editor'
     promote_charlie_data = {
