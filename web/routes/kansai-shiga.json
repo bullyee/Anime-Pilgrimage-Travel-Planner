@@ -1,0 +1,2187 @@
+{
+  "format": 1,
+  "id": "kansai-shiga",
+  "title": "滋賀：旧鎌掛小學校與豐鄉小學校",
+  "description": "《中二病也想談戀愛！》的旧鎌掛小學校，和《K-ON!》櫻丘高中原型的豐鄉小學校舊校舍，校舍內外都有。",
+  "anime": [
+    "中二病でも恋がしたい！戀",
+    "けいおん！"
+  ],
+  "area": "滋賀縣日野町・豐鄉町",
+  "updated": "2026-11-27",
+  "groups": [
+    {
+      "title": "旧鎌掛小學校",
+      "places": [
+        {
+          "name": "旧鎌掛小学校 室內",
+          "lat": 34.988649,
+          "lng": 136.259959,
+          "frames": [
+            {
+              "anime": "中二病でも恋がしたい！戀",
+              "episode": "1",
+              "seconds": 434,
+              "shot": {
+                "lat": 34.988649,
+                "lng": 136.259959,
+                "note": "旧鎌掛小学校 正門"
+              }
+            },
+            {
+              "image": "https://image.anitabi.cn/user/1065/bangumi/72942/points/j0vkyv36l-1729747584465.jpg?plan=h360",
+              "anime": "中二病でも恋がしたい！戀",
+              "episode": "第一季EP01",
+              "seconds": 342,
+              "shot": {
+                "lat": 34.988649,
+                "lng": 136.259959,
+                "note": "旧鎌掛小学校 正門"
+              },
+              "source": "Anitabi",
+              "sourceUrl": "https://anitabi.cn/map?bangumiId=72942&pid=j0vkyv36l"
+            },
+            {
+              "image": "https://image.anitabi.cn/user/1065/bangumi/72942/points/pqpvyccsa-1730764807855.jpg?plan=h360",
+              "anime": "中二病でも恋がしたい！戀",
+              "episode": "5",
+              "seconds": 1278,
+              "shot": {
+                "lat": 34.988649,
+                "lng": 136.259959,
+                "note": "旧鎌掛小学校 正門"
+              },
+              "source": "Anitabi",
+              "sourceUrl": "https://anitabi.cn/map?bangumiId=72942&pid=pqpvyccsa"
+            },
+            {
+              "image": "https://image.anitabi.cn/user/1065/bangumi/72942/points/pnp9ck0r2-1730528353526.jpg?plan=h360",
+              "anime": "中二病でも恋がしたい！戀",
+              "episode": "2",
+              "seconds": 534,
+              "shot": {
+                "lat": 34.988649,
+                "lng": 136.259959,
+                "note": "旧鎌掛小学校 正門"
+              },
+              "source": "Anitabi",
+              "sourceUrl": "https://anitabi.cn/map?bangumiId=72942&pid=pnp9ck0r2"
+            },
+            {
+              "image": "https://image.anitabi.cn/user/1065/bangumi/72942/points/q22aqqez4-1731653839382.jpg?plan=h360",
+              "anime": "中二病でも恋がしたい！戀",
+              "episode": "13",
+              "seconds": 453,
+              "shot": {
+                "lat": 34.988649,
+                "lng": 136.259959,
+                "note": "旧鎌掛小学校 正門"
+              },
+              "source": "Anitabi",
+              "sourceUrl": "https://anitabi.cn/map?bangumiId=72942&pid=q22aqqez4"
+            },
+            {
+              "image": "https://image.anitabi.cn/user/1065/bangumi/72942/points/pqps5z1ed-1730764587894.jpg?plan=h360",
+              "anime": "中二病でも恋がしたい！戀",
+              "episode": "5",
+              "seconds": 771,
+              "shot": {
+                "lat": 34.988649,
+                "lng": 136.259959,
+                "note": "旧鎌掛小学校 正門"
+              },
+              "source": "Anitabi",
+              "sourceUrl": "https://anitabi.cn/map?bangumiId=72942&pid=pqps5z1ed"
+            },
+            {
+              "image": "https://image.anitabi.cn/user/1065/bangumi/72942/points/pwvq9ycsr-1731247709583.jpg?plan=h360",
+              "anime": "中二病でも恋がしたい！戀",
+              "episode": "8",
+              "seconds": 740,
+              "shot": {
+                "lat": 34.988649,
+                "lng": 136.259959,
+                "note": "旧鎌掛小学校 正門"
+              },
+              "source": "Anitabi",
+              "sourceUrl": "https://anitabi.cn/map?bangumiId=72942&pid=pwvq9ycsr"
+            },
+            {
+              "image": "https://image.anitabi.cn/user/1065/bangumi/72942/points/pqpsr5svw-1730764614815.jpg?plan=h360",
+              "anime": "中二病でも恋がしたい！戀",
+              "episode": "5",
+              "seconds": 794,
+              "shot": {
+                "lat": 34.988649,
+                "lng": 136.259959,
+                "note": "旧鎌掛小学校 正門"
+              },
+              "source": "Anitabi",
+              "sourceUrl": "https://anitabi.cn/map?bangumiId=72942&pid=pqpsr5svw"
+            },
+            {
+              "image": "https://image.anitabi.cn/user/1065/bangumi/72942/points/ppureojh8-1730697053908.jpg?plan=h360",
+              "anime": "中二病でも恋がしたい！戀",
+              "episode": "4",
+              "seconds": 23,
+              "shot": {
+                "lat": 34.988649,
+                "lng": 136.259959,
+                "note": "旧鎌掛小学校 正門"
+              },
+              "source": "Anitabi",
+              "sourceUrl": "https://anitabi.cn/map?bangumiId=72942&pid=ppureojh8"
+            },
+            {
+              "image": "https://image.anitabi.cn/user/1065/bangumi/72942/points/q217g2yvv-1731651452640.jpg?plan=h360",
+              "anime": "中二病でも恋がしたい！戀",
+              "episode": "12",
+              "seconds": 694,
+              "shot": {
+                "lat": 34.988649,
+                "lng": 136.259959,
+                "note": "旧鎌掛小学校 正門"
+              },
+              "source": "Anitabi",
+              "sourceUrl": "https://anitabi.cn/map?bangumiId=72942&pid=q217g2yvv"
+            },
+            {
+              "image": "https://image.anitabi.cn/user/1065/bangumi/72942/points/pnmwesq4m-1730523231555.jpg?plan=h360",
+              "anime": "中二病でも恋がしたい！戀",
+              "episode": "1",
+              "seconds": 302,
+              "shot": {
+                "lat": 34.988649,
+                "lng": 136.259959,
+                "note": "旧鎌掛小学校 正門"
+              },
+              "source": "Anitabi",
+              "sourceUrl": "https://anitabi.cn/map?bangumiId=72942&pid=pnmwesq4m"
+            },
+            {
+              "image": "https://image.anitabi.cn/user/1065/bangumi/72942/points/pnn0sf47v-1730523487934.jpg?plan=h360",
+              "anime": "中二病でも恋がしたい！戀",
+              "episode": "1",
+              "seconds": 527,
+              "shot": {
+                "lat": 34.988649,
+                "lng": 136.259959,
+                "note": "旧鎌掛小学校 正門"
+              },
+              "source": "Anitabi",
+              "sourceUrl": "https://anitabi.cn/map?bangumiId=72942&pid=pnn0sf47v"
+            },
+            {
+              "image": "https://image.anitabi.cn/user/1065/bangumi/72942/points/pwvs1g6l8-1731247831648.jpg?plan=h360",
+              "anime": "中二病でも恋がしたい！戀",
+              "episode": "8",
+              "seconds": 911,
+              "shot": {
+                "lat": 34.988649,
+                "lng": 136.259959,
+                "note": "旧鎌掛小学校 正門"
+              },
+              "source": "Anitabi",
+              "sourceUrl": "https://anitabi.cn/map?bangumiId=72942&pid=pwvs1g6l8"
+            },
+            {
+              "image": "https://image.anitabi.cn/user/1065/bangumi/72942/points/pnpa1bol1-1730528393041.jpg?plan=h360",
+              "anime": "中二病でも恋がしたい！戀",
+              "episode": "2",
+              "seconds": 537,
+              "shot": {
+                "lat": 34.988649,
+                "lng": 136.259959,
+                "note": "旧鎌掛小学校 正門"
+              },
+              "source": "Anitabi",
+              "sourceUrl": "https://anitabi.cn/map?bangumiId=72942&pid=pnpa1bol1"
+            },
+            {
+              "image": "https://image.anitabi.cn/user/1065/bangumi/72942/points/pwvokwzq2-1731247607052.jpg?plan=h360",
+              "anime": "中二病でも恋がしたい！戀",
+              "episode": "8",
+              "seconds": 653,
+              "shot": {
+                "lat": 34.988649,
+                "lng": 136.259959,
+                "note": "旧鎌掛小学校 正門"
+              },
+              "source": "Anitabi",
+              "sourceUrl": "https://anitabi.cn/map?bangumiId=72942&pid=pwvokwzq2"
+            },
+            {
+              "image": "https://image.anitabi.cn/user/1065/bangumi/72942/points/q22a8hcir-1731653810133.jpg?plan=h360",
+              "anime": "中二病でも恋がしたい！戀",
+              "episode": "13",
+              "seconds": 428,
+              "shot": {
+                "lat": 34.988649,
+                "lng": 136.259959,
+                "note": "旧鎌掛小学校 正門"
+              },
+              "source": "Anitabi",
+              "sourceUrl": "https://anitabi.cn/map?bangumiId=72942&pid=q22a8hcir"
+            },
+            {
+              "image": "https://image.anitabi.cn/user/1065/bangumi/72942/points/pqqrnjc35-1730766724828.jpg?plan=h360",
+              "anime": "中二病でも恋がしたい！戀",
+              "episode": "6",
+              "seconds": 174,
+              "shot": {
+                "lat": 34.988649,
+                "lng": 136.259959,
+                "note": "旧鎌掛小学校 正門"
+              },
+              "source": "Anitabi",
+              "sourceUrl": "https://anitabi.cn/map?bangumiId=72942&pid=pqqrnjc35"
+            },
+            {
+              "image": "https://image.anitabi.cn/user/1065/bangumi/72942/points/ppuylbj70-1730697490748.jpg?plan=h360",
+              "anime": "中二病でも恋がしたい！戀",
+              "episode": "4",
+              "seconds": 750,
+              "shot": {
+                "lat": 34.988649,
+                "lng": 136.259959,
+                "note": "旧鎌掛小学校 正門"
+              },
+              "source": "Anitabi",
+              "sourceUrl": "https://anitabi.cn/map?bangumiId=72942&pid=ppuylbj70"
+            },
+            {
+              "image": "https://image.anitabi.cn/user/1065/bangumi/72942/points/pqptyv229-1730764692221.jpg?plan=h360",
+              "anime": "中二病でも恋がしたい！戀",
+              "episode": "5",
+              "seconds": 1064,
+              "shot": {
+                "lat": 34.988649,
+                "lng": 136.259959,
+                "note": "旧鎌掛小学校 正門"
+              },
+              "source": "Anitabi",
+              "sourceUrl": "https://anitabi.cn/map?bangumiId=72942&pid=pqptyv229"
+            },
+            {
+              "image": "https://image.anitabi.cn/user/1065/bangumi/72942/points/pqpthh258-1730764661356.jpg?plan=h360",
+              "anime": "中二病でも恋がしたい！戀",
+              "episode": "5",
+              "seconds": 1004,
+              "shot": {
+                "lat": 34.988649,
+                "lng": 136.259959,
+                "note": "旧鎌掛小学校 正門"
+              },
+              "source": "Anitabi",
+              "sourceUrl": "https://anitabi.cn/map?bangumiId=72942&pid=pqpthh258"
+            },
+            {
+              "image": "https://image.anitabi.cn/user/1065/bangumi/72942/points/pwvpszbmf-1731247680658.jpg?plan=h360",
+              "anime": "中二病でも恋がしたい！戀",
+              "episode": "8",
+              "seconds": 688,
+              "shot": {
+                "lat": 34.988649,
+                "lng": 136.259959,
+                "note": "旧鎌掛小学校 正門"
+              },
+              "source": "Anitabi",
+              "sourceUrl": "https://anitabi.cn/map?bangumiId=72942&pid=pwvpszbmf"
+            },
+            {
+              "image": "https://image.anitabi.cn/user/1065/bangumi/72942/points/pnmxpcrit-1730523325357.jpg?plan=h360",
+              "anime": "中二病でも恋がしたい！戀",
+              "episode": "1",
+              "seconds": 434,
+              "shot": {
+                "lat": 34.988649,
+                "lng": 136.259959,
+                "note": "旧鎌掛小学校 正門"
+              },
+              "source": "Anitabi",
+              "sourceUrl": "https://anitabi.cn/map?bangumiId=72942&pid=pnmxpcrit"
+            }
+          ]
+        },
+        {
+          "name": "旧鎌掛小学校 室外",
+          "lat": 34.988637,
+          "lng": 136.259836,
+          "frames": [
+            {
+              "anime": "中二病でも恋がしたい！戀",
+              "shot": {
+                "lat": 34.988637,
+                "lng": 136.259836,
+                "note": "旧鎌掛小学校 一樓走廊"
+              }
+            },
+            {
+              "anime": "中二病でも恋がしたい！戀",
+              "shot": {
+                "lat": 34.988637,
+                "lng": 136.259836,
+                "note": "旧鎌掛小学校 一樓走廊"
+              }
+            },
+            {
+              "anime": "中二病でも恋がしたい！戀",
+              "shot": {
+                "lat": 34.988637,
+                "lng": 136.259836,
+                "note": "旧鎌掛小学校 一樓走廊"
+              }
+            },
+            {
+              "image": "https://image.anitabi.cn/user/1065/bangumi/72942/points/pomm4lu0x-1730600957250.jpg?plan=h360",
+              "anime": "中二病でも恋がしたい！戀",
+              "episode": "3",
+              "seconds": 874,
+              "shot": {
+                "lat": 34.988637,
+                "lng": 136.259836,
+                "note": "旧鎌掛小学校 一樓走廊"
+              },
+              "source": "Anitabi",
+              "sourceUrl": "https://anitabi.cn/map?bangumiId=72942&pid=pomm4lu0x"
+            },
+            {
+              "image": "https://image.anitabi.cn/user/1065/bangumi/72942/points/pwvo2om5l-1731247579616.jpg?plan=h360",
+              "anime": "中二病でも恋がしたい！戀",
+              "episode": "8",
+              "seconds": 593,
+              "shot": {
+                "lat": 34.988637,
+                "lng": 136.259836,
+                "note": "旧鎌掛小学校 一樓走廊"
+              },
+              "source": "Anitabi",
+              "sourceUrl": "https://anitabi.cn/map?bangumiId=72942&pid=pwvo2om5l"
+            },
+            {
+              "image": "https://image.anitabi.cn/user/1065/bangumi/72942/points/pwvp281kj-1731247646236.jpg?plan=h360",
+              "anime": "中二病でも恋がしたい！戀",
+              "episode": "8",
+              "seconds": 656,
+              "shot": {
+                "lat": 34.988637,
+                "lng": 136.259836,
+                "note": "旧鎌掛小学校 一樓走廊"
+              },
+              "source": "Anitabi",
+              "sourceUrl": "https://anitabi.cn/map?bangumiId=72942&pid=pwvp281kj"
+            },
+            {
+              "image": "https://image.anitabi.cn/user/1065/bangumi/72942/points/pnpb4dbog-1730528459573.jpg?plan=h360",
+              "anime": "中二病でも恋がしたい！戀",
+              "episode": "2",
+              "seconds": 606,
+              "shot": {
+                "lat": 34.988637,
+                "lng": 136.259836,
+                "note": "旧鎌掛小学校 一樓走廊"
+              },
+              "source": "Anitabi",
+              "sourceUrl": "https://anitabi.cn/map?bangumiId=72942&pid=pnpb4dbog"
+            },
+            {
+              "image": "https://image.anitabi.cn/points/72942/q4lqzce7m_1731852897814.jpg?plan=h360",
+              "anime": "中二病でも恋がしたい！戀",
+              "episode": "3",
+              "seconds": 700,
+              "shot": {
+                "lat": 34.988637,
+                "lng": 136.259836,
+                "note": "旧鎌掛小学校 一樓走廊"
+              },
+              "source": "Anitabi",
+              "sourceUrl": "https://anitabi.cn/map?bangumiId=72942&pid=q4lqzce7m"
+            },
+            {
+              "image": "https://image.anitabi.cn/user/1065/bangumi/72942/points/pnpcks5fd-1730528546415.jpg?plan=h360",
+              "anime": "中二病でも恋がしたい！戀",
+              "episode": "2",
+              "seconds": 687,
+              "shot": {
+                "lat": 34.988637,
+                "lng": 136.259836,
+                "note": "旧鎌掛小学校 一樓走廊"
+              },
+              "source": "Anitabi",
+              "sourceUrl": "https://anitabi.cn/map?bangumiId=72942&pid=pnpcks5fd"
+            },
+            {
+              "image": "https://image.anitabi.cn/user/1065/bangumi/72942/points/pqpvdxwgo-1730764776005.jpg?plan=h360",
+              "anime": "中二病でも恋がしたい！戀",
+              "episode": "5",
+              "seconds": 1250,
+              "shot": {
+                "lat": 34.988637,
+                "lng": 136.259836,
+                "note": "旧鎌掛小学校 一樓走廊"
+              },
+              "source": "Anitabi",
+              "sourceUrl": "https://anitabi.cn/map?bangumiId=72942&pid=pqpvdxwgo"
+            },
+            {
+              "image": "https://image.anitabi.cn/user/1065/bangumi/72942/points/q22cet9lk-1731653931377.jpg?plan=h360",
+              "anime": "中二病でも恋がしたい！戀",
+              "episode": "13",
+              "seconds": 752,
+              "shot": {
+                "lat": 34.988637,
+                "lng": 136.259836,
+                "note": "旧鎌掛小学校 一樓走廊"
+              },
+              "source": "Anitabi",
+              "sourceUrl": "https://anitabi.cn/map?bangumiId=72942&pid=q22cet9lk"
+            },
+            {
+              "image": "https://image.anitabi.cn/user/1065/bangumi/72942/points/pomq0w2qe-1730601192466.jpg?plan=h360",
+              "anime": "中二病でも恋がしたい！戀",
+              "episode": "3",
+              "seconds": 732,
+              "shot": {
+                "lat": 34.988637,
+                "lng": 136.259836,
+                "note": "旧鎌掛小学校 一樓走廊"
+              },
+              "source": "Anitabi",
+              "sourceUrl": "https://anitabi.cn/map?bangumiId=72942&pid=pomq0w2qe"
+            },
+            {
+              "image": "https://image.anitabi.cn/user/1065/bangumi/72942/points/pwvsvsv60-1731247881446.jpg?plan=h360",
+              "anime": "中二病でも恋がしたい！戀",
+              "episode": "8",
+              "seconds": 913,
+              "shot": {
+                "lat": 34.988637,
+                "lng": 136.259836,
+                "note": "旧鎌掛小学校 一樓走廊"
+              },
+              "source": "Anitabi",
+              "sourceUrl": "https://anitabi.cn/map?bangumiId=72942&pid=pwvsvsv60"
+            },
+            {
+              "image": "https://image.anitabi.cn/user/1065/bangumi/72942/points/pomqdl7d2-1730601212756.jpg?plan=h360",
+              "anime": "中二病でも恋がしたい！戀",
+              "episode": "3",
+              "seconds": 734,
+              "shot": {
+                "lat": 34.988637,
+                "lng": 136.259836,
+                "note": "旧鎌掛小学校 一樓走廊"
+              },
+              "source": "Anitabi",
+              "sourceUrl": "https://anitabi.cn/map?bangumiId=72942&pid=pomqdl7d2"
+            },
+            {
+              "image": "https://image.anitabi.cn/user/1065/bangumi/72942/points/pommygyku-1730601006649.jpg?plan=h360",
+              "anime": "中二病でも恋がしたい！戀",
+              "episode": "3",
+              "seconds": 918,
+              "shot": {
+                "lat": 34.988637,
+                "lng": 136.259836,
+                "note": "旧鎌掛小学校 一樓走廊"
+              },
+              "source": "Anitabi",
+              "sourceUrl": "https://anitabi.cn/map?bangumiId=72942&pid=pommygyku"
+            },
+            {
+              "image": "https://image.anitabi.cn/user/1065/bangumi/72942/points/q22lh70bd-1731654478584.jpg?plan=h360",
+              "anime": "中二病でも恋がしたい！戀",
+              "episode": "13",
+              "seconds": 1298,
+              "shot": {
+                "lat": 34.988637,
+                "lng": 136.259836,
+                "note": "旧鎌掛小学校 一樓走廊"
+              },
+              "source": "Anitabi",
+              "sourceUrl": "https://anitabi.cn/map?bangumiId=72942&pid=q22lh70bd"
+            },
+            {
+              "image": "https://image.anitabi.cn/user/1065/bangumi/72942/points/ppus0qr1m-1730697091532.jpg?plan=h360",
+              "anime": "中二病でも恋がしたい！戀",
+              "episode": "4",
+              "seconds": 415,
+              "shot": {
+                "lat": 34.988637,
+                "lng": 136.259836,
+                "note": "旧鎌掛小学校 一樓走廊"
+              },
+              "source": "Anitabi",
+              "sourceUrl": "https://anitabi.cn/map?bangumiId=72942&pid=ppus0qr1m"
+            },
+            {
+              "image": "https://image.anitabi.cn/user/1065/bangumi/72942/points/q213nzrwh-1731651225863.jpg?plan=h360",
+              "anime": "中二病でも恋がしたい！戀",
+              "episode": "12",
+              "seconds": 203,
+              "shot": {
+                "lat": 34.988637,
+                "lng": 136.259836,
+                "note": "旧鎌掛小学校 一樓走廊"
+              },
+              "source": "Anitabi",
+              "sourceUrl": "https://anitabi.cn/map?bangumiId=72942&pid=q213nzrwh"
+            },
+            {
+              "image": "https://image.anitabi.cn/user/1065/bangumi/72942/points/ppv429m4u-1730697817676.jpg?plan=h360",
+              "anime": "中二病でも恋がしたい！戀",
+              "episode": "4",
+              "seconds": 1229,
+              "shot": {
+                "lat": 34.988637,
+                "lng": 136.259836,
+                "note": "旧鎌掛小学校 一樓走廊"
+              },
+              "source": "Anitabi",
+              "sourceUrl": "https://anitabi.cn/map?bangumiId=72942&pid=ppv429m4u"
+            },
+            {
+              "image": "https://image.anitabi.cn/user/1065/bangumi/72942/points/pputgawqu-1730697180301.jpg?plan=h360",
+              "anime": "中二病でも恋がしたい！戀",
+              "episode": "4",
+              "seconds": 442,
+              "shot": {
+                "lat": 34.988637,
+                "lng": 136.259836,
+                "note": "旧鎌掛小学校 一樓走廊"
+              },
+              "source": "Anitabi",
+              "sourceUrl": "https://anitabi.cn/map?bangumiId=72942&pid=pputgawqu"
+            },
+            {
+              "image": "https://image.anitabi.cn/user/1065/bangumi/72942/points/pnmsf9bue-1730523102729.jpg?plan=h360",
+              "anime": "中二病でも恋がしたい！戀",
+              "episode": "1",
+              "seconds": 365,
+              "shot": {
+                "lat": 34.988637,
+                "lng": 136.259836,
+                "note": "旧鎌掛小学校 一樓走廊"
+              },
+              "source": "Anitabi",
+              "sourceUrl": "https://anitabi.cn/map?bangumiId=72942&pid=pnmsf9bue"
+            },
+            {
+              "image": "https://image.anitabi.cn/user/1065/bangumi/72942/points/q22bu4zsf-1731653904891.jpg?plan=h360",
+              "anime": "中二病でも恋がしたい！戀",
+              "episode": "13",
+              "seconds": 744,
+              "shot": {
+                "lat": 34.988637,
+                "lng": 136.259836,
+                "note": "旧鎌掛小学校 一樓走廊"
+              },
+              "source": "Anitabi",
+              "sourceUrl": "https://anitabi.cn/map?bangumiId=72942&pid=q22bu4zsf"
+            },
+            {
+              "image": "https://image.anitabi.cn/user/1065/bangumi/72942/points/pnndm64ae-1730524255334.jpg?plan=h360",
+              "anime": "中二病でも恋がしたい！戀",
+              "episode": "1",
+              "seconds": 686,
+              "shot": {
+                "lat": 34.988637,
+                "lng": 136.259836,
+                "note": "旧鎌掛小学校 一樓走廊"
+              },
+              "source": "Anitabi",
+              "sourceUrl": "https://anitabi.cn/map?bangumiId=72942&pid=pnndm64ae"
+            },
+            {
+              "image": "https://image.anitabi.cn/user/1065/bangumi/72942/points/q22cu2mpq-1731653958562.jpg?plan=h360",
+              "anime": "中二病でも恋がしたい！戀",
+              "episode": "13",
+              "seconds": 773,
+              "shot": {
+                "lat": 34.988637,
+                "lng": 136.259836,
+                "note": "旧鎌掛小学校 一樓走廊"
+              },
+              "source": "Anitabi",
+              "sourceUrl": "https://anitabi.cn/map?bangumiId=72942&pid=q22cu2mpq"
+            },
+            {
+              "image": "https://image.anitabi.cn/user/1065/bangumi/72942/points/pnmyxrtem-1730523371251.jpg?plan=h360",
+              "anime": "中二病でも恋がしたい！戀",
+              "episode": "1",
+              "seconds": 476,
+              "shot": {
+                "lat": 34.988637,
+                "lng": 136.259836,
+                "note": "旧鎌掛小学校 一樓走廊"
+              },
+              "source": "Anitabi",
+              "sourceUrl": "https://anitabi.cn/map?bangumiId=72942&pid=pnmyxrtem"
+            },
+            {
+              "image": "https://image.anitabi.cn/user/1065/bangumi/72942/points/q217va2xg-1731651477748.jpg?plan=h360",
+              "anime": "中二病でも恋がしたい！戀",
+              "episode": "12",
+              "seconds": 728,
+              "shot": {
+                "lat": 34.988637,
+                "lng": 136.259836,
+                "note": "旧鎌掛小学校 一樓走廊"
+              },
+              "source": "Anitabi",
+              "sourceUrl": "https://anitabi.cn/map?bangumiId=72942&pid=q217va2xg"
+            },
+            {
+              "image": "https://image.anitabi.cn/user/1065/bangumi/72942/points/pqpmpzubl-1730764255976.jpg?plan=h360",
+              "anime": "中二病でも恋がしたい！戀",
+              "episode": "5",
+              "seconds": 238,
+              "shot": {
+                "lat": 34.988637,
+                "lng": 136.259836,
+                "note": "旧鎌掛小学校 一樓走廊"
+              },
+              "source": "Anitabi",
+              "sourceUrl": "https://anitabi.cn/map?bangumiId=72942&pid=pqpmpzubl"
+            },
+            {
+              "image": "https://image.anitabi.cn/user/1065/bangumi/72942/points/pwvbvf6x5-1731246863683.jpg?plan=h360",
+              "anime": "中二病でも恋がしたい！戀",
+              "episode": "8",
+              "seconds": 1,
+              "shot": {
+                "lat": 34.988637,
+                "lng": 136.259836,
+                "note": "旧鎌掛小学校 一樓走廊"
+              },
+              "source": "Anitabi",
+              "sourceUrl": "https://anitabi.cn/map?bangumiId=72942&pid=pwvbvf6x5"
+            },
+            {
+              "image": "https://image.anitabi.cn/user/1065/bangumi/72942/points/pommjrhm3-1730600981977.jpg?plan=h360",
+              "anime": "中二病でも恋がしたい！戀",
+              "episode": "3",
+              "seconds": 894,
+              "shot": {
+                "lat": 34.988637,
+                "lng": 136.259836,
+                "note": "旧鎌掛小学校 一樓走廊"
+              },
+              "source": "Anitabi",
+              "sourceUrl": "https://anitabi.cn/map?bangumiId=72942&pid=pommjrhm3"
+            },
+            {
+              "image": "https://image.anitabi.cn/user/1065/bangumi/72942/points/pqpm458cr-1730764216283.jpg?plan=h360",
+              "anime": "中二病でも恋がしたい！戀",
+              "episode": "5",
+              "seconds": 9,
+              "shot": {
+                "lat": 34.988637,
+                "lng": 136.259836,
+                "note": "旧鎌掛小学校 一樓走廊"
+              },
+              "source": "Anitabi",
+              "sourceUrl": "https://anitabi.cn/map?bangumiId=72942&pid=pqpm458cr"
+            },
+            {
+              "image": "https://image.anitabi.cn/user/1065/bangumi/72942/points/q22bdvi9f-1731653868526.jpg?plan=h360",
+              "anime": "中二病でも恋がしたい！戀",
+              "episode": "13",
+              "seconds": 722,
+              "shot": {
+                "lat": 34.988637,
+                "lng": 136.259836,
+                "note": "旧鎌掛小学校 一樓走廊"
+              },
+              "source": "Anitabi",
+              "sourceUrl": "https://anitabi.cn/map?bangumiId=72942&pid=q22bdvi9f"
+            },
+            {
+              "image": "https://image.anitabi.cn/user/1065/bangumi/72942/points/pwvnnlivc-1731247555256.jpg?plan=h360",
+              "anime": "中二病でも恋がしたい！戀",
+              "episode": "8",
+              "seconds": 619,
+              "shot": {
+                "lat": 34.988637,
+                "lng": 136.259836,
+                "note": "旧鎌掛小学校 一樓走廊"
+              },
+              "source": "Anitabi",
+              "sourceUrl": "https://anitabi.cn/map?bangumiId=72942&pid=pwvnnlivc"
+            },
+            {
+              "image": "https://image.anitabi.cn/user/1065/bangumi/72942/points/pnp8oayaw-1730528313315.jpg?plan=h360",
+              "anime": "中二病でも恋がしたい！戀",
+              "episode": "2",
+              "seconds": 504,
+              "shot": {
+                "lat": 34.988637,
+                "lng": 136.259836,
+                "note": "旧鎌掛小学校 一樓走廊"
+              },
+              "source": "Anitabi",
+              "sourceUrl": "https://anitabi.cn/map?bangumiId=72942&pid=pnp8oayaw"
+            },
+            {
+              "image": "https://image.anitabi.cn/user/1065/bangumi/72942/points/ppusk2jey-1730697125037.jpg?plan=h360",
+              "anime": "中二病でも恋がしたい！戀",
+              "episode": "4",
+              "seconds": 435,
+              "shot": {
+                "lat": 34.988637,
+                "lng": 136.259836,
+                "note": "旧鎌掛小学校 一樓走廊"
+              },
+              "source": "Anitabi",
+              "sourceUrl": "https://anitabi.cn/map?bangumiId=72942&pid=ppusk2jey"
+            },
+            {
+              "image": "https://image.anitabi.cn/user/1065/bangumi/72942/points/pnn2t0290-1730523625745.jpg?plan=h360",
+              "anime": "中二病でも恋がしたい！戀",
+              "episode": "1",
+              "seconds": 588,
+              "shot": {
+                "lat": 34.988637,
+                "lng": 136.259836,
+                "note": "旧鎌掛小学校 一樓走廊"
+              },
+              "source": "Anitabi",
+              "sourceUrl": "https://anitabi.cn/map?bangumiId=72942&pid=pnn2t0290"
+            },
+            {
+              "image": "https://image.anitabi.cn/user/1065/bangumi/72942/points/pomphxmzi-1730601163858.jpg?plan=h360",
+              "anime": "中二病でも恋がしたい！戀",
+              "episode": "3",
+              "seconds": 352,
+              "shot": {
+                "lat": 34.988637,
+                "lng": 136.259836,
+                "note": "旧鎌掛小学校 一樓走廊"
+              },
+              "source": "Anitabi",
+              "sourceUrl": "https://anitabi.cn/map?bangumiId=72942&pid=pomphxmzi"
+            },
+            {
+              "image": "https://image.anitabi.cn/user/1065/bangumi/72942/points/pqpnwfymj-1730764330310.jpg?plan=h360",
+              "anime": "中二病でも恋がしたい！戀",
+              "episode": "5",
+              "seconds": 380,
+              "shot": {
+                "lat": 34.988637,
+                "lng": 136.259836,
+                "note": "旧鎌掛小学校 一樓走廊"
+              },
+              "source": "Anitabi",
+              "sourceUrl": "https://anitabi.cn/map?bangumiId=72942&pid=pqpnwfymj"
+            },
+            {
+              "image": "https://image.anitabi.cn/user/1065/bangumi/72942/points/pnpbv9yht-1730528504396.jpg?plan=h360",
+              "anime": "中二病でも恋がしたい！戀",
+              "episode": "2",
+              "seconds": 645,
+              "shot": {
+                "lat": 34.988637,
+                "lng": 136.259836,
+                "note": "旧鎌掛小学校 一樓走廊"
+              },
+              "source": "Anitabi",
+              "sourceUrl": "https://anitabi.cn/map?bangumiId=72942&pid=pnpbv9yht"
+            },
+            {
+              "image": "https://image.anitabi.cn/user/1065/bangumi/72942/points/pomfwivgb-1730600579124.jpg?plan=h360",
+              "anime": "中二病でも恋がしたい！戀",
+              "episode": "3",
+              "seconds": 496,
+              "shot": {
+                "lat": 34.988637,
+                "lng": 136.259836,
+                "note": "旧鎌掛小学校 一樓走廊"
+              },
+              "source": "Anitabi",
+              "sourceUrl": "https://anitabi.cn/map?bangumiId=72942&pid=pomfwivgb"
+            },
+            {
+              "image": "https://image.anitabi.cn/user/1065/bangumi/72942/points/ppv4oubqu-1730697861991.jpg?plan=h360",
+              "anime": "中二病でも恋がしたい！戀",
+              "episode": "4",
+              "seconds": 1301,
+              "shot": {
+                "lat": 34.988637,
+                "lng": 136.259836,
+                "note": "旧鎌掛小学校 一樓走廊"
+              },
+              "source": "Anitabi",
+              "sourceUrl": "https://anitabi.cn/map?bangumiId=72942&pid=ppv4oubqu"
+            },
+            {
+              "image": "https://image.anitabi.cn/user/1065/bangumi/72942/points/ppuu0f5ou-1730697216960.jpg?plan=h360",
+              "anime": "中二病でも恋がしたい！戀",
+              "episode": "4",
+              "seconds": 452,
+              "shot": {
+                "lat": 34.988637,
+                "lng": 136.259836,
+                "note": "旧鎌掛小学校 一樓走廊"
+              },
+              "source": "Anitabi",
+              "sourceUrl": "https://anitabi.cn/map?bangumiId=72942&pid=ppuu0f5ou"
+            },
+            {
+              "image": "https://image.anitabi.cn/user/1065/bangumi/72942/points/ppv3miehb-1730697793747.jpg?plan=h360",
+              "anime": "中二病でも恋がしたい！戀",
+              "episode": "4",
+              "seconds": 1185,
+              "shot": {
+                "lat": 34.988637,
+                "lng": 136.259836,
+                "note": "旧鎌掛小学校 一樓走廊"
+              },
+              "source": "Anitabi",
+              "sourceUrl": "https://anitabi.cn/map?bangumiId=72942&pid=ppv3miehb"
+            },
+            {
+              "image": "https://image.anitabi.cn/user/1065/bangumi/72942/points/q228p1ia0-1731653705561.jpg?plan=h360",
+              "anime": "中二病でも恋がしたい！戀",
+              "episode": "13",
+              "seconds": 15,
+              "shot": {
+                "lat": 34.988637,
+                "lng": 136.259836,
+                "note": "旧鎌掛小学校 一樓走廊"
+              },
+              "source": "Anitabi",
+              "sourceUrl": "https://anitabi.cn/map?bangumiId=72942&pid=q228p1ia0"
+            }
+          ]
+        },
+        {
+          "name": "旧鎌掛小学校 部室（極東魔術昼寝結社の夏）",
+          "lat": 34.988637,
+          "lng": 136.259836,
+          "frames": [
+            {
+              "image": "https://image.anitabi.cn/user/1065/bangumi/72942/points/q228p1ia0-1731653705561.jpg?plan=h360",
+              "anime": "中二病でも恋がしたい！戀",
+              "episode": "13",
+              "seconds": 15,
+              "source": "Anitabi",
+              "sourceUrl": "https://anitabi.cn/map?bangumiId=72942&pid=q228p1ia0"
+            },
+            {
+              "image": "https://image.anitabi.cn/user/1065/bangumi/72942/points/pqpnwfymj-1730764330310.jpg?plan=h360",
+              "anime": "中二病でも恋がしたい！戀",
+              "episode": "5",
+              "seconds": 380,
+              "source": "Anitabi",
+              "sourceUrl": "https://anitabi.cn/map?bangumiId=72942&pid=pqpnwfymj"
+            },
+            {
+              "image": "https://image.anitabi.cn/user/1065/bangumi/72942/points/pomphxmzi-1730601163858.jpg?plan=h360",
+              "anime": "中二病でも恋がしたい！戀",
+              "episode": "3",
+              "seconds": 352,
+              "source": "Anitabi",
+              "sourceUrl": "https://anitabi.cn/map?bangumiId=72942&pid=pomphxmzi"
+            },
+            {
+              "image": "https://image.anitabi.cn/user/1065/bangumi/72942/points/pommjrhm3-1730600981977.jpg?plan=h360",
+              "anime": "中二病でも恋がしたい！戀",
+              "episode": "3",
+              "seconds": 894,
+              "source": "Anitabi",
+              "sourceUrl": "https://anitabi.cn/map?bangumiId=72942&pid=pommjrhm3"
+            },
+            {
+              "image": "https://image.anitabi.cn/user/1065/bangumi/72942/points/pommygyku-1730601006649.jpg?plan=h360",
+              "anime": "中二病でも恋がしたい！戀",
+              "episode": "3",
+              "seconds": 918,
+              "source": "Anitabi",
+              "sourceUrl": "https://anitabi.cn/map?bangumiId=72942&pid=pommygyku"
+            },
+            {
+              "image": "https://image.anitabi.cn/user/1065/bangumi/72942/points/ppv4oubqu-1730697861991.jpg?plan=h360",
+              "anime": "中二病でも恋がしたい！戀",
+              "episode": "4",
+              "seconds": 1301,
+              "source": "Anitabi",
+              "sourceUrl": "https://anitabi.cn/map?bangumiId=72942&pid=ppv4oubqu"
+            },
+            {
+              "image": "https://image.anitabi.cn/user/1065/bangumi/72942/points/pomm4lu0x-1730600957250.jpg?plan=h360",
+              "anime": "中二病でも恋がしたい！戀",
+              "episode": "3",
+              "seconds": 874,
+              "source": "Anitabi",
+              "sourceUrl": "https://anitabi.cn/map?bangumiId=72942&pid=pomm4lu0x"
+            },
+            {
+              "image": "https://image.anitabi.cn/user/1065/bangumi/72942/points/q22lh70bd-1731654478584.jpg?plan=h360",
+              "anime": "中二病でも恋がしたい！戀",
+              "episode": "13",
+              "seconds": 1298,
+              "source": "Anitabi",
+              "sourceUrl": "https://anitabi.cn/map?bangumiId=72942&pid=q22lh70bd"
+            },
+            {
+              "image": "https://image.anitabi.cn/user/1065/bangumi/72942/points/pomq0w2qe-1730601192466.jpg?plan=h360",
+              "anime": "中二病でも恋がしたい！戀",
+              "episode": "3",
+              "seconds": 732,
+              "source": "Anitabi",
+              "sourceUrl": "https://anitabi.cn/map?bangumiId=72942&pid=pomq0w2qe"
+            },
+            {
+              "image": "https://image.anitabi.cn/user/1065/bangumi/72942/points/pnp8oayaw-1730528313315.jpg?plan=h360",
+              "anime": "中二病でも恋がしたい！戀",
+              "episode": "2",
+              "seconds": 504,
+              "source": "Anitabi",
+              "sourceUrl": "https://anitabi.cn/map?bangumiId=72942&pid=pnp8oayaw"
+            },
+            {
+              "image": "https://image.anitabi.cn/user/1065/bangumi/72942/points/pomqdl7d2-1730601212756.jpg?plan=h360",
+              "anime": "中二病でも恋がしたい！戀",
+              "episode": "3",
+              "seconds": 734,
+              "source": "Anitabi",
+              "sourceUrl": "https://anitabi.cn/map?bangumiId=72942&pid=pomqdl7d2"
+            },
+            {
+              "image": "https://image.anitabi.cn/user/1065/bangumi/72942/points/q22cu2mpq-1731653958562.jpg?plan=h360",
+              "anime": "中二病でも恋がしたい！戀",
+              "episode": "13",
+              "seconds": 773,
+              "source": "Anitabi",
+              "sourceUrl": "https://anitabi.cn/map?bangumiId=72942&pid=q22cu2mpq"
+            },
+            {
+              "image": "https://image.anitabi.cn/user/1065/bangumi/72942/points/pwvbvf6x5-1731246863683.jpg?plan=h360",
+              "anime": "中二病でも恋がしたい！戀",
+              "episode": "8",
+              "seconds": 1,
+              "source": "Anitabi",
+              "sourceUrl": "https://anitabi.cn/map?bangumiId=72942&pid=pwvbvf6x5"
+            },
+            {
+              "image": "https://image.anitabi.cn/user/1065/bangumi/72942/points/ppus0qr1m-1730697091532.jpg?plan=h360",
+              "anime": "中二病でも恋がしたい！戀",
+              "episode": "4",
+              "seconds": 415,
+              "source": "Anitabi",
+              "sourceUrl": "https://anitabi.cn/map?bangumiId=72942&pid=ppus0qr1m"
+            },
+            {
+              "image": "https://image.anitabi.cn/user/1065/bangumi/72942/points/pwvp281kj-1731247646236.jpg?plan=h360",
+              "anime": "中二病でも恋がしたい！戀",
+              "episode": "8",
+              "seconds": 656,
+              "source": "Anitabi",
+              "sourceUrl": "https://anitabi.cn/map?bangumiId=72942&pid=pwvp281kj"
+            }
+          ]
+        },
+        {
+          "name": "旧鎌掛小学校 旁邊公園",
+          "lat": 34.988649,
+          "lng": 136.259959,
+          "frames": []
+        }
+      ]
+    },
+    {
+      "title": "豐鄉小學校",
+      "places": [
+        {
+          "name": "豐鄉小學校 室外",
+          "lat": 35.203494,
+          "lng": 136.2325,
+          "frames": [
+            {
+              "anime": "けいおん！",
+              "shot": {
+                "lat": 35.203494,
+                "lng": 136.2325,
+                "note": "豐鄉小學校 正門"
+              }
+            },
+            {
+              "anime": "けいおん！",
+              "shot": {
+                "lat": 35.203494,
+                "lng": 136.2325,
+                "note": "豐鄉小學校 正門"
+              }
+            },
+            {
+              "anime": "けいおん！",
+              "shot": {
+                "lat": 35.203494,
+                "lng": 136.2325,
+                "note": "豐鄉小學校 正門"
+              }
+            },
+            {
+              "anime": "けいおん！",
+              "episode": "1",
+              "shot": {
+                "lat": 35.203494,
+                "lng": 136.2325,
+                "note": "豐鄉小學校 正門"
+              }
+            },
+            {
+              "image": "https://image.anitabi.cn/points/1424/s9niw9oe9_1737890799583.jpg?plan=h360",
+              "anime": "けいおん！",
+              "shot": {
+                "lat": 35.203494,
+                "lng": 136.2325,
+                "note": "豐鄉小學校 正門"
+              },
+              "source": "Anitabi",
+              "sourceUrl": "https://anitabi.cn/map?bangumiId=1424&pid=s9niw9oe9"
+            },
+            {
+              "image": "https://image.anitabi.cn/points/1424/s9nis39wy_1737890792952.jpg?plan=h360",
+              "anime": "けいおん！",
+              "shot": {
+                "lat": 35.203494,
+                "lng": 136.2325,
+                "note": "豐鄉小學校 正門"
+              },
+              "source": "Anitabi",
+              "sourceUrl": "https://anitabi.cn/map?bangumiId=1424&pid=s9nis39wy"
+            },
+            {
+              "image": "https://image.anitabi.cn/points/1424/s9narzic2_1737890308716.jpg?plan=h360",
+              "anime": "けいおん！",
+              "shot": {
+                "lat": 35.203494,
+                "lng": 136.2325,
+                "note": "豐鄉小學校 正門"
+              },
+              "source": "Anitabi",
+              "sourceUrl": "https://anitabi.cn/map?bangumiId=1424&pid=s9narzic2"
+            },
+            {
+              "image": "https://image.anitabi.cn/points/1424/s9ng95i3g_1737890640180.jpg?plan=h360",
+              "anime": "けいおん！",
+              "shot": {
+                "lat": 35.203494,
+                "lng": 136.2325,
+                "note": "豐鄉小學校 正門"
+              },
+              "source": "Anitabi",
+              "sourceUrl": "https://anitabi.cn/map?bangumiId=1424&pid=s9ng95i3g"
+            },
+            {
+              "image": "https://image.anitabi.cn/points/1424/s9ni6b22h_1737890756509.jpg?plan=h360",
+              "anime": "けいおん！",
+              "shot": {
+                "lat": 35.203494,
+                "lng": 136.2325,
+                "note": "豐鄉小學校 正門"
+              },
+              "source": "Anitabi",
+              "sourceUrl": "https://anitabi.cn/map?bangumiId=1424&pid=s9ni6b22h"
+            },
+            {
+              "image": "https://image.anitabi.cn/points/1424/s9ngdidwl_1737890650033.jpg?plan=h360",
+              "anime": "けいおん！",
+              "shot": {
+                "lat": 35.203494,
+                "lng": 136.2325,
+                "note": "豐鄉小學校 正門"
+              },
+              "source": "Anitabi",
+              "sourceUrl": "https://anitabi.cn/map?bangumiId=1424&pid=s9ngdidwl"
+            },
+            {
+              "image": "https://image.anitabi.cn/points/1424/s9nfrwuka_1737890611000.jpg?plan=h360",
+              "anime": "けいおん！",
+              "shot": {
+                "lat": 35.203494,
+                "lng": 136.2325,
+                "note": "豐鄉小學校 正門"
+              },
+              "source": "Anitabi",
+              "sourceUrl": "https://anitabi.cn/map?bangumiId=1424&pid=s9nfrwuka"
+            },
+            {
+              "image": "https://image.anitabi.cn/points/1424/s9nijut9a_1737890780649.jpg?plan=h360",
+              "anime": "けいおん！",
+              "episode": "1",
+              "shot": {
+                "lat": 35.203494,
+                "lng": 136.2325,
+                "note": "豐鄉小學校 正門"
+              },
+              "source": "Anitabi",
+              "sourceUrl": "https://anitabi.cn/map?bangumiId=1424&pid=s9nijut9a"
+            },
+            {
+              "image": "https://image.anitabi.cn/points/1424/s9n3zvvrm_1737889899353.jpg?plan=h360",
+              "anime": "けいおん！",
+              "shot": {
+                "lat": 35.203494,
+                "lng": 136.2325,
+                "note": "豐鄉小學校 正門"
+              },
+              "source": "Anitabi",
+              "sourceUrl": "https://anitabi.cn/map?bangumiId=1424&pid=s9n3zvvrm"
+            },
+            {
+              "image": "https://image.anitabi.cn/points/1424/s9nhc3wtg_1737890705873.jpg?plan=h360",
+              "anime": "けいおん！",
+              "shot": {
+                "lat": 35.203494,
+                "lng": 136.2325,
+                "note": "豐鄉小學校 正門"
+              },
+              "source": "Anitabi",
+              "sourceUrl": "https://anitabi.cn/map?bangumiId=1424&pid=s9nhc3wtg"
+            },
+            {
+              "image": "https://image.anitabi.cn/points/1424/s9nfq1pjp_1737890608046.jpg?plan=h360",
+              "anime": "けいおん！",
+              "shot": {
+                "lat": 35.203494,
+                "lng": 136.2325,
+                "note": "豐鄉小學校 正門"
+              },
+              "source": "Anitabi",
+              "sourceUrl": "https://anitabi.cn/map?bangumiId=1424&pid=s9nfq1pjp"
+            },
+            {
+              "image": "https://image.anitabi.cn/points/1424/s9n38r4jb_1737889853089.jpg?plan=h360",
+              "anime": "けいおん！",
+              "shot": {
+                "lat": 35.203494,
+                "lng": 136.2325,
+                "note": "豐鄉小學校 正門"
+              },
+              "source": "Anitabi",
+              "sourceUrl": "https://anitabi.cn/map?bangumiId=1424&pid=s9n38r4jb"
+            },
+            {
+              "image": "https://image.anitabi.cn/points/1424/s9na0mpiz_1737890264871.jpg?plan=h360",
+              "anime": "けいおん！",
+              "shot": {
+                "lat": 35.203494,
+                "lng": 136.2325,
+                "note": "豐鄉小學校 正門"
+              },
+              "source": "Anitabi",
+              "sourceUrl": "https://anitabi.cn/map?bangumiId=1424&pid=s9na0mpiz"
+            },
+            {
+              "image": "https://image.anitabi.cn/points/1424/s9ney1ebi_1737890560485.jpg?plan=h360",
+              "anime": "けいおん！",
+              "shot": {
+                "lat": 35.203494,
+                "lng": 136.2325,
+                "note": "豐鄉小學校 正門"
+              },
+              "source": "Anitabi",
+              "sourceUrl": "https://anitabi.cn/map?bangumiId=1424&pid=s9ney1ebi"
+            },
+            {
+              "image": "https://image.anitabi.cn/points/1424/s9nglumpp_1737890662543.jpg?plan=h360",
+              "anime": "けいおん！",
+              "shot": {
+                "lat": 35.203494,
+                "lng": 136.2325,
+                "note": "豐鄉小學校 正門"
+              },
+              "source": "Anitabi",
+              "sourceUrl": "https://anitabi.cn/map?bangumiId=1424&pid=s9nglumpp"
+            },
+            {
+              "image": "https://image.anitabi.cn/points/1424/s9nfkdofo_1737890598482.jpg?plan=h360",
+              "anime": "けいおん！",
+              "shot": {
+                "lat": 35.203494,
+                "lng": 136.2325,
+                "note": "豐鄉小學校 正門"
+              },
+              "source": "Anitabi",
+              "sourceUrl": "https://anitabi.cn/map?bangumiId=1424&pid=s9nfkdofo"
+            },
+            {
+              "image": "https://image.anitabi.cn/points/1424/s9njc67dp_1737890826657.jpg?plan=h360",
+              "anime": "けいおん！",
+              "shot": {
+                "lat": 35.203494,
+                "lng": 136.2325,
+                "note": "豐鄉小學校 正門"
+              },
+              "source": "Anitabi",
+              "sourceUrl": "https://anitabi.cn/map?bangumiId=1424&pid=s9njc67dp"
+            },
+            {
+              "image": "https://image.anitabi.cn/points/1424/s9n2sakw4_1737889825309.jpg?plan=h360",
+              "anime": "けいおん！",
+              "shot": {
+                "lat": 35.203494,
+                "lng": 136.2325,
+                "note": "豐鄉小學校 正門"
+              },
+              "source": "Anitabi",
+              "sourceUrl": "https://anitabi.cn/map?bangumiId=1424&pid=s9n2sakw4"
+            },
+            {
+              "image": "https://image.anitabi.cn/points/1424/s9nfyqwxs_1737890625258.jpg?plan=h360",
+              "anime": "けいおん！",
+              "shot": {
+                "lat": 35.203494,
+                "lng": 136.2325,
+                "note": "豐鄉小學校 正門"
+              },
+              "source": "Anitabi",
+              "sourceUrl": "https://anitabi.cn/map?bangumiId=1424&pid=s9nfyqwxs"
+            },
+            {
+              "image": "https://image.anitabi.cn/points/1424/s9nbdaes6_1737890344452.jpg?plan=h360",
+              "anime": "けいおん！",
+              "shot": {
+                "lat": 35.203494,
+                "lng": 136.2325,
+                "note": "豐鄉小學校 正門"
+              },
+              "source": "Anitabi",
+              "sourceUrl": "https://anitabi.cn/map?bangumiId=1424&pid=s9nbdaes6"
+            },
+            {
+              "image": "https://image.anitabi.cn/points/1424/s9mwh98te_1737889444498.jpg?plan=h360",
+              "anime": "けいおん！",
+              "shot": {
+                "lat": 35.203494,
+                "lng": 136.2325,
+                "note": "豐鄉小學校 正門"
+              },
+              "source": "Anitabi",
+              "sourceUrl": "https://anitabi.cn/map?bangumiId=1424&pid=s9mwh98te"
+            },
+            {
+              "image": "https://image.anitabi.cn/points/1424/s9njlgdoa_1737890842309.jpg?plan=h360",
+              "anime": "けいおん！",
+              "shot": {
+                "lat": 35.203494,
+                "lng": 136.2325,
+                "note": "豐鄉小學校 正門"
+              },
+              "source": "Anitabi",
+              "sourceUrl": "https://anitabi.cn/map?bangumiId=1424&pid=s9njlgdoa"
+            },
+            {
+              "image": "https://image.anitabi.cn/points/1424/s9nfdgn55_1737890586989.jpg?plan=h360",
+              "anime": "けいおん！",
+              "shot": {
+                "lat": 35.203494,
+                "lng": 136.2325,
+                "note": "豐鄉小學校 正門"
+              },
+              "source": "Anitabi",
+              "sourceUrl": "https://anitabi.cn/map?bangumiId=1424&pid=s9nfdgn55"
+            },
+            {
+              "image": "https://image.anitabi.cn/points/1424/s9nj1f1ti_1737890808479.jpg?plan=h360",
+              "anime": "けいおん！",
+              "shot": {
+                "lat": 35.203494,
+                "lng": 136.2325,
+                "note": "豐鄉小學校 正門"
+              },
+              "source": "Anitabi",
+              "sourceUrl": "https://anitabi.cn/map?bangumiId=1424&pid=s9nj1f1ti"
+            },
+            {
+              "image": "https://image.anitabi.cn/points/1424/s9nfhrbg9_1737890593817.jpg?plan=h360",
+              "anime": "けいおん！",
+              "shot": {
+                "lat": 35.203494,
+                "lng": 136.2325,
+                "note": "豐鄉小學校 正門"
+              },
+              "source": "Anitabi",
+              "sourceUrl": "https://anitabi.cn/map?bangumiId=1424&pid=s9nfhrbg9"
+            },
+            {
+              "image": "https://image.anitabi.cn/points/1424/s9n45o4g1_1737889908816.jpg?plan=h360",
+              "anime": "けいおん！",
+              "shot": {
+                "lat": 35.203494,
+                "lng": 136.2325,
+                "note": "豐鄉小學校 正門"
+              },
+              "source": "Anitabi",
+              "sourceUrl": "https://anitabi.cn/map?bangumiId=1424&pid=s9n45o4g1"
+            },
+            {
+              "image": "https://image.anitabi.cn/points/1424/s9nhih0on_1737890718839.jpg?plan=h360",
+              "anime": "けいおん！",
+              "shot": {
+                "lat": 35.203494,
+                "lng": 136.2325,
+                "note": "豐鄉小學校 正門"
+              },
+              "source": "Anitabi",
+              "sourceUrl": "https://anitabi.cn/map?bangumiId=1424&pid=s9nhih0on"
+            },
+            {
+              "image": "https://image.anitabi.cn/points/1424/s9naput6c_1737890305346.jpg?plan=h360",
+              "anime": "けいおん！",
+              "shot": {
+                "lat": 35.203494,
+                "lng": 136.2325,
+                "note": "豐鄉小學校 正門"
+              },
+              "source": "Anitabi",
+              "sourceUrl": "https://anitabi.cn/map?bangumiId=1424&pid=s9naput6c"
+            },
+            {
+              "image": "https://image.anitabi.cn/points/1424/s9naea5f3_1737890285795.jpg?plan=h360",
+              "anime": "けいおん！",
+              "shot": {
+                "lat": 35.203494,
+                "lng": 136.2325,
+                "note": "豐鄉小學校 正門"
+              },
+              "source": "Anitabi",
+              "sourceUrl": "https://anitabi.cn/map?bangumiId=1424&pid=s9naea5f3"
+            },
+            {
+              "image": "https://image.anitabi.cn/points/1424/s9nbgisbe_1737890520839.jpg?plan=h360",
+              "anime": "けいおん！",
+              "shot": {
+                "lat": 35.203494,
+                "lng": 136.2325,
+                "note": "豐鄉小學校 正門"
+              },
+              "source": "Anitabi",
+              "sourceUrl": "https://anitabi.cn/map?bangumiId=1424&pid=s9nbgisbe"
+            },
+            {
+              "image": "https://image.anitabi.cn/points/1424/s9ndvf6xi_1737890495747.jpg?plan=h360",
+              "anime": "けいおん！",
+              "shot": {
+                "lat": 35.203494,
+                "lng": 136.2325,
+                "note": "豐鄉小學校 正門"
+              },
+              "source": "Anitabi",
+              "sourceUrl": "https://anitabi.cn/map?bangumiId=1424&pid=s9ndvf6xi"
+            },
+            {
+              "image": "https://image.anitabi.cn/points/1424/s9nb38pp6_1737890327994.jpg?plan=h360",
+              "anime": "けいおん！",
+              "shot": {
+                "lat": 35.203494,
+                "lng": 136.2325,
+                "note": "豐鄉小學校 正門"
+              },
+              "source": "Anitabi",
+              "sourceUrl": "https://anitabi.cn/map?bangumiId=1424&pid=s9nb38pp6"
+            },
+            {
+              "image": "https://image.anitabi.cn/points/1424/s9nal5t6b_1737890297858.jpg?plan=h360",
+              "anime": "けいおん！",
+              "shot": {
+                "lat": 35.203494,
+                "lng": 136.2325,
+                "note": "豐鄉小學校 正門"
+              },
+              "source": "Anitabi",
+              "sourceUrl": "https://anitabi.cn/map?bangumiId=1424&pid=s9nal5t6b"
+            },
+            {
+              "image": "https://image.anitabi.cn/points/1424/s9nf4uykb_1737890578131.jpg?plan=h360",
+              "anime": "けいおん！",
+              "shot": {
+                "lat": 35.203494,
+                "lng": 136.2325,
+                "note": "豐鄉小學校 正門"
+              },
+              "source": "Anitabi",
+              "sourceUrl": "https://anitabi.cn/map?bangumiId=1424&pid=s9nf4uykb"
+            },
+            {
+              "image": "https://image.anitabi.cn/points/1424/s9nawjb8q_1737890317391.jpg?plan=h360",
+              "anime": "けいおん！",
+              "shot": {
+                "lat": 35.203494,
+                "lng": 136.2325,
+                "note": "豐鄉小學校 正門"
+              },
+              "source": "Anitabi",
+              "sourceUrl": "https://anitabi.cn/map?bangumiId=1424&pid=s9nawjb8q"
+            },
+            {
+              "image": "https://image.anitabi.cn/points/1424/s9njpotxu_1737890849618.jpg?plan=h360",
+              "anime": "けいおん！",
+              "shot": {
+                "lat": 35.203494,
+                "lng": 136.2325,
+                "note": "豐鄉小學校 正門"
+              },
+              "source": "Anitabi",
+              "sourceUrl": "https://anitabi.cn/map?bangumiId=1424&pid=s9njpotxu"
+            },
+            {
+              "image": "https://image.anitabi.cn/points/1424/s9njgxogq_1737890834501.jpg?plan=h360",
+              "anime": "けいおん！",
+              "shot": {
+                "lat": 35.203494,
+                "lng": 136.2325,
+                "note": "豐鄉小學校 正門"
+              },
+              "source": "Anitabi",
+              "sourceUrl": "https://anitabi.cn/map?bangumiId=1424&pid=s9njgxogq"
+            },
+            {
+              "image": "https://image.anitabi.cn/points/1424/s9nj513cx_1737890814795.jpg?plan=h360",
+              "anime": "けいおん！",
+              "shot": {
+                "lat": 35.203494,
+                "lng": 136.2325,
+                "note": "豐鄉小學校 正門"
+              },
+              "source": "Anitabi",
+              "sourceUrl": "https://anitabi.cn/map?bangumiId=1424&pid=s9nj513cx"
+            },
+            {
+              "image": "https://image.anitabi.cn/points/1424/s9ckzpysi_1737866983896.jpg?plan=h360",
+              "anime": "けいおん！",
+              "shot": {
+                "lat": 35.203494,
+                "lng": 136.2325,
+                "note": "豐鄉小學校 正門"
+              },
+              "source": "Anitabi",
+              "sourceUrl": "https://anitabi.cn/map?bangumiId=1424&pid=s9ckzpysi"
+            },
+            {
+              "image": "https://image.anitabi.cn/points/1424/s9n48f2gl_1737889915595.jpg?plan=h360",
+              "anime": "けいおん！",
+              "shot": {
+                "lat": 35.203494,
+                "lng": 136.2325,
+                "note": "豐鄉小學校 正門"
+              },
+              "source": "Anitabi",
+              "sourceUrl": "https://anitabi.cn/map?bangumiId=1424&pid=s9n48f2gl"
+            },
+            {
+              "image": "https://image.anitabi.cn/points/1424/s9nfw3j69_1737890618354.jpg?plan=h360",
+              "anime": "けいおん！",
+              "shot": {
+                "lat": 35.203494,
+                "lng": 136.2325,
+                "note": "豐鄉小學校 正門"
+              },
+              "source": "Anitabi",
+              "sourceUrl": "https://anitabi.cn/map?bangumiId=1424&pid=s9nfw3j69"
+            },
+            {
+              "image": "https://image.anitabi.cn/points/1424/s9nahsybk_1737890291582.jpg?plan=h360",
+              "anime": "けいおん！",
+              "shot": {
+                "lat": 35.203494,
+                "lng": 136.2325,
+                "note": "豐鄉小學校 正門"
+              },
+              "source": "Anitabi",
+              "sourceUrl": "https://anitabi.cn/map?bangumiId=1424&pid=s9nahsybk"
+            },
+            {
+              "image": "https://image.anitabi.cn/points/1424/s9nhmokcq_1737890723162.jpg?plan=h360",
+              "anime": "けいおん！",
+              "shot": {
+                "lat": 35.203494,
+                "lng": 136.2325,
+                "note": "豐鄉小學校 正門"
+              },
+              "source": "Anitabi",
+              "sourceUrl": "https://anitabi.cn/map?bangumiId=1424&pid=s9nhmokcq"
+            },
+            {
+              "image": "https://image.anitabi.cn/points/1424/s9nj9bwnz_1737890821676.jpg?plan=h360",
+              "anime": "けいおん！",
+              "shot": {
+                "lat": 35.203494,
+                "lng": 136.2325,
+                "note": "豐鄉小學校 正門"
+              },
+              "source": "Anitabi",
+              "sourceUrl": "https://anitabi.cn/map?bangumiId=1424&pid=s9nj9bwnz"
+            }
+          ]
+        },
+        {
+          "name": "豐鄉小學校 室內",
+          "lat": 35.203373,
+          "lng": 136.232803,
+          "frames": [
+            {
+              "anime": "けいおん！",
+              "shot": {
+                "lat": 35.203373,
+                "lng": 136.232803,
+                "note": "豐鄉小學校 樓梯"
+              }
+            },
+            {
+              "anime": "けいおん！",
+              "shot": {
+                "lat": 35.203373,
+                "lng": 136.232803,
+                "note": "豐鄉小學校 樓梯"
+              }
+            },
+            {
+              "anime": "けいおん！",
+              "shot": {
+                "lat": 35.203373,
+                "lng": 136.232803,
+                "note": "豐鄉小學校 樓梯"
+              }
+            },
+            {
+              "anime": "けいおん！",
+              "shot": {
+                "lat": 35.203373,
+                "lng": 136.232803,
+                "note": "豐鄉小學校 樓梯"
+              }
+            },
+            {
+              "image": "https://image.anitabi.cn/points/1424/s9mh9ecnm_1737888523868.jpg?plan=h360",
+              "anime": "けいおん！",
+              "shot": {
+                "lat": 35.203373,
+                "lng": 136.232803,
+                "note": "豐鄉小學校 樓梯"
+              },
+              "source": "Anitabi",
+              "sourceUrl": "https://anitabi.cn/map?bangumiId=1424&pid=s9mh9ecnm"
+            },
+            {
+              "image": "https://image.anitabi.cn/points/1424/s9c7v1of4_1737866194238.jpg?plan=h360",
+              "anime": "けいおん！",
+              "shot": {
+                "lat": 35.203373,
+                "lng": 136.232803,
+                "note": "豐鄉小學校 樓梯"
+              },
+              "source": "Anitabi",
+              "sourceUrl": "https://anitabi.cn/map?bangumiId=1424&pid=s9c7v1of4"
+            },
+            {
+              "image": "https://image.anitabi.cn/points/1424/s9cmilnob_1737867097597.jpg?plan=h360",
+              "anime": "けいおん！",
+              "shot": {
+                "lat": 35.203373,
+                "lng": 136.232803,
+                "note": "豐鄉小學校 樓梯"
+              },
+              "source": "Anitabi",
+              "sourceUrl": "https://anitabi.cn/map?bangumiId=1424&pid=s9cmilnob"
+            },
+            {
+              "image": "https://image.anitabi.cn/points/1424/s9c8nvjpa_1737866236177.jpg?plan=h360",
+              "anime": "けいおん！",
+              "shot": {
+                "lat": 35.203373,
+                "lng": 136.232803,
+                "note": "豐鄉小學校 樓梯"
+              },
+              "source": "Anitabi",
+              "sourceUrl": "https://anitabi.cn/map?bangumiId=1424&pid=s9c8nvjpa"
+            },
+            {
+              "image": "https://image.anitabi.cn/points/1424/s9mpevz1x_1737889016998.jpg?plan=h360",
+              "anime": "けいおん！",
+              "shot": {
+                "lat": 35.203373,
+                "lng": 136.232803,
+                "note": "豐鄉小學校 樓梯"
+              },
+              "source": "Anitabi",
+              "sourceUrl": "https://anitabi.cn/map?bangumiId=1424&pid=s9mpevz1x"
+            },
+            {
+              "image": "https://image.anitabi.cn/points/1424/s9mmlk5qy_1737888846887.jpg?plan=h360",
+              "anime": "けいおん！",
+              "shot": {
+                "lat": 35.203373,
+                "lng": 136.232803,
+                "note": "豐鄉小學校 樓梯"
+              },
+              "source": "Anitabi",
+              "sourceUrl": "https://anitabi.cn/map?bangumiId=1424&pid=s9mmlk5qy"
+            },
+            {
+              "image": "https://image.anitabi.cn/points/1424/s9mp7zjhx_1737889005664.jpg?plan=h360",
+              "anime": "けいおん！",
+              "shot": {
+                "lat": 35.203373,
+                "lng": 136.232803,
+                "note": "豐鄉小學校 樓梯"
+              },
+              "source": "Anitabi",
+              "sourceUrl": "https://anitabi.cn/map?bangumiId=1424&pid=s9mp7zjhx"
+            },
+            {
+              "image": "https://image.anitabi.cn/points/1424/s9msd1fdu_1737889199289.jpg?plan=h360",
+              "anime": "けいおん！",
+              "shot": {
+                "lat": 35.203373,
+                "lng": 136.232803,
+                "note": "豐鄉小學校 樓梯"
+              },
+              "source": "Anitabi",
+              "sourceUrl": "https://anitabi.cn/map?bangumiId=1424&pid=s9msd1fdu"
+            },
+            {
+              "image": "https://image.anitabi.cn/points/1424/s9c8aeriu_1737866213505.jpg?plan=h360",
+              "anime": "けいおん！",
+              "shot": {
+                "lat": 35.203373,
+                "lng": 136.232803,
+                "note": "豐鄉小學校 樓梯"
+              },
+              "source": "Anitabi",
+              "sourceUrl": "https://anitabi.cn/map?bangumiId=1424&pid=106ft7ldz0"
+            },
+            {
+              "image": "https://image.anitabi.cn/points/1424/s9mkdjsrb_1737888713646.jpg?plan=h360",
+              "anime": "けいおん！",
+              "shot": {
+                "lat": 35.203373,
+                "lng": 136.232803,
+                "note": "豐鄉小學校 樓梯"
+              },
+              "source": "Anitabi",
+              "sourceUrl": "https://anitabi.cn/map?bangumiId=1424&pid=s9mkdjsrb"
+            },
+            {
+              "image": "https://image.anitabi.cn/points/1424/s9mqcf36e_1737889075402.jpg?plan=h360",
+              "anime": "けいおん！",
+              "shot": {
+                "lat": 35.203373,
+                "lng": 136.232803,
+                "note": "豐鄉小學校 樓梯"
+              },
+              "source": "Anitabi",
+              "sourceUrl": "https://anitabi.cn/map?bangumiId=1424&pid=s9mqcf36e"
+            },
+            {
+              "image": "https://image.anitabi.cn/points/1424/s9mioud81_1737888611715.jpg?plan=h360",
+              "anime": "けいおん！",
+              "shot": {
+                "lat": 35.203373,
+                "lng": 136.232803,
+                "note": "豐鄉小學校 樓梯"
+              },
+              "source": "Anitabi",
+              "sourceUrl": "https://anitabi.cn/map?bangumiId=1424&pid=s9mioud81"
+            },
+            {
+              "image": "https://image.anitabi.cn/points/1424/s9ce4438z_1737866565978.jpg?plan=h360",
+              "anime": "けいおん！",
+              "shot": {
+                "lat": 35.203373,
+                "lng": 136.232803,
+                "note": "豐鄉小學校 樓梯"
+              },
+              "source": "Anitabi",
+              "sourceUrl": "https://anitabi.cn/map?bangumiId=1424&pid=s9ce4438z"
+            },
+            {
+              "image": "https://image.anitabi.cn/points/1424/s9mrjxfvv_1737889146534.jpg?plan=h360",
+              "anime": "けいおん！",
+              "shot": {
+                "lat": 35.203373,
+                "lng": 136.232803,
+                "note": "豐鄉小學校 樓梯"
+              },
+              "source": "Anitabi",
+              "sourceUrl": "https://anitabi.cn/map?bangumiId=1424&pid=s9mrjxfvv"
+            },
+            {
+              "image": "https://image.anitabi.cn/points/1424/s9mhqnjmk_1737888553109.jpg?plan=h360",
+              "anime": "けいおん！",
+              "shot": {
+                "lat": 35.203373,
+                "lng": 136.232803,
+                "note": "豐鄉小學校 樓梯"
+              },
+              "source": "Anitabi",
+              "sourceUrl": "https://anitabi.cn/map?bangumiId=1424&pid=s9mhqnjmk"
+            },
+            {
+              "image": "https://image.anitabi.cn/points/1424/s9cljsgez_1737867015612.jpg?plan=h360",
+              "anime": "けいおん！",
+              "shot": {
+                "lat": 35.203373,
+                "lng": 136.232803,
+                "note": "豐鄉小學校 樓梯"
+              },
+              "source": "Anitabi",
+              "sourceUrl": "https://anitabi.cn/map?bangumiId=1424&pid=s9cljsgez"
+            },
+            {
+              "image": "https://image.anitabi.cn/points/1424/s9mq4xmzn_1737889062293.jpg?plan=h360",
+              "anime": "けいおん！",
+              "shot": {
+                "lat": 35.203373,
+                "lng": 136.232803,
+                "note": "豐鄉小學校 樓梯"
+              },
+              "source": "Anitabi",
+              "sourceUrl": "https://anitabi.cn/map?bangumiId=1424&pid=s9mq4xmzn"
+            },
+            {
+              "image": "https://image.anitabi.cn/points/1424/s9clnuu3j_1737867029303.jpg?plan=h360",
+              "anime": "けいおん！",
+              "shot": {
+                "lat": 35.203373,
+                "lng": 136.232803,
+                "note": "豐鄉小學校 樓梯"
+              },
+              "source": "Anitabi",
+              "sourceUrl": "https://anitabi.cn/map?bangumiId=1424&pid=s9clnuu3j"
+            },
+            {
+              "image": "https://image.anitabi.cn/points/1424/s9mj03im0_1737888629795.jpg?plan=h360",
+              "anime": "けいおん！",
+              "shot": {
+                "lat": 35.203373,
+                "lng": 136.232803,
+                "note": "豐鄉小學校 樓梯"
+              },
+              "source": "Anitabi",
+              "sourceUrl": "https://anitabi.cn/map?bangumiId=1424&pid=s9mj03im0"
+            },
+            {
+              "image": "https://image.anitabi.cn/points/1424/s9mxenmbz_1737889500139.jpg?plan=h360",
+              "anime": "けいおん！",
+              "shot": {
+                "lat": 35.203373,
+                "lng": 136.232803,
+                "note": "豐鄉小學校 樓梯"
+              },
+              "source": "Anitabi",
+              "sourceUrl": "https://anitabi.cn/map?bangumiId=1424&pid=s9mxenmbz"
+            },
+            {
+              "image": "https://image.anitabi.cn/points/1424/s9cfgtxmv_1737866648471.jpg?plan=h360",
+              "anime": "けいおん！",
+              "shot": {
+                "lat": 35.203373,
+                "lng": 136.232803,
+                "note": "豐鄉小學校 樓梯"
+              },
+              "source": "Anitabi",
+              "sourceUrl": "https://anitabi.cn/map?bangumiId=1424&pid=s9cfgtxmv"
+            },
+            {
+              "image": "https://image.anitabi.cn/points/1424/s9cjcd1q9_1737866941344.jpg?plan=h360",
+              "anime": "けいおん！",
+              "shot": {
+                "lat": 35.203373,
+                "lng": 136.232803,
+                "note": "豐鄉小學校 樓梯"
+              },
+              "source": "Anitabi",
+              "sourceUrl": "https://anitabi.cn/map?bangumiId=1424&pid=s9cjcd1q9"
+            },
+            {
+              "image": "https://image.anitabi.cn/points/1424/s9chx18my_1737866795653.jpg?plan=h360",
+              "anime": "けいおん！",
+              "shot": {
+                "lat": 35.203373,
+                "lng": 136.232803,
+                "note": "豐鄉小學校 樓梯"
+              },
+              "source": "Anitabi",
+              "sourceUrl": "https://anitabi.cn/map?bangumiId=1424&pid=s9chx18my"
+            },
+            {
+              "image": "https://image.anitabi.cn/points/1424/s9mvs7lh8_1737889402870.jpg?plan=h360",
+              "anime": "けいおん！",
+              "shot": {
+                "lat": 35.203373,
+                "lng": 136.232803,
+                "note": "豐鄉小學校 樓梯"
+              },
+              "source": "Anitabi",
+              "sourceUrl": "https://anitabi.cn/map?bangumiId=1424&pid=s9mvs7lh8"
+            },
+            {
+              "image": "https://image.anitabi.cn/points/1424/s9mnsrxg6_1737888919896.jpg?plan=h360",
+              "anime": "けいおん！",
+              "shot": {
+                "lat": 35.203373,
+                "lng": 136.232803,
+                "note": "豐鄉小學校 樓梯"
+              },
+              "source": "Anitabi",
+              "sourceUrl": "https://anitabi.cn/map?bangumiId=1424&pid=s9mnsrxg6"
+            },
+            {
+              "image": "https://image.anitabi.cn/points/1424/s9mreb6hc_1737889139487.jpg?plan=h360",
+              "anime": "けいおん！",
+              "shot": {
+                "lat": 35.203373,
+                "lng": 136.232803,
+                "note": "豐鄉小學校 樓梯"
+              },
+              "source": "Anitabi",
+              "sourceUrl": "https://anitabi.cn/map?bangumiId=1424&pid=s9mreb6hc"
+            },
+            {
+              "image": "https://image.anitabi.cn/points/1424/s9cf140i3_1737866633484.jpg?plan=h360",
+              "anime": "けいおん！",
+              "shot": {
+                "lat": 35.203373,
+                "lng": 136.232803,
+                "note": "豐鄉小學校 樓梯"
+              },
+              "source": "Anitabi",
+              "sourceUrl": "https://anitabi.cn/map?bangumiId=1424&pid=s9cf140i3"
+            },
+            {
+              "image": "https://image.anitabi.cn/points/1424/s9chgmyds_1737866768439.jpg?plan=h360",
+              "anime": "けいおん！",
+              "shot": {
+                "lat": 35.203373,
+                "lng": 136.232803,
+                "note": "豐鄉小學校 樓梯"
+              },
+              "source": "Anitabi",
+              "sourceUrl": "https://anitabi.cn/map?bangumiId=1424&pid=s9chgmyds"
+            },
+            {
+              "image": "https://image.anitabi.cn/points/1424/s9mks0q8t_1737888736795.jpg?plan=h360",
+              "anime": "けいおん！",
+              "shot": {
+                "lat": 35.203373,
+                "lng": 136.232803,
+                "note": "豐鄉小學校 樓梯"
+              },
+              "source": "Anitabi",
+              "sourceUrl": "https://anitabi.cn/map?bangumiId=1424&pid=s9mks0q8t"
+            },
+            {
+              "image": "https://image.anitabi.cn/points/1424/s9msvew7r_1737889226521.jpg?plan=h360",
+              "anime": "けいおん！",
+              "shot": {
+                "lat": 35.203373,
+                "lng": 136.232803,
+                "note": "豐鄉小學校 樓梯"
+              },
+              "source": "Anitabi",
+              "sourceUrl": "https://anitabi.cn/map?bangumiId=1424&pid=s9msvew7r"
+            },
+            {
+              "image": "https://image.anitabi.cn/points/1424/s9mpnljg7_1737889031616.jpg?plan=h360",
+              "anime": "けいおん！",
+              "shot": {
+                "lat": 35.203373,
+                "lng": 136.232803,
+                "note": "豐鄉小學校 樓梯"
+              },
+              "source": "Anitabi",
+              "sourceUrl": "https://anitabi.cn/map?bangumiId=1424&pid=s9mpnljg7"
+            },
+            {
+              "image": "https://image.anitabi.cn/points/1424/s9mdb1bik_1737888286009.jpg?plan=h360",
+              "anime": "けいおん！",
+              "shot": {
+                "lat": 35.203373,
+                "lng": 136.232803,
+                "note": "豐鄉小學校 樓梯"
+              },
+              "source": "Anitabi",
+              "sourceUrl": "https://anitabi.cn/map?bangumiId=1424&pid=s9mdb1bik"
+            },
+            {
+              "image": "https://image.anitabi.cn/points/1424/s9msl3oqd_1737889209726.jpg?plan=h360",
+              "anime": "けいおん！",
+              "shot": {
+                "lat": 35.203373,
+                "lng": 136.232803,
+                "note": "豐鄉小學校 樓梯"
+              },
+              "source": "Anitabi",
+              "sourceUrl": "https://anitabi.cn/map?bangumiId=1424&pid=s9msl3oqd"
+            },
+            {
+              "image": "https://image.anitabi.cn/points/1424/s9cnrj5kf_1737867150212.jpg?plan=h360",
+              "anime": "けいおん！",
+              "episode": "20",
+              "seconds": 1310,
+              "shot": {
+                "lat": 35.203373,
+                "lng": 136.232803,
+                "note": "豐鄉小學校 樓梯"
+              },
+              "source": "Anitabi",
+              "sourceUrl": "https://anitabi.cn/map?bangumiId=1424&pid=s9cnrj5kf"
+            },
+            {
+              "image": "https://image.anitabi.cn/points/1424/s9n3ebr5b_1737889864329.jpg?plan=h360",
+              "anime": "けいおん！",
+              "shot": {
+                "lat": 35.203373,
+                "lng": 136.232803,
+                "note": "豐鄉小學校 樓梯"
+              },
+              "source": "Anitabi",
+              "sourceUrl": "https://anitabi.cn/map?bangumiId=1424&pid=s9n3ebr5b"
+            },
+            {
+              "image": "https://image.anitabi.cn/points/1424/s9ms0vdlr_1737889174986.jpg?plan=h360",
+              "anime": "けいおん！",
+              "shot": {
+                "lat": 35.203373,
+                "lng": 136.232803,
+                "note": "豐鄉小學校 樓梯"
+              },
+              "source": "Anitabi",
+              "sourceUrl": "https://anitabi.cn/map?bangumiId=1424&pid=s9ms0vdlr"
+            },
+            {
+              "image": "https://image.anitabi.cn/points/1424/s9mr42rlm_1737889120829.jpg?plan=h360",
+              "anime": "けいおん！",
+              "shot": {
+                "lat": 35.203373,
+                "lng": 136.232803,
+                "note": "豐鄉小學校 樓梯"
+              },
+              "source": "Anitabi",
+              "sourceUrl": "https://anitabi.cn/map?bangumiId=1424&pid=s9mr42rlm"
+            },
+            {
+              "image": "https://image.anitabi.cn/points/1424/s9cpwl2zx_1737867278911.jpg?plan=h360",
+              "anime": "けいおん！",
+              "shot": {
+                "lat": 35.203373,
+                "lng": 136.232803,
+                "note": "豐鄉小學校 樓梯"
+              },
+              "source": "Anitabi",
+              "sourceUrl": "https://anitabi.cn/map?bangumiId=1424&pid=s9cpwl2zx"
+            },
+            {
+              "image": "https://image.anitabi.cn/points/1424/s9mfm68ka_1737888424410.jpg?plan=h360",
+              "anime": "けいおん！",
+              "shot": {
+                "lat": 35.203373,
+                "lng": 136.232803,
+                "note": "豐鄉小學校 樓梯"
+              },
+              "source": "Anitabi",
+              "sourceUrl": "https://anitabi.cn/map?bangumiId=1424&pid=s9mfm68ka"
+            },
+            {
+              "image": "https://image.anitabi.cn/points/1424/s9mpxqfal_1737889048549.jpg?plan=h360",
+              "anime": "けいおん！",
+              "shot": {
+                "lat": 35.203373,
+                "lng": 136.232803,
+                "note": "豐鄉小學校 樓梯"
+              },
+              "source": "Anitabi",
+              "sourceUrl": "https://anitabi.cn/map?bangumiId=1424&pid=s9mpxqfal"
+            },
+            {
+              "image": "https://image.anitabi.cn/points/1424/s9n2hk0as_1737889810362.jpg?plan=h360",
+              "anime": "けいおん！",
+              "shot": {
+                "lat": 35.203373,
+                "lng": 136.232803,
+                "note": "豐鄉小學校 樓梯"
+              },
+              "source": "Anitabi",
+              "sourceUrl": "https://anitabi.cn/map?bangumiId=1424&pid=s9n2hk0as"
+            },
+            {
+              "image": "https://image.anitabi.cn/points/1424/s9mjygta8_1737888687288.jpg?plan=h360",
+              "anime": "けいおん！",
+              "shot": {
+                "lat": 35.203373,
+                "lng": 136.232803,
+                "note": "豐鄉小學校 樓梯"
+              },
+              "source": "Anitabi",
+              "sourceUrl": "https://anitabi.cn/map?bangumiId=1424&pid=s9mjygta8"
+            },
+            {
+              "image": "https://image.anitabi.cn/points/1424/s9mf2ruco_1737888392385.jpg?plan=h360",
+              "anime": "けいおん！",
+              "shot": {
+                "lat": 35.203373,
+                "lng": 136.232803,
+                "note": "豐鄉小學校 樓梯"
+              },
+              "source": "Anitabi",
+              "sourceUrl": "https://anitabi.cn/map?bangumiId=1424&pid=s9mf2ruco"
+            },
+            {
+              "image": "https://image.anitabi.cn/points/1424/s9cep1r89_1737866603930.jpg?plan=h360",
+              "anime": "けいおん！",
+              "shot": {
+                "lat": 35.203373,
+                "lng": 136.232803,
+                "note": "豐鄉小學校 樓梯"
+              },
+              "source": "Anitabi",
+              "sourceUrl": "https://anitabi.cn/map?bangumiId=1424&pid=s9cep1r89"
+            },
+            {
+              "image": "https://image.anitabi.cn/points/1424/s9cqh2evi_1737867313293.jpg?plan=h360",
+              "anime": "けいおん！",
+              "shot": {
+                "lat": 35.203373,
+                "lng": 136.232803,
+                "note": "豐鄉小學校 樓梯"
+              },
+              "source": "Anitabi",
+              "sourceUrl": "https://anitabi.cn/map?bangumiId=1424&pid=s9cqh2evi"
+            },
+            {
+              "image": "https://image.anitabi.cn/points/1424/s9cnfzwmy_1737888593713.jpg?plan=h360",
+              "anime": "けいおん！",
+              "shot": {
+                "lat": 35.203373,
+                "lng": 136.232803,
+                "note": "豐鄉小學校 樓梯"
+              },
+              "source": "Anitabi",
+              "sourceUrl": "https://anitabi.cn/map?bangumiId=1424&pid=s9cnfzwmy"
+            },
+            {
+              "image": "https://image.anitabi.cn/points/1424/s9c6or1tt_1737866124593.jpg?plan=h360",
+              "anime": "けいおん！",
+              "shot": {
+                "lat": 35.203373,
+                "lng": 136.232803,
+                "note": "豐鄉小學校 樓梯"
+              },
+              "source": "Anitabi",
+              "sourceUrl": "https://anitabi.cn/map?bangumiId=1424&pid=106ft7lefb"
+            },
+            {
+              "image": "https://image.anitabi.cn/points/1424/s9cfqfp4y_1737866663954.jpg?plan=h360",
+              "anime": "けいおん！",
+              "shot": {
+                "lat": 35.203373,
+                "lng": 136.232803,
+                "note": "豐鄉小學校 樓梯"
+              },
+              "source": "Anitabi",
+              "sourceUrl": "https://anitabi.cn/map?bangumiId=1424&pid=s9cfqfp4y"
+            },
+            {
+              "image": "https://image.anitabi.cn/points/1424/s9mp0exu4_1737888993733.jpg?plan=h360",
+              "anime": "けいおん！",
+              "shot": {
+                "lat": 35.203373,
+                "lng": 136.232803,
+                "note": "豐鄉小學校 樓梯"
+              },
+              "source": "Anitabi",
+              "sourceUrl": "https://anitabi.cn/map?bangumiId=1424&pid=s9mp0exu4"
+            },
+            {
+              "image": "https://image.anitabi.cn/points/1424/s9n9pge27_1737890243982.jpg?plan=h360",
+              "anime": "けいおん！",
+              "shot": {
+                "lat": 35.203373,
+                "lng": 136.232803,
+                "note": "豐鄉小學校 樓梯"
+              },
+              "source": "Anitabi",
+              "sourceUrl": "https://anitabi.cn/map?bangumiId=1424&pid=s9n9pge27"
+            },
+            {
+              "image": "https://image.anitabi.cn/points/1424/s9mxsxyyn_1737889528070.jpg?plan=h360",
+              "anime": "けいおん！",
+              "shot": {
+                "lat": 35.203373,
+                "lng": 136.232803,
+                "note": "豐鄉小學校 樓梯"
+              },
+              "source": "Anitabi",
+              "sourceUrl": "https://anitabi.cn/map?bangumiId=1424&pid=s9mxsxyyn"
+            },
+            {
+              "image": "https://image.anitabi.cn/points/1424/s9n1o04d8_1737889758126.jpg?plan=h360",
+              "anime": "けいおん！",
+              "shot": {
+                "lat": 35.203373,
+                "lng": 136.232803,
+                "note": "豐鄉小學校 樓梯"
+              },
+              "source": "Anitabi",
+              "sourceUrl": "https://anitabi.cn/map?bangumiId=1424&pid=s9n1o04d8"
+            },
+            {
+              "image": "https://image.anitabi.cn/points/1424/s9crahyef_1737867368483.jpg?plan=h360",
+              "anime": "けいおん！",
+              "shot": {
+                "lat": 35.203373,
+                "lng": 136.232803,
+                "note": "豐鄉小學校 樓梯"
+              },
+              "source": "Anitabi",
+              "sourceUrl": "https://anitabi.cn/map?bangumiId=1424&pid=s9crahyef"
+            },
+            {
+              "image": "https://image.anitabi.cn/points/1424/s9cgpkdha_1737866722615.jpg?plan=h360",
+              "anime": "けいおん！",
+              "shot": {
+                "lat": 35.203373,
+                "lng": 136.232803,
+                "note": "豐鄉小學校 樓梯"
+              },
+              "source": "Anitabi",
+              "sourceUrl": "https://anitabi.cn/map?bangumiId=1424&pid=s9cgpkdha"
+            },
+            {
+              "image": "https://image.anitabi.cn/points/1424/s9mdnzoyt_1737888308382.jpg?plan=h360",
+              "anime": "けいおん！",
+              "shot": {
+                "lat": 35.203373,
+                "lng": 136.232803,
+                "note": "豐鄉小學校 樓梯"
+              },
+              "source": "Anitabi",
+              "sourceUrl": "https://anitabi.cn/map?bangumiId=1424&pid=s9mdnzoyt"
+            },
+            {
+              "image": "https://image.anitabi.cn/points/1424/s9mt69n6i_1737889244673.jpg?plan=h360",
+              "anime": "けいおん！",
+              "shot": {
+                "lat": 35.203373,
+                "lng": 136.232803,
+                "note": "豐鄉小學校 樓梯"
+              },
+              "source": "Anitabi",
+              "sourceUrl": "https://anitabi.cn/map?bangumiId=1424&pid=s9mt69n6i"
+            }
+          ]
+        }
+      ]
+    }
+  ],
+  "credits": [
+    {
+      "name": "Anitabi",
+      "url": "https://www.anitabi.cn",
+      "license": "CC BY-NC-SA 4.0"
+    }
+  ]
+}

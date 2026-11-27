@@ -1,4 +1,45 @@
 {
   "format": 1,
-  "routes": []
+  "routes": [
+    {
+      "id": "kansai-uji",
+      "title": "宇治：吹響吧！上低音號",
+      "description": "沿著京阪宇治線走：黃檗、木幡、六地藏，北宇治高中原型的菟道高校也在路上；再到宇治郊外的天瀨水壩和大吉山展望台，最後是宇治川兩岸、宇治橋和京阪宇治站。",
+      "anime": [
+        "響け！ユーフォニアム",
+        "響け！ユーフォニアム 3",
+        "響け！ユーフォニアム2",
+        "劇場版 響け！ユーフォニアム～誓いのフィナーレ～"
+      ],
+      "area": "京都府宇治市・京都市伏見區",
+      "places": 37,
+      "frames": 561,
+      "cover": "https://image.anitabi.cn/points/115908/kq0uirvw2_1716604752074.jpg?plan=h360"
+    },
+    {
+      "id": "kansai-shiga",
+      "title": "滋賀：旧鎌掛小學校與豐鄉小學校",
+      "description": "《中二病也想談戀愛！》的旧鎌掛小學校，和《K-ON!》櫻丘高中原型的豐鄉小學校舊校舍，校舍內外都有。",
+      "anime": [
+        "中二病でも恋がしたい！戀",
+        "けいおん！"
+      ],
+      "area": "滋賀縣日野町・豐鄉町",
+      "places": 6,
+      "frames": 188,
+      "cover": "https://image.anitabi.cn/user/1065/bangumi/72942/points/j0vkyv36l-1729747584465.jpg?plan=h360"
+    },
+    {
+      "id": "kansai-nishinomiya",
+      "title": "西宮：涼宮春日的憂鬱一日遊",
+      "description": "從甲陽園站出發，走上通往北高的坡道，經過廣田神社和新池，最後到西宮北口。",
+      "anime": [
+        "涼宮ハルヒの憂鬱"
+      ],
+      "area": "兵庫縣西宮市",
+      "places": 9,
+      "frames": 30,
+      "cover": "https://image.anitabi.cn/points/485/e59844ea_1742908244568.jpg?plan=h360"
+    }
+  ]
 }

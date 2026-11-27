@@ -1,0 +1,425 @@
+{
+  "format": 1,
+  "id": "kansai-nishinomiya",
+  "title": "西宮：涼宮春日的憂鬱一日遊",
+  "description": "從甲陽園站出發，走上通往北高的坡道，經過廣田神社和新池，最後到西宮北口。",
+  "anime": [
+    "涼宮ハルヒの憂鬱"
+  ],
+  "area": "兵庫縣西宮市",
+  "updated": "2026-11-27",
+  "groups": [
+    {
+      "title": "甲陽園到西宮北口",
+      "places": [
+        {
+          "name": "苦樂元to甲陽園",
+          "lat": 34.757209,
+          "lng": 135.332558,
+          "frames": [
+            {
+              "anime": "涼宮ハルヒの憂鬱",
+              "episode": "1",
+              "seconds": 175,
+              "shot": {
+                "lat": 34.757209,
+                "lng": 135.332558,
+                "note": "OP畫面 鐵道與樹叢"
+              }
+            },
+            {
+              "image": "https://image.anitabi.cn/points/485/e59844ea_1742908244568.jpg?plan=h360",
+              "anime": "涼宮ハルヒの憂鬱",
+              "episode": "1",
+              "seconds": 175,
+              "shot": {
+                "lat": 34.757209,
+                "lng": 135.332558,
+                "note": "OP畫面 鐵道與樹叢"
+              },
+              "source": "凉宫春日系列圣地巡礼副本",
+              "sourceUrl": "https://anitabi.cn/map?bangumiId=485&pid=e59844ea"
+            },
+            {
+              "image": "https://image.anitabi.cn/user/2176/bangumi/485/points/13khymf-1749402986824.jpg?plan=h360",
+              "anime": "涼宮ハルヒの憂鬱",
+              "episode": "13",
+              "seconds": 404,
+              "shot": {
+                "lat": 34.757464,
+                "lng": 135.332579,
+                "note": "平交道"
+              },
+              "source": "Anitabi",
+              "sourceUrl": "https://anitabi.cn/map?bangumiId=485&pid=13khymf"
+            }
+          ]
+        },
+        {
+          "name": "甲陽園車站周邊",
+          "lat": 34.761056,
+          "lng": 135.333153,
+          "frames": [
+            {
+              "anime": "涼宮ハルヒの憂鬱",
+              "episode": "1",
+              "seconds": 1,
+              "shot": {
+                "lat": 34.761056,
+                "lng": 135.333153,
+                "note": "甲陽園車站 涼宮春日的故事由此開始"
+              }
+            },
+            {
+              "image": "https://image.anitabi.cn/user/0/bangumi/1606/points/p52ppjg4e-1729068870393.jpg?plan=h360",
+              "anime": "涼宮ハルヒの憂鬱",
+              "episode": "1",
+              "seconds": 20,
+              "shot": {
+                "lat": 34.761175,
+                "lng": 135.329802,
+                "note": "甲陽園車站 售票機"
+              },
+              "source": "Anitabi",
+              "sourceUrl": "https://anitabi.cn/map?bangumiId=485&pid=p52ppjg4e"
+            },
+            {
+              "image": "https://image.anitabi.cn/points/485/d8f114c1_1742908786122.jpg?plan=h360",
+              "anime": "涼宮ハルヒの憂鬱",
+              "episode": "1",
+              "seconds": 1,
+              "shot": {
+                "lat": 34.761056,
+                "lng": 135.333153,
+                "note": "甲陽園車站 涼宮春日的故事由此開始"
+              },
+              "source": "凉宫春日系列圣地巡礼副本",
+              "sourceUrl": "https://anitabi.cn/map?bangumiId=485&pid=d8f114c1"
+            },
+            {
+              "image": "https://image.anitabi.cn/user/2176/bangumi/485/points/171vxs6-1749613567144.jpg?plan=h360",
+              "anime": "涼宮ハルヒの憂鬱",
+              "episode": "9",
+              "seconds": 901,
+              "shot": {
+                "lat": 34.761175,
+                "lng": 135.329802,
+                "note": "甲陽園車站 售票機"
+              },
+              "source": "Anitabi",
+              "sourceUrl": "https://anitabi.cn/map?bangumiId=485&pid=171vxs6"
+            },
+            {
+              "image": "https://image.anitabi.cn/points/485/2a17aa4c_1742908257690.jpg?plan=h360",
+              "anime": "涼宮ハルヒの憂鬱",
+              "episode": "1",
+              "seconds": 20,
+              "shot": {
+                "lat": 34.761175,
+                "lng": 135.329802,
+                "note": "甲陽園車站 售票機"
+              },
+              "source": "凉宫春日系列圣地巡礼副本",
+              "sourceUrl": "https://anitabi.cn/map?bangumiId=485&pid=2a17aa4c"
+            },
+            {
+              "image": "https://image.anitabi.cn/points/485/926b9074_1742908692616.jpg?plan=h360",
+              "anime": "涼宮ハルヒの憂鬱",
+              "episode": "9",
+              "seconds": 549,
+              "shot": {
+                "lat": 34.761175,
+                "lng": 135.329802,
+                "note": "甲陽園車站 售票機"
+              },
+              "source": "凉宫春日系列圣地巡礼副本",
+              "sourceUrl": "https://anitabi.cn/map?bangumiId=485&pid=926b9074"
+            }
+          ]
+        },
+        {
+          "name": "甲陽園to第二座橋",
+          "lat": 34.760487,
+          "lng": 135.329342,
+          "frames": [
+            {
+              "anime": "涼宮ハルヒの憂鬱",
+              "episode": "1",
+              "seconds": 28,
+              "shot": {
+                "lat": 34.760487,
+                "lng": 135.329342,
+                "note": "上學路的階梯"
+              }
+            },
+            {
+              "image": "https://image.anitabi.cn/user/0/bangumi/1606/points/p611wwhqb-1729143512078.jpg?plan=h360",
+              "anime": "涼宮ハルヒの憂鬱",
+              "episode": "1",
+              "seconds": 28,
+              "shot": {
+                "lat": 34.760487,
+                "lng": 135.329342,
+                "note": "上學路的階梯"
+              },
+              "source": "Anitabi",
+              "sourceUrl": "https://anitabi.cn/map?bangumiId=485&pid=p611wwhqb"
+            },
+            {
+              "image": "https://image.anitabi.cn/points/485/ac13367b_1742908289081.jpg?plan=h360",
+              "anime": "涼宮ハルヒの憂鬱",
+              "episode": "1",
+              "seconds": 530,
+              "shot": {
+                "lat": 34.760111,
+                "lng": 135.325882,
+                "note": "馬路上的減速標誌"
+              },
+              "source": "凉宫春日系列圣地巡礼副本",
+              "sourceUrl": "https://anitabi.cn/map?bangumiId=485&pid=ac13367b"
+            },
+            {
+              "image": "https://image.anitabi.cn/points/485/suxyix3l7_1770632075156.jpg?plan=h360",
+              "anime": "涼宮ハルヒの憂鬱",
+              "episode": "13",
+              "seconds": 4,
+              "shot": {
+                "lat": 34.760682,
+                "lng": 135.324476,
+                "note": "通學路 小橋"
+              },
+              "source": "Anitabi",
+              "sourceUrl": "https://anitabi.cn/map?bangumiId=485&pid=suxyix3l7"
+            },
+            {
+              "image": "https://image.anitabi.cn/points/485/fbb799c4_1742908271624.jpg?plan=h360",
+              "anime": "涼宮ハルヒの憂鬱",
+              "episode": "2",
+              "seconds": 52,
+              "shot": {
+                "lat": 34.760278,
+                "lng": 135.3225,
+                "note": "通學路上坡"
+              },
+              "source": "凉宫春日系列圣地巡礼副本",
+              "sourceUrl": "https://anitabi.cn/map?bangumiId=485&pid=fbb799c4"
+            }
+          ]
+        },
+        {
+          "name": "第二座橋to學校",
+          "lat": 34.761882,
+          "lng": 135.313177,
+          "frames": [
+            {
+              "anime": "涼宮ハルヒの憂鬱",
+              "shot": {
+                "lat": 34.761882,
+                "lng": 135.313177,
+                "note": "北高正門附近"
+              }
+            },
+            {
+              "anime": "涼宮ハルヒの憂鬱",
+              "shot": {
+                "lat": 34.761882,
+                "lng": 135.313177,
+                "note": "北高正門附近"
+              }
+            },
+            {
+              "anime": "涼宮ハルヒの憂鬱",
+              "shot": {
+                "lat": 34.761882,
+                "lng": 135.313177,
+                "note": "北高正門附近"
+              }
+            },
+            {
+              "anime": "涼宮ハルヒの憂鬱",
+              "shot": {
+                "lat": 34.761882,
+                "lng": 135.313177,
+                "note": "北高正門附近"
+              }
+            },
+            {
+              "image": "https://image.anitabi.cn/user/0/bangumi/485/points/kgnm8d0oi-1741450016067.jpg?plan=h360",
+              "anime": "涼宮ハルヒの憂鬱",
+              "episode": "1",
+              "seconds": 73,
+              "shot": {
+                "lat": 34.761882,
+                "lng": 135.313177,
+                "note": "北高正門附近"
+              },
+              "source": "Anitabi",
+              "sourceUrl": "https://anitabi.cn/map?bangumiId=485&pid=kgnm8d0oi"
+            },
+            {
+              "image": "https://image.anitabi.cn/points/485/e073cbaf_1742908218185.jpg?plan=h360",
+              "anime": "涼宮ハルヒの憂鬱",
+              "shot": {
+                "lat": 34.761882,
+                "lng": 135.313177,
+                "note": "北高正門附近"
+              },
+              "source": "凉宫春日系列圣地巡礼副本",
+              "sourceUrl": "https://anitabi.cn/map?bangumiId=485&pid=e073cbaf"
+            },
+            {
+              "image": "https://image.anitabi.cn/points/485/f89f7fc9_1742908248938.jpg?plan=h360",
+              "anime": "涼宮ハルヒの憂鬱",
+              "episode": "1",
+              "seconds": 210,
+              "shot": {
+                "lat": 34.762222,
+                "lng": 135.3125,
+                "note": "OP影像 涼宮 斑馬線"
+              },
+              "source": "凉宫春日系列圣地巡礼副本",
+              "sourceUrl": "https://anitabi.cn/map?bangumiId=485&pid=f89f7fc9"
+            },
+            {
+              "image": "https://image.anitabi.cn/points/485/1ba1cd3e_1742908220257.jpg?plan=h360",
+              "anime": "涼宮ハルヒの憂鬱",
+              "episode": "1",
+              "seconds": 73,
+              "shot": {
+                "lat": 34.761882,
+                "lng": 135.313177,
+                "note": "北高正門附近"
+              },
+              "source": "凉宫春日系列圣地巡礼副本",
+              "sourceUrl": "https://anitabi.cn/map?bangumiId=485&pid=1ba1cd3e"
+            },
+            {
+              "image": "https://image.anitabi.cn/points/485/0b13c8c4_1742908216479.jpg?plan=h360",
+              "anime": "涼宮ハルヒの憂鬱",
+              "episode": "1",
+              "seconds": 77,
+              "shot": {
+                "lat": 34.761882,
+                "lng": 135.313177,
+                "note": "北高正門附近"
+              },
+              "source": "凉宫春日系列圣地巡礼副本",
+              "sourceUrl": "https://anitabi.cn/map?bangumiId=485&pid=0b13c8c4"
+            }
+          ]
+        },
+        {
+          "name": "前往廣田神社的路上",
+          "lat": 34.755258,
+          "lng": 135.339336,
+          "frames": [
+            {
+              "anime": "涼宮ハルヒの憂鬱",
+              "episode": "14",
+              "seconds": 56,
+              "shot": {
+                "lat": 34.755258,
+                "lng": 135.339336,
+                "note": "涼宮消失的世界線 橋"
+              }
+            },
+            {
+              "image": "https://image.anitabi.cn/user/0/bangumi/485/points/e6d2bd02-1767194845656.jpg?plan=h360",
+              "anime": "涼宮ハルヒの憂鬱",
+              "episode": "14",
+              "seconds": 56,
+              "shot": {
+                "lat": 34.755258,
+                "lng": 135.339336,
+                "note": "涼宮消失的世界線 橋"
+              },
+              "source": "凉宫春日系列圣地巡礼副本",
+              "sourceUrl": "https://anitabi.cn/map?bangumiId=485&pid=e6d2bd02"
+            }
+          ]
+        },
+        {
+          "name": "廣田神社",
+          "lat": 34.752899,
+          "lng": 135.340028,
+          "frames": [
+            {
+              "shot": {
+                "lat": 34.752899,
+                "lng": 135.340028,
+                "note": "參道"
+              }
+            },
+            {
+              "shot": {
+                "lat": 34.752899,
+                "lng": 135.340028,
+                "note": "參道"
+              }
+            }
+          ]
+        },
+        {
+          "name": "新池",
+          "lat": 34.754047,
+          "lng": 135.343324,
+          "frames": []
+        },
+        {
+          "name": "西宮北口",
+          "lat": 34.746389,
+          "lng": 135.356111,
+          "frames": [
+            {
+              "anime": "涼宮ハルヒの憂鬱",
+              "shot": {
+                "lat": 34.746389,
+                "lng": 135.356111,
+                "note": "SOS團聚會公園"
+              }
+            },
+            {
+              "image": "https://image.anitabi.cn/points/485/kgnri41s9_1729064622993.jpg?plan=h360",
+              "anime": "涼宮ハルヒの憂鬱",
+              "episode": "3",
+              "seconds": 672,
+              "shot": {
+                "lat": 34.746674,
+                "lng": 135.356023,
+                "note": "阿虛非法停車處"
+              },
+              "source": "Anitabi",
+              "sourceUrl": "https://anitabi.cn/map?bangumiId=485&pid=umk0cb4s9"
+            },
+            {
+              "image": "https://image.anitabi.cn/points/485/32208ee2_1742908344129.jpg?plan=h360",
+              "anime": "涼宮ハルヒの憂鬱",
+              "episode": "3",
+              "seconds": 670,
+              "shot": {
+                "lat": 34.746389,
+                "lng": 135.356111,
+                "note": "SOS團聚會公園"
+              },
+              "source": "凉宫春日系列圣地巡礼副本",
+              "sourceUrl": "https://anitabi.cn/map?bangumiId=485&pid=32208ee2"
+            }
+          ]
+        },
+        {
+          "name": "Create Nishinomiya",
+          "lat": 34.7185166,
+          "lng": 135.3635003,
+          "frames": []
+        }
+      ]
+    }
+  ],
+  "credits": [
+    {
+      "name": "Anitabi",
+      "url": "https://www.anitabi.cn",
+      "license": "CC BY-NC-SA 4.0"
+    }
+  ]
+}
