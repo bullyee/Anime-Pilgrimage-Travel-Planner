@@ -297,8 +297,10 @@ flutter test
 # Run the Firestore rules tests on the emulator (needs firebase-tools and Java)
 firebase emulators:exec "python test/rules_v2_emulator_test.py" --only firestore --project trip-planner-2775c
 
-# Build and deploy the Web app (PWA) to Firebase Hosting
+# Build and deploy the Web app (PWA) to Firebase Hosting, with the example
+# routes' link-preview pages (`/t/<id>`; the routes are in web/routes/)
 flutter build web --wasm --release
+dart run tool/route_pages.dart
 firebase deploy --only hosting
 ```
 
