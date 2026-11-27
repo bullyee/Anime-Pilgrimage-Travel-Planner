@@ -520,6 +520,18 @@ class AppLocalizationsJa extends AppLocalizations {
   String get tripSchedule => 'スケジュール';
 
   @override
+  String get scheduleShowOneDay => '1日ずつ表示';
+
+  @override
+  String get scheduleShowAllDays => 'すべての日を表示';
+
+  @override
+  String get scheduleEditPlan => 'プランを編集';
+
+  @override
+  String get scheduleEditingBanner => 'プランを編集中です。スポットを長押しで移動できます。変更は自動で保存されます。';
+
+  @override
   String get placesSearchHint => '場所・メモ・比較画像・タグを検索';
 
   @override

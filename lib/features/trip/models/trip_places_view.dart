@@ -60,14 +60,22 @@ class TripPlacesView {
 
   List<PlacesSection> get sections => [...days, unsorted];
 
-  /// Every place once, in list order.
+  /// Every place once, in list order. A group of stops not folded yet that
+  /// sits on several days is one place, listed where it comes first.
   List<TripPlace> get all {
     final seen = <String>{};
     return [
       for (final s in sections)
         for (final p in s.places)
-          if (seen.add(p.id)) p,
+          if (seen.add(p.group == null ? 'stop:${p.id}' : 'group:${p.group}')) p,
     ];
+  }
+
+  /// Every place of every section, a group split over days once per day.
+  Iterable<TripPlace> get everyCard sync* {
+    for (final s in sections) {
+      yield* s.places;
+    }
   }
 
   /// The section the place with [stopId] is in (its first one).

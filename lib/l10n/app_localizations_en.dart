@@ -534,6 +534,19 @@ class AppLocalizationsEn extends AppLocalizations {
   String get tripSchedule => 'Schedule';
 
   @override
+  String get scheduleShowOneDay => 'Show one day at a time';
+
+  @override
+  String get scheduleShowAllDays => 'Show all days';
+
+  @override
+  String get scheduleEditPlan => 'Edit the plan';
+
+  @override
+  String get scheduleEditingBanner =>
+      'Editing the plan. Hold a stop to move it. Changes are saved as you go.';
+
+  @override
   String get placesSearchHint => 'Find places, spot notes, frames or tags';
 
   @override

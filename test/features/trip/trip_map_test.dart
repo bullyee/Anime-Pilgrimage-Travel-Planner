@@ -135,5 +135,22 @@ void main() {
       expect(tripMapPlaces(view, contents, colorOf).map((p) => (p.id, p.color)), [('uji', Colors.teal), ('byo', Colors.purple)]);
       expect(tripMapPlaces(view, contents, colorOf, dayId: 'd2').map((p) => p.id), ['byo', 'uji'], reason: "the day's order, for its route");
     });
+
+    test('a group not folded yet that sits on two days is one place in all, with a card on each day', () {
+      final east = stop('east', '宇治橋 東詰');
+      final west = stop('west', '宇治橋 西詰');
+      final onDay1 = TripPlace(id: 'east', name: '宇治橋', group: '宇治橋', stops: [east]);
+      final onDay2 = TripPlace(id: 'west', name: '宇治橋', group: '宇治橋', stops: [west]);
+      final b = TripPlace(id: 'byo', name: '平等院', stops: [byodoin]);
+      final view = TripPlacesView(
+        days: [
+          PlacesSection(day: day('d1', 0, date: t0), places: [onDay1]),
+          PlacesSection(day: day('d2', 1, date: t0.add(const Duration(days: 1))), places: [b, onDay2]),
+        ],
+        unsorted: PlacesSection(day: null, places: [b]),
+      );
+      expect(view.all.map((p) => p.id), ['east', 'byo'], reason: 'the group where it comes first, and a stop once');
+      expect(view.everyCard.map((p) => p.id), ['east', 'byo', 'west', 'byo']);
+    });
   });
 }

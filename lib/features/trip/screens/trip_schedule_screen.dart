@@ -51,15 +51,15 @@ class _TripScheduleScreenState extends ConsumerState<TripScheduleScreen> {
         ),
         actions: [
           IconButton(
-            tooltip: _grid ? 'Show one day at a time' : 'Show all days',
+            tooltip: _grid ? context.l10n.scheduleShowOneDay : context.l10n.scheduleShowAllDays,
             icon: Icon(_grid ? Icons.view_carousel_outlined : Icons.grid_view),
             onPressed: () => setState(() => _grid = !_grid),
           ),
           if (canEdit)
             editing
-                ? TextButton(onPressed: () => setState(() => _editing = false), child: const Text('Done'))
+                ? TextButton(onPressed: () => setState(() => _editing = false), child: Text(context.l10n.placesDone))
                 : IconButton(
-                    tooltip: 'Edit the plan',
+                    tooltip: context.l10n.scheduleEditPlan,
                     icon: const Icon(Icons.edit_outlined),
                     onPressed: () => setState(() => _editing = true),
                   ),
@@ -78,7 +78,7 @@ class _TripScheduleScreenState extends ConsumerState<TripScheduleScreen> {
                   const SizedBox(width: 10),
                   Expanded(
                     child: Text(
-                      'Editing the plan. Hold a stop to move it. Changes are saved as you go.',
+                      context.l10n.scheduleEditingBanner,
                       style: theme.textTheme.bodySmall?.copyWith(color: theme.colorScheme.onSurface),
                     ),
                   ),

@@ -517,6 +517,18 @@ class AppLocalizationsZh extends AppLocalizations {
   String get tripSchedule => '時間表';
 
   @override
+  String get scheduleShowOneDay => '一次看一天';
+
+  @override
+  String get scheduleShowAllDays => '看所有天';
+
+  @override
+  String get scheduleEditPlan => '編輯行程';
+
+  @override
+  String get scheduleEditingBanner => '正在編輯行程。長按一站可以移動，改動會自動儲存。';
+
+  @override
   String get placesSearchHint => '找地點、機位備註、參考圖或標籤';
 
   @override
@@ -1379,6 +1391,18 @@ class AppLocalizationsZhHant extends AppLocalizationsZh {
 
   @override
   String get tripSchedule => '時間表';
+
+  @override
+  String get scheduleShowOneDay => '一次看一天';
+
+  @override
+  String get scheduleShowAllDays => '看所有天';
+
+  @override
+  String get scheduleEditPlan => '編輯行程';
+
+  @override
+  String get scheduleEditingBanner => '正在編輯行程。長按一站可以移動，改動會自動儲存。';
 
   @override
   String get placesSearchHint => '找地點、機位備註、參考圖或標籤';

@@ -893,6 +893,30 @@ abstract class AppLocalizations {
   /// **'Schedule'**
   String get tripSchedule;
 
+  /// No description provided for @scheduleShowOneDay.
+  ///
+  /// In en, this message translates to:
+  /// **'Show one day at a time'**
+  String get scheduleShowOneDay;
+
+  /// No description provided for @scheduleShowAllDays.
+  ///
+  /// In en, this message translates to:
+  /// **'Show all days'**
+  String get scheduleShowAllDays;
+
+  /// No description provided for @scheduleEditPlan.
+  ///
+  /// In en, this message translates to:
+  /// **'Edit the plan'**
+  String get scheduleEditPlan;
+
+  /// No description provided for @scheduleEditingBanner.
+  ///
+  /// In en, this message translates to:
+  /// **'Editing the plan. Hold a stop to move it. Changes are saved as you go.'**
+  String get scheduleEditingBanner;
+
   /// No description provided for @placesSearchHint.
   ///
   /// In en, this message translates to:
